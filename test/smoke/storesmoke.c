@@ -134,6 +134,89 @@ nowdb_bool_t testOpenCloseStore() {
 	return TRUE;
 }
 
+nowdb_bool_t testInsert() {
+	nowdb_store_t store;
+	nowdb_err_t     err;
+	nowdb_edge_t    e,k;
+
+	err = nowdb_store_init(&store, "rsc/teststore", 1, 64, NOWDB_MEGA);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_store_open(&store);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	e.edge = 3;
+	e.origin = 1;
+	e.destin = 2;
+	e.label = 5;
+	e.weight = 42;
+	e.weight2 = 0;
+	e.wtype[0] = NOWDB_TYP_UINT;
+	e.wtype[1] = NOWDB_TYP_NOTHING;
+
+	err = nowdb_time_now(&e.timestamp);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	err = nowdb_store_insert(&store, &e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	e.weight++;
+	err = nowdb_store_insert(&store, &e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	e.weight++;
+	err = nowdb_store_insert(&store, &e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	memcpy(&k, store.writer->mptr, 64);
+	if (k.weight != e.weight-2) {
+		fprintf(stderr, "edges differ\n");
+		return FALSE;
+	}
+	memcpy(&k, store.writer->mptr+64, 64);
+	if (k.weight != e.weight-1) {
+		fprintf(stderr, "edges differ\n");
+		return FALSE;
+	}
+	memcpy(&k, store.writer->mptr+128, 64);
+	if (k.weight != e.weight) {
+		fprintf(stderr, "edges differ\n");
+		return FALSE;
+	}
+	
+	err = nowdb_store_close(&store);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	nowdb_store_destroy(&store);
+	return TRUE;
+}
+
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -157,6 +240,10 @@ int main() {
 	}
 	if (!testOpenCloseStore()) {
 		fprintf(stderr, "testOpenCloseStore failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testInsert()) {
+		fprintf(stderr, "testInsert failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!dropStore()) {
