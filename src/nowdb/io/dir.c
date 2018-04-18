@@ -1,0 +1,169 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * Directories
+ * ========================================================================
+ *
+ * ========================================================================
+ */
+#include <nowdb/io/dir.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+
+static char *OBJECT = "dir";
+
+nowdb_path_t nowdb_path_append(nowdb_path_t base, nowdb_path_t toadd) {
+	size_t s1, s2;
+	nowdb_path_t path;
+
+	if (base == NULL) return NULL;
+ 	s1 = strnlen(base, NOWDB_MAX_PATH+1);
+	if (s1 > NOWDB_MAX_PATH) return NULL;
+
+	if (toadd == NULL) return NULL;
+ 	s2 = strnlen(toadd, NOWDB_MAX_PATH+1);
+	if (s2 > NOWDB_MAX_PATH) return NULL;
+
+	if (s1 + s2 + 1 > NOWDB_MAX_PATH) return NULL;
+
+	path = malloc(s1+1+s2+1);
+	if (path == NULL) return NULL;
+
+	sprintf(path, "%s/%s", base, toadd);
+	return path;
+}
+
+nowdb_path_t nowdb_path_filename(nowdb_path_t path) {
+	nowdb_path_t nm;
+	size_t s = strlen(path);
+	size_t l;
+	size_t i;
+	for(i=s;i>=0;i--) {
+		if (path[i] == '/') break;
+	}
+	if (i == s) return NULL;
+	if (i == 0) {
+		nm = malloc(s+1);
+		if (nm == NULL) return NULL;
+		strcpy(nm, path);
+		return nm;
+	}
+	l = s-i;
+	nm = malloc(l);
+	if (nm == NULL) return NULL;
+	for(int z=0; z<l; z++) {
+		nm[z] = path[i+z+1];
+	}
+	nm[l-1] = 0;
+	return nm;
+}
+
+nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
+                              nowdb_dir_type_t t) {
+	struct stat st;
+	if (stat(path, &st) != 0) return FALSE;
+	if (t & NOWDB_DIR_TYPE_DIR) return S_ISDIR(st.st_mode);
+	if (t & NOWDB_DIR_TYPE_FILE) return S_ISREG(st.st_mode);
+	if (t == NOWDB_DIR_TYPE_ANY) {
+		if (S_ISLNK(st.st_mode)) return TRUE;
+		if (S_ISSOCK(st.st_mode)) return TRUE;
+		if (S_ISBLK(st.st_mode)) return TRUE;
+		if (S_ISCHR(st.st_mode)) return TRUE;
+		if (S_ISFIFO(st.st_mode)) return TRUE;
+	}
+	return FALSE;
+}
+
+nowdb_err_t nowdb_dir_create(nowdb_path_t path) {
+	if (mkdir(path,NOWDB_FILE_MODE) != 0) {
+		return nowdb_err_get(nowdb_err_create, TRUE, OBJECT, path);
+	}
+	return NOWDB_OK;
+}
+
+nowdb_err_t nowdb_path_remove(nowdb_path_t path) {
+	if (remove(path) != 0) {
+		return nowdb_err_get(nowdb_err_remove, TRUE, OBJECT, path);
+	}
+	return NOWDB_OK;
+}
+
+nowdb_err_t nowdb_path_move(nowdb_path_t src,
+                            nowdb_path_t trg) {
+	if (rename(src,trg) != 0) return nowdb_err_get(nowdb_err_move,
+	                                           TRUE, OBJECT, trg);
+	return NOWDB_OK;
+}
+
+void nowdb_dir_content_destroy(ts_algo_list_t *list) {
+	ts_algo_list_node_t *runner;
+	ts_algo_list_node_t *tmp;
+
+	runner = list->head;
+	while(runner!=NULL) {
+		nowdb_dir_ent_t *ent = runner->cont;
+		tmp = runner->nxt;
+		if (ent != NULL) {
+			if (ent->path != NULL) free(ent->path);
+			free(ent);
+		}
+		free(runner); runner = tmp;
+	}
+}
+
+nowdb_err_t nowdb_dir_content(nowdb_path_t path,
+                           nowdb_dir_type_t   t,
+                           ts_algo_list_t *list) {
+	DIR *d;
+	struct dirent *e;
+	nowdb_dir_ent_t *ent;
+	struct stat st;
+	nowdb_path_t p;
+	nowdb_bool_t x,y;
+	
+
+	d = opendir(path);
+	if (d == NULL) return nowdb_err_get(nowdb_err_open,
+	                               TRUE, OBJECT, path);
+
+	for(e=readdir(d); e!=NULL; e=readdir(d)) {
+		if (strcmp(e->d_name, ".") == 0) continue;
+		if (strcmp(e->d_name, "..") == 0) continue;
+
+		p = nowdb_path_append(path, e->d_name);
+		if (p == 0) {
+			closedir(d);
+			return nowdb_err_get(nowdb_err_no_mem,
+			                 FALSE, OBJECT, NULL);
+		}
+		if (stat(p, &st) != 0) { 
+			return nowdb_err_get(nowdb_err_stat,
+			                   TRUE, OBJECT, p);
+		}
+		x = S_ISREG(st.st_mode);
+		if (x) y = FALSE; else y = S_ISDIR(st.st_mode);
+		if (((t & NOWDB_DIR_TYPE_FILE) && x) ||
+		    ((t & NOWDB_DIR_TYPE_DIR)  && y)) {
+			ent = malloc(sizeof(nowdb_dir_ent_t));
+			if (ent == NULL) {
+				closedir(d); nowdb_dir_content_destroy(list);
+				return nowdb_err_get(nowdb_err_no_mem,
+				                 FALSE, OBJECT, NULL);
+			}
+			ent->path = p;
+			ent->t    = x?NOWDB_DIR_TYPE_FILE:NOWDB_DIR_TYPE_DIR;
+			if (ts_algo_list_append(list, ent) != TS_ALGO_OK) {
+				closedir(d); nowdb_dir_content_destroy(list);
+				return nowdb_err_get(nowdb_err_no_mem,
+				                 FALSE, OBJECT, NULL);
+			}
+		} else free(p);
+	}
+	closedir(d);
+	return NOWDB_OK;
+}
+
+
