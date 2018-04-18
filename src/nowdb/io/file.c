@@ -590,6 +590,9 @@ nowdb_err_t nowdb_file_rewind(nowdb_file_t *file) {
 		                 "file descriptor is in wrong state");
 	}
 	file->pos = 0;
+
+	if (file->ctrl & NOWDB_FILE_WRITER) return NOWDB_OK;
+
 	if (lseek(file->fd, file->pos, SEEK_SET) < 0) {
 		return nowdb_err_get(nowdb_err_seek, TRUE, OBJECT,
 		                                      file->path);
