@@ -30,4 +30,10 @@ then
 	echo "FAILED: storesmoke failed"
 fi
 
+test/smoke/insertstoresmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: insertstoresmoke failed"
+fi
+
 echo "PASSED"
