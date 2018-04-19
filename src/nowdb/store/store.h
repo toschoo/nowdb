@@ -19,7 +19,7 @@
 #include <tsalgo/tree.h>
 
 typedef struct {
-	nowdb_lock_t       lock; /* exclusive lock              */
+	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
 	uint32_t        recsize; /* size of record stored       */
 	uint32_t       filesize; /* size of new files           */

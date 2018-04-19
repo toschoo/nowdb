@@ -57,13 +57,15 @@ all:	default tools tests bench
 tools:	bin/randomfile \
 	bin/catalog
 
-bench: bin/readplainbench
+bench: bin/readplainbench \
+       bin/writestorebench
 
-smoke:	compileme        \
-	$(SMK)/errsmoke  \
-	$(SMK)/timesmoke \
-	$(SMK)/filesmoke \
-	$(SMK)/storesmoke
+smoke:	compileme         \
+	$(SMK)/errsmoke   \
+	$(SMK)/timesmoke  \
+	$(SMK)/filesmoke  \
+	$(SMK)/storesmoke \
+	$(SMK)/insertstoresmoke
 
 tests: smoke
 
@@ -128,6 +130,11 @@ $(SMK)/storesmoke:	$(LIB) $(DEP) $(SMK)/storesmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
+
+$(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o
+				$(LNKMSG)
+				$(CC) $(LDFLAGS) -o $@ $@.o \
+				                 $(libs) -lnowdb
 		
 		
 # BENCHMARKS
@@ -140,6 +147,19 @@ $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
 			                       $(COM)/progress.o         \
 			                       $(COM)/bench.o            \
 			                       $(COM)/cmd.o              \
+			                 $(libs) -lnowdb
+
+$(BIN)/writestorebench:	$(LIB) $(DEP) $(BENCH)/writestorebench.o \
+			              $(COM)/progress.o          \
+			              $(COM)/bench.o             \
+			              $(COM)/stores.o            \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(BENCH)/writestorebench.o \
+			                       $(COM)/progress.o          \
+			                       $(COM)/bench.o             \
+			              	       $(COM)/stores.o            \
+			                       $(COM)/cmd.o               \
 			                 $(libs) -lnowdb
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
@@ -169,12 +189,15 @@ clean:
 	rm -f $(RSC)/*.bin
 	rm -f $(RSC)/*.binz
 	rm -rf $(RSC)/teststore
+	rm -rf $(RSC)/store??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
+	rm -f $(SMK)/insertstoresmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/randomfile
 	rm -f $(BIN)/readplainbench
+	rm -f $(BIN)/writestorebench
 	rm -f $(BIN)/catalog
 
