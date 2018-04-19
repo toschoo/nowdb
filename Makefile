@@ -131,9 +131,11 @@ $(SMK)/storesmoke:	$(LIB) $(DEP) $(SMK)/storesmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
-$(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o
+$(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
+			        $(COM)/stores.o
 				$(LNKMSG)
-				$(CC) $(LDFLAGS) -o $@ $@.o \
+				$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                         $(COM)/stores.o \
 				                 $(libs) -lnowdb
 		
 		

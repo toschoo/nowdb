@@ -75,6 +75,53 @@ static void destroy(void *ignore, void **n) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: Copy file descriptor
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copyFile(nowdb_file_t  *source,
+                                   nowdb_file_t **target) {
+	nowdb_err_t err;
+	*target = malloc(sizeof(nowdb_file_t));
+	if (*target == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                        "allocating file desriptor");
+	}
+	err = nowdb_file_copy(source, *target);
+	if (err != NOWDB_OK) {
+		free(*target); *target = NULL; return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: Deep Copy file descriptor list
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copyFileList(ts_algo_list_t *source,
+                                       ts_algo_list_t *target,
+                                       nowdb_time_t     start,
+                                       nowdb_time_t       end) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t *file;
+	nowdb_err_t    err;
+
+	for(runner=source->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		if (file->newest < start || 
+		    file->oldest > end) continue;
+
+		err = copyFile(runner->cont, &file);
+		if (err != NOWDB_OK) return err;
+		if (ts_algo_list_append(target, file) != TS_ALGO_OK) {
+			free(file);
+			return nowdb_err_get(nowdb_err_no_mem,  
+				FALSE, OBJECT, "list append");
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: destroy list of files
  * ------------------------------------------------------------------------
  */
@@ -142,7 +189,55 @@ static inline void destroyAllFiles(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper to initialise tree of files
+ * Helper: find file in list of files
+ * ------------------------------------------------------------------------
+ */
+static inline ts_algo_list_node_t *findInList(ts_algo_list_t *list,
+                                              nowdb_file_t   *file) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t        *tmp;
+	for(runner=list->head; runner!=NULL; runner=runner->nxt) {
+		tmp = runner->cont;
+		if (tmp->id == file->id) return runner;
+	}
+	return NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findWaiting(nowdb_store_t *store,
+                                      nowdb_file_t  *file) {
+	ts_algo_list_node_t *tmp;
+	tmp = findInList(&store->waiting, file);
+	if (tmp == NULL) return NULL;
+	return tmp->cont;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in spares
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findSpare(nowdb_store_t *store,
+                                    nowdb_file_t  *file) {
+	ts_algo_list_node_t *tmp;
+	tmp = findInList(&store->spares, file);
+	if (tmp == NULL) return NULL;
+	return tmp->cont;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findReader(nowdb_store_t *store,
+                                     nowdb_file_t  *file) {
+	return ts_algo_tree_find(&store->readers, file);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper initialise tree of files
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t initreaders(nowdb_store_t *store) {
@@ -1016,8 +1111,57 @@ nowdb_err_t nowdb_store_insertBulk(nowdb_store_t *store,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
+                                 ts_algo_list_t *list,
                                  nowdb_time_t   start,
-                                 nowdb_time_t    end);
+                                 nowdb_time_t    end) {
+	ts_algo_list_t      *tmp;
+	nowdb_file_t       *file;
+	nowdb_err_t  err=NOWDB_OK;
+	nowdb_err_t err2=NOWDB_OK;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "list pointer is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+	
+	/* readers */
+	if (store->readers.count > 0) {
+		tmp = ts_algo_tree_toList(&store->readers);
+		if (tmp == NULL) {
+			err = nowdb_err_get(nowdb_err_no_mem,
+			     FALSE, OBJECT, "readers toList");
+			goto unlock;
+		}
+		err = copyFileList(tmp, list, start, end);
+		ts_algo_list_destroy(tmp); free(tmp);
+		if (err != NOWDB_OK) goto unlock;
+	}
+	
+	/* pending */
+	if (store->waiting.len > 0) {
+		err = copyFileList(&store->waiting, list, start, end);
+		if (err != NOWDB_OK) goto unlock;
+		
+	}
+	/* writer */
+	err = copyFile(store->writer, &file);
+	if (err != NOWDB_OK) goto unlock;
+	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                     "list append");
+		goto unlock;
+	}
+		
+unlock:
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Add a file

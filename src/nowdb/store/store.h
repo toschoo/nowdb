@@ -102,9 +102,31 @@ nowdb_err_t nowdb_store_insertBulk(nowdb_store_t *store,
  * Get all readers for period start - end
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
-                                 nowdb_time_t   start,
-                                 nowdb_time_t    end);
+nowdb_err_t nowdb_store_getFiles(nowdb_store_t  *store,
+                                 ts_algo_list_t *files,
+                                 nowdb_time_t    start,
+                                 nowdb_time_t     end);
+
+/* ------------------------------------------------------------------------
+ * Find file in waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findWaiting(nowdb_store_t *store,
+                                      nowdb_file_t  *file);
+
+/* ------------------------------------------------------------------------
+ * Find file in spares
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findSpare(nowdb_store_t *store,
+                                    nowdb_file_t  *file); 
+
+/* ------------------------------------------------------------------------
+ * Find file in readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_file_t *nowdb_store_findReader(nowdb_store_t *store,
+                                     nowdb_file_t  *file);
 
 /* ------------------------------------------------------------------------
  * Add a file
