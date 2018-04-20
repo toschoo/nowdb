@@ -102,7 +102,7 @@ nowdb_bool_t randompath() {
 	char *p4=NULL, *p5=NULL, *p6=NULL;
 	uint32_t l;
 
-	for(int i=0; i<10; i++) {
+	for(int i=0; i<1000; i++) {
 		do l = rand()%65; while(l==0);
 		p1 = malloc(l+1);
 		if (p1==NULL) {

@@ -39,6 +39,8 @@ OBJ = $(SRC)/types/types.o  \
       $(SRC)/io/dir.o       \
       $(SRC)/io/file.o      \
       $(SRC)/task/lock.o    \
+      $(SRC)/task/task.o    \
+      $(SRC)/task/queue.o   \
       $(SRC)/store/store.o
 
 DEP = $(SRC)/types/types.h  \
@@ -48,6 +50,8 @@ DEP = $(SRC)/types/types.h  \
       $(SRC)/io/dir.h       \
       $(SRC)/io/file.h      \
       $(SRC)/task/lock.h    \
+      $(SRC)/task/task.h    \
+      $(SRC)/task/queue.h   \
       $(SRC)/store/store.h
 
 default:	lib 
@@ -64,6 +68,7 @@ smoke:	compileme         \
 	$(SMK)/errsmoke   \
 	$(SMK)/timesmoke  \
 	$(SMK)/pathsmoke  \
+	$(SMK)/tasksmoke  \
 	$(SMK)/filesmoke  \
 	$(SMK)/storesmoke \
 	$(SMK)/insertstoresmoke
@@ -125,6 +130,12 @@ $(SMK)/timesmoke:	$(LIB) $(DEP) $(SMK)/timesmoke.o
 $(SMK)/pathsmoke:	$(LIB) $(DEP) $(SMK)/pathsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/tasksmoke:	$(LIB) $(DEP) $(SMK)/tasksmoke.o $(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o     \
+			                 $(COM)/bench.o \
 			                 $(libs) -lnowdb
 
 $(SMK)/filesmoke:	$(LIB) $(DEP) $(SMK)/filesmoke.o
@@ -200,6 +211,8 @@ clean:
 	rm -rf $(RSC)/store??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
+	rm -f $(SMK)/pathsmoke
+	rm -f $(SMK)/tasksmoke
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
