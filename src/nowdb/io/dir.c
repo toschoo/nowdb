@@ -15,6 +15,10 @@
 
 static char *OBJECT = "dir";
 
+/* ------------------------------------------------------------------------
+ * append path to path
+ * ------------------------------------------------------------------------
+ */
 nowdb_path_t nowdb_path_append(nowdb_path_t base, nowdb_path_t toadd) {
 	size_t s1, s2;
 	nowdb_path_t path;
@@ -36,15 +40,19 @@ nowdb_path_t nowdb_path_append(nowdb_path_t base, nowdb_path_t toadd) {
 	return path;
 }
 
+/* ------------------------------------------------------------------------
+ * extract filename from a path
+ * ------------------------------------------------------------------------
+ */
 nowdb_path_t nowdb_path_filename(nowdb_path_t path) {
 	nowdb_path_t nm;
 	size_t s = strlen(path);
 	size_t l;
-	size_t i;
-	for(i=s;i>=0;i--) {
+	int    i;
+	for(i=s-1;i>=0;i--) {
 		if (path[i] == '/') break;
 	}
-	if (i == s) return NULL;
+	if (i == s-1) return NULL;
 	if (i == 0) {
 		nm = malloc(s+1);
 		if (nm == NULL) return NULL;
@@ -61,6 +69,10 @@ nowdb_path_t nowdb_path_filename(nowdb_path_t path) {
 	return nm;
 }
 
+/* ------------------------------------------------------------------------
+ * object represented by path exists
+ * ------------------------------------------------------------------------
+ */
 nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
                               nowdb_dir_type_t t) {
 	struct stat st;
@@ -77,13 +89,21 @@ nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
 	return FALSE;
 }
 
+/* ------------------------------------------------------------------------
+ * Create directory
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dir_create(nowdb_path_t path) {
-	if (mkdir(path,NOWDB_FILE_MODE) != 0) {
+	if (mkdir(path,NOWDB_DIR_MODE) != 0) {
 		return nowdb_err_get(nowdb_err_create, TRUE, OBJECT, path);
 	}
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Remove file
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_path_remove(nowdb_path_t path) {
 	if (remove(path) != 0) {
 		return nowdb_err_get(nowdb_err_remove, TRUE, OBJECT, path);
@@ -91,6 +111,10 @@ nowdb_err_t nowdb_path_remove(nowdb_path_t path) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Move src to trg
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_path_move(nowdb_path_t src,
                             nowdb_path_t trg) {
 	if (rename(src,trg) != 0) return nowdb_err_get(nowdb_err_move,
@@ -98,6 +122,10 @@ nowdb_err_t nowdb_path_move(nowdb_path_t src,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy content list
+ * ------------------------------------------------------------------------
+ */
 void nowdb_dir_content_destroy(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	ts_algo_list_node_t *tmp;
@@ -114,6 +142,10 @@ void nowdb_dir_content_destroy(ts_algo_list_t *list) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Get content from a directory
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dir_content(nowdb_path_t path,
                            nowdb_dir_type_t   t,
                            ts_algo_list_t *list) {
@@ -165,5 +197,3 @@ nowdb_err_t nowdb_dir_content(nowdb_path_t path,
 	closedir(d);
 	return NOWDB_OK;
 }
-
-

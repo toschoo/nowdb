@@ -131,6 +131,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	nowdb_err_t err;
 	nowdb_edge_t *e=NULL;
 	uint64_t j = start;
+	uint64_t c = 0;
 	// uint32_t max = file->size / file->bufsize;
 
 	err = nowdb_file_open(file);
@@ -147,8 +148,10 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 		return FALSE;
 	}
 	fprintf(stderr, "file size: %u\n", file->size);
+	fprintf(stderr, "file  pos: %u\n", file->pos);
+	fprintf(stderr, "file  buf: %u\n", file->bufsize);
 	for(;;) {
-		if (file->pos == file->size) break;
+		if (file->pos >= file->size) break;
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
@@ -163,8 +166,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 				NOWDB_IGNORE(nowdb_file_close(file));
 				return FALSE;
 			}
-			j++;
-			fprintf(stderr, "edge: %lu\n", e->weight);
+			j++; c++;
 		}
 	}
 	if (e == NULL) {
@@ -173,7 +175,8 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 		return FALSE;
 	}
 	if (e->weight != start + count) {
-		fprintf(stderr, "last number is wrong: %lu\n", e->weight);
+		fprintf(stderr, "last number is wrong: %lu (%lu)\n",
+		                            e->weight, start+count);
 		NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
@@ -193,6 +196,7 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	nowdb_file_t   *file;
 	ts_algo_list_node_t *runner;
 	ts_algo_list_init(&files);
+
 	err = nowdb_store_getFiles(store, &files,
 	                           NOWDB_TIME_DAWN,
 	                           NOWDB_TIME_DUSK);
@@ -200,11 +204,12 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		ts_algo_list_destroy(&files);
+		nowdb_store_destroyFiles(&files);
 		return FALSE;
 	}
 	if (files.len != 2) {
 		fprintf(stderr, "expecting 2 files: %d\n", files.len);
-		ts_algo_list_destroy(&files);
+		nowdb_store_destroyFiles(&files);
 		return FALSE;
 	}
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
@@ -212,19 +217,25 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 		if (file->id != store->writer->id &&
 		    nowdb_store_findWaiting(store, file) == NULL)
 		{
-			ts_algo_list_destroy(&files);
+			nowdb_store_destroyFiles(&files);
 			return FALSE;
 		}
 		/* if waiting find from 0...16383 */
+		if (file->id != store->writer->id) {
+			if (!find(file, FULL-1, 0)) {
+				nowdb_store_destroyFiles(&files);
+				return FALSE;
+			}
+		}
 		/* if writer find from 16384 ...24575 */
 		if (file->id == store->writer->id) {
-			if (!find(file, FULL, 16384)) {
-				ts_algo_list_destroy(&files);
+			if (!find(file, HALF-1, FULL)) {
+				nowdb_store_destroyFiles(&files);
 				return FALSE;
 			}
 		}
 	}
-	ts_algo_list_destroy(&files);
+	nowdb_store_destroyFiles(&files);
 	return TRUE;
 }
 

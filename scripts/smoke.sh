@@ -18,6 +18,12 @@ then
 	echo "FAILED: timesmoke failed"
 fi
 
+test/smoke/pathsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: pathsmoke failed"
+fi
+
 test/smoke/filesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then

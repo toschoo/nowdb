@@ -63,6 +63,7 @@ bench: bin/readplainbench \
 smoke:	compileme         \
 	$(SMK)/errsmoke   \
 	$(SMK)/timesmoke  \
+	$(SMK)/pathsmoke  \
 	$(SMK)/filesmoke  \
 	$(SMK)/storesmoke \
 	$(SMK)/insertstoresmoke
@@ -117,6 +118,11 @@ $(SMK)/errsmoke:	$(LIB) $(DEP) $(SMK)/errsmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/timesmoke:	$(LIB) $(DEP) $(SMK)/timesmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/pathsmoke:	$(LIB) $(DEP) $(SMK)/pathsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb

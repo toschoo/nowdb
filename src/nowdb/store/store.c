@@ -393,7 +393,7 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
 	p = nowdb_path_append(store->path, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "allocating file path");
-	err = nowdb_file_new(file, fid, p, store->filesize, 
+	err = nowdb_file_new(file, fid, p, store->filesize,0,
 	                     NOWDB_IDX_PAGE, store->recsize, 
 	                     NOWDB_FILE_WRITER | NOWDB_FILE_SPARE,
 	                     NOWDB_COMP_FLAT, NOWDB_ENCP_NONE,
@@ -614,6 +614,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 		       FALSE, OBJECT, "allocating store path");
 	err = nowdb_file_new(&file, tmp.id, p,
 	                            tmp.capacity,
+	                            tmp.size,
 	                            tmp.blocksize,
 	                            tmp.recordsize,
 	                            tmp.ctrl,
@@ -656,8 +657,10 @@ static inline nowdb_err_t open(nowdb_store_t *store, char *buf, int size) {
 	runner = files.head;
 	while (runner!=NULL) {
 		file = runner->cont;
+		/*
 		fprintf(stderr, "%u: %s -- %u\n",
 		        file->id, file->path, (uint32_t)file->ctrl);
+		*/
 		if (file->ctrl & NOWDB_FILE_SPARE) {
 			if (ts_algo_list_append(
 			    &store->spares, file) != TS_ALGO_OK)
@@ -999,8 +1002,10 @@ nowdb_err_t nowdb_store_create(nowdb_store_t *store) {
 		destroySpares(store); goto unlock;
 	}
 
+	/*
 	fprintf(stderr, "writer: %s -- %u\n",
 		         store->writer->path, store->writer->ctrl);
+	*/
 
 	err = storeCatalog(store);
 unlock:
@@ -1038,13 +1043,11 @@ nowdb_err_t nowdb_store_drop(nowdb_store_t *store) {
 
 	for (runner=dir.head; runner!=NULL; runner=runner->nxt) {
 		e = runner->cont;
-		fprintf(stderr, "removing %s\n", e->path);
 		err = nowdb_path_remove(e->path);
 		if (err != NOWDB_OK) {
 			goto unlock;
 		}
 	}
-	fprintf(stderr, "removing %s\n", store->path);
 	err = nowdb_path_remove(store->path);
 
 unlock:
@@ -1149,6 +1152,8 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	/* writer */
 	err = copyFile(store->writer, &file);
 	if (err != NOWDB_OK) goto unlock;
+	err = nowdb_file_makeReader(file);
+	if (err != NOWDB_OK) goto unlock;
 	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                     "list append");
@@ -1161,6 +1166,14 @@ unlock:
 		err2->cause = err; return err2;
 	}
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Destroy files and list
+ * ------------------------------------------------------------------------
+ */
+void nowdb_store_destroyFiles(ts_algo_list_t *files) {
+	destroyFiles(files);
 }
 
 /* ------------------------------------------------------------------------
