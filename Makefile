@@ -61,14 +61,16 @@ all:	default tools tests bench
 tools:	bin/randomfile \
 	bin/catalog
 
-bench: bin/readplainbench \
-       bin/writestorebench
+bench: bin/readplainbench  \
+       bin/writestorebench \
+       bin/qstress
 
 smoke:	compileme         \
 	$(SMK)/errsmoke   \
 	$(SMK)/timesmoke  \
 	$(SMK)/pathsmoke  \
 	$(SMK)/tasksmoke  \
+	$(SMK)/queuesmoke \
 	$(SMK)/filesmoke  \
 	$(SMK)/storesmoke \
 	$(SMK)/insertstoresmoke
@@ -138,6 +140,14 @@ $(SMK)/tasksmoke:	$(LIB) $(DEP) $(SMK)/tasksmoke.o $(COM)/bench.o
 			                 $(COM)/bench.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/queuesmoke:	$(LIB) $(DEP) $(SMK)/queuesmoke.o \
+			$(COM)/bench.o $(COM)/math.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o     \
+			                 $(COM)/bench.o \
+			                 $(COM)/math.o  \
+			                 $(libs) -lnowdb
+
 $(SMK)/filesmoke:	$(LIB) $(DEP) $(SMK)/filesmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
@@ -180,6 +190,13 @@ $(BIN)/writestorebench:	$(LIB) $(DEP) $(BENCH)/writestorebench.o \
 			              	       $(COM)/stores.o            \
 			                       $(COM)/cmd.o               \
 			                 $(libs) -lnowdb
+
+$(BIN)/qstress:		$(LIB) $(DEP) $(BENCH)/qstress.o \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(BENCH)/qstress.o \
+			                       $(COM)/cmd.o       \
+			                 $(libs) -lnowdb
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
 			              $(COM)/cmd.o
@@ -213,6 +230,7 @@ clean:
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
 	rm -f $(SMK)/tasksmoke
+	rm -f $(SMK)/queuesmoke
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
@@ -220,5 +238,6 @@ clean:
 	rm -f $(BIN)/randomfile
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench
+	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 

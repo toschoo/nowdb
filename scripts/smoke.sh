@@ -24,6 +24,18 @@ then
 	echo "FAILED: pathsmoke failed"
 fi
 
+test/smoke/tasksmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: tasksmoke failed"
+fi
+
+test/smoke/queuesmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: queuesmoke failed"
+fi
+
 test/smoke/filesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then

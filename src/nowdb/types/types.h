@@ -58,6 +58,8 @@ typedef int64_t nowdb_time_t;
 
 typedef uint32_t nowdb_version_t;
 
+typedef uint32_t nowdb_roleid_t;
+
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
 
@@ -85,11 +87,11 @@ typedef uint64_t nowdb_rowid_t;
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_key_t   origin; /* id of the vertex          */
+	nowdb_key_t   vertex; /* id of the vertex          */
 	nowdb_key_t property; /* id of the vertex property */
 	nowdb_value_t  value; /* property value            */
 	nowdb_type_t   vtype; /* type of the value         */
-	char     reserved[4]; /* reservered for future use */
+	nowdb_roleid_t  role; /* role identifier           */
 } nowdb_property_t;
 
 /* ------------------------------------------------------------------------
@@ -99,8 +101,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_key_t      origin; /* id of the left  vertex  */
 	nowdb_key_t        edge; /* id of the edge          */
+	nowdb_key_t      origin; /* id of the left  vertex  */
 	nowdb_key_t      destin; /* id of the right vertex  */
 	nowdb_key_t       label; /* id of the primary label */
 	nowdb_time_t  timestamp; /* timestamp               */

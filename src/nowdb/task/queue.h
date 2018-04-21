@@ -17,17 +17,6 @@
 #include <stdint.h>
 
 /* ------------------------------------------------------------------------
- * Queue
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_lock_t   lock;  /* Exclusive lock     */
-	nowdb_bool_t closed;  /* closed for enqueue */
-	ts_algo_list_t list;  /* the queue content  */
-	int             max;  /* max messages       */
-} nowdb_queue_t;
-
-/* ------------------------------------------------------------------------
  * Queue is infinite
  * ------------------------------------------------------------------------
  */
@@ -37,13 +26,28 @@ typedef struct {
  * User defined callback to destroy messages before destroying the queue
  * ------------------------------------------------------------------------
  */
-typedef void (*nowdb_queue_destroy_t)(void **message);
+typedef void (*nowdb_queue_drain_t)(void **message);
+
+/* ------------------------------------------------------------------------
+ * Queue
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_lock_t         lock;  /* Exclusive lock                   */
+	nowdb_bool_t       closed;  /* closed for enqueue               */
+	ts_algo_list_t       list;  /* the queue content                */
+	int                   max;  /* max messages                     */
+	nowdb_time_t        delay;  /* delay between checking the queue */
+	nowdb_queue_drain_t drain;  /* callback to free messages        */
+} nowdb_queue_t;
 
 /* ------------------------------------------------------------------------
  * Initialise the queue
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_init(nowdb_queue_t *q, int max);
+nowdb_err_t nowdb_queue_init(nowdb_queue_t *q, int max,
+                             nowdb_time_t        delay,
+                             nowdb_queue_drain_t drain);
 
 /* ------------------------------------------------------------------------
  * Destroy the queue
@@ -78,14 +82,14 @@ nowdb_err_t nowdb_queue_close(nowdb_queue_t *q);
  * the calling thread blocks.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_enque(nowdb_queue_t *q, void *message);
+nowdb_err_t nowdb_queue_enqueue(nowdb_queue_t *q, void *message);
 
 /* ------------------------------------------------------------------------
  * Writes 'message' to the head of the queue (last in / first out)
  * The message is written even when the queue is full.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_enquePrio(nowdb_queue_t *q, void *message);
+nowdb_err_t nowdb_queue_enqueuePrio(nowdb_queue_t *q, void *message);
 
 /* ------------------------------------------------------------------------
  * Removes the 'message' at the head of the queue
@@ -97,10 +101,9 @@ nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, void **message);
 
 /* ------------------------------------------------------------------------
  * Removes all messages from the queue
- * calling 'handler' on each message.
+ * calling 'drain' on each message.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_drain(nowdb_queue_t *q,
-                nowdb_queue_destroy_t handler);
+nowdb_err_t nowdb_queue_drain(nowdb_queue_t *q);
 
 #endif

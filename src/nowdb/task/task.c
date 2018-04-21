@@ -55,6 +55,10 @@ nowdb_task_t nowdb_task_myself() {
 nowdb_err_t nowdb_task_sleep(nowdb_time_t delay) {
 	struct timespec ts, rem;
 
+	if (delay < 0) return nowdb_err_get(nowdb_err_invalid,
+	                      FALSE, OBJECT, "negative delay");
+	if (delay == 0) return NOWDB_OK;
+
 	ts.tv_sec = delay / NPERSEC;
 	ts.tv_nsec = delay - ts.tv_sec * NPERSEC;
 

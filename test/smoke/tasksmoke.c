@@ -54,6 +54,8 @@ nowdb_bool_t testSleep() {
 }
 
 nowdb_lock_t   lock;
+nowdb_lock_t   waitOne;
+nowdb_lock_t   waitTwo;
 ts_algo_list_t inlist;
 ts_algo_list_t outlist;
 nowdb_err_t    globalErr;
@@ -62,7 +64,12 @@ void *job1(void *ignore) {
 	int f1=1, tmp;
 	ts_algo_list_node_t *node;
 	nowdb_bool_t z;
-	int *f = malloc(sizeof(int));
+	int *f;
+
+	globalErr = nowdb_lock(&waitOne);
+	if (globalErr != NOWDB_OK) return NULL;
+
+	f = malloc(sizeof(int));
 	if (f == NULL) {
 		globalErr = nowdb_err_get(nowdb_err_no_mem,
 			              FALSE, "job1", NULL);
@@ -119,6 +126,8 @@ void *job1(void *ignore) {
 	}
 	fprintf(stderr, "\n");
 	if (f != NULL) free(f);
+
+	globalErr = nowdb_unlock(&waitOne);
 	return NULL;
 }
 
@@ -126,7 +135,12 @@ void *job2(void *ignore) {
 	ts_algo_list_node_t *node;
 	int f1 = 1, tmp;
 	nowdb_bool_t z;
-	int *f = malloc(sizeof(int));
+	int *f;
+
+	globalErr = nowdb_lock(&waitTwo);
+	if (globalErr != NOWDB_OK) return NULL;
+
+	f = malloc(sizeof(int));
 	if (f == NULL) {
 		globalErr = nowdb_err_get(nowdb_err_no_mem,
 			              FALSE, "job2", NULL);
@@ -179,6 +193,7 @@ void *job2(void *ignore) {
 		if (globalErr != NOWDB_OK) return NULL;
 	}
 	if (f != NULL) free(f);
+	globalErr = nowdb_unlock(&waitTwo);
 	return NULL;
 }
 
@@ -189,6 +204,18 @@ nowdb_task_t test2task() {
 	ts_algo_list_init(&inlist);
 	ts_algo_list_init(&outlist);
 	err = nowdb_lock_init(&lock);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_lock_init(&waitOne);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_lock_init(&waitTwo);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -206,12 +233,37 @@ nowdb_task_t test2task() {
 		nowdb_err_release(err);
 		return FALSE;
 	}
-	err = nowdb_task_sleep(1000000000); // <- use a lock instead
+	err = nowdb_task_sleep(1000000);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return FALSE;
 	}
+	err = nowdb_lock(&waitOne);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_lock(&waitTwo);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_unlock(&waitOne);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_unlock(&waitTwo);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
 	ts_algo_list_destroy(&inlist);
 	ts_algo_list_destroy(&outlist);
 	nowdb_task_destroy(t1);
@@ -226,6 +278,10 @@ nowdb_task_t test2task() {
 int main() {
 	int rc = EXIT_SUCCESS;
 
+	if (!nowdb_err_init()) {
+		fprintf(stderr, "nowdb_err_init failed\n");
+		return EXIT_FAILURE;
+	}
 	if (!testSleep()) {
 		fprintf(stderr, "testSleep failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -236,6 +292,7 @@ int main() {
 	}
 
 cleanup:
+	nowdb_err_destroy();
 	if (rc == EXIT_SUCCESS) {
 		fprintf(stderr, "PASSED\n");
 	} else {
