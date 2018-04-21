@@ -94,10 +94,15 @@ nowdb_err_t nowdb_queue_enqueuePrio(nowdb_queue_t *q, void *message);
 /* ------------------------------------------------------------------------
  * Removes the 'message' at the head of the queue
  * If there are no messages in the queue,
- * the calling thread blocks.
+ * the calling thread blocks according to tmo:
+ * tmo < 0: blocks forever
+ * tmo = 0: returns immediately
+ * tmo > 0: blocks tmo nanoseconds
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, void **message);
+nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, 
+                                nowdb_time_t tmo,
+                                void  **message);
 
 /* ------------------------------------------------------------------------
  * Removes all messages from the queue

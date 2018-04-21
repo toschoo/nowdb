@@ -144,7 +144,10 @@ nowdb_err_t nowdb_queue_close(nowdb_queue_t *q) {
  */
 #define FULL  0
 #define EMPTY 1
-static inline nowdb_err_t block(nowdb_queue_t *q, int what) {
+static inline nowdb_err_t block(nowdb_queue_t *q,
+                                nowdb_time_t tmo,
+                                int         what) {
+	nowdb_time_t s = tmo;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
@@ -165,9 +168,14 @@ static inline nowdb_err_t block(nowdb_queue_t *q, int what) {
 		if (err2 != NOWDB_OK) {
 			err2->cause = err; return err2;
 		}
+		if (tmo == 0) return nowdb_err_get(nowdb_err_timeout,
+		                                FALSE, OBJECT, NULL);
+		if (tmo > 0 && s <= 0) return nowdb_err_get(nowdb_err_timeout,
+		                                         FALSE, OBJECT, NULL);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_task_sleep(q->delay);
 		if (err != NOWDB_OK) return err;
+		if (tmo > 0) s-=q->delay;
 	}
 	return NOWDB_OK;
 }
@@ -184,7 +192,7 @@ nowdb_err_t nowdb_queue_enqueue(nowdb_queue_t *q, void *message) {
 
 	if (q == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                             "queue object is NULL");
-	err = block(q, FULL);
+	err = block(q, -1, FULL);
 	if (err != NOWDB_OK) return err;
 	if (q->closed) {
 		err = nowdb_err_get(nowdb_err_no_rsc, FALSE, OBJECT,
@@ -229,11 +237,11 @@ nowdb_err_t nowdb_queue_enqueuePrio(nowdb_queue_t *q, void *message) {
 
 /* ------------------------------------------------------------------------
  * Removes the 'message' at the head of the queue
- * If there are no messages in the queue,
- * the calling thread blocks.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, void **message) {
+nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, 
+                                nowdb_time_t tmo,
+                                void   **message) {
 	ts_algo_list_node_t  *node;
 	nowdb_err_t err = NOWDB_OK;
 
@@ -241,7 +249,7 @@ nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, void **message) {
 	                                             "queue object is NULL");
 	if (message == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "message is NULL");
-	err = block(q, EMPTY);
+	err = block(q, tmo, EMPTY);
 	if (err != NOWDB_OK) return err;
 
 	node = q->list.head;

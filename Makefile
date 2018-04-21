@@ -41,6 +41,7 @@ OBJ = $(SRC)/types/types.o  \
       $(SRC)/task/lock.o    \
       $(SRC)/task/task.o    \
       $(SRC)/task/queue.o   \
+      $(SRC)/task/worker.o  \
       $(SRC)/store/store.o
 
 DEP = $(SRC)/types/types.h  \
@@ -52,6 +53,7 @@ DEP = $(SRC)/types/types.h  \
       $(SRC)/task/lock.h    \
       $(SRC)/task/task.h    \
       $(SRC)/task/queue.h   \
+      $(SRC)/task/worker.h  \
       $(SRC)/store/store.h
 
 default:	lib 
@@ -65,14 +67,15 @@ bench: bin/readplainbench  \
        bin/writestorebench \
        bin/qstress
 
-smoke:	compileme         \
-	$(SMK)/errsmoke   \
-	$(SMK)/timesmoke  \
-	$(SMK)/pathsmoke  \
-	$(SMK)/tasksmoke  \
-	$(SMK)/queuesmoke \
-	$(SMK)/filesmoke  \
-	$(SMK)/storesmoke \
+smoke:	compileme          \
+	$(SMK)/errsmoke    \
+	$(SMK)/timesmoke   \
+	$(SMK)/pathsmoke   \
+	$(SMK)/tasksmoke   \
+	$(SMK)/queuesmoke  \
+	$(SMK)/workersmoke \
+	$(SMK)/filesmoke   \
+	$(SMK)/storesmoke  \
 	$(SMK)/insertstoresmoke
 
 tests: smoke
@@ -141,6 +144,14 @@ $(SMK)/tasksmoke:	$(LIB) $(DEP) $(SMK)/tasksmoke.o $(COM)/bench.o
 			                 $(libs) -lnowdb
 
 $(SMK)/queuesmoke:	$(LIB) $(DEP) $(SMK)/queuesmoke.o \
+			$(COM)/bench.o $(COM)/math.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o     \
+			                 $(COM)/bench.o \
+			                 $(COM)/math.o  \
+			                 $(libs) -lnowdb
+
+$(SMK)/workersmoke:	$(LIB) $(DEP) $(SMK)/workersmoke.o \
 			$(COM)/bench.o $(COM)/math.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o     \
@@ -219,7 +230,7 @@ clean:
 	rm -f $(BENCH)/*.o
 	rm -f $(TOOLS)/*.o
 	rm -f $(OUTLIB)/libnowdb.so
-	rm -f $(LOG)/test.log
+	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
 	rm -f $(RSC)/*.dbz
 	rm -f $(RSC)/*.bin
@@ -231,6 +242,7 @@ clean:
 	rm -f $(SMK)/pathsmoke
 	rm -f $(SMK)/tasksmoke
 	rm -f $(SMK)/queuesmoke
+	rm -f $(SMK)/workersmoke
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke

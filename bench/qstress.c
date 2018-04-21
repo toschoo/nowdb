@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 		nowdb_err_destroy();
 		return EXIT_FAILURE;
 	}
-	nowdb_queue_dequeue(&q, (void**)&msg);
+	nowdb_queue_dequeue(&q, -1, (void**)&msg);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

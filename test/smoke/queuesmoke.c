@@ -69,7 +69,7 @@ nowdb_bool_t testEnqueueNoBlock() {
 		nowdb_queue_destroy(&q); free(msg);
 		return FALSE;
 	}
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -125,7 +125,7 @@ nowdb_bool_t testEnqueueClosed() {
 	nowdb_err_print(err);
 	nowdb_err_release(err);
 
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err == NOWDB_OK) {
 		fprintf(stderr, "dequeue from empty closed queue\n");
 		free(msg); nowdb_queue_destroy(&q);
@@ -149,7 +149,7 @@ nowdb_bool_t testEnqueueClosed() {
 		nowdb_queue_destroy(&q); free(msg);
 		return FALSE;
 	}
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -211,7 +211,7 @@ nowdb_bool_t testEnqueuePrio() {
 		free(msg1); free(msg2);
 		return FALSE;
 	}
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -249,7 +249,7 @@ nowdb_bool_t testEnqueuePrio() {
 		free(msg2); free(prio);
 		return FALSE;
 	}
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -269,7 +269,7 @@ nowdb_bool_t testEnqueuePrio() {
 		free(msg2); free(prio);
 		return FALSE;
 	}
-	err = nowdb_queue_dequeue(&q, (void**)&rcv);
+	err = nowdb_queue_dequeue(&q, -1, (void**)&rcv);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -356,7 +356,7 @@ void *job(void *args) {
 	}
 	for(;;) {
 		// fprintf(stderr, "dequeuing from %p\n", q1);
-		err = nowdb_queue_dequeue(q1,(void**)&rcv);
+		err = nowdb_queue_dequeue(q1, -1, (void**)&rcv);
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
@@ -465,7 +465,7 @@ nowdb_bool_t test2tasks() {
 	fprintf(stderr, "1 1 ");
 	for(int i=0;i<15;i++) {
 		// fprintf(stderr, "dequeuing from %p\n", &q2);
-		err = nowdb_queue_dequeue(&q2,(void**)&rcv);
+		err = nowdb_queue_dequeue(&q2, -1, (void**)&rcv);
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
