@@ -15,13 +15,41 @@
 #include <nowdb/task/task.h>
 #include <nowdb/task/queue.h>
 
+/* ------------------------------------------------------------------------
+ * Message to send to the worker
+ * -------
+ * 'type': can be freely selected by the user.
+ *         the values 0-9, however, are reserved
+ *         for internal use.
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	uint32_t       type;
 	void          *cont;
 } nowdb_wrk_message_t;
 
-#define NOWDB_WRK_STOP 0
+#define NOWDB_WRK_STOP  0
+#define NOWDB_WRK_USER 10
 
+/* ------------------------------------------------------------------------
+ * Worker
+ * ------
+ * Workers may be periodic or aperiodic.
+ * Periodic workers perform their job every 'period' nanoseconds.
+ *          They also perform their job, when a message is sent.
+ *          (This means that periodic workers must be able to perform
+ *           their job without a message!)
+ * Aperiodic workers by contrast perform their job
+ *           only when a message is sent.
+ * 'rsc' is an additional resource that can be used
+ * by the user-defined job.
+ * 'errqueue' may be NULL. In that case, errors are announced on
+ * stderr. Otherwise, errors are sent to that queue (which shall
+ * be initialised and opened beforehand.
+ * If an error occurs writing to the error queue,
+ * errors (including that error) are announced on stderr.
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_lock_t         lock; /* exclusive lock              */
 	char              name[8]; /* worker name                 */
@@ -34,12 +62,47 @@ typedef struct {
 	char                state; /* running or stopped          */
 } nowdb_worker_t;
 
+/* ------------------------------------------------------------------------
+ * Worker states
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_WRK_STOPPED 0
 #define NOWDB_WRK_RUNNING 1
 
+/* ------------------------------------------------------------------------
+ * Job to be done by a worker
+ * ------------------------------------------------------------------------
+ */
 typedef nowdb_err_t (*nowdb_job_t)(nowdb_worker_t      *wrk,
                                    nowdb_wrk_message_t *msg);
 
+/* ------------------------------------------------------------------------
+ * Allocate and initialise a worker
+ * --------     ----------
+ * NOTE: the drain callback is passed to the jobqueue.
+ *       all messages are destroyed using drain
+ *       (except: internal messages!!!)
+ *       If you don't want the worker to manage the memory
+ *       you should pass a 'drain' that does nothing.
+ *       Otherwise, you need to destroy your content and
+ *       the user data (cont) itself.                ---
+ *       The drain method shall ignore messages with type < 10!
+ * NOTE: The worker is immediately available,
+ *       when the function has returned.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
+                             char                *name,
+                             nowdb_time_t       period,
+                             nowdb_job_t           job,
+                             nowdb_queue_t   *errqueue,
+	                     nowdb_queue_drain_t drain,
+                             void                *rsc);
+
+/* ------------------------------------------------------------------------
+ * Initialise an already allocated worker.
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
                               char                *name,
                               nowdb_time_t       period,
@@ -48,11 +111,17 @@ nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
 	                      nowdb_queue_drain_t drain,
                               void                *rsc);
 
-void nowdb_worker_destroy(nowdb_worker_t *wrk);
-
-nowdb_err_t nowdb_worker_do(nowdb_worker_t      *wrk,
-                            nowdb_wrk_message_t *msg);
-
+/* ------------------------------------------------------------------------
+ * Stops and destroys all resources in use by the worker
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
                               nowdb_time_t    tmo);
+
+/* ------------------------------------------------------------------------
+ * Do your job.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_worker_do(nowdb_worker_t      *wrk,
+                            nowdb_wrk_message_t *msg);
 #endif

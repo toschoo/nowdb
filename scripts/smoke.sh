@@ -36,6 +36,12 @@ then
 	echo "FAILED: queuesmoke failed"
 fi
 
+test/smoke/workersmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: workersmoke failed"
+fi
+
 test/smoke/filesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
