@@ -14,6 +14,7 @@
 #include <nowdb/io/file.h>
 #include <nowdb/io/dir.h>
 #include <nowdb/task/lock.h>
+#include <nowdb/task/worker.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -30,7 +31,8 @@ typedef struct {
 	ts_algo_list_t  waiting; /* unprepard readers           */
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
-	                         /* workers                     */
+	nowdb_worker_t  syncwrk; /* background sync             */
+	nowdb_worker_t  sortwrk; /* background sorter           */
 } nowdb_store_t;
 
 /* ------------------------------------------------------------------------

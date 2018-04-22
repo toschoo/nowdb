@@ -32,29 +32,31 @@ RSC = rsc
 OUTLIB = lib
 libs = -lm -lpthread -ltsalgo -lzstd
 
-OBJ = $(SRC)/types/types.o  \
-      $(SRC)/types/errman.o \
-      $(SRC)/types/error.o  \
-      $(SRC)/types/time.o   \
-      $(SRC)/io/dir.o       \
-      $(SRC)/io/file.o      \
-      $(SRC)/task/lock.o    \
-      $(SRC)/task/task.o    \
-      $(SRC)/task/queue.o   \
-      $(SRC)/task/worker.o  \
-      $(SRC)/store/store.o
+OBJ = $(SRC)/types/types.o    \
+      $(SRC)/types/errman.o   \
+      $(SRC)/types/error.o    \
+      $(SRC)/types/time.o     \
+      $(SRC)/io/dir.o         \
+      $(SRC)/io/file.o        \
+      $(SRC)/task/lock.o      \
+      $(SRC)/task/task.o      \
+      $(SRC)/task/queue.o     \
+      $(SRC)/task/worker.o    \
+      $(SRC)/store/store.o    \
+      $(SRC)/store/storewrk.o
 
-DEP = $(SRC)/types/types.h  \
-      $(SRC)/types/errman.h \
-      $(SRC)/types/error.h  \
-      $(SRC)/types/time.h   \
-      $(SRC)/io/dir.h       \
-      $(SRC)/io/file.h      \
-      $(SRC)/task/lock.h    \
-      $(SRC)/task/task.h    \
-      $(SRC)/task/queue.h   \
-      $(SRC)/task/worker.h  \
-      $(SRC)/store/store.h
+DEP = $(SRC)/types/types.h    \
+      $(SRC)/types/errman.h   \
+      $(SRC)/types/error.h    \
+      $(SRC)/types/time.h     \
+      $(SRC)/io/dir.h         \
+      $(SRC)/io/file.h        \
+      $(SRC)/task/lock.h      \
+      $(SRC)/task/task.h      \
+      $(SRC)/task/queue.h     \
+      $(SRC)/task/worker.h    \
+      $(SRC)/store/store.h    \
+      $(SRC)/store/storewrk.h
 
 default:	lib 
 

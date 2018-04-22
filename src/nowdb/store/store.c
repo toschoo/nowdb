@@ -7,6 +7,7 @@
  * ========================================================================
  */
 #include <nowdb/store/store.h>
+#include <nowdb/store/storewrk.h>
 #include <tsalgo/types.h>
 
 static char *OBJECT = "store";
@@ -911,6 +912,33 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	free(buf); return err;
 }
 
+static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
+	nowdb_err_t err = NOWDB_OK;
+
+	err = nowdb_store_startSync(&store->syncwrk, store, NULL);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_store_startSorter(&store->sortwrk, store, NULL);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_store_stopSync(&store->syncwrk));
+		return err;
+	}
+
+	return NOWDB_OK;
+}
+
+static inline nowdb_err_t stopWorkers(nowdb_store_t *store) {
+	nowdb_err_t err = NOWDB_OK;
+
+	err = nowdb_store_stopSync(&store->syncwrk);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_store_stopSorter(&store->sortwrk);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
 /* ------------------------------------------------------------------------
  * Open store
  * ------------------------------------------------------------------------
@@ -936,6 +964,11 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	}
 
 	/* start workers */
+	err = startWorkers(store);
+	if (err != NOWDB_OK) {
+		destroyAllFiles(store); goto unlock;
+	}
+	
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
@@ -956,6 +989,11 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
+	/* stop workers */
+	err = stopWorkers(store);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* write catalog */
 	err = storeCatalog(store);
 	if (err != NOWDB_OK) goto unlock;
 
