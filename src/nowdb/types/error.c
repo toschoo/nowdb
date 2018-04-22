@@ -184,7 +184,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	switch(rc) {
 	case nowdb_err_no_mem: return "out of memory";
 	case nowdb_err_invalid: return "invalid parameter";
-	case nowdb_err_no_rsc: return "out of resources";
+	case nowdb_err_no_rsc: return "resource not available";
 	case nowdb_err_busy: return "resource busy";          
 	case nowdb_err_too_big: return "you request too much";
 	case nowdb_err_lock: return "lock operation failed";

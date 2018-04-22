@@ -23,6 +23,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
                            uint32_t          id,
                            nowdb_path_t    path,
                            uint32_t         cap,
+                           uint32_t        size,
                            uint32_t   blocksize,
                            uint32_t  recordsize,
                            nowdb_bitmap8_t ctrl,
@@ -40,7 +41,8 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, NULL);
 	}
 	nowdb_err_t r = nowdb_file_init(*file,id,path,
-	                                cap,blocksize,recordsize,
+	                                cap,size,
+	                                blocksize,recordsize,
 	                                ctrl,comp,encp,
 	                                grain,oldest,newest);
 	if (r != NOWDB_OK) {
@@ -57,6 +59,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             uint32_t          id,
                             nowdb_path_t    path,
                             uint32_t         cap,
+                            uint32_t        size,
                             uint32_t   blocksize,
                             uint32_t  recordsize,
                             nowdb_bitmap8_t ctrl,
@@ -79,7 +82,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->cctx     = NULL;
 	file->dctx     = NULL;
 	file->off      = 0;
-	file->size     = 0;
+	file->size     = size;
 	file->capacity = cap;
 	file->tmpsize  = 0;
 	file->pos      = 0;
@@ -223,6 +226,8 @@ void nowdb_file_destroy(nowdb_file_t *file) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
+	nowdb_err_t err;
+
 	if (source == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                         "source descriptor is NULL");
@@ -231,18 +236,22 @@ nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                         "target descriptor is NULL");
 	}
-	return nowdb_file_init(target,
-	                       source->id,
-	                       source->path,
-	                       source->capacity,
-	                       source->blocksize,
-	                       source->recordsize,
-	                       source->ctrl,
-	                       source->comp,
-	                       source->encp,
-	                       source->grain,
-	                       source->oldest,
-	                       source->newest);
+	err = nowdb_file_init(target,
+	                      source->id,
+	                      source->path,
+	                      source->capacity,
+	                      source->size,
+	                      source->blocksize,
+	                      source->recordsize,
+	                      source->ctrl,
+	                      source->comp,
+	                      source->encp,
+	                      source->grain,
+	                      source->oldest,
+	                      source->newest);
+	if (err != NOWDB_OK) return err;
+	target->size = source->size;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------

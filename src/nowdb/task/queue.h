@@ -1,119 +1,114 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Directories and paths
+ * Queue: inter-thread communication
  * ========================================================================
  *
  * ========================================================================
  */
-#ifndef nowdb_dir_decl
-#define nowdb_dir_decl
+#ifndef nowdb_queue_decl
+#define nowdb_queue_decl
 
-#include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/types/time.h>
+#include <nowdb/task/lock.h>
 
 #include <tsalgo/list.h>
-
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
-#include <sys/stat.h>
 
 /* ------------------------------------------------------------------------
- * This is a path
+ * Queue is infinite
  * ------------------------------------------------------------------------
  */
-typedef char* nowdb_path_t;
+#define NOWDB_QUEUE_INF 0
 
 /* ------------------------------------------------------------------------
- * File type selector
+ * User defined callback to destroy messages before destroying the queue
  * ------------------------------------------------------------------------
  */
-typedef nowdb_bitmap8_t nowdb_dir_type_t;
-
-#define NOWDB_DIR_TYPE_ANY NOWDB_BITMAP8_ALL
-#define NOWDB_DIR_TYPE_FILE  1
-#define NOWDB_DIR_TYPE_DIR   2
-#define NOWDB_DIR_TYPE_SYM   4
-#define NOWDB_DIR_TYPE_OTHER 8
+typedef void (*nowdb_queue_drain_t)(void **message);
 
 /* ------------------------------------------------------------------------
- * Dirs: owner can read/write/execute
- * ------------------------------------------------------------------------
- */
-#define NOWDB_DIR_MODE S_IRWXU
-
-/* ------------------------------------------------------------------------
- * Files: owner can read/write
- * ------------------------------------------------------------------------
- */
-#define NOWDB_FILE_MODE S_IRUSR | S_IWUSR
-
-/* ------------------------------------------------------------------------
- * Append a path to another path
- * The result is 'base/toadd'.
- * ------------------------------------------------------------------------
- */
-nowdb_path_t nowdb_path_append(nowdb_path_t  base,
-                               nowdb_path_t toadd);
-
-/* ------------------------------------------------------------------------
- * Extract filename from a path
- * ------------------------------------------------------------------------
- */
-nowdb_path_t nowdb_path_filename(nowdb_path_t path);
-
-/* ------------------------------------------------------------------------
- * File exists and has one of the indicated types
- * ------------------------------------------------------------------------
- */
-nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
-                               nowdb_dir_type_t t);
-
-/* ------------------------------------------------------------------------
- * Create directory
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_dir_create(nowdb_path_t path);
-
-/* ------------------------------------------------------------------------
- * Remove file identified by path
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_path_remove(nowdb_path_t path);
-
-/* ------------------------------------------------------------------------
- * Move file 'src' to 'trg'
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_path_move(nowdb_path_t src,
-                            nowdb_path_t trg);
-
-/* ------------------------------------------------------------------------
- * Represents an object in a directory
+ * Queue
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_path_t  path;
-	nowdb_dir_type_t t;
-} nowdb_dir_ent_t;
+	nowdb_lock_t         lock;  /* Exclusive lock                   */
+	nowdb_bool_t       closed;  /* closed for enqueue               */
+	ts_algo_list_t       list;  /* the queue content                */
+	int                   max;  /* max messages                     */
+	nowdb_time_t        delay;  /* delay between checking the queue */
+	nowdb_queue_drain_t drain;  /* callback to free messages        */
+} nowdb_queue_t;
 
 /* ------------------------------------------------------------------------
- * Get the content of a dir
- * adds a nowdb_dir_ent_t object into the list
- * for every object in the dir of one of the indicated types
+ * Initialise the queue
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_dir_content(nowdb_path_t path,
-                          nowdb_dir_type_t    t,
-                          ts_algo_list_t *list);
+nowdb_err_t nowdb_queue_init(nowdb_queue_t *q, int max,
+                             nowdb_time_t        delay,
+                             nowdb_queue_drain_t drain);
 
 /* ------------------------------------------------------------------------
- * Destroy list filled by nowdb_dir_content
+ * Destroy the queue
  * ------------------------------------------------------------------------
  */
-void nowdb_dir_content_destroy(ts_algo_list_t *list);
+void nowdb_queue_destroy(nowdb_queue_t *q);
+
+/* ------------------------------------------------------------------------
+ * Shutdown
+ * --------
+ * close and drain the queue
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_shutdown(nowdb_queue_t *q);
+
+/* ------------------------------------------------------------------------
+ * Open the queue after it was closed.
+ * The function has no effect, when the queue was already open.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_open(nowdb_queue_t *q);
+
+/* ------------------------------------------------------------------------
+ * Closes the queue for 'enqueue'
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_close(nowdb_queue_t *q);
+
+/* ------------------------------------------------------------------------
+ * Writes 'message' to the end of the queue (last in / last out)
+ * If the queue is already full (contains more than max messages),
+ * the calling thread blocks.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_enqueue(nowdb_queue_t *q, void *message);
+
+/* ------------------------------------------------------------------------
+ * Writes 'message' to the head of the queue (last in / first out)
+ * The message is written even when the queue is full.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_enqueuePrio(nowdb_queue_t *q, void *message);
+
+/* ------------------------------------------------------------------------
+ * Removes the 'message' at the head of the queue
+ * If there are no messages in the queue,
+ * the calling thread blocks according to tmo:
+ * tmo < 0: blocks forever
+ * tmo = 0: returns immediately
+ * tmo > 0: blocks tmo nanoseconds
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, 
+                                nowdb_time_t tmo,
+                                void  **message);
+
+/* ------------------------------------------------------------------------
+ * Removes all messages from the queue
+ * calling 'drain' on each message.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_queue_drain(nowdb_queue_t *q);
 
 #endif
-

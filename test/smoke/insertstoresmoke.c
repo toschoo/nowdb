@@ -6,6 +6,7 @@
  */
 #include <nowdb/io/file.h>
 #include <nowdb/store/store.h>
+#include <common/stores.h>
 
 #include <time.h>
 #include <stdio.h>
@@ -50,81 +51,6 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	fprintf(stderr, "inserted %u from %lu to %lu (%lu)\n",
 	                         count, start, max, e.weight);
 	return TRUE;
-}
-
-nowdb_store_t *mkStore() {
-	nowdb_store_t *store;
-	nowdb_err_t err;
-	err = nowdb_store_new(&store, "rsc/store10", 1, 64, NOWDB_MEGA);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return NULL;
-	}
-	return store;
-}
-
-nowdb_bool_t createStore(nowdb_store_t *store) {
-	nowdb_err_t     err;
-	err = nowdb_store_create(store);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
-	}
-	return TRUE;
-}
-
-nowdb_bool_t dropStore(nowdb_store_t *store) {
-	nowdb_err_t     err;
-	err = nowdb_store_drop(store);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
-	}
-	return TRUE;
-}
-
-nowdb_bool_t openStore(nowdb_store_t *store) {
-	nowdb_err_t     err;
-	err = nowdb_store_open(store);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
-	}
-	return TRUE;
-}
-
-nowdb_bool_t closeStore(nowdb_store_t *store) {
-	nowdb_err_t     err;
-	err = nowdb_store_close(store);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
-	}
-	return TRUE;
-}
-
-nowdb_store_t *bootstrap() {
-	nowdb_store_t *store;
-	store = mkStore();
-	if (store == NULL) return NULL;
-	if (openStore(store)) {
-		if (!closeStore(store)) goto failure;
-		if (!dropStore(store)) goto failure;
-	}
-	if (!createStore(store)) goto failure;
-	if (!openStore(store)) goto failure;
-	return store;
-
-failure:
-	closeStore(store);
-	nowdb_store_destroy(store);
-	return NULL;
-	
 }
 
 nowdb_bool_t checkInitial(nowdb_store_t *store) {
@@ -201,12 +127,124 @@ nowdb_bool_t checkFull(nowdb_store_t *store) {
 	return TRUE;
 }
 
+nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
+	nowdb_err_t err;
+	nowdb_edge_t *e=NULL;
+	uint64_t j = start;
+	uint64_t c = 0;
+	// uint32_t max = file->size / file->bufsize;
+
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	err = nowdb_file_rewind(file);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_file_close(file));
+		return FALSE;
+	}
+	fprintf(stderr, "file size: %u\n", file->size);
+	fprintf(stderr, "file  pos: %u\n", file->pos);
+	fprintf(stderr, "file  buf: %u\n", file->bufsize);
+	for(;;) {
+		if (file->pos >= file->size) break;
+		err = nowdb_file_move(file);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			NOWDB_IGNORE(nowdb_file_close(file));
+			return FALSE;
+		}
+		for(int i=0;i<file->bufsize;i+=file->recordsize) {
+			e = (nowdb_edge_t*)(file->bptr+i);
+			if (e->weight != j) {
+				fprintf(stderr, "wrong number: %lu\n", e->weight);
+				NOWDB_IGNORE(nowdb_file_close(file));
+				return FALSE;
+			}
+			j++; c++;
+		}
+	}
+	if (e == NULL) {
+		fprintf(stderr, "no edge\n");
+		NOWDB_IGNORE(nowdb_file_close(file));
+		return FALSE;
+	}
+	if (e->weight != start + count) {
+		fprintf(stderr, "last number is wrong: %lu (%lu)\n",
+		                            e->weight, start+count);
+		NOWDB_IGNORE(nowdb_file_close(file));
+		return FALSE;
+	}
+	err = nowdb_file_close(file);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_file_close(file));
+		return FALSE;
+	}
+	return TRUE;
+}
+
+nowdb_bool_t checkFiles(nowdb_store_t *store) {
+	nowdb_err_t      err;
+	ts_algo_list_t files;
+	nowdb_file_t   *file;
+	ts_algo_list_node_t *runner;
+	ts_algo_list_init(&files);
+
+	err = nowdb_store_getFiles(store, &files,
+	                           NOWDB_TIME_DAWN,
+	                           NOWDB_TIME_DUSK);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		ts_algo_list_destroy(&files);
+		nowdb_store_destroyFiles(&files);
+		return FALSE;
+	}
+	if (files.len != 2) {
+		fprintf(stderr, "expecting 2 files: %d\n", files.len);
+		nowdb_store_destroyFiles(&files);
+		return FALSE;
+	}
+	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		if (file->id != store->writer->id &&
+		    nowdb_store_findWaiting(store, file) == NULL)
+		{
+			nowdb_store_destroyFiles(&files);
+			return FALSE;
+		}
+		/* if waiting find from 0...16383 */
+		if (file->id != store->writer->id) {
+			if (!find(file, FULL-1, 0)) {
+				nowdb_store_destroyFiles(&files);
+				return FALSE;
+			}
+		}
+		/* if writer find from 16384 ...24575 */
+		if (file->id == store->writer->id) {
+			if (!find(file, HALF-1, FULL)) {
+				nowdb_store_destroyFiles(&files);
+				return FALSE;
+			}
+		}
+	}
+	nowdb_store_destroyFiles(&files);
+	return TRUE;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store;
 
 	nowdb_err_init();
-	store = bootstrap();
+	store = bootstrap("rsc/store10");
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -225,9 +263,9 @@ int main() {
 	if (!checkFull(store)) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	/*
-	 * read files
-	 */
+	if (!checkFiles(store)) {
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (!closeStore(store)) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -237,9 +275,9 @@ int main() {
 	if (!checkFull(store)) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	/*
-	 * read files
-	 */
+	if (!checkFiles(store)) {
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	
 cleanup:
 	if (store != NULL) {
