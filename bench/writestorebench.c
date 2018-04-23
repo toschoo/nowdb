@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
 	timestamp(&t2);
 	
 	fprintf(stdout, "Running time: %luus\n", minus(&t2, &t1)/1000);
+	nowdb_task_sleep(1000000000);
 
 cleanup:
 	if (store != NULL) {

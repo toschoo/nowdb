@@ -190,6 +190,33 @@ static inline void destroyAllFiles(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: initialise tree of readers
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t initreaders(nowdb_store_t *store) {
+	ts_algo_rc_t rc = ts_algo_tree_init(&store->readers,
+	                                    &compare, NULL,
+	                                    &update, &delete,
+	                                    &destroy);
+	if (rc != 0) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                       "cannot initialise AVL tree");
+	}
+	return NOWDB_OK;
+}
+
+
+/* ------------------------------------------------------------------------
+ * Helper: initialise all files
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t initAllFiles(nowdb_store_t *store) {
+	ts_algo_list_init(&store->spares);
+	ts_algo_list_init(&store->waiting);
+	return initreaders(store);
+}
+
+/* ------------------------------------------------------------------------
  * Helper: find file in list of files
  * ------------------------------------------------------------------------
  */
@@ -208,8 +235,8 @@ static inline ts_algo_list_node_t *findInList(ts_algo_list_t *list,
  * Find file in waiting
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findWaiting(nowdb_store_t *store,
-                                      nowdb_file_t  *file) {
+static inline nowdb_file_t *findWaiting(nowdb_store_t *store,
+                                        nowdb_file_t   *file) {
 	ts_algo_list_node_t *tmp;
 	tmp = findInList(&store->waiting, file);
 	if (tmp == NULL) return NULL;
@@ -220,8 +247,8 @@ nowdb_file_t *nowdb_store_findWaiting(nowdb_store_t *store,
  * Find file in spares
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findSpare(nowdb_store_t *store,
-                                    nowdb_file_t  *file) {
+static inline nowdb_file_t *findSpare(nowdb_store_t *store,
+                                       nowdb_file_t  *file) {
 	ts_algo_list_node_t *tmp;
 	tmp = findInList(&store->spares, file);
 	if (tmp == NULL) return NULL;
@@ -232,25 +259,9 @@ nowdb_file_t *nowdb_store_findSpare(nowdb_store_t *store,
  * Find file in readers
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findReader(nowdb_store_t *store,
-                                     nowdb_file_t  *file) {
+static inline nowdb_file_t *findReader(nowdb_store_t *store,
+                                       nowdb_file_t   *file) {
 	return ts_algo_tree_find(&store->readers, file);
-}
-
-/* ------------------------------------------------------------------------
- * Helper initialise tree of files
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t initreaders(nowdb_store_t *store) {
-	ts_algo_rc_t rc = ts_algo_tree_init(&store->readers,
-	                                    &compare, NULL,
-	                                    &update, &delete,
-	                                    &destroy);
-	if (rc != 0) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                       "cannot initialise AVL tree");
-	}
-	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -275,17 +286,15 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->version = ver;
 	store->recsize = recsize;
 	store->filesize = filesize;
+	store->starting = FALSE;
 	store->path = NULL;
 	store->catalog = NULL;
 	store->writer = NULL;
+	store->compare = NULL;
 	store->nextid = 1;
 
 	/* lists of files */
-	ts_algo_list_init(&store->spares);
-	ts_algo_list_init(&store->waiting);
-
-	err = initreaders(store);
-	if (err != NOWDB_OK) return err;
+	err = initAllFiles(store);
 
 	/* lock */ 
 	err = nowdb_rwlock_init(&store->lock);
@@ -403,6 +412,52 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * create reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
+                                     nowdb_file_t  **file) {
+	nowdb_err_t    err=NOWDB_OK;
+	nowdb_err_t    err2;
+	nowdb_fileid_t fid;
+	char fname[MAX_FILE_NAME];
+
+	if (store == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "store object is NULL");
+	if (file == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = makeFileName(store, fname);
+	if (err != NOWDB_OK) goto unlock;
+	
+	fid = getFileId(store);
+
+	err = makeFile(store, file, fname, fid);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_file_create(*file);
+	if (err != NOWDB_OK) {
+		nowdb_file_destroy(*file); free(*file); *file = NULL;
+		goto unlock;
+	}
+
+	err = nowdb_file_makeReader(*file);
+	if (err != NOWDB_OK) {
+		nowdb_file_destroy(*file); free(*file); *file = NULL;
+		goto unlock;
+	}
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
+	if (err != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: create file
  * ------------------------------------------------------------------------
  */
@@ -470,11 +525,17 @@ static inline nowdb_err_t makeSpare(nowdb_store_t *store,
 
 static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
                                       nowdb_file_t  *file) {
+	nowdb_err_t err = NOWDB_OK;
+
 	if (ts_algo_list_append(&store->waiting, file) != TS_ALGO_OK) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                   "pending append");
 	}
-	return nowdb_file_makeReader(store->writer);
+	err = nowdb_file_makeReader(store->writer);
+	if (err != NOWDB_OK) return err;
+
+	if (store->starting) return NOWDB_OK;
+	return nowdb_store_sortNow(&store->sortwrk);
 }
 
 static inline nowdb_err_t swapWriter(nowdb_store_t *store) {
@@ -923,7 +984,6 @@ static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
 		NOWDB_IGNORE(nowdb_store_stopSync(&store->syncwrk));
 		return err;
 	}
-
 	return NOWDB_OK;
 }
 
@@ -951,6 +1011,8 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
+	store->starting = TRUE;
+
 	/* read catalog */
 	err = readCatalog(store);
 	if (err != NOWDB_OK) {
@@ -968,9 +1030,9 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	if (err != NOWDB_OK) {
 		destroyAllFiles(store); goto unlock;
 	}
-	
-
+	fprintf(stderr, "workers running\n");
 unlock:
+	store->starting = FALSE;
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
@@ -998,6 +1060,7 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	if (err != NOWDB_OK) goto unlock;
 
 	destroyAllFiles(store);
+	err = initAllFiles(store);
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1126,7 +1189,10 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	pos+=store->recsize; store->writer->pos+=store->recsize;
 	if (pos == store->writer->bufsize) {
 		err = remapWriter(store);
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "remap error!\n");
+			goto unlock;
+		}
 	}
 
 	/* insert into indices ? */
@@ -1200,6 +1266,270 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 		
 unlock:
 	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in spares
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_findSpare(nowdb_store_t *store,
+                                  nowdb_file_t  *file,
+                                  nowdb_bool_t  *found) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "store object is NULL");
+	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "file object is NULL");
+	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                       "found parameter is NULL");
+
+	*found = FALSE;
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (findSpare(store, file) != NULL) *found = TRUE;
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_findWaiting(nowdb_store_t *store,
+                                    nowdb_file_t  *file,
+                                    nowdb_bool_t  *found) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "store object is NULL");
+	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "file object is NULL");
+	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                       "found parameter is NULL");
+
+	*found = FALSE;
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (findWaiting(store, file) != NULL) *found = TRUE;
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Find file in readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
+                                   nowdb_file_t  *file,
+                                   nowdb_bool_t  *found) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "store object is NULL");
+	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                          "file object is NULL");
+	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                       "found parameter is NULL");
+
+	*found = FALSE;
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (findReader(store, file) != NULL) *found = TRUE;
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Find reader with capacity to store more
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
+                                      nowdb_file_t  **file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_node_t   *runner;
+	ts_algo_list_t      *tmp=NULL;
+	nowdb_file_t  *candidate=NULL;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* nothing available */
+	if (store->readers.count == 0) goto unlock;
+
+	/* this is not optimal! */
+	tmp = ts_algo_tree_toList(&store->readers);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "readers.toList");
+		goto unlock;
+	}
+	for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
+		candidate = runner->cont;
+		if (candidate->size < NOWDB_FILE_MAXSIZE) {
+			*file = malloc(sizeof(nowdb_file_t));
+			if (file == NULL) {
+				err = nowdb_err_get(nowdb_err_no_mem,
+				                       FALSE, OBJECT,
+				       "allocating file descriptor");
+				break;
+			}
+			err = nowdb_file_copy(candidate, *file);
+			if (err != NOWDB_OK) {
+				free(*file); *file = NULL; break;
+			}
+			break;
+		}
+	}
+
+unlock:
+	if (tmp != NULL) {
+		ts_algo_list_destroy(tmp); free(tmp);
+	}
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Get waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
+                                   nowdb_file_t  **file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_node_t *tmp;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	tmp = store->waiting.head;
+	if (tmp == NULL) goto unlock;
+
+	*file = malloc(sizeof(nowdb_file_t));
+	if (*file == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                      "allocating file descriptor");
+		goto unlock;
+	}
+	err = nowdb_file_copy(tmp->cont, *file);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Promote
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_promote(nowdb_store_t  *store,
+                                nowdb_file_t *waiting,
+                                nowdb_file_t  *reader) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_node_t *tmp;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (waiting == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                        OBJECT, "waiting is NULL");
+	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                        OBJECT, "reader is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	tmp = findInList(&store->waiting, waiting);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT,
+	                                              "waiting not found");
+		goto unlock;
+	}
+	if (ts_algo_tree_insert(&store->readers,reader) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                          "readers insert");
+		goto unlock;
+	}
+	ts_algo_list_remove(&store->waiting, tmp); free(tmp);
+
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Donate empty file to spares
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* review !!! all this could be makeSpare! */
+	if (store->spares.len > 3) {
+		// remove !
+		nowdb_file_destroy(file); free(file); goto unlock;
+	}
+	NOWDB_IGNORE(nowdb_file_close(file));
+	err = makeSpare(store, file);
+	if (err != NOWDB_OK) goto unlock;
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}

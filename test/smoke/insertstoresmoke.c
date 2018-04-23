@@ -191,6 +191,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 }
 
 nowdb_bool_t checkFiles(nowdb_store_t *store) {
+	nowdb_bool_t   found;
 	nowdb_err_t      err;
 	ts_algo_list_t files;
 	nowdb_file_t   *file;
@@ -214,9 +215,14 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	}
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
-		if (file->id != store->writer->id &&
-		    nowdb_store_findWaiting(store, file) == NULL)
-		{
+		err = nowdb_store_findWaiting(store, file, &found);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			nowdb_store_destroyFiles(&files);
+			return FALSE;
+		}
+		if (file->id != store->writer->id && !found) {
 			nowdb_store_destroyFiles(&files);
 			return FALSE;
 		}

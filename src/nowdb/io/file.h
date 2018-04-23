@@ -38,6 +38,7 @@ typedef uint32_t nowdb_encp_t;
 #define NOWDB_FILE_SORT   8
 
 #define NOWDB_FILE_MAPSIZE 8388608
+#define NOWDB_FILE_MAXSIZE 1073741824
 
 /* ------------------------------------------------------------------------
  * File State
@@ -171,6 +172,12 @@ nowdb_err_t nowdb_file_create(nowdb_file_t *file);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_remove(nowdb_file_t *file);
+
+/* ------------------------------------------------------------------------
+ * Erase file content 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_erase(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
  * Write a block to a buffered file ("reader").

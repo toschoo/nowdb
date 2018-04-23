@@ -323,6 +323,26 @@ nowdb_err_t nowdb_file_remove(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Erase file content
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
+	nowdb_err_t err;
+	ssize_t x;
+
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) return err;
+	memset(file->bptr, 0, file->bufsize);
+	for(int i=0; i<file->size; i+=file->bufsize) {
+		x = write(file->fd, file->bptr, file->bufsize);
+		if (x != file->bufsize) return nowdb_err_get(nowdb_err_write,
+		                                   TRUE, OBJECT, file->path);
+		
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper function to compress a block using ZSTD and write to the file
  * ------------------------------------------------------------------------
  */
