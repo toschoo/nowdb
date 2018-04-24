@@ -63,6 +63,8 @@ static ts_algo_cmp_t compare(void *ignore, void *left, void *right) {
 }
 
 static ts_algo_rc_t update(void *ignore, void *o, void *n) {
+	NOWDB_IGNORE(nowdb_file_update(n, o));
+	nowdb_file_destroy(n); free(n);
 	return TS_ALGO_OK;
 }
 
@@ -513,6 +515,8 @@ static inline nowdb_err_t getWriter(nowdb_store_t *store) {
 static inline nowdb_err_t makeSpare(nowdb_store_t *store,
                                     nowdb_file_t  *file) {
 	if (store->spares.len > 3) {
+		NOWDB_IGNORE(nowdb_file_close(file));
+		NOWDB_IGNORE(nowdb_file_remove(file));
 		nowdb_file_destroy(file); free(file);
 		return NOWDB_OK;
 	}
@@ -695,7 +699,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	return NOWDB_OK;
 }
                                            
-static inline nowdb_err_t open(nowdb_store_t *store, char *buf, int size) {
+static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_version_t ver;
 	uint32_t magic;
@@ -822,7 +826,7 @@ static inline nowdb_err_t readCatalog(nowdb_store_t *store) {
 	if (err != NULL) {
 		free(buf); return err;
 	}
-	err = open(store, buf, sz);
+	err = openstore(store, buf, sz);
 	if (err != NULL) {
 		free(buf); return err;
 	}
@@ -1030,7 +1034,6 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	if (err != NOWDB_OK) {
 		destroyAllFiles(store); goto unlock;
 	}
-	fprintf(stderr, "workers running\n");
 unlock:
 	store->starting = FALSE;
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1520,15 +1523,8 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	/* review !!! all this could be makeSpare! */
-	if (store->spares.len > 3) {
-		// remove !
-		nowdb_file_destroy(file); free(file); goto unlock;
-	}
-	NOWDB_IGNORE(nowdb_file_close(file));
 	err = makeSpare(store, file);
-	if (err != NOWDB_OK) goto unlock;
-unlock:
+
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;

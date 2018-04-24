@@ -129,6 +129,9 @@ static inline nowdb_err_t putContent(char *buf, uint32_t size,
 	err = nowdb_file_open(file);
 	if (err != NOWDB_OK) return err;
 
+	err = nowdb_file_position(file, file->size);
+	if (err != NOWDB_OK) return err;
+
 	for(uint32_t i=0; i<size; i+=file->bufsize) {
 		err = nowdb_file_writeBuf(file, buf+i, file->bufsize);
 		if (err != NOWDB_OK) {
@@ -146,7 +149,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	nowdb_file_t *reader=NULL;
 	char *buf=NULL;
 
-	fprintf(stderr, "SORTING\n");
+	// fprintf(stderr, "SORTING\n");
 
 	// get waiting
 	err = nowdb_store_getWaiting(store, &src);
@@ -186,6 +189,8 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(reader); free(reader); free(buf);
 		nowdb_file_destroy(src); free(src); return err;
 	}
+
+	// only if actually sorted
 	reader->ctrl |= NOWDB_FILE_SORT;
 
 	// insert into index

@@ -255,6 +255,33 @@ nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
 }
 
 /* ------------------------------------------------------------------------
+ * Update file descriptor
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_update(nowdb_file_t *source, nowdb_file_t *target) {
+	if (source == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                         "source descriptor is NULL");
+	}
+	if (target == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                         "target descriptor is NULL");
+	}
+	target->order = source->order;
+	target->size = source->size;
+	target->capacity = source->capacity;
+	target->blocksize = source->blocksize;
+	target->recordsize = source->recordsize;
+	target->ctrl = source->ctrl;
+	target->comp = source->comp;
+	target->encp = source->encp;
+	target->grain = source->grain;
+	target->oldest = source->oldest;
+	target->newest = source->newest;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Create file physically on disk
  * ------------------------------------------------------------------------
  */
@@ -330,6 +357,17 @@ nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
 	nowdb_err_t err;
 	ssize_t x;
 
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, NULL);
+	}
+	if (file->path == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                      "path is NULL");
+	}
+	if (file->state != nowdb_file_state_closed) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                    "file descriptor in wrong state");
+	}
 	err = nowdb_file_open(file);
 	if (err != NOWDB_OK) return err;
 	memset(file->bptr, 0, file->bufsize);
@@ -339,7 +377,8 @@ nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
 		                                   TRUE, OBJECT, file->path);
 		
 	}
-	return NOWDB_OK;
+	file->size = 0;
+	return nowdb_file_close(file);
 }
 
 /* ------------------------------------------------------------------------
@@ -406,6 +445,7 @@ static inline nowdb_err_t flatwrite(nowdb_file_t *file,
  */
 nowdb_err_t nowdb_file_writeBuf(nowdb_file_t *file,
                           char *buf, uint32_t size) {
+	nowdb_err_t err = NOWDB_OK;
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                            "file descriptor is NULL");
@@ -414,10 +454,14 @@ nowdb_err_t nowdb_file_writeBuf(nowdb_file_t *file,
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                 "file descriptor is in wrong state");
 	}
-	if (file->comp == NOWDB_COMP_FLAT) return flatwrite(file, buf, size);
-	if (file->comp == NOWDB_COMP_ZSTD) return zstdcomp(file, buf, size);
-	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	if (file->comp == NOWDB_COMP_FLAT) {
+		err = flatwrite(file, buf, size);
+	} else if (file->comp == NOWDB_COMP_ZSTD) {
+		err = zstdcomp(file, buf, size);
+	} else return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                       "unknown compression");
+	if (file->capacity < file->size) file->capacity = file->size;
+	return err;
 }
 
 /* ------------------------------------------------------------------------

@@ -162,6 +162,12 @@ void nowdb_file_destroy(nowdb_file_t *file);
 nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target);
 
 /* ------------------------------------------------------------------------
+ * Update file descriptor
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_update(nowdb_file_t *source, nowdb_file_t *target);
+
+/* ------------------------------------------------------------------------
  * Create file physically on disk
  * ------------------------------------------------------------------------
  */
