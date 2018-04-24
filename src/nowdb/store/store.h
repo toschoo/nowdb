@@ -19,6 +19,9 @@
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
 
+/* does not belong here */
+typedef char (*nowdb_compare_t)(void*, void*, void*);
+
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
@@ -31,8 +34,11 @@ typedef struct {
 	ts_algo_list_t  waiting; /* unprepard readers           */
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
+	                         /* compression                 */
+	nowdb_compare_t compare; /* comparison                  */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
+	nowdb_bool_t   starting; /* set during startup          */
 } nowdb_store_t;
 
 /* ------------------------------------------------------------------------
@@ -119,22 +125,60 @@ void nowdb_store_destroyFiles(ts_algo_list_t *files);
  * Find file in waiting
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findWaiting(nowdb_store_t *store,
-                                      nowdb_file_t  *file);
+nowdb_err_t nowdb_store_findWaiting(nowdb_store_t *store,
+                                    nowdb_file_t  *file,
+                                    nowdb_bool_t  *found);
 
 /* ------------------------------------------------------------------------
  * Find file in spares
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findSpare(nowdb_store_t *store,
-                                    nowdb_file_t  *file); 
+nowdb_err_t nowdb_store_findSpare(nowdb_store_t *store,
+                                  nowdb_file_t  *file,
+                                  nowdb_bool_t  *found); 
 
 /* ------------------------------------------------------------------------
  * Find file in readers
  * ------------------------------------------------------------------------
  */
-nowdb_file_t *nowdb_store_findReader(nowdb_store_t *store,
-                                     nowdb_file_t  *file);
+nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
+                                   nowdb_file_t  *file,
+                                   nowdb_bool_t  *found);
+
+/* ------------------------------------------------------------------------
+ * Find reader with capacity to store more
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
+                                      nowdb_file_t **file);
+
+/* ------------------------------------------------------------------------
+ * Create new reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
+                                     nowdb_file_t  **file);
+
+/* ------------------------------------------------------------------------
+ * Get waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
+                                   nowdb_file_t **file);
+
+/* ------------------------------------------------------------------------
+ * Donate empty file to spares
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file);
+
+/* ------------------------------------------------------------------------
+ * Promote
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_promote(nowdb_store_t  *store,
+                                 nowdb_file_t *waiting,
+                                 nowdb_file_t  *reader);
 
 /* ------------------------------------------------------------------------
  * Add a file

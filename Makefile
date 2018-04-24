@@ -172,10 +172,12 @@ $(SMK)/storesmoke:	$(LIB) $(DEP) $(SMK)/storesmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
-			        $(COM)/stores.o
+			        $(COM)/stores.o \
+			        $(COM)/bench.o
 				$(LNKMSG)
 				$(CC) $(LDFLAGS) -o $@ $@.o      \
 			                         $(COM)/stores.o \
+			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
 		
 		

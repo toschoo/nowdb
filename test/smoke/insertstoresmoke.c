@@ -7,6 +7,7 @@
 #include <nowdb/io/file.h>
 #include <nowdb/store/store.h>
 #include <common/stores.h>
+#include <common/bench.h>
 
 #include <time.h>
 #include <stdio.h>
@@ -191,6 +192,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 }
 
 nowdb_bool_t checkFiles(nowdb_store_t *store) {
+	nowdb_bool_t   found;
 	nowdb_err_t      err;
 	ts_algo_list_t files;
 	nowdb_file_t   *file;
@@ -214,13 +216,19 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	}
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
-		if (file->id != store->writer->id &&
-		    nowdb_store_findWaiting(store, file) == NULL)
-		{
+		err = nowdb_store_findWaiting(store, file, &found);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			nowdb_store_destroyFiles(&files);
+			return FALSE;
+		}
+		if (file->id != store->writer->id && !found) {
 			nowdb_store_destroyFiles(&files);
 			return FALSE;
 		}
 		/* if waiting find from 0...16383 */
+		/* CAUTION: waiting may have been sorted already !!! */
 		if (file->id != store->writer->id) {
 			if (!find(file, FULL-1, 0)) {
 				nowdb_store_destroyFiles(&files);
@@ -240,6 +248,7 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 }
 
 int main() {
+	struct timespec t1, t2;
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store;
 
@@ -281,9 +290,16 @@ int main() {
 	
 cleanup:
 	if (store != NULL) {
-		closeStore(store);
-		nowdb_store_destroy(store);
-		free(store);
+		nowdb_bool_t x;
+		timestamp(&t1);
+		x = closeStore(store);
+		timestamp(&t2);
+		fprintf(stderr, "closing took %luus\n",
+		                 minus(&t2, &t1)/1000);
+		if (x) {
+			nowdb_store_destroy(store);
+			free(store);
+		}
 	}
 	nowdb_err_destroy();
 	if (rc == EXIT_SUCCESS) {

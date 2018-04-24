@@ -41,6 +41,18 @@ void nowdb_task_destroy(nowdb_task_t task) {
 }
 
 /* ------------------------------------------------------------------------
+ * Join task
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_task_join(nowdb_task_t task) {
+	int x = pthread_join(task, NULL);
+	/* that is not the right error: review errors! */
+	if (x != 0) return nowdb_err_get(nowdb_err_busy, FALSE, OBJECT,
+	                                        "cannot join pthread");
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * My task
  * ------------------------------------------------------------------------
  */

@@ -25,5 +25,7 @@ nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
 
 nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk);
 
+nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk);
+
 #endif
 
