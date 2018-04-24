@@ -7,6 +7,8 @@
  * ========================================================================
  */
 #include <nowdb/task/lock.h>
+#include <stdio.h>
+#include <errno.h>
 
 static char *OBJECT = "lock";
 
@@ -49,7 +51,8 @@ nowdb_err_t nowdb_lock(nowdb_lock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_mutex_lock(lock) != 0) {
+	errno = pthread_mutex_lock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                     "pthread_mutex_lock failed");
 	}
@@ -61,7 +64,8 @@ nowdb_err_t nowdb_unlock(nowdb_lock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_mutex_unlock(lock) != 0) {
+	errno = pthread_mutex_unlock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                   "pthread_mutex_unlock failed");
 	}
@@ -73,7 +77,8 @@ nowdb_err_t nowdb_lock_read(nowdb_rwlock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_rwlock_rdlock(lock) != 0) {
+	errno = pthread_rwlock_rdlock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                  "pthread_rwlock_rdlock failed");
 	}
@@ -85,7 +90,8 @@ nowdb_err_t nowdb_unlock_read(nowdb_rwlock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_rwlock_unlock(lock) != 0) {
+	errno = pthread_rwlock_unlock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                  "pthread_rwlock_unlock failed");
 	}
@@ -97,7 +103,8 @@ nowdb_err_t nowdb_lock_write(nowdb_rwlock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_rwlock_wrlock(lock) != 0) {
+	errno = pthread_rwlock_wrlock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                  "pthread_wrlock_wrlock failed");
 	}
@@ -109,7 +116,8 @@ nowdb_err_t nowdb_unlock_write(nowdb_rwlock_t *lock) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                              "lock is NULL");
 	}
-	if (pthread_rwlock_unlock(lock) != 0) {
+	errno = pthread_rwlock_unlock(lock);
+	if (errno != 0) {
 		return nowdb_err_get(nowdb_err_lock, TRUE, OBJECT,
 		                  "pthread_wrlock_unlock failed");
 	}

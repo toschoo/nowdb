@@ -51,6 +51,16 @@ static void *wrkentry(void *p) {
 
 	job = wrk->job;
 
+	err = nowdb_lock(&wrk->lock);
+	if (err != NOWDB_OK) {
+		reportError(wrk, err); return NULL;
+	}
+	wrk->state = NOWDB_WRK_RUNNING;
+
+	err = nowdb_unlock(&wrk->lock);
+	if (err != NOWDB_OK) {
+		reportError(wrk, err); return NULL;
+	}
 	for(;;) {
 		err = nowdb_queue_dequeue(&wrk->jobqueue,
 		                           wrk->period,   /* wait for   */
@@ -116,6 +126,37 @@ nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: wait for stop
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
+                                  char          state,
+                                  nowdb_time_t    tmo) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_time_t t = tmo;
+
+	for(;;) {
+		err = nowdb_lock(&wrk->lock);
+		if (err != NOWDB_OK) return err;
+		
+		if (wrk->state == state) {
+			return nowdb_unlock(&wrk->lock);
+		}
+		err = nowdb_unlock(&wrk->lock);
+		if (err != NOWDB_OK) return err;
+
+		if (tmo == 0) return nowdb_err_get(nowdb_err_timeout,
+		                  FALSE, wrk->name, "with timout=0");
+		if (tmo > 0 && t <= 0) return nowdb_err_get(nowdb_err_timeout,
+		                          FALSE, wrk->name, "with timeout>0");
+		err = nowdb_task_sleep(MINOR);
+		if (err != NOWDB_OK) return err;
+		t -= MINOR;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Initialise worker
  * ------------------------------------------------------------------------
  */
@@ -145,13 +186,19 @@ nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
 	err = nowdb_queue_init(&wrk->jobqueue, 0, DELAY, drain);
 	if (err != NOWDB_OK) return err;
 
+	err = nowdb_lock(&wrk->lock);
+	if (err != NOWDB_OK) return err;
+
 	err = nowdb_task_create(&wrk->task, wrkentry, wrk);
 	if (err != NOWDB_OK) {
 		nowdb_queue_destroy(&wrk->jobqueue);
 		return err;
 	}
-	wrk->state = NOWDB_WRK_RUNNING;
-	return NOWDB_OK;
+	err = nowdb_unlock(&wrk->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* wait for running */
+	return waitFor(wrk, NOWDB_WRK_RUNNING, DELAY);
 }
 
 /* ------------------------------------------------------------------------
@@ -163,36 +210,6 @@ static inline void destroy(nowdb_worker_t *wrk) {
 	nowdb_queue_destroy(&wrk->jobqueue);
 	nowdb_lock_destroy(&wrk->lock);
 	nowdb_task_destroy(wrk->task);
-}
-
-/* ------------------------------------------------------------------------
- * Helper: wait for stop
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t waitForStop(nowdb_worker_t *wrk,
-                                      nowdb_time_t    tmo) {
-	nowdb_err_t err = NOWDB_OK;
-	nowdb_time_t t = tmo;
-
-	for(;;) {
-		err = nowdb_lock(&wrk->lock);
-		if (err != NOWDB_OK) return err;
-		
-		if (wrk->state == NOWDB_WRK_STOPPED) {
-			return nowdb_unlock(&wrk->lock);
-		}
-		err = nowdb_unlock(&wrk->lock);
-		if (err != NOWDB_OK) return err;
-
-		if (tmo == 0) return nowdb_err_get(nowdb_err_timeout,
-		                             FALSE, wrk->name, NULL);
-		if (tmo > 0 && t <= 0) return nowdb_err_get(nowdb_err_timeout,
-		                                      FALSE, wrk->name, NULL);
-		err = nowdb_task_sleep(MINOR);
-		if (err != NOWDB_OK) return err;
-		t -= MINOR;
-	}
-	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -215,7 +232,7 @@ nowdb_err_t nowdb_worker_do(nowdb_worker_t      *wrk,
  */
 nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
                               nowdb_time_t    tmo) {
-	nowdb_err_t err, err2;
+	nowdb_err_t err;
 
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid,
 	              FALSE, "worker", "worker object is NULL");
@@ -224,23 +241,23 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	 * there is nothing to do */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
+
 	if (wrk->state == NOWDB_WRK_STOPPED) {
 		return nowdb_unlock(&wrk->lock);
 	}
+	err = nowdb_unlock(&wrk->lock);
+	if (err != NOWDB_OK) return err;
 
 	/* send stop message */
 	err = nowdb_queue_enqueuePrio(&wrk->jobqueue, &stopmsg);
-	if (err != NOWDB_OK) goto unlock;
-
-unlock:
-	err2 = nowdb_unlock(&wrk->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err; return err2;
-	}
 	if (err != NOWDB_OK) return err;
 
 	/* wait for stop */
-	err = waitForStop(wrk,tmo);
+	err = waitFor(wrk, NOWDB_WRK_STOPPED, tmo);
+	if (err != NOWDB_OK) return err;
+
+	/* wait for thread to terminate */
+	err = nowdb_task_join(wrk->task);
 	if (err != NOWDB_OK) return err;
 
 	/* stop queue */
@@ -248,7 +265,6 @@ unlock:
 	if (err != NOWDB_OK) return err;
 
 	/* destroy everything */
-	err = nowdb_queue_shutdown(&wrk->jobqueue);
 	destroy(wrk); return NOWDB_OK;
 }
 

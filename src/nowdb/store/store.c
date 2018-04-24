@@ -994,12 +994,11 @@ static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
 static inline nowdb_err_t stopWorkers(nowdb_store_t *store) {
 	nowdb_err_t err = NOWDB_OK;
 
-	err = nowdb_store_stopSync(&store->syncwrk);
-	if (err != NOWDB_OK) return err;
-
 	err = nowdb_store_stopSorter(&store->sortwrk);
 	if (err != NOWDB_OK) return err;
 
+	err = nowdb_store_stopSync(&store->syncwrk);
+	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
 
@@ -1051,12 +1050,13 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	nowdb_err_t err  = NOWDB_OK;
 	nowdb_err_t err2 = NOWDB_OK;
 
-	err = nowdb_lock_write(&store->lock);
+	/* stop workers
+	 * DONT LOCK the store when stopping workers! */
+	err = stopWorkers(store);
 	if (err != NOWDB_OK) return err;
 
-	/* stop workers */
-	err = stopWorkers(store);
-	if (err != NOWDB_OK) goto unlock;
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
 
 	/* write catalog */
 	err = storeCatalog(store);
@@ -1497,8 +1497,8 @@ nowdb_err_t nowdb_store_promote(nowdb_store_t  *store,
 	                                          "readers insert");
 		goto unlock;
 	}
-	ts_algo_list_remove(&store->waiting, tmp); free(tmp);
-
+	ts_algo_list_remove(&store->waiting, tmp);
+	nowdb_file_destroy(tmp->cont); free(tmp->cont); free(tmp);
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {

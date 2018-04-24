@@ -87,6 +87,10 @@ int main(int argc, char **argv) {
 	}
 	fprintf(stderr, "count: %u\n", global_count);
 
+	if (!nowdb_err_init()) {
+		fprintf(stderr, "cannot init library\n");
+		return EXIT_FAILURE;
+	}
 	store = bootstrap(path);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
@@ -102,10 +106,13 @@ int main(int argc, char **argv) {
 
 cleanup:
 	if (store != NULL) {
-		closeStore(store);
+		if (!closeStore(store)) {
+			fprintf(stderr, "cannot close store\n");
+		}
 		nowdb_store_destroy(store);
 		free(store);
 	}
+	nowdb_err_destroy();
 	return rc;
 }
 

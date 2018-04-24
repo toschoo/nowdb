@@ -15,7 +15,7 @@
 
 #define SYNCPERIOD    500000000l
 #define SORTPERIOD   5000000000l
-#define SYNCTIMEOUT  5000000000l
+#define SYNCTIMEOUT 10000000000l
 #define SORTTIMEOUT 10000000000l
 
 static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
@@ -215,6 +215,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 
+	// fprintf(stderr, "DONE SORTING\n");
 	return NOWDB_OK;
 }
 

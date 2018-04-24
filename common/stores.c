@@ -49,6 +49,7 @@ nowdb_bool_t closeStore(nowdb_store_t *store) {
 	nowdb_err_t     err;
 	err = nowdb_store_close(store);
 	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot close store\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return FALSE;
@@ -64,6 +65,9 @@ nowdb_store_t *bootstrap(nowdb_path_t path) {
 		if (!closeStore(store)) goto failure;
 		if (!dropStore(store)) goto failure;
 	}
+	nowdb_store_destroy(store); free(store);
+	store = mkStore(path);
+	if (store == NULL) return NULL;
 	if (!createStore(store)) goto failure;
 	if (!openStore(store)) goto failure;
 	return store;
