@@ -42,6 +42,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/task.o      \
       $(SRC)/task/queue.o     \
       $(SRC)/task/worker.o    \
+      $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/storewrk.o
 
@@ -55,6 +56,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/task.h      \
       $(SRC)/task/queue.h     \
       $(SRC)/task/worker.h    \
+      $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/storewrk.h
 
