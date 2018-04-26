@@ -49,12 +49,19 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 }
 
 uint32_t global_count = 1000;
+int      global_sort  = 0;
 
 int parsecmd(int argc, char **argv) {
 	int err = 0;
 
 	global_count = (uint32_t)ts_algo_args_findUint(
 	            argc, argv, 2, "count", 1000, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_sort = ts_algo_args_findBool(
+	            argc, argv, 2, "sort", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -67,6 +74,7 @@ void helptxt(char *progname) {
 }
 
 int main(int argc, char **argv) {
+	nowdb_comprsc_t compare;
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store = NULL;
 	nowdb_path_t path;
@@ -91,7 +99,12 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
-	store = bootstrap(path);
+	if (global_sort) {
+		compare = &nowdb_store_edge_compare;
+	} else {
+		compare = NULL;
+	}
+	store = xBootstrap(path, compare, NOWDB_COMP_FLAT);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}

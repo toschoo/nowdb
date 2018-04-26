@@ -357,7 +357,9 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
-                                          nowdb_comp_t   comp);
+                                          nowdb_comp_t   comp) {
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Destroy store

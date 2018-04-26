@@ -86,8 +86,70 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 	return err;
 }
 
+nowdb_cmp_t nowdb_store_edge_compare(const void *left,
+                                     const void *right,
+                                     void      *ignore)
+{
+	if (((nowdb_edge_t*)left)->origin <  
+	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_LESS;
+	if (((nowdb_edge_t*)left)->origin >
+	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_edge_t*)left)->edge   <
+	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_LESS;
+	if (((nowdb_edge_t*)left)->edge   >
+	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_edge_t*)left)->destin <
+	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_LESS;
+	if (((nowdb_edge_t*)left)->destin >
+	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_edge_t*)left)->label  <
+	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_LESS;
+	if (((nowdb_edge_t*)left)->label >
+	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_edge_t*)left)->timestamp <
+	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_LESS;
+	if (((nowdb_edge_t*)left)->timestamp >
+	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_GREATER;
+
+	return NOWDB_SORT_EQUAL;
+}
+
+nowdb_cmp_t nowdb_store_vertex_compare(const void *left,
+                                       const void *right,
+                                       void      *ignore)
+{
+	if (((nowdb_vertex_t*)left)->role <
+	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_LESS;
+	if (((nowdb_vertex_t*)left)->role >
+	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_vertex_t*)left)->vertex <
+	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_LESS;
+	if (((nowdb_vertex_t*)left)->vertex >
+	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_GREATER;
+
+	if (((nowdb_vertex_t*)left)->property <
+	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_LESS;
+	if (((nowdb_vertex_t*)left)->property >
+	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_GREATER;
+
+	return NOWDB_SORT_EQUAL;
+}
+
 static inline nowdb_err_t findMinMax(nowdb_file_t *file) {
 	return NOWDB_OK;
+}
+
+static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
+	if (trg->oldest == NOWDB_TIME_DAWN || src->oldest < trg->oldest)
+		trg->oldest = src->oldest;
+
+	if (trg->newest == NOWDB_TIME_DUSK || src->newest > trg->newest)
+		trg->newest = src->newest;
 }
 
 static inline nowdb_err_t getReader(nowdb_store_t *store,
@@ -182,6 +244,13 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	}
 
 	// sort buf -- if compare is not NULL!
+	if (store->compare != NULL) {
+		nowdb_mem_sort(buf, src->size/store->recsize,
+		                    store->recsize,
+		                    store->compare, NULL);
+		reader->ctrl |= NOWDB_FILE_SORT;
+		setMinMax(src, reader);
+	}
 
 	// write to reader (potentially compressing)
 	err = putContent(buf, src->size, reader);
@@ -189,9 +258,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(reader); free(reader); free(buf);
 		nowdb_file_destroy(src); free(src); return err;
 	}
-
-	// only if actually sorted
-	reader->ctrl |= NOWDB_FILE_SORT;
 
 	// insert into index
 

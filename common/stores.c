@@ -57,7 +57,10 @@ nowdb_bool_t closeStore(nowdb_store_t *store) {
 	return TRUE;
 }
 
-nowdb_store_t *bootstrap(nowdb_path_t path) {
+nowdb_store_t *xBootstrap(nowdb_path_t       path,
+                          nowdb_comprsc_t compare,
+                          nowdb_comp_t   compress) {
+	nowdb_err_t      err;
 	nowdb_store_t *store;
 	store = mkStore(path);
 	if (store == NULL) return NULL;
@@ -68,14 +71,29 @@ nowdb_store_t *bootstrap(nowdb_path_t path) {
 	nowdb_store_destroy(store); free(store);
 	store = mkStore(path);
 	if (store == NULL) return NULL;
+	err = nowdb_store_configSort(store, compare);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot configure store.Sort\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		goto failure;
+	}
+	err = nowdb_store_configCompression(store, compress);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot configure store.Compression\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		goto failure;
+	}
 	if (!createStore(store)) goto failure;
 	if (!openStore(store)) goto failure;
 	return store;
-
 failure:
 	closeStore(store);
 	nowdb_store_destroy(store);
 	return NULL;
-	
 }
 
+nowdb_store_t *bootstrap(nowdb_path_t path) {
+	return xBootstrap(path, NULL, NOWDB_COMP_FLAT);
+}

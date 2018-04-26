@@ -23,7 +23,7 @@ typedef int nowdb_cmp_t;
 typedef nowdb_cmp_t (*nowdb_compare_t)(const void*, const void*);
 typedef nowdb_cmp_t (*nowdb_comprsc_t)(const void*,const void*, void*);
 
-void nowdb_mem_sort(char *buf, uint32_t recsize, uint32_t size,
+void nowdb_mem_sort(char *buf, uint32_t size, uint32_t recsize,
                            nowdb_comprsc_t compare, void *args);
 
 #endif
