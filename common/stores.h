@@ -6,4 +6,7 @@ nowdb_bool_t dropStore(nowdb_store_t *store);
 nowdb_bool_t openStore(nowdb_store_t *store);
 nowdb_bool_t closeStore(nowdb_store_t *store);
 nowdb_store_t *bootstrap(nowdb_path_t path);
+nowdb_store_t *xBootstrap(nowdb_path_t path,
+                          nowdb_comprsc_t compare,
+                          nowdb_comp_t   compress);
 

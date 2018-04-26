@@ -42,6 +42,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/task.o      \
       $(SRC)/task/queue.o     \
       $(SRC)/task/worker.o    \
+      $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/storewrk.o
 
@@ -55,6 +56,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/task.h      \
       $(SRC)/task/queue.h     \
       $(SRC)/task/worker.h    \
+      $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/storewrk.h
 
@@ -62,8 +64,10 @@ default:	lib
 
 all:	default tools tests bench
 
-tools:	bin/randomfile \
-	bin/catalog
+tools:	bin/randomfile    \
+	bin/catalog       \
+	bin/keepstoreopen \
+	bin/waitstore     \
 
 bench: bin/readplainbench  \
        bin/writestorebench \
@@ -225,7 +229,15 @@ $(BIN)/catalog:		$(LIB) $(DEP) $(TOOLS)/catalog.o
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/catalog.o \
 			                 $(libs) -lnowdb
 
-		
+$(BIN)/keepstoreopen:	$(LIB) $(DEP) $(TOOLS)/keepstoreopen.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/keepstoreopen.o \
+			                 $(libs) -lnowdb
+
+$(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
+			                 $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -254,6 +266,8 @@ clean:
 	rm -f $(BIN)/randomfile
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench
+	rm -f $(BIN)/keepstoreopen
+	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 

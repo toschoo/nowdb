@@ -15,12 +15,10 @@
 #include <nowdb/io/dir.h>
 #include <nowdb/task/lock.h>
 #include <nowdb/task/worker.h>
+#include <nowdb/sort/sort.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
-
-/* does not belong here */
-typedef char (*nowdb_compare_t)(void*, void*, void*);
 
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
@@ -35,11 +33,18 @@ typedef struct {
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
 	                         /* compression                 */
-	nowdb_compare_t compare; /* comparison                  */
+	nowdb_comprsc_t compare; /* comparison                  */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
 } nowdb_store_t;
+
+/* ------------------------------------------------------------------------
+ * Default compare for edges and vertices
+ * ------------------------------------------------------------------------
+ */
+nowdb_cmp_t nowdb_store_edge_compare(const void*, const void*, void*);
+nowdb_cmp_t nowdb_store_vertex_compare(const void*, const void*, void*);
 
 /* ------------------------------------------------------------------------
  * Allocate and initialise new store object
@@ -60,6 +65,20 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
                              uint32_t     filesize);
+
+/* ------------------------------------------------------------------------
+ * Configure sorting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
+                                   nowdb_comprsc_t compare);
+
+/* ------------------------------------------------------------------------
+ * Configure compression
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
+                                          nowdb_comp_t   comp);
 
 /* ------------------------------------------------------------------------
  * Destroy store

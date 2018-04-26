@@ -92,7 +92,7 @@ typedef struct {
 	nowdb_value_t  value; /* property value            */
 	nowdb_type_t   vtype; /* type of the value         */
 	nowdb_roleid_t  role; /* role identifier           */
-} nowdb_property_t;
+} nowdb_vertex_t;
 
 /* ------------------------------------------------------------------------
  * Edge

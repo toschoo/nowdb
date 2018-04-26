@@ -341,6 +341,27 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Configure sorting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
+                                   nowdb_comprsc_t compare) {
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	store->compare = compare;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Configure compression
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
+                                          nowdb_comp_t   comp) {
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Destroy store
  * ------------------------------------------------------------------------
  */
