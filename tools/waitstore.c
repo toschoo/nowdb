@@ -6,6 +6,7 @@
  * ========================================================================
  */
 #include <nowdb/store/store.h>
+#include <nowdb/store/storewrk.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,6 +77,16 @@ int main(int argc, char **argv) {
 		fprintf(stdout, "\b\b\b\b\b\b\b\b");
 		fprintf(stdout, "%08d", store.waiting.len);
 		fflush(stdout);
+		for(int i=0;i<store.waiting.len;i++) {
+			err = nowdb_store_sortNow(&store.sortwrk);
+			if (err != NOWDB_OK) {
+				fprintf(stderr,
+				"\ncannot send sort message\n");
+				nowdb_err_print(err);
+				nowdb_err_release(err);
+				rc = EXIT_FAILURE; break;
+			}
+		}
 		err = nowdb_task_sleep(DELAY);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "\ncannot sleep\n");
