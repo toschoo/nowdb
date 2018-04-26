@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 	nowdb_err_t   err;
 	nowdb_path_t  path;
 	size_t        s;
-	int           len;	
+	int           len=0;	
 
 	if (argc < 2) {
 		helptext(argv[0]);
@@ -82,27 +82,24 @@ int main(int argc, char **argv) {
 		nowdb_store_destroy(&store);
 		return EXIT_FAILURE;
 	}
-	err = nowdb_lock_read(&store.lock);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot lock store\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_store_close(&store));
-		nowdb_store_destroy(&store);
-		return EXIT_FAILURE;
-	}
-	len = store.waiting.len;
-	err = nowdb_unlock_read(&store.lock);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot unlock store\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_store_close(&store));
-		nowdb_store_destroy(&store);
-		return EXIT_FAILURE;
-	}
 	fprintf(stdout, "%08d", len);
-	while(keeprunning && len > 0) {
+	while(keeprunning) {
+		err = nowdb_lock_read(&store.lock);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot lock store\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			rc = EXIT_FAILURE; break;
+		}
+		len = store.waiting.len;
+		err = nowdb_unlock_read(&store.lock);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot unlock store\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			rc = EXIT_FAILURE; break;
+		}
+		if (len == 0) break;
 		fprintf(stdout, "\b\b\b\b\b\b\b\b");
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
@@ -122,25 +119,6 @@ int main(int argc, char **argv) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
 			rc = EXIT_FAILURE; break;
-		}
-		err = nowdb_lock_read(&store.lock);
-		if (err != NOWDB_OK) {
-			fprintf(stderr, "cannot lock store\n");
-			nowdb_err_print(err);
-			nowdb_err_release(err);
-			NOWDB_IGNORE(nowdb_store_close(&store));
-			nowdb_store_destroy(&store);
-			return EXIT_FAILURE;
-		}
-		len = store.waiting.len;
-		err = nowdb_unlock_read(&store.lock);
-		if (err != NOWDB_OK) {
-			fprintf(stderr, "cannot unlock store\n");
-			nowdb_err_print(err);
-			nowdb_err_release(err);
-			NOWDB_IGNORE(nowdb_store_close(&store));
-			nowdb_store_destroy(&store);
-			return EXIT_FAILURE;
 		}
 	}
 	fprintf(stdout, "\n");
