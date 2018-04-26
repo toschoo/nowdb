@@ -54,8 +54,24 @@ int readfile(char *path) {
 		}
 		for(int z=0;z<8192;z+=64) {
 			e = (nowdb_edge_t*)(buf+z);
-			fprintf(stdout, "%lu.%lu(%lu)\n",
-			  e->origin, e->edge, e->destin);
+			fprintf(stdout, "%lu.%lu-->%lu #%lu @%ld: ",
+			  e->origin, e->edge, e->destin,
+			  e->label, e->timestamp);
+			switch(e->wtype[0]) {
+			case NOWDB_TYP_FLOAT:
+				fprintf(stdout, "%f\n",
+				       (double)e->weight); break;
+			case NOWDB_TYP_INT:
+			case NOWDB_TYP_TIME:
+			case NOWDB_TYP_DATE:
+				fprintf(stdout, "%ld\n",
+				       (int64_t)e->weight); break;
+			case NOWDB_TYP_UINT:
+			case NOWDB_TYP_TEXT:
+				fprintf(stdout, "%lu\n",
+				       (uint64_t)e->weight); break;
+			default: fprintf(stdout, "\n");
+			}
 		}
 	}
 	fclose(f);

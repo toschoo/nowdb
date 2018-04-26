@@ -140,7 +140,17 @@ nowdb_cmp_t nowdb_store_vertex_compare(const void *left,
 	return NOWDB_SORT_EQUAL;
 }
 
-static inline nowdb_err_t findMinMax(nowdb_file_t *file) {
+static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
+	nowdb_time_t max = NOWDB_TIME_DAWN;
+	nowdb_time_t min = NOWDB_TIME_DUSK;
+	nowdb_edge_t *e;
+	for (int i=0; i<file->size; i+=file->recordsize) {
+		e = (nowdb_edge_t*)(buf+i);
+		if (e->timestamp < min) min = e->timestamp;
+		if (e->timestamp > max) max = e->timestamp;
+	}
+	file->oldest = min;
+	file->newest = max;
 	return NOWDB_OK;
 }
 
@@ -213,23 +223,18 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 
 	// fprintf(stderr, "SORTING\n");
 
-	// get waiting
+	/* get waiting file */
 	err = nowdb_store_getWaiting(store, &src);
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
 
-	// find max/min
-	err = findMinMax(src);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(src); free(src); return err;
-	}
-
-	// get (or create) reader with space
+	/* get (or create) reader with space */
 	err = getReader(store, &reader);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
+	/* get content from source */
 	buf = malloc(src->size);
 	if (buf == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, wrk->name,
@@ -243,7 +248,16 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// sort buf -- if compare is not NULL!
+	/* find min/max if this are edges */
+	if (store->recsize == 64) { /* not too convincing */
+		err = findMinMax(buf, src);
+		if (err != NOWDB_OK) {
+			nowdb_file_destroy(reader); free(reader);
+			nowdb_file_destroy(src); free(src); return err;
+		}
+	}
+
+	/* sort buf -- if compare is not NULL! */
 	if (store->compare != NULL) {
 		nowdb_mem_sort(buf, src->size/store->recsize,
 		                    store->recsize,
@@ -252,32 +266,37 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		setMinMax(src, reader);
 	}
 
-	// write to reader (potentially compressing)
+	/* reset min/max */
+	src->oldest = NOWDB_TIME_DAWN;
+	src->newest = NOWDB_TIME_DUSK;
+
+	/* write to reader (potentially compressing) */
 	err = putContent(buf, src->size, reader);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(reader); free(reader); free(buf);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// insert into index
+	/* insert into index */
+	/* TODO              */
 
-	// we don't need it anymore
+	/* we don't need it anymore */
 	free(buf);
 
-	// promote to reader 
+	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(reader); free(reader);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// erase waiting... 
+	/* erase waiting... */
 	err = nowdb_file_erase(src);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// ...and donate it
+	/* ...and donate it */
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 

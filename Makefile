@@ -65,6 +65,7 @@ default:	lib
 all:	default tools tests bench
 
 tools:	bin/randomfile    \
+	bin/readfile      \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \

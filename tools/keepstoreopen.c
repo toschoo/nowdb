@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
 		if (x>=0 && x<20) {
 			fprintf(stdout, "\b\b\b:-|"); x++;
 		} else if (x>=20 && x<50) {
-			fprintf(stdout, "\b\b\b:-O"); x++;
+			fprintf(stdout, "\b\b\b<-O"); x++;
 		} else x=0;
 		fflush(stdout);
 		err = nowdb_task_sleep(DELAY);
