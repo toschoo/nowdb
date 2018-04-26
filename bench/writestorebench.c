@@ -70,7 +70,10 @@ int parsecmd(int argc, char **argv) {
 }
 
 void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-file> [-count n]\n", progname);
+	fprintf(stderr, "%s <path-to-file> [-count n] [-sort b]\n", progname);
+	fprintf(stderr, "count is the number of edges to insert\n");
+	fprintf(stderr, "sort indicates whether to sort or not\n");
+	fprintf(stderr, "possible values for sort: 0/1, true/false, t/f\n");
 }
 
 int main(int argc, char **argv) {

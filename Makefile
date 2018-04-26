@@ -64,9 +64,10 @@ default:	lib
 
 all:	default tools tests bench
 
-tools:	bin/randomfile \
-	bin/catalog    \
-	bin/keepstoreopen
+tools:	bin/randomfile    \
+	bin/catalog       \
+	bin/keepstoreopen \
+	bin/waitstore     \
 
 bench: bin/readplainbench  \
        bin/writestorebench \
@@ -232,6 +233,11 @@ $(BIN)/keepstoreopen:	$(LIB) $(DEP) $(TOOLS)/keepstoreopen.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/keepstoreopen.o \
 			                 $(libs) -lnowdb
+
+$(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
+			                 $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -261,6 +267,7 @@ clean:
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench
 	rm -f $(BIN)/keepstoreopen
+	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 
