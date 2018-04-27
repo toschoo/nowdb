@@ -10,6 +10,7 @@
 #include <common/bench.h>
 #include <common/stores.h>
 
+/*
 void makeEdgePattern(nowdb_edge_t *e) {
 	e->origin   = 1;
 	e->destin   = 1;
@@ -41,14 +42,47 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 			return FALSE;
 		}
 	}
-	/*
-	fprintf(stderr, "inserted %u (last: %lu)\n",
-	                           count, e.weight);
-	*/
+	return TRUE;
+}
+*/
+
+nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
+	nowdb_err_t err;
+	nowdb_edge_t e;
+
+	for(uint32_t i=0; i<count; i++) {
+
+		memset(&e,0,64);
+
+		do e.origin = rand()%100; while(e.origin == 0);
+		do e.destin = rand()%100; while(e.destin == 0);
+		do e.edge   = rand()%10; while(e.edge == 0);
+		do e.label  = rand()%10; while(e.label == 0);
+		err = nowdb_time_now(&e.timestamp);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "insert error\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+		e.weight = (uint64_t)i;
+		e.weight2  = 0;
+		e.wtype[0] = NOWDB_TYP_UINT;
+		e.wtype[1] = NOWDB_TYP_NOTHING;
+
+		err = nowdb_store_insert(store, &e);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "insert error\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+	}
 	return TRUE;
 }
 
 uint32_t global_count = 1000;
+uint32_t global_block = 1;
 int      global_sort  = 0;
 char    *global_comp  = NULL;
 
@@ -57,6 +91,12 @@ int parsecmd(int argc, char **argv) {
 
 	global_count = (uint32_t)ts_algo_args_findUint(
 	            argc, argv, 2, "count", 1000, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_block = (uint32_t)ts_algo_args_findUint(
+	            argc, argv, 2, "block", 1, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -77,15 +117,17 @@ int parsecmd(int argc, char **argv) {
 }
 
 void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-file> ", progname);
-	fprintf(stderr, "[-count n] [-sort b] [-comp x]\n");
-	fprintf(stderr, "count is the number of edges to insert\n");
-	fprintf(stderr, "sort indicates whether or not to sort\n");
+	fprintf(stderr, "%s <path-to-file> [options]\n", progname);
+	fprintf(stderr, "all options are in the format -opt value\n");
+	fprintf(stderr, "[-count n] [-sort b] [-comp x] [-block n]\n");
+	fprintf(stderr, "-count n: number of edges to insert\n");
+	fprintf(stderr, "-sort  b: indicates whether or not to sort\n");
 	fprintf(stderr,
-		"     possible values for bool: 0/1, true/false, t/f\n");
-	fprintf(stderr, "compression algorithm, either\n");
-	fprintf(stderr, "            'flat' or\n");
-	fprintf(stderr, "            'zstd'\n");
+		"     possible values for b: 0/1, true/false, t/f\n");
+	fprintf(stderr, "-comp  a: compression algorithm, either\n");
+	fprintf(stderr, "          'flat' or\n");
+	fprintf(stderr, "          'zstd'\n");
+	fprintf(stderr, "-block n: blocksize in megabyte\n");
 }
 
 int main(int argc, char **argv) {
@@ -134,7 +176,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "unknown compression: '%s'\n", global_comp);
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap(path, compare, comp);
+	store = xBootstrap(path, compare, comp, NOWDB_MEGA*global_block);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}

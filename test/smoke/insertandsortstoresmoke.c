@@ -203,7 +203,8 @@ int main() {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_FLAT);
+	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_FLAT,
+	                                           NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		rc = EXIT_FAILURE; goto cleanup;
