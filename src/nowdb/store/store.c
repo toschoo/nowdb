@@ -766,6 +766,9 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	runner = files.head;
 	while (runner!=NULL) {
 		file = runner->cont;
+		if (store->nextid <= file->id + 1) {
+			store->nextid = file->id + 1;
+		}	
 		/*
 		fprintf(stderr, "%u: %s -- %u\n",
 		        file->id, file->path, (uint32_t)file->ctrl);

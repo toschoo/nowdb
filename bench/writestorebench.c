@@ -83,6 +83,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 
 uint32_t global_count = 1000;
 uint32_t global_block = 1;
+uint32_t global_report = 1;
 int      global_sort  = 0;
 char    *global_comp  = NULL;
 
@@ -97,6 +98,12 @@ int parsecmd(int argc, char **argv) {
 	}
 	global_block = (uint32_t)ts_algo_args_findUint(
 	            argc, argv, 2, "block", 1, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_report = (uint32_t)ts_algo_args_findUint(
+	            argc, argv, 2, "report", global_count, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -128,6 +135,7 @@ void helptxt(char *progname) {
 	fprintf(stderr, "          'flat' or\n");
 	fprintf(stderr, "          'zstd'\n");
 	fprintf(stderr, "-block n: blocksize in megabyte\n");
+	fprintf(stderr, "-report n: report every n inserts\n");
 }
 
 int main(int argc, char **argv) {
@@ -137,6 +145,8 @@ int main(int argc, char **argv) {
 	nowdb_store_t *store = NULL;
 	nowdb_path_t path;
 	struct timespec t1, t2;
+	uint32_t runs;
+	uint64_t d=0;
 
 	if (argc < 2) {
 		helptxt(argv[0]);
@@ -180,13 +190,20 @@ int main(int argc, char **argv) {
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	timestamp(&t1);
-	if (!insertEdges(store, global_count)) {
-		rc = EXIT_FAILURE; goto cleanup;
+	runs = global_count/global_report;
+	for(int i=0; i<runs; i++) {
+		timestamp(&t1);
+		if (!insertEdges(store, global_report)) {
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		timestamp(&t2);
+		d += minus(&t2, &t1)/1000;
+		if (global_report != global_count) {
+			fprintf(stdout, "%u: %luus\n", global_report,
+			                       minus(&t2, &t1)/1000);
+		}
 	}
-	timestamp(&t2);
-	
-	fprintf(stdout, "Running time: %luus\n", minus(&t2, &t1)/1000);
+	fprintf(stdout, "Running time: %luus\n", d);
 	nowdb_task_sleep(1000000000);
 
 cleanup:
