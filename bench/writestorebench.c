@@ -50,6 +50,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 
 uint32_t global_count = 1000;
 int      global_sort  = 0;
+char    *global_comp  = NULL;
 
 int parsecmd(int argc, char **argv) {
 	int err = 0;
@@ -66,18 +67,30 @@ int parsecmd(int argc, char **argv) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
 	}
+	global_comp = ts_algo_args_findString(
+	            argc, argv, 2, "comp", "flat", &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
 	return 0;
 }
 
 void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-file> [-count n] [-sort b]\n", progname);
+	fprintf(stderr, "%s <path-to-file> ", progname);
+	fprintf(stderr, "[-count n] [-sort b] [-comp x]\n");
 	fprintf(stderr, "count is the number of edges to insert\n");
-	fprintf(stderr, "sort indicates whether to sort or not\n");
-	fprintf(stderr, "possible values for sort: 0/1, true/false, t/f\n");
+	fprintf(stderr, "sort indicates whether or not to sort\n");
+	fprintf(stderr,
+		"     possible values for bool: 0/1, true/false, t/f\n");
+	fprintf(stderr, "compression algorithm, either\n");
+	fprintf(stderr, "            'flat' or\n");
+	fprintf(stderr, "            'zstd'\n");
 }
 
 int main(int argc, char **argv) {
 	nowdb_comprsc_t compare;
+	nowdb_comp_t    comp;
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store = NULL;
 	nowdb_path_t path;
@@ -90,6 +103,11 @@ int main(int argc, char **argv) {
 	path = argv[1];
 	if (strnlen(path, 4097) == 4097) {
 		fprintf(stderr, "path too long (max: 4096)\n");
+		return EXIT_FAILURE;
+	}
+	if (path[0] == '-') {
+		fprintf(stderr, "invalid path\n");
+		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
 	if (parsecmd(argc, argv) != 0) {
@@ -107,7 +125,16 @@ int main(int argc, char **argv) {
 	} else {
 		compare = NULL;
 	}
-	store = xBootstrap(path, compare, NOWDB_COMP_FLAT);
+	if (global_comp == NULL ||
+	    strcmp(global_comp, "flat") == 0) {
+		comp = NOWDB_COMP_FLAT;
+	} else if (strcmp(global_comp, "zstd") == 0) {
+		comp = NOWDB_COMP_ZSTD;
+	} else {
+		fprintf(stderr, "unknown compression: '%s'\n", global_comp);
+		return EXIT_FAILURE;
+	}
+	store = xBootstrap(path, compare, comp);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}

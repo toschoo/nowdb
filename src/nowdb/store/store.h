@@ -20,6 +20,8 @@
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
 
+#include <zstd.h>
+
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
@@ -32,7 +34,10 @@ typedef struct {
 	ts_algo_list_t  waiting; /* unprepard readers           */
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
-	                         /* compression                 */
+	nowdb_comp_t       comp; /* compression                 */
+	void              *dict; /* compression dictionary             */
+	ZSTD_CCtx         *cctx; /* ZSTD compression context           */
+	ZSTD_DCtx         *dctx; /* ZSTD decompression context         */
 	nowdb_comprsc_t compare; /* comparison                  */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */

@@ -13,6 +13,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <zstd.h>
+#include <zstd/zdict.h>
+
 #define SYNCPERIOD    500000000l
 #define SORTPERIOD   5000000000l
 #define SYNCTIMEOUT 10000000000l

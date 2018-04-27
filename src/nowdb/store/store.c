@@ -293,6 +293,10 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->catalog = NULL;
 	store->writer = NULL;
 	store->compare = NULL;
+	store->comp = NOWDB_COMP_FLAT;
+	store->dict = NULL;
+	store->cctx = NULL;
+	store->dctx = NULL;
 	store->nextid = 1;
 
 	/* lists of files */
@@ -358,6 +362,9 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp) {
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	store->comp = comp;
 	return NOWDB_OK;
 }
 
@@ -472,6 +479,8 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 		nowdb_file_destroy(*file); free(*file); *file = NULL;
 		goto unlock;
 	}
+	if (store->comp != NOWDB_COMP_FLAT) (*file)->comp = store->comp;
+	
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err != NOWDB_OK) {
