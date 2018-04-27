@@ -245,12 +245,13 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_version         43
 #define nowdb_err_comp            44
 #define nowdb_err_decomp          45
-#define nowdb_err_store           46
-#define nowdb_err_context         47
-#define nowdb_err_scope           48
-#define nowdb_err_stat            49
-#define nowdb_err_create          50
-#define nowdb_err_magic           51
+#define nowdb_err_compdict        46
+#define nowdb_err_store           47
+#define nowdb_err_context         48
+#define nowdb_err_scope           49
+#define nowdb_err_stat            50
+#define nowdb_err_create          51
+#define nowdb_err_magic           52
 #define nowdb_err_unknown       9999
 
 #endif

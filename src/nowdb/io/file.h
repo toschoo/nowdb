@@ -30,6 +30,8 @@ typedef uint32_t nowdb_encp_t;
 #define NOWDB_COMP_ZSTD 1
 #define NOWDB_COMP_LZ4  2
 
+#define NOWDB_ZSTD_LEVEL 4
+
 #define NOWDB_ENCP_NONE 0
 
 #define NOWDB_FILE_WRITER 1

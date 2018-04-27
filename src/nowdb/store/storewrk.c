@@ -165,6 +165,149 @@ static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
 		trg->newest = src->newest;
 }
 
+#define DICTNAME "zdict"
+static inline nowdb_err_t loadZSTDDict(nowdb_store_t *store) {
+	char *buf;
+	nowdb_err_t err;
+	nowdb_path_t p;
+	struct stat st;
+	ssize_t x;
+	FILE *d;
+
+	p = nowdb_path_append(store->path, DICTNAME);
+	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                   FALSE, "store", "append to path");
+	if (stat(p, &st) != 0) {
+		free(p); return NOWDB_OK;
+	}
+	buf = malloc(st.st_size);
+	if (buf == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store", p);
+		free(p); return err;
+	}
+	d = fopen(p, "rb");
+	if (d == NULL) {
+		err = nowdb_err_get(nowdb_err_open, TRUE, "store", p);
+		free(buf); free(p); return err;
+	}
+	x = fread(buf, 1, st.st_size, d);
+	if (x != st.st_size) {
+		err = nowdb_err_get(nowdb_err_read, TRUE, "store", p);
+		fclose(d); free(buf); free(p); return err;
+	}
+	fclose(d); free(p);
+
+	store->cdict = ZSTD_createCDict(buf, st.st_size, NOWDB_ZSTD_LEVEL);
+	if (store->cdict == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                      "cannot load ZSTD dictionary");
+		free(buf); return err;
+	}
+	store->ddict = ZSTD_createDDict(buf, st.st_size);
+	if (store->cdict == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                      "cannot load ZSTD dictionary");
+		free(buf); return err;
+	}
+	free(buf);
+
+	store->cctx = ZSTD_createCCtx();
+	if (store->cctx == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                        "cannot create ZSTD context");
+	}
+	store->dctx = ZSTD_createDCtx();
+	if (store->dctx == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                        "cannot create ZSTD context");
+	}
+	/* in case of error:
+	 * destroy dictionary and contexts! */
+	return NOWDB_OK;
+}
+
+#define DICTSIZE 102400
+static inline nowdb_err_t trainZSTDDict(nowdb_store_t     *store,
+                                        char *buf, uint32_t size) {
+	nowdb_path_t  p;
+	nowdb_err_t err;
+	size_t dsz;
+	size_t *samplesz;
+	size_t nm;
+	char *dictbuf;
+	FILE *d;
+	ssize_t x;
+
+	dictbuf = malloc(DICTSIZE);
+	if (dictbuf == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                                 "allocating buffer");
+	}
+	nm = size/NOWDB_IDX_PAGE;
+	if (nm == 0) {
+		err = nowdb_err_get(nowdb_err_invalid, FALSE, "store",
+		                          "training buffer too small");
+		free(dictbuf); return err;
+	}
+	samplesz = malloc(nm*sizeof(size_t));
+	if (samplesz == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                                "allocating buffer"); 
+		free(dictbuf); return err;
+	}
+	for(int i=0;i<nm;i++) {
+		samplesz[i] = NOWDB_IDX_PAGE;
+	}
+	dsz = ZDICT_trainFromBuffer(dictbuf, DICTSIZE, buf, samplesz, nm);
+	if (ZDICT_isError(dsz)) {
+		err = nowdb_err_get(nowdb_err_compdict, FALSE, "store",
+		                       (char*)ZDICT_getErrorName(dsz));
+		free(dictbuf); free(samplesz); return err;
+	}
+	p = nowdb_path_append(store->path, DICTNAME);
+	if (p == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                                "appending to path");
+		free(dictbuf); free(samplesz); return err;
+	}
+	d = fopen(p, "wb");
+	if (d == NULL) {
+		err = nowdb_err_get(nowdb_err_open, TRUE, "store", p);
+		free(p); free(dictbuf); free(samplesz); return err;
+	}
+	x = fwrite(dictbuf, 1, dsz, d);
+	if (x != dsz) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, "store", p);
+		fclose(d); free(p); free(dictbuf); free(samplesz);
+		return err;
+	}
+	fclose(d); free(p);
+	free(dictbuf); free(samplesz);
+	return NOWDB_OK;
+}
+
+static inline nowdb_err_t getZSTDDict(nowdb_store_t     *store,
+                                      char *buf, uint32_t size) {
+	nowdb_err_t err;
+
+	err = loadZSTDDict(store);
+	if (err != NOWDB_OK) return err;
+
+	if (store->cdict != NULL) return NOWDB_OK;
+
+	err = trainZSTDDict(store, buf, size);
+	if (err != NOWDB_OK) return err;
+
+	err = loadZSTDDict(store);
+	if (err != NOWDB_OK) return err;
+
+	if (store->cdict == NULL) {
+		return nowdb_err_get(nowdb_err_compdict, FALSE, "store",
+		                           "no compression dictionary");
+	}
+	return NOWDB_OK;
+}
+
 static inline nowdb_err_t getReader(nowdb_store_t *store,
                                     nowdb_file_t  **file) {
 	nowdb_err_t err;
@@ -273,6 +416,17 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	src->oldest = NOWDB_TIME_DAWN;
 	src->newest = NOWDB_TIME_DUSK;
 
+	/* prepare compression */
+	if (store->comp == NOWDB_COMP_ZSTD &&
+	    store->cdict == NULL) {
+		err = getZSTDDict(store, buf, src->size);
+		if (err != NOWDB_OK) {
+			nowdb_file_destroy(reader);
+			free(reader); free(buf);
+			nowdb_file_destroy(src); free(src);
+			return err;
+		}
+	}
 	/* write to reader (potentially compressing) */
 	err = putContent(buf, src->size, reader);
 	if (err != NOWDB_OK) {

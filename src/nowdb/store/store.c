@@ -294,7 +294,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->writer = NULL;
 	store->compare = NULL;
 	store->comp = NOWDB_COMP_FLAT;
-	store->dict = NULL;
+	store->cdict = NULL;
+	store->ddict = NULL;
 	store->cctx = NULL;
 	store->dctx = NULL;
 	store->nextid = 1;
@@ -379,6 +380,18 @@ void nowdb_store_destroy(nowdb_store_t *store) {
 	}
 	if (store->catalog != NULL) {
 		free(store->catalog); store->catalog = NULL;
+	}
+	if (store->cdict != NULL) {
+		ZSTD_freeCDict(store->cdict); store->cdict = NULL;
+	}
+	if (store->ddict != NULL) {
+		ZSTD_freeDDict(store->ddict); store->ddict = NULL;
+	}
+	if (store->cctx != NULL) {
+		ZSTD_freeCCtx(store->cctx); store->cctx = NULL;
+	}
+	if (store->dctx != NULL) {
+		ZSTD_freeDCtx(store->dctx); store->dctx = NULL;
 	}
 	destroyAllFiles(store);
 	nowdb_rwlock_destroy(&store->lock);

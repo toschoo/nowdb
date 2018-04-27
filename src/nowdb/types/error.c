@@ -262,6 +262,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_version: return "cannot read version";
 	case nowdb_err_comp: return "compression failed";
 	case nowdb_err_decomp: return "decompression failed";
+	case nowdb_err_compdict: return "error creating compression dictionary";
 	case nowdb_err_store: return "operation on store failed";
 	case nowdb_err_context: return "operation on context failed";
 	case nowdb_err_scope: return "operation on scope failed";

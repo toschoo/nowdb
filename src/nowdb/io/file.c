@@ -188,7 +188,7 @@ nowdb_err_t nowdb_file_makeWriter(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
- * Change file from to spare
+ * Change file to spare
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_makeSpare(nowdb_file_t *file) {
@@ -397,7 +397,7 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 		                              file->dict);
 	} else {
 		sz = ZSTD_compress(file->tmp, file->bufsize,
-		                   buf, size, 10);
+		               buf, size, NOWDB_ZSTD_LEVEL);
 	}
 	if (ZSTD_isError(sz)) {
 		return nowdb_err_get(nowdb_err_comp, FALSE, OBJECT,

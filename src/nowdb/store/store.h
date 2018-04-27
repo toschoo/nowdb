@@ -35,9 +35,10 @@ typedef struct {
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
 	nowdb_comp_t       comp; /* compression                 */
-	void              *dict; /* compression dictionary             */
-	ZSTD_CCtx         *cctx; /* ZSTD compression context           */
-	ZSTD_DCtx         *dctx; /* ZSTD decompression context         */
+	void             *cdict; /* compression dictionary      */
+	void             *ddict; /* decompression dictionary    */
+	ZSTD_CCtx         *cctx; /* ZSTD compression context    */
+	ZSTD_DCtx         *dctx; /* ZSTD decompression context  */
 	nowdb_comprsc_t compare; /* comparison                  */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */

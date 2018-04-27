@@ -66,10 +66,18 @@ int main(int argc, char **argv) {
 	}
 	err = nowdb_store_configSort(&store, &nowdb_store_edge_compare);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot open store\n");
+		fprintf(stderr, "cannot config store (sort)\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_store_close(&store));
+		nowdb_store_destroy(&store);
+		return EXIT_FAILURE;
+	}
+	/* parameter! */
+	err = nowdb_store_configCompression(&store, NOWDB_COMP_ZSTD);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot config store (compression)\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
 		nowdb_store_destroy(&store);
 		return EXIT_FAILURE;
 	}
@@ -78,7 +86,6 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "cannot open store\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_store_close(&store));
 		nowdb_store_destroy(&store);
 		return EXIT_FAILURE;
 	}
