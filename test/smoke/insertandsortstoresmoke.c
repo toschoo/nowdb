@@ -10,6 +10,11 @@
 #include <common/bench.h>
 #include <common/stores.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+
 #define ONEANDHALF 16384
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
@@ -104,6 +109,10 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 			NOWDB_IGNORE(nowdb_file_close(file));
 			return FALSE;
 		}
+
+		fprintf(stderr, "block read to %u - %zu\n",
+		        file->pos, lseek(file->fd, 0, SEEK_CUR));
+
 		for(int i=0;i<file->bufsize;i+=file->recordsize) {
 			e = (nowdb_edge_t*)(file->bptr+i);
 			if (first) {
@@ -203,7 +212,7 @@ int main() {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_FLAT,
+	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_ZSTD,
 	                                           NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");

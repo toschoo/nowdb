@@ -78,7 +78,8 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->mptr     = NULL;
 	file->bptr     = NULL;
 	file->tmp      = NULL;
-	file->dict     = NULL;
+	file->cdict    = NULL;
+	file->ddict    = NULL;
 	file->cctx     = NULL;
 	file->dctx     = NULL;
 	file->off      = 0;
@@ -250,7 +251,12 @@ nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
 	                      source->oldest,
 	                      source->newest);
 	if (err != NOWDB_OK) return err;
-	target->size = source->size;
+	if (target->comp == NOWDB_COMP_ZSTD) {
+		target->cdict = source->cdict;
+		target->ddict = source->ddict;
+		target->cctx  = source->cctx;
+		target->dctx  = source->dctx;
+	}
 	return NOWDB_OK;
 }
 
@@ -390,11 +396,11 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 	ssize_t x;
 	size_t sz;
 
-	if (file->dict != NULL) {
+	if (file->cdict != NULL) {
 		sz = ZSTD_compress_usingCDict(file->cctx,
 		                              file->tmp, file->bufsize,
 		                              buf, size,
-		                              file->dict);
+		                              file->cdict);
 	} else {
 		sz = ZSTD_compress(file->tmp, file->bufsize,
 		               buf, size, NOWDB_ZSTD_LEVEL);
@@ -697,11 +703,12 @@ static inline nowdb_err_t plainload(nowdb_file_t *file) {
  */
 static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 	size_t sz;
-	if (file->dict != NULL) {
+	if (file->ddict != NULL) {
 		sz = ZSTD_decompress_usingDDict(file->dctx,
 		                                file->bptr, file->bufsize,
-		                                file->tmp, file->hdr.size,
-		                                file->dict);
+		                                file->tmp+file->off,
+		                                file->hdr.size,
+		                                file->ddict);
 	} else {
 		sz = ZSTD_decompress(file->bptr, file->bufsize,
 		                     file->tmp+file->off,
@@ -772,6 +779,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 
 		/* move on to next header */
 		file->off += file->hdr.size;
+		file->pos += file->hdr.size;
 
 		/* next header incomplete */
 		if (file->off + NOWDB_HDR_SIZE >= file->tmpsize) {
@@ -782,6 +790,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 		/* load header */
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
+		file->pos += NOWDB_HDR_SIZE;
 		return err;
 	}
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,

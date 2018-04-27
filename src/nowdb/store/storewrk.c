@@ -166,7 +166,8 @@ static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
 }
 
 #define DICTNAME "zdict"
-static inline nowdb_err_t loadZSTDDict(nowdb_store_t *store) {
+nowdb_err_t nowdb_store_loadZSTDDict(void *pstore) {
+	nowdb_store_t *store = pstore;
 	char *buf;
 	nowdb_err_t err;
 	nowdb_path_t p;
@@ -290,7 +291,7 @@ static inline nowdb_err_t getZSTDDict(nowdb_store_t     *store,
                                       char *buf, uint32_t size) {
 	nowdb_err_t err;
 
-	err = loadZSTDDict(store);
+	err = nowdb_store_loadZSTDDict(store);
 	if (err != NOWDB_OK) return err;
 
 	if (store->cdict != NULL) return NOWDB_OK;
@@ -298,7 +299,7 @@ static inline nowdb_err_t getZSTDDict(nowdb_store_t     *store,
 	err = trainZSTDDict(store, buf, size);
 	if (err != NOWDB_OK) return err;
 
-	err = loadZSTDDict(store);
+	err = nowdb_store_loadZSTDDict(store);
 	if (err != NOWDB_OK) return err;
 
 	if (store->cdict == NULL) {
@@ -374,32 +375,25 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
 
-	/* get (or create) reader with space */
-	err = getReader(store, &reader);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(src); free(src); return err;
-	}
-
 	/* get content from source */
 	buf = malloc(src->size);
 	if (buf == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, wrk->name,
 		                            "allocating large buffer");
-		nowdb_file_destroy(reader); free(reader);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 	err = getContent(wrk, src, buf);
 	if (err != NOWDB_OK) {
-		nowdb_file_destroy(reader); free(reader); free(buf);
-		nowdb_file_destroy(src); free(src); return err;
+		nowdb_file_destroy(src); free(src);
+		free(buf); return err;
 	}
 
 	/* find min/max if this are edges */
 	if (store->recsize == 64) { /* not too convincing */
 		err = findMinMax(buf, src);
 		if (err != NOWDB_OK) {
-			nowdb_file_destroy(reader); free(reader);
-			nowdb_file_destroy(src); free(src); return err;
+			nowdb_file_destroy(src); free(src);
+			free(buf); return err;
 		}
 	}
 
@@ -408,25 +402,35 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_mem_sort(buf, src->size/store->recsize,
 		                    store->recsize,
 		                    store->compare, NULL);
-		reader->ctrl |= NOWDB_FILE_SORT;
-		setMinMax(src, reader);
 	}
-
-	/* reset min/max */
-	src->oldest = NOWDB_TIME_DAWN;
-	src->newest = NOWDB_TIME_DUSK;
 
 	/* prepare compression */
 	if (store->comp == NOWDB_COMP_ZSTD &&
 	    store->cdict == NULL) {
 		err = getZSTDDict(store, buf, src->size);
 		if (err != NOWDB_OK) {
-			nowdb_file_destroy(reader);
-			free(reader); free(buf);
 			nowdb_file_destroy(src); free(src);
-			return err;
+			free(buf); return err;
 		}
 	}
+
+	/* get (or create) reader with space */
+	err = getReader(store, &reader);
+	if (err != NOWDB_OK) {
+		nowdb_file_destroy(src); free(src);
+		free(buf); return err;
+	}
+
+	/* set file sorted */
+	if (store->compare != NULL) {
+		reader->ctrl |= NOWDB_FILE_SORT;
+	}
+
+	/* set and reset min/max */
+	setMinMax(src, reader);
+	src->oldest = NOWDB_TIME_DAWN;
+	src->newest = NOWDB_TIME_DUSK;
+
 	/* write to reader (potentially compressing) */
 	err = putContent(buf, src->size, reader);
 	if (err != NOWDB_OK) {

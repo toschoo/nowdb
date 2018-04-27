@@ -83,7 +83,8 @@ typedef struct {
 	char            *bptr; /* pointer for buffered reading       */
 	char             *tmp; /* temporary buffer for decompression */
 	int               off; /* current position within tmp/map    */
-	void            *dict; /* compression dictionary             */
+	void           *cdict; /* compression dictionary             */
+	void           *ddict; /* decompression dictionary           */
 	ZSTD_CCtx       *cctx; /* ZSTD compression context           */
 	ZSTD_DCtx       *dctx; /* ZSTD decompression context         */
 	uint32_t      bufsize; /* map or buf size                    */
