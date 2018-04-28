@@ -714,6 +714,14 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 		                     file->tmp+file->off,
 		                     file->hdr.size);
 	}
+	/*
+	fprintf(stderr, "%zu, %u - %u\n", sz, file->off, file->hdr.size);
+	for(int i=0;i<file->hdr.size;i++) {
+		fprintf(stderr, "%x ",
+		       (unsigned char)(file->tmp+file->off)[i]);
+	}
+	fprintf(stderr, "\n");
+	*/
 	if (ZSTD_isError(sz)) {
 		return nowdb_err_get(nowdb_err_decomp, FALSE, OBJECT,
 			               (char*)ZSTD_getErrorName(sz));
@@ -728,21 +736,26 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 static inline nowdb_err_t compload(nowdb_file_t *file,
                                    nowdb_bool_t  hdr) {
 	ssize_t x;
+	if (file->pos >= file->size) return nowdb_err_get(nowdb_err_eof,
+	                                     FALSE, OBJECT, file->path);
 	if (file->hdr.size != 0) {
 		uint32_t sz = file->tmpsize - file->off;
 		memcpy(file->tmp, file->tmp+file->off, sz);
+		file->tmpsize = sz;
 		x = read(file->fd, file->tmp+sz, file->bufsize-sz);
 		if (x == 0) return nowdb_err_get(
 		                   nowdb_err_bad_block,
 		            FALSE, OBJECT, file->path);
 	} else {
+		file->tmpsize = 0;
 		x = read(file->fd, file->tmp, file->bufsize);
 		if (x == 0) return nowdb_err_get(nowdb_err_eof,
 		                    FALSE, OBJECT, file->path);
 	}
 	if (x < 0) return nowdb_err_get(nowdb_err_read,
 	                     TRUE, OBJECT, file->path);
-	file->tmpsize = (uint32_t)x;
+	file->pos += (uint32_t)x;
+	file->tmpsize += (uint32_t)x;
 	if (hdr) {
 		file->off = NOWDB_HDR_SIZE;
 		memcpy(&file->hdr, file->tmp, NOWDB_HDR_SIZE);
@@ -779,7 +792,6 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 
 		/* move on to next header */
 		file->off += file->hdr.size;
-		file->pos += file->hdr.size;
 
 		/* next header incomplete */
 		if (file->off + NOWDB_HDR_SIZE >= file->tmpsize) {
@@ -790,7 +802,6 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 		/* load header */
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
-		file->pos += NOWDB_HDR_SIZE;
 		return err;
 	}
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,

@@ -101,17 +101,24 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 	fprintf(stderr, "%u == %u\n",
 	        file->bufsize, file->blocksize);
 	first = TRUE;
-	for(;file->pos<file->size;) {
+	// for(;file->pos<file->size;) {
+	for(;;) {
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			NOWDB_IGNORE(nowdb_file_close(file));
-			return FALSE;
+			if (err->errcode != nowdb_err_eof) {
+				NOWDB_IGNORE(nowdb_file_close(file));
+				return FALSE;
+			} else {
+				break;
+			}
 		}
 
+		/*
 		fprintf(stderr, "block read to %u - %zu\n",
 		        file->pos, lseek(file->fd, 0, SEEK_CUR));
+		*/
 
 		for(int i=0;i<file->bufsize;i+=file->recordsize) {
 			e = (nowdb_edge_t*)(file->bptr+i);
@@ -161,7 +168,6 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
 	return TRUE;

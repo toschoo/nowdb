@@ -53,7 +53,7 @@ typedef enum {
 } nowdb_file_state_t;
 
 /* ------------------------------------------------------------------------
- * Block Header for encrypted files
+ * Block Header for compressed files
  * ------------------------------------------------------------------------
  */
 typedef struct {
