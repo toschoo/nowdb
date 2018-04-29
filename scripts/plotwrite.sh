@@ -5,6 +5,8 @@ else
 	n=$1
 fi
 
-echo "from first $nm lines"
 head -$n report.txt | tail -100 | \
 	feedgnuplot --terminal 'dumb 120,35' --lines --unset grid --exit
+
+echo ""
+echo "from first $n lines"
