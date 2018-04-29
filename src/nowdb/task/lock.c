@@ -10,6 +10,10 @@
 
 static char *OBJECT = "lock";
 
+/* ------------------------------------------------------------------------
+ * init exclusive lock
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_lock_init(nowdb_lock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -23,6 +27,10 @@ nowdb_err_t nowdb_lock_init(nowdb_lock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * init read/write lock
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_rwlock_init(nowdb_rwlock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -36,16 +44,28 @@ nowdb_err_t nowdb_rwlock_init(nowdb_rwlock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * destroy exclusive lock
+ * ------------------------------------------------------------------------
+ */
 void nowdb_lock_destroy(nowdb_lock_t *lock) {
 	if (lock == NULL) return;
 	pthread_mutex_destroy(lock);
 }
 
+/* ------------------------------------------------------------------------
+ * destroy read/write lock
+ * ------------------------------------------------------------------------
+ */
 void nowdb_rwlock_destroy(nowdb_rwlock_t *lock) {
 	if (lock == NULL) return;
 	pthread_rwlock_destroy(lock);
 }
 
+/* ------------------------------------------------------------------------
+ * lock exclusive lock
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_lock(nowdb_lock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -59,6 +79,10 @@ nowdb_err_t nowdb_lock(nowdb_lock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * unlock exclusive lock
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_unlock(nowdb_lock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -72,6 +96,10 @@ nowdb_err_t nowdb_unlock(nowdb_lock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * lock read/write lock for reading
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_lock_read(nowdb_rwlock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -85,6 +113,10 @@ nowdb_err_t nowdb_lock_read(nowdb_rwlock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * unlock read/write lock acquired for reading
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_unlock_read(nowdb_rwlock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -98,6 +130,10 @@ nowdb_err_t nowdb_unlock_read(nowdb_rwlock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * lock read/write lock for reading
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_lock_write(nowdb_rwlock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -111,6 +147,10 @@ nowdb_err_t nowdb_lock_write(nowdb_rwlock_t *lock) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * unlock read/write lock acquired for writing
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_unlock_write(nowdb_rwlock_t *lock) {
 	if (lock == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -123,4 +163,3 @@ nowdb_err_t nowdb_unlock_write(nowdb_rwlock_t *lock) {
 	}
 	return NOWDB_OK;
 }
-

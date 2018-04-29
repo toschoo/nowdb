@@ -267,4 +267,3 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	/* destroy everything */
 	destroy(wrk); return NOWDB_OK;
 }
-

@@ -3,8 +3,6 @@
  * ========================================================================
  * File Abstraction
  * ========================================================================
- *
- * ========================================================================
  */
 #include <nowdb/io/file.h>
 #include <stdio.h>
@@ -93,7 +91,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->order    = 0;
 	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
 
-	if (cap == 0) {
+	if ((ctrl & NOWDB_FILE_WRITER) && cap == 0) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                     "capacity is 0");
 	}
@@ -178,6 +176,10 @@ nowdb_err_t nowdb_file_makeWriter(nowdb_file_t *file) {
 	if (file->state != nowdb_file_state_closed) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                 "file descriptor is in wrong state");
+	}
+	if (file->capacity == 0) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                     "capacity is 0");
 	}
 	file->bufsize  = NOWDB_FILE_MAPSIZE > file->capacity ?
 	                                      file->capacity :
@@ -698,6 +700,18 @@ static inline nowdb_err_t plainload(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Debug function to show contents of the tmp buffer
+ * ------------------------------------------------------------------------
+ */
+static inline void showtmp(nowdb_file_t *file) {
+	for(int i=0;i<file->hdr.size;i++) {
+		fprintf(stderr, "%x ",
+		       (unsigned char)(file->tmp+file->off)[i]);
+	}
+	fprintf(stderr, "\n");
+}
+
+/* ------------------------------------------------------------------------
  * Helper function to decompress a block using ZSTD
  * ------------------------------------------------------------------------
  */
@@ -715,12 +729,7 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 		                     file->hdr.size);
 	}
 	/*
-	fprintf(stderr, "%zu, %u - %u\n", sz, file->off, file->hdr.size);
-	for(int i=0;i<file->hdr.size;i++) {
-		fprintf(stderr, "%x ",
-		       (unsigned char)(file->tmp+file->off)[i]);
-	}
-	fprintf(stderr, "\n");
+	showtmp(file);
 	*/
 	if (ZSTD_isError(sz)) {
 		return nowdb_err_get(nowdb_err_decomp, FALSE, OBJECT,
@@ -736,10 +745,15 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 static inline nowdb_err_t compload(nowdb_file_t *file,
                                    nowdb_bool_t  hdr) {
 	ssize_t x;
+
+	/* if we are behind file end: set header.size 0 */
 	if (file->pos >= file->size) {
 		memset(&file->hdr, 0, NOWDB_HDR_SIZE);
 		return NOWDB_OK;
 	}
+
+	/* if we have already something loaded
+	 * preserve non-processed data */
 	if (file->hdr.size != 0) {
 		uint32_t sz = file->tmpsize - file->off;
 		memcpy(file->tmp, file->tmp+file->off, sz);
@@ -748,16 +762,24 @@ static inline nowdb_err_t compload(nowdb_file_t *file,
 		if (x == 0) return nowdb_err_get(
 		                   nowdb_err_bad_block,
 		            FALSE, OBJECT, file->path);
+
+	/* nothing loaded yet */
 	} else {
 		file->tmpsize = 0;
 		x = read(file->fd, file->tmp, file->bufsize);
 		if (x == 0) return nowdb_err_get(nowdb_err_eof,
 		                    FALSE, OBJECT, file->path);
 	}
+
+	/* check for error */
 	if (x < 0) return nowdb_err_get(nowdb_err_read,
 	                     TRUE, OBJECT, file->path);
+
+	/* remember file position and tmp size */
 	file->pos += (uint32_t)x;
 	file->tmpsize += (uint32_t)x;
+
+	/* load header */
 	if (hdr) {
 		file->off = NOWDB_HDR_SIZE;
 		memcpy(&file->hdr, file->tmp, NOWDB_HDR_SIZE);
@@ -802,7 +824,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 			if (err != NOWDB_OK) return err;
 			file->off = 0;
 		}
-		/* last block seen */
+		/* that was the last block */
 		if (file->hdr.size == 0) return NOWDB_OK;
 
 		/* load header */
@@ -810,6 +832,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 		file->off += NOWDB_HDR_SIZE;
 		return err;
 	}
+	/* unknown compression algorithm */
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                      "unknown compression algorithm");
 }
@@ -879,4 +902,3 @@ nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file);
-
