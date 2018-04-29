@@ -736,8 +736,10 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 static inline nowdb_err_t compload(nowdb_file_t *file,
                                    nowdb_bool_t  hdr) {
 	ssize_t x;
-	if (file->pos >= file->size) return nowdb_err_get(nowdb_err_eof,
-	                                     FALSE, OBJECT, file->path);
+	if (file->pos >= file->size) {
+		memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+		return NOWDB_OK;
+	}
 	if (file->hdr.size != 0) {
 		uint32_t sz = file->tmpsize - file->off;
 		memcpy(file->tmp, file->tmp+file->off, sz);
@@ -777,12 +779,13 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 	/* data missing from block for this header */
 	if (file->tmpsize <
 	    file->hdr.size + file->off) err = compload(file, FALSE);
+
+	/* check for error */
 	if (err != NOWDB_OK) return err;
 
 	/* no header found: EOF */
 	if (file->hdr.size == 0) return nowdb_err_get(nowdb_err_eof,
 		                         FALSE, OBJECT, file->path);
-
 	/* decompress using ZSTD */
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
@@ -799,6 +802,9 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 			if (err != NOWDB_OK) return err;
 			file->off = 0;
 		}
+		/* last block seen */
+		if (file->hdr.size == 0) return NOWDB_OK;
+
 		/* load header */
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
