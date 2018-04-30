@@ -1563,7 +1563,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 	}
 	for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
 		candidate = runner->cont;
-		if (candidate->size < NOWDB_FILE_MAXSIZE) {
+		if (candidate->size < NOWDB_FILE_MAXSIZE && !candidate->used) {
 			*file = malloc(sizeof(nowdb_file_t));
 			if (file == NULL) {
 				err = nowdb_err_get(nowdb_err_no_mem,
@@ -1575,6 +1575,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 			if (err != NOWDB_OK) {
 				free(*file); *file = NULL; break;
 			}
+			candidate->used = TRUE;
 			break;
 		}
 	}
@@ -1599,16 +1600,19 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	ts_algo_list_node_t *tmp;
+	nowdb_file_t *f;
 
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                 OBJECT, "store object is NULL");
 	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                      OBJECT, "pointer to file object is NULL");
 
-	err = nowdb_lock_read(&store->lock);
+	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	tmp = store->waiting.head;
+	for(tmp=store->waiting.head; tmp!=NULL; tmp=tmp->nxt) {
+		f = tmp->cont; if (!f->used) break;
+	}
 	if (tmp == NULL) goto unlock;
 
 	*file = malloc(sizeof(nowdb_file_t));
@@ -1619,9 +1623,10 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	}
 	err = nowdb_file_copy(tmp->cont, *file);
 	if (err != NOWDB_OK) goto unlock;
+	f->used = TRUE;
 
 unlock:
-	err2 = nowdb_unlock_read(&store->lock);
+	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
