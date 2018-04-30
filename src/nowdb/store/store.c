@@ -23,6 +23,9 @@ static char nullrec[64] = {0,0,0,0,0,0,0,0,
 
 #define MAX_FILE_NAME 32
 
+#define MAX_SPARES 9
+#define MIN_SPARES 3
+
 /* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
@@ -565,7 +568,7 @@ static inline nowdb_err_t createFile(nowdb_store_t *store) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t createSpares(nowdb_store_t *store) {
-	while (store->spares.len < 3) {
+	while (store->spares.len < MIN_SPARES) {
 		nowdb_err_t err = createFile(store);
 		if (err != NOWDB_OK) return err;
 	}
@@ -596,7 +599,7 @@ static inline nowdb_err_t getWriter(nowdb_store_t *store) {
  */
 static inline nowdb_err_t makeSpare(nowdb_store_t *store,
                                     nowdb_file_t  *file) {
-	if (store->spares.len > 3) {
+	if (store->spares.len > MAX_SPARES) {
 		NOWDB_IGNORE(nowdb_file_close(file));
 		NOWDB_IGNORE(nowdb_file_remove(file));
 		nowdb_file_destroy(file); free(file);

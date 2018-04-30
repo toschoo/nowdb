@@ -1,6 +1,7 @@
 if [ $# -lt 1 ]
 then
-	n=$RANDOM
+	w=$(wc -l report.txt | awk '{print $1}')	
+	n=$(($RANDOM%$w))
 else
 	n=$1
 fi
