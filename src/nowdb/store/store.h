@@ -181,6 +181,13 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
                                       nowdb_file_t **file);
 
 /* ------------------------------------------------------------------------
+ * Release waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,
+                                      nowdb_file_t  *file);
+
+/* ------------------------------------------------------------------------
  * Create new reader
  * ------------------------------------------------------------------------
  */
@@ -193,6 +200,13 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
  */
 nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
                                    nowdb_file_t **file);
+
+/* ------------------------------------------------------------------------
+ * Release waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
+                                       nowdb_file_t  *file);
 
 /* ------------------------------------------------------------------------
  * Donate empty file to spares

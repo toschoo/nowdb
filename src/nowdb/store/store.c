@@ -1173,10 +1173,12 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	store->starting = TRUE;
 
 	/* compression */
+	/*
 	if (store->comp == NOWDB_COMP_ZSTD) {
 		err = nowdb_store_loadZSTDDict(store);
 		if (err != NOWDB_OK) goto unlock;
 	}
+	*/
 
 	/* read catalog */
 	err = readCatalog(store);
@@ -1592,6 +1594,43 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Release reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,
+                                      nowdb_file_t  *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_file_t  *tmp=NULL;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* nothing available */
+	if (store->readers.count == 0) goto unlock;
+
+	tmp = ts_algo_tree_find(&store->readers, file);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT,
+	                                               "reader not found");
+		goto unlock;
+	}
+	tmp->used = FALSE;
+
+unlock:
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Get waiting
  * ------------------------------------------------------------------------
  */
@@ -1625,6 +1664,40 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	if (err != NOWDB_OK) goto unlock;
 	f->used = TRUE;
 
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Release waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
+                                       nowdb_file_t  *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_node_t *tmp;
+	nowdb_file_t *f;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	tmp = findInList(&store->waiting, file);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT,
+	                                              "waiting not found");
+		goto unlock;
+	}
+	f = tmp->cont; f->used = FALSE;
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
