@@ -373,7 +373,9 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 
 	// fprintf(stderr, "SORTING\n");
 
-	/* get waiting file */
+	/* get waiting file 
+	 * we have to free it in case of error!
+	 */
 	err = nowdb_store_getWaiting(store, &src);
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
