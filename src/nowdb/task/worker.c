@@ -55,7 +55,7 @@ static void *wrkentry(void *p) {
 	if (err != NOWDB_OK) {
 		reportError(wrk, err); return NULL;
 	}
-	wrk->state = NOWDB_WRK_RUNNING;
+	wrk->running++;
 
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) {
@@ -93,7 +93,7 @@ static void *wrkentry(void *p) {
 	/* announce that I'm stopping */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) reportError(wrk, err); /* what to do,    */
-	wrk->state = NOWDB_WRK_STOPPED;             /* when we cannot */
+	wrk->running--;                             /* when we cannot */
 	err = nowdb_unlock(&wrk->lock);             /* lock???        */
 	if (err != NOWDB_OK) reportError(wrk, err);
 	return NULL;
@@ -105,6 +105,7 @@ static void *wrkentry(void *p) {
  */
 nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
                              char                *name,
+                             uint32_t             pool,
                              nowdb_time_t       period,
                              nowdb_job_t           job,
                              nowdb_queue_t   *errqueue,
@@ -116,8 +117,8 @@ nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
 	*wrk = malloc(sizeof(nowdb_worker_t));
 	if (*wrk == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE,
 	                         "worker", "worker object allocation");
-	err = nowdb_worker_init(*wrk, name, period, job,
-	                          errqueue, drain, rsc);
+	err = nowdb_worker_init(*wrk, name, pool, period, job,
+	                                errqueue, drain, rsc);
 	if (err != NOWDB_OK) {
 		free(*wrk); *wrk = NULL;
 		return err;
@@ -130,7 +131,7 @@ nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
-                                  char          state,
+                                  uint32_t   expected,
                                   nowdb_time_t    tmo) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_time_t t = tmo;
@@ -139,7 +140,7 @@ static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
 		err = nowdb_lock(&wrk->lock);
 		if (err != NOWDB_OK) return err;
 		
-		if (wrk->state == state) {
+		if (wrk->running == expected) {
 			return nowdb_unlock(&wrk->lock);
 		}
 		err = nowdb_unlock(&wrk->lock);
@@ -162,6 +163,7 @@ static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
  */
 nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
                               char                *name,
+                              uint32_t             pool,
                               nowdb_time_t       period,
                               nowdb_job_t           job,
                               nowdb_queue_t   *errqueue,
@@ -173,32 +175,51 @@ nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
 	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                        FALSE, "worker", "name is NULL");
 
+	wrk->tasks = NULL;
 	strncpy(wrk->name, name, 8); wrk->name[7] = 0;
 	wrk->errqueue = errqueue;
+	wrk->pool = pool;
 	wrk->job = job;
 	wrk->rsc = rsc;
 	wrk->period = period>0?period:-1;
-	wrk->state = NOWDB_WRK_STOPPED;
+	wrk->running = 0;
 
 	err = nowdb_lock_init(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_queue_init(&wrk->jobqueue, 0, DELAY, drain);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		nowdb_lock_destroy(&wrk->lock);
+		return err;
+	}
+
+	wrk->tasks = malloc(sizeof(nowdb_task_t)*wrk->pool);
+	if (wrk->tasks == NULL) {
+		nowdb_lock_destroy(&wrk->lock);
+		nowdb_queue_destroy(&wrk->jobqueue);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, wrk->name,
+		                                    "allocating tasks");
+	}
 
 	err = nowdb_lock(&wrk->lock);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_task_create(&wrk->task, wrkentry, wrk);
 	if (err != NOWDB_OK) {
+		nowdb_lock_destroy(&wrk->lock);
 		nowdb_queue_destroy(&wrk->jobqueue);
+		free(wrk->tasks);
 		return err;
+	}
+
+	/* from here on it's a mess. Hard to stop tasks
+	 * with a non-initialised worker */
+	for(uint32_t i=0;i<wrk->pool;i++) {
+		err = nowdb_task_create(wrk->tasks+i, wrkentry, wrk);
+		if (err != NOWDB_OK) return err;
 	}
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
 	/* wait for running */
-	return waitFor(wrk, NOWDB_WRK_RUNNING, DELAY);
+	return waitFor(wrk, wrk->pool, DELAY);
 }
 
 /* ------------------------------------------------------------------------
@@ -209,7 +230,10 @@ static inline void destroy(nowdb_worker_t *wrk) {
 	if (wrk == NULL) return;
 	nowdb_queue_destroy(&wrk->jobqueue);
 	nowdb_lock_destroy(&wrk->lock);
-	nowdb_task_destroy(wrk->task);
+	for(uint32_t i=0;i<wrk->pool;i++) {
+		nowdb_task_destroy(wrk->tasks[i]);
+	}
+	free(wrk->tasks); wrk->tasks = 0;
 }
 
 /* ------------------------------------------------------------------------
@@ -242,23 +266,27 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (wrk->state == NOWDB_WRK_STOPPED) {
+	if (wrk->running == 0) {
 		return nowdb_unlock(&wrk->lock);
 	}
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
 	/* send stop message */
-	err = nowdb_queue_enqueuePrio(&wrk->jobqueue, &stopmsg);
-	if (err != NOWDB_OK) return err;
+	for(uint32_t i=0;i<wrk->pool;i++) {
+		err = nowdb_queue_enqueuePrio(&wrk->jobqueue, &stopmsg);
+		if (err != NOWDB_OK) return err;
+	}
 
 	/* wait for stop */
-	err = waitFor(wrk, NOWDB_WRK_STOPPED, tmo);
+	err = waitFor(wrk, 0, tmo);
 	if (err != NOWDB_OK) return err;
 
 	/* wait for thread to terminate */
-	err = nowdb_task_join(wrk->task);
-	if (err != NOWDB_OK) return err;
+	for(uint32_t i=0;i<wrk->pool;i++) {
+		err = nowdb_task_join(wrk->tasks[i]);
+		if (err != NOWDB_OK) return err;
+	}
 
 	/* stop queue */
 	err = nowdb_queue_shutdown(&wrk->jobqueue);

@@ -45,21 +45,22 @@ typedef struct {
  * by the user-defined job.
  * 'errqueue' may be NULL. In that case, errors are announced on
  * stderr. Otherwise, errors are sent to that queue (which shall
- * be initialised and opened beforehand.
+ * be initialised and opened beforehand).
  * If an error occurs writing to the error queue,
  * errors (including that error) are announced on stderr.
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_lock_t         lock; /* exclusive lock              */
-	char              name[8]; /* worker name                 */
-	nowdb_time_t       period; /* periodic workers            */
-	nowdb_task_t         task; /* task running the worker     */
-	void                 *job; /* user-defined callback       */
-	nowdb_queue_t    jobqueue; /* queue where jobs arrive     */
-	nowdb_queue_t   *errqueue; /* queue where to write errors */
-	void                 *rsc; /* additional resources        */
-	char                state; /* running or stopped          */
+	nowdb_lock_t         lock; /* exclusive lock                 */
+	char              name[8]; /* worker name                    */
+        uint32_t             pool; /* how many tasks are in the pool */
+	nowdb_time_t       period; /* periodic workers               */
+	nowdb_task_t       *tasks; /* tasks running the worker       */
+	void                 *job; /* user-defined callback          */
+	nowdb_queue_t    jobqueue; /* queue where jobs arrive        */
+	nowdb_queue_t   *errqueue; /* queue where to write errors    */
+	void                 *rsc; /* additional resources           */
+	uint32_t          running; /* how many tasks are running     */
 } nowdb_worker_t;
 
 /* ------------------------------------------------------------------------
@@ -93,6 +94,7 @@ typedef nowdb_err_t (*nowdb_job_t)(nowdb_worker_t      *wrk,
  */
 nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
                              char                *name,
+                             uint32_t             pool,
                              nowdb_time_t       period,
                              nowdb_job_t           job,
                              nowdb_queue_t   *errqueue,
@@ -105,6 +107,7 @@ nowdb_err_t nowdb_worker_new(nowdb_worker_t      **wrk,
  */
 nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
                               char                *name,
+                              uint32_t             pool,
                               nowdb_time_t       period,
                               nowdb_job_t           job,
                               nowdb_queue_t   *errqueue,

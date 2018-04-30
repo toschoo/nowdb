@@ -40,8 +40,8 @@ nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                "store", "store object is NULL");
 
-	return nowdb_worker_init(wrk, "sync", SYNCPERIOD, &syncjob,
-	                                    errq, &nodrain, store);
+	return nowdb_worker_init(wrk, "sync", 1, SYNCPERIOD, &syncjob,
+	                                       errq, &nodrain, store);
 }
 
 nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk) {
@@ -56,8 +56,8 @@ nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                "store", "store object is NULL");
 
-	return nowdb_worker_init(wrk, "sorter", SORTPERIOD, &sortjob,
-	                                      errq, &nodrain, store);
+	return nowdb_worker_init(wrk, "sorter", 2, SORTPERIOD, &sortjob,
+	                                         errq, &nodrain, store);
 }
 
 nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
