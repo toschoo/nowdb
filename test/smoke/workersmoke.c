@@ -25,6 +25,7 @@
 #define TMO  1000000000
 
 nowdb_err_t hellojob(nowdb_worker_t      *wrk,
+                     uint32_t              id,
                      nowdb_wrk_message_t *msg) {
 	if (msg == NULL) {
 		return nowdb_err_get(nowdb_err_invalid,
@@ -171,6 +172,7 @@ typedef struct {
 } fibo_t;
 
 nowdb_err_t job(nowdb_worker_t      *wrk,
+                uint32_t              id,
                 nowdb_wrk_message_t *msg) {
 	fibo_t *fibo = wrk->rsc;
 	uint32_t f1, f2;
@@ -311,7 +313,7 @@ nowdb_bool_t testPool2() {
 	nowdb_worker_t wrk;
 	nowdb_err_t    err;
 
-	err = nowdb_worker_init(&wrk, "pooltest", 2, PERIOD,
+	err = nowdb_worker_init(&wrk, "pool", 2, PERIOD,
 	                        &hellojob, NULL,
 	                        &drainer, NULL);
 	if (err != NOWDB_OK) {

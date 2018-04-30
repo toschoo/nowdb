@@ -48,6 +48,7 @@ static void *wrkentry(void *p) {
 	nowdb_wrk_message_t *msg=NULL;
 	nowdb_err_t     err;
 	nowdb_job_t job;
+	uint32_t idx;
 
 	job = wrk->job;
 
@@ -55,6 +56,8 @@ static void *wrkentry(void *p) {
 	if (err != NOWDB_OK) {
 		reportError(wrk, err); return NULL;
 	}
+
+	idx = wrk->running;
 	wrk->running++;
 
 	err = nowdb_unlock(&wrk->lock);
@@ -69,7 +72,7 @@ static void *wrkentry(void *p) {
 			/* on timeout: perform the job without message */
 			if (err->errcode == nowdb_err_timeout) {
 				nowdb_err_release(err);
-				err = job(wrk, NULL);
+				err = job(wrk, idx, NULL);
 				if (err != NOWDB_OK) reportError(wrk, err);
 				nowdb_err_release(err);
 			} else {
@@ -84,7 +87,7 @@ static void *wrkentry(void *p) {
 		if (msg->type == NOWDB_WRK_STOP) {
 			/* free(msg); */ break;
 		}
-		err = job(wrk, msg);
+		err = job(wrk, idx, msg);
 		if (err != NOWDB_OK) reportError(wrk, err);
 
 		/* cleanup */

@@ -38,8 +38,8 @@ typedef struct {
 	nowdb_comp_t       comp; /* compression                 */
 	void             *cdict; /* compression dictionary      */
 	void             *ddict; /* decompression dictionary    */
-	ZSTD_CCtx         *cctx; /* ZSTD compression context    */
-	ZSTD_DCtx         *dctx; /* ZSTD decompression context  */
+	nowdb_bitmap64_t myctxs; /* free/used dctx              */
+	ZSTD_DCtx        **dctx; /* ZSTD decompression contexts */
 	nowdb_comprsc_t compare; /* comparison                  */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
@@ -88,6 +88,26 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp);
+
+/* ------------------------------------------------------------------------
+ * Load (de)compression dictionaries
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_loadZSTDDict(nowdb_store_t *store);
+
+/* ------------------------------------------------------------------------
+ * Get  decompression context
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getZSTDDCtx(nowdb_store_t *store,
+                                    ZSTD_DCtx    **dctx);
+
+/* ------------------------------------------------------------------------
+ * Release decompression context
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseZSTDDCtx(nowdb_store_t *store,
+                                        ZSTD_DCtx     *dctx);
 
 /* ------------------------------------------------------------------------
  * Destroy store

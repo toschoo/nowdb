@@ -318,7 +318,6 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->comp = NOWDB_COMP_FLAT;
 	store->cdict = NULL;
 	store->ddict = NULL;
-	store->cctx = NULL;
 	store->dctx = NULL;
 	store->nextid = 1;
 
@@ -392,6 +391,37 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Get Decompression context
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getZSTDDCtx(nowdb_store_t *store, ZSTD_DCtx **dctx) {
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (dctx == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                 FALSE, OBJECT, "context object is NULL");
+
+	if (store->dctx != NULL) {
+		// get first free
+	}
+
+	*dctx = ZSTD_createDCtx();
+	if (*dctx == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		                          "no decompression context");
+	}
+	return NOWDB_OK;
+}
+
+void nowdb_store_releaseZSTDCtx(nowdb_store_t *store, ZSTD_DCtx *dctx) {
+	if (store == NULL) return;
+	if (dctx == NULL) return;
+	if (store->dctx != NULL) {
+		// unmark 
+	}
+	ZSTD_freeDCtx(dctx);
+}
+
+/* ------------------------------------------------------------------------
  * Destroy store
  * ------------------------------------------------------------------------
  */
@@ -409,11 +439,14 @@ void nowdb_store_destroy(nowdb_store_t *store) {
 	if (store->ddict != NULL) {
 		ZSTD_freeDDict(store->ddict); store->ddict = NULL;
 	}
-	if (store->cctx != NULL) {
-		ZSTD_freeCCtx(store->cctx); store->cctx = NULL;
-	}
 	if (store->dctx != NULL) {
-		ZSTD_freeDCtx(store->dctx); store->dctx = NULL;
+		for(int i=0;i<64;i++) {
+			if (store->dctx[i] != NULL) {
+				ZSTD_freeDCtx(store->dctx[i]);
+				store->dctx[i] = NULL;
+			}
+		}
+		free(store->dctx); store->dctx = NULL;
 	}
 	destroyAllFiles(store);
 	nowdb_rwlock_destroy(&store->lock);
@@ -477,19 +510,6 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: config compression in reader
- * ------------------------------------------------------------------------
- */
-static inline void configReader(nowdb_store_t *store, nowdb_file_t *file) {
-	if (file->comp == NOWDB_COMP_ZSTD) {
-		file->ddict = store->ddict;
-		file->cdict = store->cdict;
-		file->cctx  = store->cctx;
-		file->dctx  = store->dctx;
-	}
-}
-
-/* ------------------------------------------------------------------------
  * create reader
  * ------------------------------------------------------------------------
  */
@@ -522,7 +542,6 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 		goto unlock;
 	}
 	(*file)->comp = store->comp;
-	configReader(store, *file);
 	
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
@@ -873,8 +892,6 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 		} else if ((file->ctrl & NOWDB_FILE_READER) &&
 		           (file->ctrl & NOWDB_FILE_SORT)) {
 
-			configReader(store, file);
-
 			if (ts_algo_tree_insert(
 			    &store->readers, file) != TS_ALGO_OK) 
 			{
@@ -1176,12 +1193,10 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	store->starting = TRUE;
 
 	/* compression */
-	/*
 	if (store->comp == NOWDB_COMP_ZSTD) {
 		err = nowdb_store_loadZSTDDict(store);
 		if (err != NOWDB_OK) goto unlock;
 	}
-	*/
 
 	/* read catalog */
 	err = readCatalog(store);
