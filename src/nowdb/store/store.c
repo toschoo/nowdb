@@ -508,11 +508,13 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 	err = makeFile(store, file, fname, fid);
 	if (err != NOWDB_OK) goto unlock;
 
+	/*
 	err = nowdb_file_create(*file);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(*file); free(*file); *file = NULL;
 		goto unlock;
 	}
+	*/
 
 	err = nowdb_file_makeReader(*file);
 	if (err != NOWDB_OK) {

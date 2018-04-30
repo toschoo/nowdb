@@ -316,7 +316,11 @@ static inline nowdb_err_t getReader(nowdb_store_t *store,
 	err = nowdb_store_getFreeReader(store, file);
 	if (err != NOWDB_OK) return err;
 	if (*file != NULL) return NOWDB_OK;
-	return nowdb_store_createReader(store, file);
+	err = nowdb_store_createReader(store, file);
+	if (err != NOWDB_OK) return err;
+	(*file)->capacity = 1073741824;
+	return nowdb_file_create(*file);
+
 }
 
 static inline nowdb_err_t getContent(nowdb_worker_t *wrk,
