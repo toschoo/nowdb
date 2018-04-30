@@ -83,6 +83,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 
 uint32_t global_count = 1000;
 uint32_t global_block = 1;
+uint32_t global_large = 1;
 uint32_t global_report = 1;
 int      global_sort  = 0;
 char    *global_comp  = NULL;
@@ -98,6 +99,12 @@ int parsecmd(int argc, char **argv) {
 	}
 	global_block = (uint32_t)ts_algo_args_findUint(
 	            argc, argv, 2, "block", 1, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_large = (uint32_t)ts_algo_args_findUint(
+	            argc, argv, 2, "large", 1, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -135,6 +142,7 @@ void helptxt(char *progname) {
 	fprintf(stderr, "          'flat' or\n");
 	fprintf(stderr, "          'zstd'\n");
 	fprintf(stderr, "-block n: blocksize in megabyte\n");
+	fprintf(stderr, "-large n: large file size in megabyte\n");
 	fprintf(stderr, "-report n: report every n inserts\n");
 }
 
@@ -186,7 +194,8 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "unknown compression: '%s'\n", global_comp);
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap(path, compare, comp, NOWDB_MEGA*global_block);
+	store = xBootstrap(path, compare, comp, NOWDB_MEGA*global_block,
+	                                        NOWDB_MEGA*global_large);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}

@@ -31,7 +31,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
-                            uint32_t     filesize)
+                            uint32_t     filesize,
+                            uint32_t    largesize)
 {
 	nowdb_err_t err = NOWDB_OK;
 	if (store == NULL) {
@@ -43,7 +44,9 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating store object");
 	}
-	err = nowdb_store_init(*store, base, ver, recsize, filesize);
+	err = nowdb_store_init(*store, base, ver, recsize,
+	                                         filesize,
+						largesize);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -288,7 +291,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
-                             uint32_t     filesize)
+                             uint32_t     filesize,
+                             uint32_t    largesize)
 {
 	nowdb_err_t err;
 	size_t s;
@@ -302,6 +306,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->version = ver;
 	store->recsize = recsize;
 	store->filesize = filesize;
+	store->largesize = largesize;
 	store->starting = FALSE;
 	store->path = NULL;
 	store->catalog = NULL;
@@ -507,14 +512,6 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 
 	err = makeFile(store, file, fname, fid);
 	if (err != NOWDB_OK) goto unlock;
-
-	/*
-	err = nowdb_file_create(*file);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(*file); free(*file); *file = NULL;
-		goto unlock;
-	}
-	*/
 
 	err = nowdb_file_makeReader(*file);
 	if (err != NOWDB_OK) {

@@ -318,9 +318,8 @@ static inline nowdb_err_t getReader(nowdb_store_t *store,
 	if (*file != NULL) return NOWDB_OK;
 	err = nowdb_store_createReader(store, file);
 	if (err != NOWDB_OK) return err;
-	(*file)->capacity = 1073741824;
+	(*file)->capacity = store->largesize;
 	return nowdb_file_create(*file);
-
 }
 
 static inline nowdb_err_t getContent(nowdb_worker_t *wrk,

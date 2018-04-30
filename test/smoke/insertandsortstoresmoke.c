@@ -219,7 +219,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_ZSTD,
-	                                           NOWDB_MEGA);
+	                                   NOWDB_MEGA, NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		rc = EXIT_FAILURE; goto cleanup;

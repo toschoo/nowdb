@@ -1,9 +1,9 @@
 #include <nowdb/store/store.h>
 
-nowdb_store_t *mkStoreBlock(nowdb_path_t path, uint32_t block) {
+nowdb_store_t *mkStoreBlock(nowdb_path_t path, uint32_t block, uint32_t large) {
 	nowdb_store_t *store;
 	nowdb_err_t err;
-	err = nowdb_store_new(&store, path, 1, 64, block);
+	err = nowdb_store_new(&store, path, 1, 64, block, large);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -13,7 +13,7 @@ nowdb_store_t *mkStoreBlock(nowdb_path_t path, uint32_t block) {
 }
 
 nowdb_store_t *mkStore(nowdb_path_t path) {
-	return mkStoreBlock(path, NOWDB_MEGA);
+	return mkStoreBlock(path, NOWDB_MEGA, NOWDB_MEGA);
 }
 
 nowdb_bool_t createStore(nowdb_store_t *store) {
@@ -64,7 +64,8 @@ nowdb_bool_t closeStore(nowdb_store_t *store) {
 nowdb_store_t *xBootstrap(nowdb_path_t       path,
                           nowdb_comprsc_t compare,
                           nowdb_comp_t   compress,
-                          uint32_t          block) {
+                          uint32_t          block,
+                          uint32_t          large) {
 	nowdb_err_t      err;
 	nowdb_store_t *store;
 	store = mkStore(path);
@@ -74,7 +75,7 @@ nowdb_store_t *xBootstrap(nowdb_path_t       path,
 		if (!dropStore(store)) goto failure;
 	}
 	nowdb_store_destroy(store); free(store);
-	store = mkStoreBlock(path, block);
+	store = mkStoreBlock(path, block, large);
 	if (store == NULL) return NULL;
 	err = nowdb_store_configSort(store, compare);
 	if (err != NOWDB_OK) {
@@ -100,5 +101,5 @@ failure:
 }
 
 nowdb_store_t *bootstrap(nowdb_path_t path) {
-	return xBootstrap(path, NULL, NOWDB_COMP_FLAT, NOWDB_MEGA);
+	return xBootstrap(path, NULL, NOWDB_COMP_FLAT, NOWDB_MEGA, NOWDB_MEGA);
 }

@@ -27,6 +27,7 @@ typedef struct {
 	nowdb_version_t version; /* database version            */
 	uint32_t        recsize; /* size of record stored       */
 	uint32_t       filesize; /* size of new files           */
+	uint32_t      largesize; /* size of new readers         */
 	nowdb_path_t       path; /* base path                   */
 	nowdb_path_t    catalog; /* path to catalog             */
 	nowdb_file_t    *writer; /* where we currently write to */
@@ -60,7 +61,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
-                            uint32_t     filesize);
+                            uint32_t     filesize,
+                            uint32_t    largesize);
 
 /* ------------------------------------------------------------------------
  * Initialise already allocated store object
@@ -70,7 +72,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
-                             uint32_t     filesize);
+                             uint32_t     filesize,
+                             uint32_t    largesize);
 
 /* ------------------------------------------------------------------------
  * Configure sorting
