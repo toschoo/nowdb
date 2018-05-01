@@ -360,7 +360,10 @@ static inline nowdb_err_t getReader(nowdb_store_t *store,
 
 	err = nowdb_store_getFreeReader(store, file);
 	if (err != NOWDB_OK) return err;
-	if (*file != NULL) return NOWDB_OK;
+	if (*file != NULL) {
+		configReader(store, *file);
+		return NOWDB_OK;
+	}
 	err = nowdb_store_createReader(store, file);
 	if (err != NOWDB_OK) return err;
 	(*file)->capacity = store->largesize;
@@ -418,7 +421,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	nowdb_file_t *reader=NULL;
 	char *buf=NULL;
 
-	// fprintf(stderr, "SORTING\n");
+	// fprintf(stderr, "%s.%u SORTING\n", wrk->name, id);
 
 	/* get waiting file 
 	 * we have to free it in case of error!
@@ -514,7 +517,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
-		releaseReader(store, reader);
+		nowdb_store_releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader);
 		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
@@ -530,7 +533,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 
-	// fprintf(stderr, "DONE SORTING\n");
+	// fprintf(stderr, "%s.%u DONE\n", wrk->name, id);
 	return NOWDB_OK;
 }
 

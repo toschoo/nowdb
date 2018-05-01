@@ -311,6 +311,7 @@ nowdb_err_t nowdb_compctx_getCCtx(nowdb_compctx_t *ctx,
 		}
 		k <<= 1;
 	}
+	// fprintf(stderr, "%u - %p\n", ctx->cmap, *cctx);
 	if (*cctx == NULL) err = nowdb_err_get(nowdb_err_no_rsc,
                                                  FALSE, "store",
 	                              "no compression context");
@@ -400,6 +401,7 @@ nowdb_err_t nowdb_compctx_releaseCCtx(nowdb_compctx_t *ctx,
 		}
 		k <<= 1;
 	}
+	// fprintf(stderr, "%u + %p\n", ctx->cmap, cctx);
 	return nowdb_unlock(&ctx->lock);
 }
 
