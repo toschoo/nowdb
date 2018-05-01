@@ -327,7 +327,8 @@ unlock:
  */
 static inline nowdb_err_t configReader(nowdb_store_t *store, nowdb_file_t *file) {
 	nowdb_err_t err;
-	if (file->comp == NOWDB_COMP_ZSTD) {
+	if (store->comp == NOWDB_COMP_ZSTD) {
+		file->comp = NOWDB_COMP_ZSTD;
 		err = nowdb_compctx_getCDict(store->ctx, &file->cdict);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_compctx_getCCtx(store->ctx, &file->cctx);
@@ -359,7 +360,10 @@ static inline nowdb_err_t getReader(nowdb_store_t *store,
 
 	err = nowdb_store_getFreeReader(store, file);
 	if (err != NOWDB_OK) return err;
-	if (*file != NULL) return NOWDB_OK;
+	if (*file != NULL) {
+		configReader(store, *file);
+		return NOWDB_OK;
+	}
 	err = nowdb_store_createReader(store, file);
 	if (err != NOWDB_OK) return err;
 	(*file)->capacity = store->largesize;
@@ -417,7 +421,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	nowdb_file_t *reader=NULL;
 	char *buf=NULL;
 
-	// fprintf(stderr, "SORTING\n");
+	// fprintf(stderr, "%s.%u SORTING\n", wrk->name, id);
 
 	/* get waiting file 
 	 * we have to free it in case of error!
@@ -502,15 +506,18 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	free(buf);
 
 	/* release compression context */
-	err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err); nowdb_err_release(err);
+	if (reader->cctx != NULL) {
+		err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err); nowdb_err_release(err);
+		}
+		reader->cctx = NULL;
 	}
 
 	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
-		releaseReader(store, reader);
+		nowdb_store_releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader);
 		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
@@ -526,7 +533,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 
-	// fprintf(stderr, "DONE SORTING\n");
+	// fprintf(stderr, "%s.%u DONE\n", wrk->name, id);
 	return NOWDB_OK;
 }
 
