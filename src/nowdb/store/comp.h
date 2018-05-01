@@ -65,7 +65,11 @@ nowdb_err_t nowdb_compctx_init(nowdb_compctx_t *ctx,
 void nowdb_compctx_destroy(nowdb_compctx_t *ctx);
 
 /* ------------------------------------------------------------------------
- * Load dictionary from disk   
+ * Load dictionary from disk
+ * ---------------
+ * NOTE: This function does not lock.
+ *       The context must be locked explicitly,
+ *                when this function is called!   
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
@@ -73,6 +77,10 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Train dictionary and store it to disk
+ * ---------------
+ * NOTE: This function does not lock.
+ *       The context must be locked explicitly,
+ *                when this function is called!   
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,

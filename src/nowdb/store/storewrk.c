@@ -6,6 +6,7 @@
  */
 #include <nowdb/store/storewrk.h>
 #include <nowdb/store/store.h>
+#include <nowdb/store/comp.h>
 #include <nowdb/io/file.h>
 
 #include <stdint.h>
@@ -19,9 +20,7 @@
 #define SYNCPERIOD    500000000l
 #define SORTPERIOD    500000000l
 #define SYNCTIMEOUT 10000000000l
-#define SORTTIMEOUT 10000000000l
-
-#define TASKNUM 2
+#define SORTTIMEOUT 60000000000l
 
 static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
@@ -34,11 +33,6 @@ static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
 static void nodrain(void **ignore) {}
 
 static nowdb_wrk_message_t sortmsg = {11, NULL};
-
-typedef struct {
-	ZSTD_CCtx         *cctx; /* ZSTD compression context    */
-	nowdb_store_t    *store;
-} nowdb_store_wrapper_t;
 
 nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
                                   void         *store,
@@ -57,56 +51,22 @@ nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk) {
 	return nowdb_worker_stop(wrk, SYNCTIMEOUT);
 }
 
-static inline nowdb_err_t getZSTDCCtx(nowdb_store_wrapper_t *wrap) {
-	wrap->cctx = ZSTD_createCCtx();
-	if (wrap->cctx == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
-		                        "cannot create ZSTD context");
-	}
-	return NOWDB_OK;
-}
-
 nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
-                                    void         *store,
+                                    void        *pstore,
                                     nowdb_queue_t *errq) {
-	nowdb_err_t err;
-	nowdb_store_wrapper_t *wrap;
-
+	nowdb_store_t *store = pstore;
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                "store", "store object is NULL");
-
-	wrap = malloc(TASKNUM*sizeof(nowdb_store_wrapper_t));
-	if (wrap == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
-		                          "allocating store wrapper");
-	}
-
-	for(int i=0; i<TASKNUM; i++) {
-		wrap[i].cctx  = NULL;
-		wrap[i].store = store;
-
-		err = getZSTDCCtx(wrap+i);
-		if (err != NOWDB_OK) {
-			/* cctxes are lost ! */
-			free(wrap); return err;
-		}
-	}
-	return nowdb_worker_init(wrk, "sorter", 2, SORTPERIOD, &sortjob,
-	                                          errq, &nodrain, wrap);
+	return nowdb_worker_init(wrk, "sorter",
+	                         store->tasknum,
+	                         SORTPERIOD, &sortjob,
+	                         errq, &nodrain, store);
 }
 
 nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
-	nowdb_err_t err;
-	nowdb_store_wrapper_t *wrap = wrk->rsc;
-	err = nowdb_worker_stop(wrk, SORTTIMEOUT);
-	if (err != NOWDB_OK) return err;
-	for(int i=0;i<TASKNUM;i++) {
-		ZSTD_freeCCtx(wrap[i].cctx); wrap[i].cctx = NULL;
-	}
-	free(wrap);
-	return NOWDB_OK;
+	return nowdb_worker_stop(wrk, SORTTIMEOUT);
 }
 
 nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk) {
@@ -211,6 +171,7 @@ static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
 		trg->newest = src->newest;
 }
 
+/*
 #define DICTNAME "zdict"
 nowdb_err_t nowdb_store_loadZSTDDict(nowdb_store_t *store) {
 	char *buf;
@@ -257,8 +218,6 @@ nowdb_err_t nowdb_store_loadZSTDDict(nowdb_store_t *store) {
 	}
 	free(buf);
 
-	/* in case of error:
-	 * destroy dictionary and contexts! */
 	return NOWDB_OK;
 }
 
@@ -321,37 +280,41 @@ static inline nowdb_err_t trainZSTDDict(nowdb_store_wrapper_t *wrap,
 	free(dictbuf); free(samplesz);
 	return NOWDB_OK;
 }
+*/
 
-static inline nowdb_err_t getZSTDResources(nowdb_store_wrapper_t *wrap,
+static inline nowdb_err_t getZSTDResources(nowdb_store_t     *store,
                                            char *buf, uint32_t size) {
 	nowdb_err_t err2, err = NOWDB_OK;
 
-	err = nowdb_lock_write(&wrap->store->lock);
+	err = nowdb_lock(&store->ctx->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (wrap->store->cdict != NULL) {
-		return nowdb_unlock_write(&wrap->store->lock);
+	if (store->ctx->cdict != NULL) {
+		return nowdb_unlock(&store->ctx->lock);
 	}
 
-	err = nowdb_store_loadZSTDDict(wrap->store);
+	err = nowdb_compctx_loadDict(store->ctx, store->path);
+	if (err != NOWDB_OK) {
+		if (err->errcode != nowdb_err_stat) goto unlock;
+		nowdb_err_release(err);
+	}
+	if (store->ctx->cdict != NULL) goto unlock;
+
+	err = nowdb_compctx_trainDict(store->ctx,
+	                              store->path,
+	                              buf,  size);
 	if (err != NOWDB_OK) goto unlock;
 
-	if (wrap->store->cdict != NULL) goto unlock;
-
-	err = trainZSTDDict(wrap, buf, size);
+	err = nowdb_compctx_loadDict(store->ctx, store->path);
 	if (err != NOWDB_OK) goto unlock;
 
-	err = nowdb_store_loadZSTDDict(wrap->store);
-	if (err != NOWDB_OK) goto unlock;
-
-	if (wrap->store->cdict == NULL) {
+	if (store->ctx->cdict == NULL) {
 		err = nowdb_err_get(nowdb_err_compdict, FALSE, "store",
 		                          "no compression dictionary");
 		goto unlock;
 	}
-
 unlock:
-	err2 = nowdb_unlock_write(&wrap->store->lock);
+	err2 = nowdb_unlock(&store->ctx->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
@@ -362,29 +325,45 @@ unlock:
  * Helper: config compression in reader
  * ------------------------------------------------------------------------
  */
-static inline void configReader(nowdb_store_t *store, nowdb_file_t *file) {
+static inline nowdb_err_t configReader(nowdb_store_t *store, nowdb_file_t *file) {
+	nowdb_err_t err;
 	if (file->comp == NOWDB_COMP_ZSTD) {
-		file->ddict = store->ddict;
-		file->cdict = store->cdict;
+		err = nowdb_compctx_getCDict(store->ctx, &file->cdict);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_compctx_getCCtx(store->ctx, &file->cctx);
+		if (err != NOWDB_OK) return err;
 	}
+	return NOWDB_OK;
 }
 
-static inline nowdb_err_t getReader(nowdb_store_wrapper_t *wrap,
+/* ------------------------------------------------------------------------
+ * Helper: config compression in reader
+ * ------------------------------------------------------------------------
+ */
+static inline void releaseReader(nowdb_store_t *store, nowdb_file_t *file) {
+	nowdb_err_t err;
+	if (file->comp == NOWDB_COMP_ZSTD) {
+		err = nowdb_compctx_releaseCCtx(store->ctx, file->cctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err); nowdb_err_release(err);
+		}
+	}
+	file->cctx  = NULL;
+	file->cdict = NULL;
+	nowdb_store_releaseReader(store, file);
+}
+
+static inline nowdb_err_t getReader(nowdb_store_t *store,
                                     nowdb_file_t  **file) {
 	nowdb_err_t err;
 
-	err = nowdb_store_getFreeReader(wrap->store, file);
+	err = nowdb_store_getFreeReader(store, file);
 	if (err != NOWDB_OK) return err;
 	if (*file != NULL) return NOWDB_OK;
-	err = nowdb_store_createReader(wrap->store, file);
+	err = nowdb_store_createReader(store, file);
 	if (err != NOWDB_OK) return err;
-	(*file)->capacity = wrap->store->largesize;
-	if (wrap->cctx == NULL) fprintf(stderr, "NO CCTX in wrapper\n");
-	(*file)->cctx = wrap->cctx;
-	configReader(wrap->store, *file);
-	if ((*file)->cdict == NULL) fprintf(stderr, "CDICT NULL\n");
-	if ((*file)->ddict == NULL) fprintf(stderr, "DDICT NULL\n");
-	if ((*file)->cctx  == NULL) fprintf(stderr, "cctx  NULL\n");
+	(*file)->capacity = store->largesize;
+	configReader(store, *file);
 	return nowdb_file_create(*file);
 }
 
@@ -432,9 +411,7 @@ static inline nowdb_err_t putContent(char *buf, uint32_t size,
 
 static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
                                    uint32_t          id,
-                                   nowdb_store_wrapper_t *wraps) {
-	nowdb_store_wrapper_t *wrap = wraps+id;
-	nowdb_store_t *store = wrap->store;
+                                   nowdb_store_t *store) {
 	nowdb_err_t err;
 	nowdb_file_t *src=NULL;
 	nowdb_file_t *reader=NULL;
@@ -483,7 +460,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 
 	/* prepare compression */
 	if (store->comp == NOWDB_COMP_ZSTD) {
-		err = getZSTDResources(wrap, buf, src->size);
+		err = getZSTDResources(store, buf, src->size);
 		if (err != NOWDB_OK) {
 			nowdb_store_releaseWaiting(store, src);
 			nowdb_file_destroy(src); free(src);
@@ -492,7 +469,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	}
 
 	/* get (or create) reader with space */
-	err = getReader(wrap, &reader);
+	err = getReader(store, &reader);
 	if (err != NOWDB_OK) {
 		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src);
@@ -512,7 +489,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	/* write to reader (potentially compressing) */
 	err = putContent(buf, src->size, reader);
 	if (err != NOWDB_OK) {
-		nowdb_store_releaseReader(store, reader);
+		releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader); free(buf);
 		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
@@ -524,10 +501,16 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	/* we don't need it anymore */
 	free(buf);
 
+	/* release compression context */
+	err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err); nowdb_err_release(err);
+	}
+
 	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
-		nowdb_store_releaseReader(store, reader);
+		releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader);
 		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;

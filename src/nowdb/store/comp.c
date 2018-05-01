@@ -159,36 +159,42 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
                                    nowdb_path_t   path) {
 	char *buf;
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2;
 	nowdb_path_t p;
 	struct stat st;
 	ssize_t x;
 	FILE *d;
 
-	err = nowdb_lock(&ctx->lock);
-	if (err != NOWDB_OK) return err;
+	if (ctx->cdict != NULL &&
+	    ctx->ddict != NULL) NOWDB_OK;
+	
+	if (ctx->cdict != NULL) {
+		ZSTD_freeCDict(ctx->cdict); ctx->cdict = NULL;
+	}
+	if (ctx->ddict != NULL) {
+		ZSTD_freeDDict(ctx->ddict); ctx->ddict = NULL;
+	}
 
 	p = nowdb_path_append(path, DICTNAME);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                   FALSE, "store", "append to path");
 	if (stat(p, &st) != 0) {
 		err = nowdb_err_get(nowdb_err_stat, TRUE, "store", p);
-		free(p); goto unlock;
+		free(p); return err;
 	}
 	buf = malloc(st.st_size);
 	if (buf == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store", p);
-		free(p); goto unlock;
+		free(p); return err;
 	}
 	d = fopen(p, "rb");
 	if (d == NULL) {
 		err = nowdb_err_get(nowdb_err_open, TRUE, "store", p);
-		free(buf); free(p); goto unlock;
+		free(buf); free(p); return err;
 	}
 	x = fread(buf, 1, st.st_size, d);
 	if (x != st.st_size) {
 		err = nowdb_err_get(nowdb_err_read, TRUE, "store", p);
-		fclose(d); free(buf); free(p); goto unlock;
+		fclose(d); free(buf); free(p); return err;
 	}
 	fclose(d); free(p);
 
@@ -196,22 +202,17 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 	if (ctx->cdict == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                      "cannot load ZSTD dictionary");
-		free(buf); goto unlock;
+		free(buf); return err;
 	}
 	ctx->ddict = ZSTD_createDDict(buf, st.st_size);
 	if (ctx->cdict == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                      "cannot load ZSTD dictionary");
 		ZSTD_freeCDict(ctx->cdict); ctx->cdict = NULL;
-		free(buf); goto unlock;
+		free(buf); return err;
 	}
 	free(buf);
-unlock:
-	err2 = nowdb_unlock(&ctx->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err; return err2;
-	}
-	return err;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -225,7 +226,6 @@ nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,
                                     uint32_t        size) {
 	nowdb_path_t  p;
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2;
 	size_t dsz;
 	size_t *samplesz;
 	size_t nm;
@@ -233,26 +233,22 @@ nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,
 	FILE *d;
 	ssize_t x;
 
-	err = nowdb_lock(&ctx->lock);
-	if (err != NOWDB_OK) return err;
-
 	dictbuf = malloc(DICTSIZE);
 	if (dictbuf == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                                 "allocating buffer");
-		goto unlock;
 	}
 	nm = size/NOWDB_IDX_PAGE;
 	if (nm == 0) {
 		err = nowdb_err_get(nowdb_err_invalid, FALSE, "store",
 		                          "training buffer too small");
-		free(dictbuf); goto unlock;
+		free(dictbuf); return err;
 	}
 	samplesz = malloc(nm*sizeof(size_t));
 	if (samplesz == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                                "allocating buffer"); 
-		free(dictbuf); goto unlock;
+		free(dictbuf); return err;
 	}
 	for(int i=0;i<nm;i++) {
 		samplesz[i] = NOWDB_IDX_PAGE;
@@ -261,33 +257,28 @@ nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,
 	if (ZDICT_isError(dsz)) {
 		err = nowdb_err_get(nowdb_err_compdict, FALSE, "store",
 		                       (char*)ZDICT_getErrorName(dsz));
-		free(dictbuf); free(samplesz); goto unlock;
+		free(dictbuf); free(samplesz); return err;
 	}
 	p = nowdb_path_append(path, DICTNAME);
 	if (p == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                                "appending to path");
-		free(dictbuf); free(samplesz); goto unlock;
+		free(dictbuf); free(samplesz); return err;
 	}
 	d = fopen(p, "wb");
 	if (d == NULL) {
 		err = nowdb_err_get(nowdb_err_open, TRUE, "store", p);
-		free(p); free(dictbuf); free(samplesz); goto unlock;
+		free(p); free(dictbuf); free(samplesz); return err;
 	}
 	x = fwrite(dictbuf, 1, dsz, d);
 	if (x != dsz) {
 		err = nowdb_err_get(nowdb_err_write, TRUE, "store", p);
 		fclose(d); free(p); free(dictbuf); free(samplesz);
-		goto unlock;
+		return err;
 	}
 	fclose(d); free(p);
 	free(dictbuf); free(samplesz);
-unlock:
-	err2 = nowdb_unlock(&ctx->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err; return err2;
-	}
-	return err;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -409,7 +400,7 @@ nowdb_err_t nowdb_compctx_releaseCCtx(nowdb_compctx_t *ctx,
 		}
 		k <<= 1;
 	}
-	return nowdb_lock(&ctx->lock);
+	return nowdb_unlock(&ctx->lock);
 }
 
 /* ------------------------------------------------------------------------

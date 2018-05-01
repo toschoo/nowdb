@@ -16,6 +16,7 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/task/worker.h>
 #include <nowdb/sort/sort.h>
+#include <nowdb/store/comp.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -36,11 +37,9 @@ typedef struct {
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
 	nowdb_comp_t       comp; /* compression                 */
-	void             *cdict; /* compression dictionary      */
-	void             *ddict; /* decompression dictionary    */
-	nowdb_bitmap64_t myctxs; /* free/used dctx              */
-	ZSTD_DCtx        **dctx; /* ZSTD decompression contexts */
+	nowdb_compctx_t    *ctx; /* compression context         */
 	nowdb_comprsc_t compare; /* comparison                  */
+	uint32_t        tasknum; /* number of sorter tasks      */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
@@ -90,24 +89,11 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp);
 
 /* ------------------------------------------------------------------------
- * Load (de)compression dictionaries
+ * Configure worker
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_loadZSTDDict(nowdb_store_t *store);
-
-/* ------------------------------------------------------------------------
- * Get  decompression context
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_store_getZSTDDCtx(nowdb_store_t *store,
-                                    ZSTD_DCtx    **dctx);
-
-/* ------------------------------------------------------------------------
- * Release decompression context
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_store_releaseZSTDDCtx(nowdb_store_t *store,
-                                        ZSTD_DCtx     *dctx);
+nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
+                                      uint32_t    tasknum);
 
 /* ------------------------------------------------------------------------
  * Destroy store
@@ -167,7 +153,8 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t  *store,
  * Destroy files and list
  * ------------------------------------------------------------------------
  */
-void nowdb_store_destroyFiles(ts_algo_list_t *files);
+void nowdb_store_destroyFiles(nowdb_store_t  *store,
+                              ts_algo_list_t *files);
 
 /* ------------------------------------------------------------------------
  * Find file in waiting
@@ -201,7 +188,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
                                       nowdb_file_t **file);
 
 /* ------------------------------------------------------------------------
- * Release waiting
+ * Release reader
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,

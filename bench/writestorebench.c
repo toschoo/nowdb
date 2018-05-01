@@ -85,6 +85,7 @@ uint32_t global_count = 1000;
 uint32_t global_block = 1;
 uint32_t global_large = 1;
 uint32_t global_report = 1;
+uint32_t global_sorter = 1;
 int      global_sort  = 0;
 char    *global_comp  = NULL;
 
@@ -115,6 +116,12 @@ int parsecmd(int argc, char **argv) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
 	}
+	global_sorter = (uint32_t)ts_algo_args_findUint(
+	            argc, argv, 2, "sorter", 1, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
 	global_sort = ts_algo_args_findBool(
 	            argc, argv, 2, "sort", 0, &err);
 	if (err != 0) {
@@ -138,11 +145,13 @@ void helptxt(char *progname) {
 	fprintf(stderr, "-sort  b: indicates whether or not to sort\n");
 	fprintf(stderr,
 		"     possible values for b: 0/1, true/false, t/f\n");
-	fprintf(stderr, "-comp  a: compression algorithm, either\n");
+	fprintf(stderr, "-comp   a: compression algorithm, either\n");
 	fprintf(stderr, "          'flat' or\n");
 	fprintf(stderr, "          'zstd'\n");
-	fprintf(stderr, "-block n: blocksize in megabyte\n");
-	fprintf(stderr, "-large n: large file size in megabyte\n");
+	fprintf(stderr, "-block  n: blocksize in megabyte\n");
+	fprintf(stderr, "-large  n: large file size in megabyte\n");
+	fprintf(stderr, "-sorter n: number of threads for sorting\n");
+	fprintf(stderr, "           max: 32\n");
 	fprintf(stderr, "-report n: report every n inserts\n");
 }
 
@@ -194,8 +203,12 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "unknown compression: '%s'\n", global_comp);
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap(path, compare, comp, NOWDB_MEGA*global_block,
-	                                        NOWDB_MEGA*global_large);
+	if (global_sorter < 1 || global_sorter > 32) {
+		global_sorter = 1;
+	}
+	store = xBootstrap(path, compare, comp, global_sorter,
+	                              NOWDB_MEGA*global_block,
+	                              NOWDB_MEGA*global_large);
 	if (store == NULL) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}

@@ -206,12 +206,12 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		ts_algo_list_destroy(&files);
-		nowdb_store_destroyFiles(&files);
+		nowdb_store_destroyFiles(store, &files);
 		return FALSE;
 	}
 	if (files.len != 2) {
 		fprintf(stderr, "expecting 2 files: %d\n", files.len);
-		nowdb_store_destroyFiles(&files);
+		nowdb_store_destroyFiles(store, &files);
 		return FALSE;
 	}
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
@@ -220,30 +220,30 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			nowdb_store_destroyFiles(&files);
+			nowdb_store_destroyFiles(store, &files);
 			return FALSE;
 		}
 		if (file->id != store->writer->id && !found) {
-			nowdb_store_destroyFiles(&files);
+			nowdb_store_destroyFiles(store, &files);
 			return FALSE;
 		}
 		/* if waiting find from 0...16383 */
 		/* CAUTION: waiting may have been sorted already !!! */
 		if (file->id != store->writer->id) {
 			if (!find(file, FULL-1, 0)) {
-				nowdb_store_destroyFiles(&files);
+				nowdb_store_destroyFiles(store, &files);
 				return FALSE;
 			}
 		}
 		/* if writer find from 16384 ...24575 */
 		if (file->id == store->writer->id) {
 			if (!find(file, HALF-1, FULL)) {
-				nowdb_store_destroyFiles(&files);
+				nowdb_store_destroyFiles(store, &files);
 				return FALSE;
 			}
 		}
 	}
-	nowdb_store_destroyFiles(&files);
+	nowdb_store_destroyFiles(store, &files);
 	return TRUE;
 }
 

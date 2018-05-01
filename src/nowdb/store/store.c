@@ -316,10 +316,9 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->writer = NULL;
 	store->compare = NULL;
 	store->comp = NOWDB_COMP_FLAT;
-	store->cdict = NULL;
-	store->ddict = NULL;
-	store->dctx = NULL;
+	store->ctx  = NULL;
 	store->nextid = 1;
+	store->tasknum = 1;
 
 	/* lists of files */
 	err = initAllFiles(store);
@@ -379,46 +378,36 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Configure worker
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
+                                      uint32_t    tasknum) {
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (tasknum > 32) return nowdb_err_get(nowdb_err_invalid,
+	             FALSE, OBJECT, "tasknum too big (max: 32)");
+	store->tasknum = tasknum;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Configure compression
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp) {
+	nowdb_err_t err;
+
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                   FALSE, OBJECT, "store object is NULL");
 	store->comp = comp;
+	if (comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+	
+	err = nowdb_compctx_new(&store->ctx, 4, 128);
+	if (err != NOWDB_OK) return err;
+
 	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Get Decompression context
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_store_getZSTDDCtx(nowdb_store_t *store, ZSTD_DCtx **dctx) {
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
-	if (dctx == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                 FALSE, OBJECT, "context object is NULL");
-
-	if (store->dctx != NULL) {
-		// get first free
-	}
-
-	*dctx = ZSTD_createDCtx();
-	if (*dctx == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
-		                          "no decompression context");
-	}
-	return NOWDB_OK;
-}
-
-void nowdb_store_releaseZSTDCtx(nowdb_store_t *store, ZSTD_DCtx *dctx) {
-	if (store == NULL) return;
-	if (dctx == NULL) return;
-	if (store->dctx != NULL) {
-		// unmark 
-	}
-	ZSTD_freeDCtx(dctx);
 }
 
 /* ------------------------------------------------------------------------
@@ -433,20 +422,9 @@ void nowdb_store_destroy(nowdb_store_t *store) {
 	if (store->catalog != NULL) {
 		free(store->catalog); store->catalog = NULL;
 	}
-	if (store->cdict != NULL) {
-		ZSTD_freeCDict(store->cdict); store->cdict = NULL;
-	}
-	if (store->ddict != NULL) {
-		ZSTD_freeDDict(store->ddict); store->ddict = NULL;
-	}
-	if (store->dctx != NULL) {
-		for(int i=0;i<64;i++) {
-			if (store->dctx[i] != NULL) {
-				ZSTD_freeDCtx(store->dctx[i]);
-				store->dctx[i] = NULL;
-			}
-		}
-		free(store->dctx); store->dctx = NULL;
+	if (store->ctx != NULL) {
+		nowdb_compctx_destroy(store->ctx);
+		free(store->ctx); store->ctx = NULL;
 	}
 	destroyAllFiles(store);
 	nowdb_rwlock_destroy(&store->lock);
@@ -1193,9 +1171,12 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	store->starting = TRUE;
 
 	/* compression */
-	if (store->comp == NOWDB_COMP_ZSTD) {
-		err = nowdb_store_loadZSTDDict(store);
-		if (err != NOWDB_OK) goto unlock;
+	if (store->comp == NOWDB_COMP_ZSTD &&
+	    store->ctx != NULL) {
+		/* if we can load it now, fine.
+		 * Otherwise, we do it later */
+		NOWDB_IGNORE(nowdb_compctx_loadDict(store->ctx,
+		                                    store->path));
 	}
 
 	/* read catalog */
@@ -1400,6 +1381,34 @@ nowdb_err_t nowdb_store_insertBulk(nowdb_store_t *store,
                                    uint32_t       count);
 
 /* ------------------------------------------------------------------------
+ * Helper: set decompression settings to all files in list
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t setDecomp(nowdb_store_t *store,
+                                    ts_algo_list_t *list) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t          *file;
+	nowdb_err_t    err=NOWDB_OK;
+	ZSTD_DDict    *dict;
+	ZSTD_DCtx     *ctx;
+
+	if (store->comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+
+	err = nowdb_compctx_getDCtx(store->ctx, &ctx);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_compctx_getDDict(store->ctx, &dict);
+	if (err != NOWDB_OK) return err;
+	
+	for(runner=list->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		file->ddict = dict;
+		file->dctx  = ctx;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get all readers for period start - end
  * ------------------------------------------------------------------------
  */
@@ -1449,13 +1458,14 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 		                                     "list append");
 		goto unlock;
 	}
-		
+
 unlock:
 	err2 = nowdb_unlock_read(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
-	return err;
+	if (err != NOWDB_OK) return err;
+	return setDecomp(store, list);
 }
 
 /* ------------------------------------------------------------------------
@@ -1792,10 +1802,37 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Release decompression contexts from files
+ * ------------------------------------------------------------------------
+ */
+static inline void releaseDecomp(nowdb_store_t  *store,
+                                 ts_algo_list_t *files) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *runner;
+	nowdb_file_t        *file;
+
+	for(runner=files->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		if (file->dctx != NULL) {
+			err = nowdb_compctx_releaseDCtx(store->ctx,
+			                                file->dctx);
+			if (err != NOWDB_OK) {
+				nowdb_err_print(err);
+				nowdb_err_release(err);
+			}
+			file->dctx = NULL;
+			file->ddict = NULL;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
  * Destroy files and list
  * ------------------------------------------------------------------------
  */
-void nowdb_store_destroyFiles(ts_algo_list_t *files) {
+void nowdb_store_destroyFiles(nowdb_store_t  *store,
+                              ts_algo_list_t *files) {
+	releaseDecomp(store, files);
 	destroyFiles(files);
 }
 

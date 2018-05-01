@@ -5,6 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/io/file.h>
+#include <nowdb/task/task.h>
 #include <common/progress.h>
 #include <common/cmd.h>
 #include <common/bench.h>
@@ -16,6 +17,7 @@
 #include <stdio.h>
 
 #define ONEANDHALF 16384
+#define DELAY   10000000
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
@@ -75,6 +77,12 @@ nowdb_bool_t waitForSort(nowdb_store_t *store) {
 			return FALSE;
 		}
 		if (len == 0) break;
+		err = nowdb_task_sleep(DELAY);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
 	}
 	return TRUE;
 }
@@ -187,24 +195,24 @@ nowdb_bool_t checkFile(nowdb_store_t *store) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		ts_algo_list_destroy(&files);
-		nowdb_store_destroyFiles(&files);
+		nowdb_store_destroyFiles(store, &files);
 		return FALSE;
 	}
 	if (files.len != 2) {
 		fprintf(stderr, "expecting 2 files: %d\n", files.len);
-		nowdb_store_destroyFiles(&files);
+		nowdb_store_destroyFiles(store, &files);
 		return FALSE;
 	}
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
 		if (file->id != store->writer->id) {
 			if (!checkSorted(file)) {
-				nowdb_store_destroyFiles(&files);
+				nowdb_store_destroyFiles(store, &files);
 				return FALSE;
 			}
 		}
 	}
-	nowdb_store_destroyFiles(&files);
+	nowdb_store_destroyFiles(store, &files);
 	return TRUE;
 }
 
@@ -218,8 +226,8 @@ int main() {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_ZSTD,
-	                                   NOWDB_MEGA, NOWDB_MEGA);
+	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_ZSTD, 1,
+	                                      NOWDB_MEGA, NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		rc = EXIT_FAILURE; goto cleanup;
