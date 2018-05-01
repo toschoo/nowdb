@@ -44,6 +44,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
+      $(SRC)/store/comp.o     \
       $(SRC)/store/storewrk.o
 
 DEP = $(SRC)/types/types.h    \
@@ -58,6 +59,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
+      $(SRC)/store/comp.h     \
       $(SRC)/store/storewrk.h
 
 default:	lib 
