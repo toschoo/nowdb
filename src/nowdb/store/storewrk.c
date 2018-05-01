@@ -327,7 +327,8 @@ unlock:
  */
 static inline nowdb_err_t configReader(nowdb_store_t *store, nowdb_file_t *file) {
 	nowdb_err_t err;
-	if (file->comp == NOWDB_COMP_ZSTD) {
+	if (store->comp == NOWDB_COMP_ZSTD) {
+		file->comp = NOWDB_COMP_ZSTD;
 		err = nowdb_compctx_getCDict(store->ctx, &file->cdict);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_compctx_getCCtx(store->ctx, &file->cctx);
@@ -502,9 +503,12 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	free(buf);
 
 	/* release compression context */
-	err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err); nowdb_err_release(err);
+	if (reader->cctx != NULL) {
+		err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err); nowdb_err_release(err);
+		}
+		reader->cctx = NULL;
 	}
 
 	/* promote to reader */
