@@ -371,7 +371,7 @@ nowdb_bool_t testReadRewind() {
 	return rc;
 }
 
-nowdb_bool_t testCompressSimple() {
+nowdb_bool_t testCompressSimple(uint32_t *sz) {
 	nowdb_file_t *file;
 	nowdb_file_t *cfile;
 	nowdb_err_t    err;
@@ -412,6 +412,7 @@ nowdb_bool_t testCompressSimple() {
 		return FALSE;
 	}
 
+	fprintf(stderr, "size (before): %u\n", cfile->size);
 	for(int i=0; i<file->size; i+=file->bufsize) {
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
@@ -441,12 +442,13 @@ nowdb_bool_t testCompressSimple() {
 		return FALSE;
 	}
 	fprintf(stderr, "size: %u\n", cfile->size);
+	*sz = cfile->size;
 	nowdb_file_destroy(file); free(file);
 	nowdb_file_destroy(cfile); free(cfile);
 	return rc;
 }
 
-nowdb_bool_t testReadCompressed() {
+nowdb_bool_t testReadCompressed(uint32_t sz) {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
@@ -456,8 +458,7 @@ nowdb_bool_t testReadCompressed() {
 	file = testMakeFile("rsc/test.dbz");
 	if (file == NULL) return FALSE;
 
-	/* we do not know filesize! */
-	file->size = file->capacity;
+	file->size = sz;
 	file->comp = NOWDB_COMP_ZSTD;
 
 	err = nowdb_file_makeReader(file);
@@ -474,13 +475,13 @@ nowdb_bool_t testReadCompressed() {
 		nowdb_file_destroy(file); free(file);
 		return FALSE;
 	}
-	for(int i=0; i<file->size; i+=file->bufsize) {
+	for(;;) { // int i=0; i<file->size; i+=) {
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
 			if (err->errcode != nowdb_err_eof) rc = FALSE;
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			rc = FALSE; break;
+			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
 			e = (nowdb_edge_t*)(file->bptr+k);
@@ -490,7 +491,7 @@ nowdb_bool_t testReadCompressed() {
 		fprintf(stderr, "round %d OK\n", i/file->bufsize);
 		*/
 	}
-	if (z != (file->size / 64) / 16) {
+	if (z != (file->capacity / 64) / 16) {
 		fprintf(stderr, "not correct: %d\n", z);
 		rc = FALSE;
 	}
@@ -506,7 +507,7 @@ nowdb_bool_t testReadCompressed() {
 	return rc;
 }
 
-nowdb_bool_t testReadCompRewind() {
+nowdb_bool_t testReadCompRewind(uint32_t sz) {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
@@ -517,7 +518,7 @@ nowdb_bool_t testReadCompRewind() {
 	if (file == NULL) return FALSE;
 
 	/* we do not know filesize! */
-	file->size = file->capacity;
+	file->size = sz;
 	file->comp = NOWDB_COMP_ZSTD;
 
 	err = nowdb_file_makeReader(file);
@@ -534,13 +535,13 @@ nowdb_bool_t testReadCompRewind() {
 		nowdb_file_destroy(file); free(file);
 		return FALSE;
 	}
-	for(int i=0; i<file->size; i+=file->bufsize) {
+	for(;;) {
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
 			if (err->errcode != nowdb_err_eof) rc = FALSE;
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			rc = FALSE; break;
+			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
 			e = (nowdb_edge_t*)(file->bptr+k);
@@ -550,7 +551,7 @@ nowdb_bool_t testReadCompRewind() {
 		fprintf(stderr, "round %d OK\n", i/file->bufsize);
 		*/
 	}
-	if (z != (file->size / 64) / 16) {
+	if (z != (file->capacity / 64) / 16) {
 		fprintf(stderr, "not correct: %d\n", z);
 		rc = FALSE;
 	}
@@ -563,13 +564,13 @@ nowdb_bool_t testReadCompRewind() {
 		return FALSE;
 	}
 	z=0;
-	for(int i=0; i<file->size; i+=file->bufsize) {
+	for(;;) {
 		err = nowdb_file_move(file);
 		if (err != NOWDB_OK) {
 			if (err->errcode != nowdb_err_eof) rc = FALSE;
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			rc = FALSE; break;
+			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
 			e = (nowdb_edge_t*)(file->bptr+k);
@@ -579,7 +580,7 @@ nowdb_bool_t testReadCompRewind() {
 		fprintf(stderr, "round %d OK\n", i/file->bufsize);
 		*/
 	}
-	if (z != (file->size / 64) / 16) {
+	if (z != (file->capacity / 64) / 16) {
 		fprintf(stderr, "not correct: %d\n", z);
 		rc = FALSE;
 	}
@@ -596,6 +597,7 @@ nowdb_bool_t testReadCompRewind() {
 }
 
 int main() {
+	uint32_t sz;
 	int rc = EXIT_SUCCESS;
 
 	if (!nowdb_err_init()) {
@@ -663,17 +665,17 @@ int main() {
 		rc = EXIT_FAILURE;
 		goto cleanup;
 	}
-	if (!testCompressSimple()) {
+	if (!testCompressSimple(&sz)) {
 		fprintf(stderr, "compress file failed\n");
 		rc = EXIT_FAILURE;
 		goto cleanup;
 	}
-	if (!testReadCompressed()) {
+	if (!testReadCompressed(sz)) {
 		fprintf(stderr, "read compressed file failed\n");
 		rc = EXIT_FAILURE;
 		goto cleanup;
 	}
-	if (!testReadCompRewind()) {
+	if (!testReadCompRewind(sz)) {
 		fprintf(stderr, "read+rewind compressed file failed\n");
 		rc = EXIT_FAILURE;
 		goto cleanup;

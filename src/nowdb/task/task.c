@@ -25,8 +25,9 @@ nowdb_err_t nowdb_task_create(nowdb_task_t       *task,
                               nowdb_task_entry_t entry,
                               void               *args) 
 {
-	if (pthread_create(task, NULL, entry, args) != 0) {
-		return nowdb_err_get(nowdb_err_thread, TRUE, OBJECT,
+	int x = pthread_create(task, NULL, entry, args);
+	if (x != 0) {
+		return nowdb_err_getRC(nowdb_err_thread, x, OBJECT,
 		                           "cannot create pthread");
 	}
 	return NOWDB_OK;
@@ -46,9 +47,8 @@ void nowdb_task_destroy(nowdb_task_t task) {
  */
 nowdb_err_t nowdb_task_join(nowdb_task_t task) {
 	int x = pthread_join(task, NULL);
-	/* that is not the right error: review errors! */
-	if (x != 0) return nowdb_err_get(nowdb_err_busy, FALSE, OBJECT,
-	                                        "cannot join pthread");
+	if (x != 0) return nowdb_err_getRC(nowdb_err_busy, x, OBJECT,
+	                                       "cannot join pthread");
 	return NOWDB_OK;
 }
 

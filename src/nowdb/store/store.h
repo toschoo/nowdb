@@ -16,15 +16,19 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/task/worker.h>
 #include <nowdb/sort/sort.h>
+#include <nowdb/store/comp.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
+
+#include <zstd.h>
 
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
 	uint32_t        recsize; /* size of record stored       */
 	uint32_t       filesize; /* size of new files           */
+	uint32_t      largesize; /* size of new readers         */
 	nowdb_path_t       path; /* base path                   */
 	nowdb_path_t    catalog; /* path to catalog             */
 	nowdb_file_t    *writer; /* where we currently write to */
@@ -32,8 +36,10 @@ typedef struct {
 	ts_algo_list_t  waiting; /* unprepard readers           */
 	ts_algo_tree_t  readers; /* collection of readers       */
 	nowdb_fileid_t   nextid; /* next free fileid            */
-	                         /* compression                 */
+	nowdb_comp_t       comp; /* compression                 */
+	nowdb_compctx_t    *ctx; /* compression context         */
 	nowdb_comprsc_t compare; /* comparison                  */
+	uint32_t        tasknum; /* number of sorter tasks      */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
@@ -54,7 +60,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
-                            uint32_t     filesize);
+                            uint32_t     filesize,
+                            uint32_t    largesize);
 
 /* ------------------------------------------------------------------------
  * Initialise already allocated store object
@@ -64,7 +71,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
-                             uint32_t     filesize);
+                             uint32_t     filesize,
+                             uint32_t    largesize);
 
 /* ------------------------------------------------------------------------
  * Configure sorting
@@ -79,6 +87,13 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp);
+
+/* ------------------------------------------------------------------------
+ * Configure worker
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
+                                      uint32_t    tasknum);
 
 /* ------------------------------------------------------------------------
  * Destroy store
@@ -138,7 +153,8 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t  *store,
  * Destroy files and list
  * ------------------------------------------------------------------------
  */
-void nowdb_store_destroyFiles(ts_algo_list_t *files);
+void nowdb_store_destroyFiles(nowdb_store_t  *store,
+                              ts_algo_list_t *files);
 
 /* ------------------------------------------------------------------------
  * Find file in waiting
@@ -172,6 +188,13 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
                                       nowdb_file_t **file);
 
 /* ------------------------------------------------------------------------
+ * Release reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,
+                                      nowdb_file_t  *file);
+
+/* ------------------------------------------------------------------------
  * Create new reader
  * ------------------------------------------------------------------------
  */
@@ -184,6 +207,13 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
  */
 nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
                                    nowdb_file_t **file);
+
+/* ------------------------------------------------------------------------
+ * Release waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
+                                       nowdb_file_t  *file);
 
 /* ------------------------------------------------------------------------
  * Donate empty file to spares

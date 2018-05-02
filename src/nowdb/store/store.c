@@ -23,6 +23,9 @@ static char nullrec[64] = {0,0,0,0,0,0,0,0,
 
 #define MAX_FILE_NAME 32
 
+#define MAX_SPARES 9
+#define MIN_SPARES 3
+
 /* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
@@ -31,7 +34,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
-                            uint32_t     filesize)
+                            uint32_t     filesize,
+                            uint32_t    largesize)
 {
 	nowdb_err_t err = NOWDB_OK;
 	if (store == NULL) {
@@ -43,7 +47,9 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating store object");
 	}
-	err = nowdb_store_init(*store, base, ver, recsize, filesize);
+	err = nowdb_store_init(*store, base, ver, recsize,
+	                                         filesize,
+						largesize);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -51,7 +57,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 }
 
 /* ------------------------------------------------------------------------
- * Tree callbacks
+ * Tree callbacks for readers: compare
  * ------------------------------------------------------------------------
  */
 static ts_algo_cmp_t compare(void *ignore, void *left, void *right) {
@@ -62,14 +68,28 @@ static ts_algo_cmp_t compare(void *ignore, void *left, void *right) {
 	return ts_algo_cmp_equal;
 }
 
+/* ------------------------------------------------------------------------
+ * Tree callbacks for readers: update:
+ * - the old values are replaced by new values
+ * - the new file descriptor is freed
+ * ------------------------------------------------------------------------
+ */
 static ts_algo_rc_t update(void *ignore, void *o, void *n) {
 	NOWDB_IGNORE(nowdb_file_update(n, o));
 	nowdb_file_destroy(n); free(n);
 	return TS_ALGO_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Tree callbacks for readers: delete (we do not delete files...?)
+ * ------------------------------------------------------------------------
+ */
 static void delete (void *ignore, void **n) {}
 
+/* ------------------------------------------------------------------------
+ * Tree callbacks for readers: destroy
+ * ------------------------------------------------------------------------
+ */
 static void destroy(void *ignore, void **n) {
 	if (*n != NULL) {
 		nowdb_file_destroy((nowdb_file_t*)(*n));
@@ -274,7 +294,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
-                             uint32_t     filesize)
+                             uint32_t     filesize,
+                             uint32_t    largesize)
 {
 	nowdb_err_t err;
 	size_t s;
@@ -288,12 +309,16 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->version = ver;
 	store->recsize = recsize;
 	store->filesize = filesize;
+	store->largesize = largesize;
 	store->starting = FALSE;
 	store->path = NULL;
 	store->catalog = NULL;
 	store->writer = NULL;
 	store->compare = NULL;
+	store->comp = NOWDB_COMP_FLAT;
+	store->ctx  = NULL;
 	store->nextid = 1;
+	store->tasknum = 1;
 
 	/* lists of files */
 	err = initAllFiles(store);
@@ -330,7 +355,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	strcpy(store->path, base);
 
 	/* catalog */
-	store->catalog = nowdb_path_append(store->path, "cat");
+	store->catalog = nowdb_path_append(store->path, "catalog");
 	if (store->catalog == NULL) {
 		nowdb_rwlock_destroy(&store->lock);
 		free(store->path);
@@ -353,11 +378,35 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Configure worker
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
+                                      uint32_t    tasknum) {
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (tasknum > 32) return nowdb_err_get(nowdb_err_invalid,
+	             FALSE, OBJECT, "tasknum too big (max: 32)");
+	store->tasknum = tasknum;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Configure compression
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp) {
+	nowdb_err_t err;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	store->comp = comp;
+	if (comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+	
+	err = nowdb_compctx_new(&store->ctx, 4, 128);
+	if (err != NOWDB_OK) return err;
+
 	return NOWDB_OK;
 }
 
@@ -372,6 +421,10 @@ void nowdb_store_destroy(nowdb_store_t *store) {
 	}
 	if (store->catalog != NULL) {
 		free(store->catalog); store->catalog = NULL;
+	}
+	if (store->ctx != NULL) {
+		nowdb_compctx_destroy(store->ctx);
+		free(store->ctx); store->ctx = NULL;
 	}
 	destroyAllFiles(store);
 	nowdb_rwlock_destroy(&store->lock);
@@ -461,17 +514,13 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 	err = makeFile(store, file, fname, fid);
 	if (err != NOWDB_OK) goto unlock;
 
-	err = nowdb_file_create(*file);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(*file); free(*file); *file = NULL;
-		goto unlock;
-	}
-
 	err = nowdb_file_makeReader(*file);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(*file); free(*file); *file = NULL;
 		goto unlock;
 	}
+	(*file)->comp = store->comp;
+	
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err != NOWDB_OK) {
@@ -511,14 +560,22 @@ static inline nowdb_err_t createFile(nowdb_store_t *store) {
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: create spares
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t createSpares(nowdb_store_t *store) {
-	while (store->spares.len < 3) {
+	while (store->spares.len < MIN_SPARES) {
 		nowdb_err_t err = createFile(store);
 		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: get a new writer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getWriter(nowdb_store_t *store) {
 	ts_algo_list_node_t  *node;
 	nowdb_err_t err = NOWDB_OK;
@@ -533,9 +590,13 @@ static inline nowdb_err_t getWriter(nowdb_store_t *store) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: add a file to spares (or remove it)
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t makeSpare(nowdb_store_t *store,
                                     nowdb_file_t  *file) {
-	if (store->spares.len > 3) {
+	if (store->spares.len > MAX_SPARES) {
 		NOWDB_IGNORE(nowdb_file_close(file));
 		NOWDB_IGNORE(nowdb_file_remove(file));
 		nowdb_file_destroy(file); free(file);
@@ -548,6 +609,10 @@ static inline nowdb_err_t makeSpare(nowdb_store_t *store,
 	return nowdb_file_makeSpare(file);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: make file waiting
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
                                       nowdb_file_t  *file) {
 	nowdb_err_t err = NOWDB_OK;
@@ -563,6 +628,10 @@ static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
 	return nowdb_store_sortNow(&store->sortwrk);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: swap writer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t swapWriter(nowdb_store_t *store) {
 	nowdb_err_t err;
 	
@@ -583,6 +652,10 @@ static inline nowdb_err_t swapWriter(nowdb_store_t *store) {
 	return nowdb_file_map(store->writer);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: map next position in writer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t remapWriter(nowdb_store_t *store) {
 	if (store->writer->pos >= store->writer->capacity) {
 		return swapWriter(store);
@@ -590,6 +663,11 @@ static inline nowdb_err_t remapWriter(nowdb_store_t *store) {
 	return nowdb_file_move(store->writer);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: adjust writer position to real position onn open,
+ *         i.e. adjust to last written position instead of 'size'
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 	nowdb_err_t err;
 	uint32_t pos = 0;
@@ -616,6 +694,10 @@ static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: get writer ready for being written
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t prepareWriter(nowdb_store_t *store) {
 	nowdb_err_t err;
 
@@ -635,6 +717,10 @@ static inline nowdb_err_t prepareWriter(nowdb_store_t *store) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: write one file into catalog
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t writeCatalogLine(char *buf, int *off, 
                                             nowdb_file_t *file) {
 	nowdb_path_t nm;
@@ -660,12 +746,20 @@ static inline nowdb_err_t writeCatalogLine(char *buf, int *off,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: get catalog size from stat
+ * ------------------------------------------------------------------------
+ */
 static inline uint32_t measureCatalogSize(nowdb_store_t *store) {
 	struct stat st;
 	if (stat(store->catalog, &st) != 0) return 0;
 	return st.st_size;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: read one file from catalog
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
                                           ts_algo_list_t *files,
                                           char *buf,
@@ -719,7 +813,11 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	}
 	return NOWDB_OK;
 }
-                                           
+
+/* ------------------------------------------------------------------------
+ * Helper: read catalog and create files
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_version_t ver;
@@ -744,6 +842,9 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	runner = files.head;
 	while (runner!=NULL) {
 		file = runner->cont;
+		if (store->nextid <= file->id) {
+			store->nextid = file->id + 1;
+		}	
 		/*
 		fprintf(stderr, "%u: %s -- %u\n",
 		        file->id, file->path, (uint32_t)file->ctrl);
@@ -768,6 +869,7 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 
 		} else if ((file->ctrl & NOWDB_FILE_READER) &&
 		           (file->ctrl & NOWDB_FILE_SORT)) {
+
 			if (ts_algo_tree_insert(
 			    &store->readers, file) != TS_ALGO_OK) 
 			{
@@ -815,6 +917,10 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: read catalog into buffer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t readCatalogFile(nowdb_store_t *store,
                                            char *buf, int size) {
 	ssize_t x;
@@ -834,6 +940,10 @@ static inline nowdb_err_t readCatalogFile(nowdb_store_t *store,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: read catalog, get files, prepare writer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t readCatalog(nowdb_store_t *store) {
 	nowdb_err_t err;
 	char *buf;
@@ -858,6 +968,10 @@ static inline nowdb_err_t readCatalog(nowdb_store_t *store) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: compute catalog size
+ * ------------------------------------------------------------------------
+ */
 static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	/* once:
 	 * MAGIC + version
@@ -889,6 +1003,10 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	return once + nfiles * perline + 1;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: write buffer to catalog
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t writeCatalogFile(nowdb_store_t *store,
                                             char *buf, int size) {
 	nowdb_err_t  err;
@@ -900,7 +1018,7 @@ static inline nowdb_err_t writeCatalogFile(nowdb_store_t *store,
 	bkp = nowdb_path_exists(store->catalog, NOWDB_DIR_TYPE_ANY);
 
 	if (bkp) {
-		p = nowdb_path_append(store->path, "cat.bkp");
+		p = nowdb_path_append(store->path, "catalog.bkp");
 		if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		               FALSE, OBJECT, "allocating backup path");
 		err = nowdb_path_move(store->catalog, p);
@@ -942,6 +1060,11 @@ static inline nowdb_err_t writeCatalogFile(nowdb_store_t *store,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: compute catalog size and alloc buf
+ *         write files to buffer and write buffers to disk
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	nowdb_err_t err;
 	uint32_t magic = NOWDB_MAGIC;
@@ -949,7 +1072,9 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	int off=8;
 	ts_algo_list_node_t *runner;
 	ts_algo_list_t *readers;
-	uint32_t sz = computeCatalogSize(store);
+	uint32_t sz;
+
+	sz = computeCatalogSize(store);
 	buf = malloc(sz);
 	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                   FALSE, OBJECT, "allocating buffer");
@@ -998,6 +1123,10 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	free(buf); return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: start workers
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
 	nowdb_err_t err = NOWDB_OK;
 
@@ -1012,6 +1141,10 @@ static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: stop workers
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t stopWorkers(nowdb_store_t *store) {
 	nowdb_err_t err = NOWDB_OK;
 
@@ -1036,6 +1169,15 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	if (err != NOWDB_OK) return err;
 
 	store->starting = TRUE;
+
+	/* compression */
+	if (store->comp == NOWDB_COMP_ZSTD &&
+	    store->ctx != NULL) {
+		/* if we can load it now, fine.
+		 * Otherwise, we do it later */
+		NOWDB_IGNORE(nowdb_compctx_loadDict(store->ctx,
+		                                    store->path));
+	}
 
 	/* read catalog */
 	err = readCatalog(store);
@@ -1205,6 +1347,7 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
+	/* optimisation: pos & (bufsize - 1) */
 	pos = store->writer->pos%store->writer->bufsize;
 	memcpy(store->writer->mptr+pos, data, store->recsize);
 	if (!store->writer->dirty) store->writer->dirty = TRUE;
@@ -1236,6 +1379,34 @@ unlock:
 nowdb_err_t nowdb_store_insertBulk(nowdb_store_t *store,
                                    void           *data,
                                    uint32_t       count);
+
+/* ------------------------------------------------------------------------
+ * Helper: set decompression settings to all files in list
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t setDecomp(nowdb_store_t *store,
+                                    ts_algo_list_t *list) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t          *file;
+	nowdb_err_t    err=NOWDB_OK;
+	ZSTD_DDict    *dict;
+	ZSTD_DCtx     *ctx;
+
+	if (store->comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+
+	err = nowdb_compctx_getDCtx(store->ctx, &ctx);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_compctx_getDDict(store->ctx, &dict);
+	if (err != NOWDB_OK) return err;
+	
+	for(runner=list->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		file->ddict = dict;
+		file->dctx  = ctx;
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Get all readers for period start - end
@@ -1287,13 +1458,14 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 		                                     "list append");
 		goto unlock;
 	}
-		
+
 unlock:
 	err2 = nowdb_unlock_read(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
-	return err;
+	if (err != NOWDB_OK) return err;
+	return setDecomp(store, list);
 }
 
 /* ------------------------------------------------------------------------
@@ -1421,7 +1593,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 	}
 	for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
 		candidate = runner->cont;
-		if (candidate->size < NOWDB_FILE_MAXSIZE) {
+		if (candidate->size < NOWDB_FILE_MAXSIZE && !candidate->used) {
 			*file = malloc(sizeof(nowdb_file_t));
 			if (file == NULL) {
 				err = nowdb_err_get(nowdb_err_no_mem,
@@ -1433,6 +1605,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 			if (err != NOWDB_OK) {
 				free(*file); *file = NULL; break;
 			}
+			candidate->used = TRUE;
 			break;
 		}
 	}
@@ -1449,6 +1622,43 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Release reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,
+                                      nowdb_file_t  *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_file_t  *tmp=NULL;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* nothing available */
+	if (store->readers.count == 0) goto unlock;
+
+	tmp = ts_algo_tree_find(&store->readers, file);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT,
+	                                               "reader not found");
+		goto unlock;
+	}
+	tmp->used = FALSE;
+
+unlock:
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Get waiting
  * ------------------------------------------------------------------------
  */
@@ -1457,16 +1667,19 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	ts_algo_list_node_t *tmp;
+	nowdb_file_t *f;
 
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                 OBJECT, "store object is NULL");
 	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                      OBJECT, "pointer to file object is NULL");
 
-	err = nowdb_lock_read(&store->lock);
+	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	tmp = store->waiting.head;
+	for(tmp=store->waiting.head; tmp!=NULL; tmp=tmp->nxt) {
+		f = tmp->cont; if (!f->used) break;
+	}
 	if (tmp == NULL) goto unlock;
 
 	*file = malloc(sizeof(nowdb_file_t));
@@ -1477,9 +1690,44 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	}
 	err = nowdb_file_copy(tmp->cont, *file);
 	if (err != NOWDB_OK) goto unlock;
+	f->used = TRUE;
 
 unlock:
-	err2 = nowdb_unlock_read(&store->lock);
+	err2 = nowdb_unlock_write(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Release waiting
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
+                                       nowdb_file_t  *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_node_t *tmp;
+	nowdb_file_t *f;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                                 OBJECT, "store object is NULL");
+	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                      OBJECT, "pointer to file object is NULL");
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	tmp = findInList(&store->waiting, file);
+	if (tmp == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT,
+	                                              "waiting not found");
+		goto unlock;
+	}
+	f = tmp->cont; f->used = FALSE;
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
@@ -1554,10 +1802,37 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Release decompression contexts from files
+ * ------------------------------------------------------------------------
+ */
+static inline void releaseDecomp(nowdb_store_t  *store,
+                                 ts_algo_list_t *files) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *runner;
+	nowdb_file_t        *file;
+
+	for(runner=files->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		if (file->dctx != NULL) {
+			err = nowdb_compctx_releaseDCtx(store->ctx,
+			                                file->dctx);
+			if (err != NOWDB_OK) {
+				nowdb_err_print(err);
+				nowdb_err_release(err);
+			}
+			file->dctx = NULL;
+			file->ddict = NULL;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
  * Destroy files and list
  * ------------------------------------------------------------------------
  */
-void nowdb_store_destroyFiles(ts_algo_list_t *files) {
+void nowdb_store_destroyFiles(nowdb_store_t  *store,
+                              ts_algo_list_t *files) {
+	releaseDecomp(store, files);
 	destroyFiles(files);
 }
 
@@ -1660,4 +1935,3 @@ nowdb_err_t nowdb_store_showCatalog(nowdb_store_t *store) {
 	destroyFiles(&files);
 	return NOWDB_OK;
 }
-

@@ -44,6 +44,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
+      $(SRC)/store/comp.o     \
       $(SRC)/store/storewrk.o
 
 DEP = $(SRC)/types/types.h    \
@@ -58,6 +59,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
+      $(SRC)/store/comp.h     \
       $(SRC)/store/storewrk.h
 
 default:	lib 
@@ -65,6 +67,7 @@ default:	lib
 all:	default tools tests bench
 
 tools:	bin/randomfile    \
+	bin/readfile      \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
@@ -73,16 +76,17 @@ bench: bin/readplainbench  \
        bin/writestorebench \
        bin/qstress
 
-smoke:	compileme          \
-	$(SMK)/errsmoke    \
-	$(SMK)/timesmoke   \
-	$(SMK)/pathsmoke   \
-	$(SMK)/tasksmoke   \
-	$(SMK)/queuesmoke  \
-	$(SMK)/workersmoke \
-	$(SMK)/filesmoke   \
-	$(SMK)/storesmoke  \
-	$(SMK)/insertstoresmoke
+smoke:	compileme               \
+	$(SMK)/errsmoke         \
+	$(SMK)/timesmoke        \
+	$(SMK)/pathsmoke        \
+	$(SMK)/tasksmoke        \
+	$(SMK)/queuesmoke       \
+	$(SMK)/workersmoke      \
+	$(SMK)/filesmoke        \
+	$(SMK)/storesmoke       \
+	$(SMK)/insertstoresmoke \
+	$(SMK)/insertandsortstoresmoke
 
 tests: smoke
 
@@ -183,6 +187,15 @@ $(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
 			                         $(COM)/stores.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
+
+$(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
+			        $(COM)/stores.o \
+			        $(COM)/bench.o
+				$(LNKMSG)
+				$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                         $(COM)/stores.o \
+			                         $(COM)/bench.o  \
+				                 $(libs) -lnowdb
 		
 		
 # BENCHMARKS
@@ -224,6 +237,13 @@ $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
 			                 $(COM)/cmd.o                \
 			                 $(libs) -lnowdb
 
+$(BIN)/readfile:	$(LIB) $(DEP) $(TOOLS)/readfile.o \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/readfile.o \
+			                 $(COM)/cmd.o                \
+			                 $(libs) -lnowdb
+
 $(BIN)/catalog:		$(LIB) $(DEP) $(TOOLS)/catalog.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/catalog.o \
@@ -262,7 +282,9 @@ clean:
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
+	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(BIN)/compileme
+	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench

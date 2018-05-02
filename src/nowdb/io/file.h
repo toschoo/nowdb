@@ -3,8 +3,6 @@
  * ========================================================================
  * File Abstraction
  * ========================================================================
- *
- * ========================================================================
  */
 #ifndef nowdb_file_decl
 #define nowdb_file_decl
@@ -30,6 +28,8 @@ typedef uint32_t nowdb_encp_t;
 #define NOWDB_COMP_ZSTD 1
 #define NOWDB_COMP_LZ4  2
 
+#define NOWDB_ZSTD_LEVEL 3
+
 #define NOWDB_ENCP_NONE 0
 
 #define NOWDB_FILE_WRITER 1
@@ -45,24 +45,26 @@ typedef uint32_t nowdb_encp_t;
  * ------------------------------------------------------------------------
  */
 typedef enum {
-	nowdb_file_state_closed = 0, /* file not yet opened         */
-	nowdb_file_state_open   = 1, /* file opened                 */
-	nowdb_file_state_mapped = 2  /* file mapped to memory       */
+	nowdb_file_state_closed = 0, /* file not yet opened   */
+	nowdb_file_state_open   = 1, /* file opened           */
+	nowdb_file_state_mapped = 2  /* file mapped to memory */
 } nowdb_file_state_t;
 
 /* ------------------------------------------------------------------------
- * Block Header for encrypted files
+ * Block Header for compressed files
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_bitmap64_t set[2]; /* set if not deleted              */
-	uint32_t           size; /* compressed size                 */
+	nowdb_bitmap64_t set[2]; /* set if not deleted */
+	uint32_t           size; /* compressed size    */
 	uint32_t       reserve4;
 	uint64_t       reserve8;
 } nowdb_block_hdr_t;
 
 /* ------------------------------------------------------------------------
  * NoWDB File Descriptor
+ * TODO:
+ * is grain needed?
  * ------------------------------------------------------------------------
  */
 typedef struct {
@@ -74,18 +76,20 @@ typedef struct {
 	uint32_t    blocksize; /* size of stored blocks              */
 	uint32_t   recordsize; /* size of one record                 */
 	uint32_t        state; /* current state of the descriptor    */
-	uint32_t          pos; /* current position                   */
+	uint32_t          pos; /* current position in the file       */
 	nowdb_bool_t    dirty; /* map was written                    */
+	nowdb_bool_t     used; /* reader is in use for writing       */
 	int                fd; /* os file descriptor                 */
 	char            *mptr; /* pointer for mapping                */
 	char            *bptr; /* pointer for buffered reading       */
 	char             *tmp; /* temporary buffer for decompression */
-	int               off; /* current position within tmp/map    */
-	void            *dict; /* compression dictionary             */
+	int               off; /* current position within tmp        */
+	ZSTD_CDict     *cdict; /* compression dictionary             */
+	ZSTD_DDict     *ddict; /* decompression dictionary           */
 	ZSTD_CCtx       *cctx; /* ZSTD compression context           */
 	ZSTD_DCtx       *dctx; /* ZSTD decompression context         */
 	uint32_t      bufsize; /* map or buf size                    */
-	uint32_t      tmpsize; /* actual buf size                    */
+	uint32_t      tmpsize; /* actual tmp size                    */
 	nowdb_block_hdr_t hdr; /* current header                     */
 	nowdb_bitmap8_t  ctrl; /* writer, reader, spare, sorted      */
 	nowdb_comp_t     comp; /* compression algorithm              */
@@ -205,25 +209,25 @@ nowdb_err_t nowdb_file_open(nowdb_file_t *file);
 nowdb_err_t nowdb_file_close(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * Map file to memory
+ * Map file to memory ("writer")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_map(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * Map file at given position
+ * Map file at given position ("writer")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_mapAt(nowdb_file_t *file, uint32_t pos);
 
 /* ------------------------------------------------------------------------
- * Unmap file from memory
+ * Unmap file from memory ("writer")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_umap(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * Sync map to disk
+ * Sync map to disk ("writer")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_sync(nowdb_file_t *file);
@@ -241,19 +245,19 @@ nowdb_err_t nowdb_file_rewind(nowdb_file_t *file);
 nowdb_err_t nowdb_file_move(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * Position file freely
+ * Position file freely ("reader")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_position(nowdb_file_t *file, uint32_t pos);
 
 /* ------------------------------------------------------------------------
- * Load the current block into memory
+ * Load the current block into memory ("reader")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * Load only the current header into memory
+ * Load only the current header into memory ("reader")
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file);

@@ -25,6 +25,7 @@
 #define TMO  1000000000
 
 nowdb_err_t hellojob(nowdb_worker_t      *wrk,
+                     uint32_t              id,
                      nowdb_wrk_message_t *msg) {
 	if (msg == NULL) {
 		return nowdb_err_get(nowdb_err_invalid,
@@ -54,7 +55,7 @@ nowdb_bool_t testCreateStopDestroy() {
 	nowdb_worker_t wrk;
 	nowdb_err_t    err;
 
-	err = nowdb_worker_init(&wrk, "test", PERIOD,
+	err = nowdb_worker_init(&wrk, "test", 1, PERIOD,
 	                        &hellojob, NULL,
 	                        &drainer, NULL);
 	if (err != NOWDB_OK) {
@@ -79,7 +80,7 @@ nowdb_bool_t testHelloJob() {
 	nowdb_err_t    err;
 	struct timespec t1, t2;
 
-	err = nowdb_worker_init(&wrk, "test", PERIOD,
+	err = nowdb_worker_init(&wrk, "test", 1, PERIOD,
 	                        &hellojob, NULL,
 	                        &drainer, NULL);
 	if (err != NOWDB_OK) {
@@ -93,7 +94,7 @@ nowdb_bool_t testHelloJob() {
 		NOWDB_IGNORE(nowdb_worker_stop(&wrk, TMO));
 		return FALSE;
 	}
-	msg->type = 1;
+	msg->type = 11;
 	msg->cont = NULL;
 	err = nowdb_worker_do(&wrk, msg);
 	if (err != NOWDB_OK) {
@@ -103,7 +104,7 @@ nowdb_bool_t testHelloJob() {
 		free(msg);
 		return FALSE;
 	}
-	nowdb_task_sleep(PERIOD);
+	nowdb_task_sleep(2*PERIOD);
 	timestamp(&t1);
 	err = nowdb_worker_stop(&wrk, TMO);
 	if (err != NOWDB_OK) {
@@ -122,7 +123,7 @@ nowdb_bool_t testPrintCont() {
 	nowdb_worker_t wrk;
 	nowdb_err_t    err;
 
-	err = nowdb_worker_init(&wrk, "test", PERIOD,
+	err = nowdb_worker_init(&wrk, "test", 1, PERIOD,
 	                        &hellojob, NULL,
 	                        &drainer, NULL);
 	if (err != NOWDB_OK) {
@@ -149,7 +150,7 @@ nowdb_bool_t testPrintCont() {
 		free(msg->cont); free(msg);
 		return FALSE;
 	}
-	nowdb_task_sleep(PERIOD);
+	nowdb_task_sleep(2*PERIOD);
 	err = nowdb_worker_stop(&wrk, TMO);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -171,6 +172,7 @@ typedef struct {
 } fibo_t;
 
 nowdb_err_t job(nowdb_worker_t      *wrk,
+                uint32_t              id,
                 nowdb_wrk_message_t *msg) {
 	fibo_t *fibo = wrk->rsc;
 	uint32_t f1, f2;
@@ -222,7 +224,7 @@ nowdb_bool_t test2tasks() {
 	}
 
 	fibo.q = &q; fibo.last = 1;
-	err = nowdb_worker_init(&wrk, "fibo", -1,
+	err = nowdb_worker_init(&wrk, "fibo", 1, -1,
 	                        &job, NULL, &drainer, &fibo);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -306,6 +308,55 @@ nowdb_bool_t test2tasks() {
 	return TRUE;
 }
 
+nowdb_bool_t testPool2() {
+	nowdb_wrk_message_t *msg;
+	nowdb_worker_t wrk;
+	nowdb_err_t    err;
+
+	err = nowdb_worker_init(&wrk, "pool", 2, PERIOD,
+	                        &hellojob, NULL,
+	                        &drainer, NULL);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+
+	for(int i=0;i<10;i++) {
+		msg = malloc(sizeof(nowdb_wrk_message_t));
+		if (msg == NULL) {
+			fprintf(stderr, "no mem\n");
+			return FALSE;
+		}
+		msg->cont = malloc(32);
+		if (msg->cont == NULL) {
+			fprintf(stderr, "no mem\n");
+			free(msg); return FALSE;
+		}
+		msg->type = 1;
+		if (i%2==0) {
+			sprintf(msg->cont, "even message %d", i);
+		} else {
+			sprintf(msg->cont, "odd  message %d", i);
+		}
+		err = nowdb_worker_do(&wrk, msg);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			free(msg->cont); free(msg);
+			return FALSE;
+		}
+	}
+	nowdb_task_sleep(2*PERIOD);
+	err = nowdb_worker_stop(&wrk, TMO);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
+	return TRUE;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 
@@ -327,6 +378,10 @@ int main() {
 	}
 	if (!test2tasks()) {
 		fprintf(stderr, "test2tasks failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testPool2()) {
+		fprintf(stderr, "testPool2 failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

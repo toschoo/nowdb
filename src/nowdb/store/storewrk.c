@@ -6,6 +6,7 @@
  */
 #include <nowdb/store/storewrk.h>
 #include <nowdb/store/store.h>
+#include <nowdb/store/comp.h>
 #include <nowdb/io/file.h>
 
 #include <stdint.h>
@@ -13,21 +14,55 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <zstd.h>
+#include <zstd/zdict.h>
+
+/* ------------------------------------------------------------------------
+ * Sync Worker Period and Timeout
+ * ------------------------------------------------------------------------
+ */
 #define SYNCPERIOD    500000000l
-#define SORTPERIOD   5000000000l
 #define SYNCTIMEOUT 10000000000l
-#define SORTTIMEOUT 10000000000l
 
+/* ------------------------------------------------------------------------
+ * Sorter Period and Timeout
+ * ------------------------------------------------------------------------
+ */
+#define SORTPERIOD    500000000l
+#define SORTTIMEOUT 60000000000l
+
+/* ------------------------------------------------------------------------
+ * Syncjob predeclaration
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
+                           uint32_t              id,
                            nowdb_wrk_message_t *msg);
 
+/* ------------------------------------------------------------------------
+ * Sorter  predeclaration
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
+                           uint32_t              id,
                            nowdb_wrk_message_t *msg);
 
+/* ------------------------------------------------------------------------
+ * All messages are static, no drain required for queues
+ * ------------------------------------------------------------------------
+ */
 static void nodrain(void **ignore) {}
 
-static nowdb_wrk_message_t sortmsg = {11, NULL};
+/* ------------------------------------------------------------------------
+ * Sorter message
+ * ------------------------------------------------------------------------
+ */
+static nowdb_wrk_message_t sortmsg = {11,NULL};
 
+/* ------------------------------------------------------------------------
+ * Start Sync Worker
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
                                   void         *store,
                                   nowdb_queue_t *errq) 
@@ -37,35 +72,58 @@ nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                "store", "store object is NULL");
 
-	return nowdb_worker_init(wrk, "sync", SYNCPERIOD, &syncjob,
-	                                    errq, &nodrain, store);
+	return nowdb_worker_init(wrk, "sync", 1, SYNCPERIOD, &syncjob,
+	                                       errq, &nodrain, store);
 }
 
+/* ------------------------------------------------------------------------
+ * Stop Sync Worker
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk) {
 	return nowdb_worker_stop(wrk, SYNCTIMEOUT);
 }
 
+/* ------------------------------------------------------------------------
+ * Start Sorter
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
-                                    void         *store,
+                                    void        *pstore,
                                     nowdb_queue_t *errq) {
+	nowdb_store_t *store = pstore;
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                "store", "store object is NULL");
-
-	return nowdb_worker_init(wrk, "sorter", SORTPERIOD, &sortjob,
-	                                      errq, &nodrain, store);
+	return nowdb_worker_init(wrk, "sorter",
+	                         store->tasknum,
+	                         SORTPERIOD, &sortjob,
+	                         errq, &nodrain, store);
 }
 
+/* ------------------------------------------------------------------------
+ * Stop Sorter
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
 	return nowdb_worker_stop(wrk, SORTTIMEOUT);
 }
 
+/* ------------------------------------------------------------------------
+ * Do your job, sorter!
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk) {
 	return nowdb_worker_do(wrk, &sortmsg);
 }
 
+/* ------------------------------------------------------------------------
+ * Syncjob
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
+                           uint32_t              id,
                            nowdb_wrk_message_t *msg) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
@@ -77,6 +135,8 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 	if (store->writer->dirty) {
 		err = nowdb_file_sync(store->writer);
 		store->writer->dirty = FALSE;
+
+		/* write catalog ? */
 	}
 
 	err2 = nowdb_unlock_write(&store->lock);
@@ -86,6 +146,10 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Standard sort for edges
+ * ------------------------------------------------------------------------
+ */
 nowdb_cmp_t nowdb_store_edge_compare(const void *left,
                                      const void *right,
                                      void      *ignore)
@@ -118,6 +182,10 @@ nowdb_cmp_t nowdb_store_edge_compare(const void *left,
 	return NOWDB_SORT_EQUAL;
 }
 
+/* ------------------------------------------------------------------------
+ * Standard sort for vertices
+ * ------------------------------------------------------------------------
+ */
 nowdb_cmp_t nowdb_store_vertex_compare(const void *left,
                                        const void *right,
                                        void      *ignore)
@@ -140,10 +208,28 @@ nowdb_cmp_t nowdb_store_vertex_compare(const void *left,
 	return NOWDB_SORT_EQUAL;
 }
 
-static inline nowdb_err_t findMinMax(nowdb_file_t *file) {
+/* ------------------------------------------------------------------------
+ * Find minmax (edges only)
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
+	nowdb_time_t max = NOWDB_TIME_DAWN;
+	nowdb_time_t min = NOWDB_TIME_DUSK;
+	nowdb_edge_t *e;
+	for (int i=0; i<file->size; i+=file->recordsize) {
+		e = (nowdb_edge_t*)(buf+i);
+		if (e->timestamp < min) min = e->timestamp;
+		if (e->timestamp > max) max = e->timestamp;
+	}
+	file->oldest = min;
+	file->newest = max;
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Find set min and max (edges only)
+ * ------------------------------------------------------------------------
+ */
 static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
 	if (trg->oldest == NOWDB_TIME_DAWN || src->oldest < trg->oldest)
 		trg->oldest = src->oldest;
@@ -152,16 +238,115 @@ static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
 		trg->newest = src->newest;
 }
 
+/* ------------------------------------------------------------------------
+ * Get dictionary; create it if it does not exist.
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getZSTDResources(nowdb_store_t     *store,
+                                           char *buf, uint32_t size) {
+	nowdb_err_t err2, err = NOWDB_OK;
+
+	/* we lock to avoid several threads
+	 * creating several dictionaries in parallel */
+	err = nowdb_lock(&store->ctx->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* if it exists, there is nothing to do */
+	if (store->ctx->cdict != NULL) {
+		return nowdb_unlock(&store->ctx->lock);
+	}
+
+	err = nowdb_compctx_loadDict(store->ctx, store->path);
+	if (err != NOWDB_OK) {
+		/* stat error: dictionary does not exist */
+		if (err->errcode != nowdb_err_stat) goto unlock;
+		nowdb_err_release(err);
+	}
+	/* we could load it */
+	if (store->ctx->cdict != NULL) goto unlock;
+
+	/* train and create dictionary */
+	err = nowdb_compctx_trainDict(store->ctx,
+	                              store->path,
+	                              buf,  size);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* now, we should be able to load it */
+	err = nowdb_compctx_loadDict(store->ctx, store->path);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* otherwise, something is wrong */
+	if (store->ctx->cdict == NULL) {
+		err = nowdb_err_get(nowdb_err_compdict, FALSE, "store",
+		                          "no compression dictionary");
+		goto unlock;
+	}
+unlock:
+	err2 = nowdb_unlock(&store->ctx->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: config compression in reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t configReader(nowdb_store_t *store, nowdb_file_t *file) {
+	nowdb_err_t err;
+	if (store->comp == NOWDB_COMP_ZSTD) {
+		file->comp = NOWDB_COMP_ZSTD;
+		err = nowdb_compctx_getCDict(store->ctx, &file->cdict);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_compctx_getCCtx(store->ctx, &file->cctx);
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: release reader obtained from store (in case of error)
+ * ------------------------------------------------------------------------
+ */
+static inline void releaseReader(nowdb_store_t *store, nowdb_file_t *file) {
+	nowdb_err_t err;
+	if (file->comp == NOWDB_COMP_ZSTD) {
+		err = nowdb_compctx_releaseCCtx(store->ctx, file->cctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err); nowdb_err_release(err);
+		}
+	}
+	file->cctx  = NULL;
+	file->cdict = NULL;
+	nowdb_store_releaseReader(store, file);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: get free reader from store or create new one
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getReader(nowdb_store_t *store,
                                     nowdb_file_t  **file) {
 	nowdb_err_t err;
 
 	err = nowdb_store_getFreeReader(store, file);
 	if (err != NOWDB_OK) return err;
-	if (*file != NULL) return NOWDB_OK;
-	return nowdb_store_createReader(store, file);
+	if (*file != NULL) {
+		configReader(store, *file);
+		return NOWDB_OK;
+	}
+	err = nowdb_store_createReader(store, file);
+	if (err != NOWDB_OK) return err;
+	(*file)->capacity = store->largesize;
+	configReader(store, *file);
+	return nowdb_file_create(*file);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: read whole content of waiting file into buffer
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getContent(nowdb_worker_t *wrk,
                                      nowdb_file_t  *file,
                                      char           *buf) {
@@ -184,6 +369,10 @@ static inline nowdb_err_t getContent(nowdb_worker_t *wrk,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: write buffer to target file (reader)
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t putContent(char *buf, uint32_t size,
                                      nowdb_file_t       *file) {
 	nowdb_err_t err;
@@ -200,92 +389,144 @@ static inline nowdb_err_t putContent(char *buf, uint32_t size,
 			NOWDB_IGNORE(nowdb_file_close(file));
 			return err;
 		}
+		/* write to index... */
 	}
 	return nowdb_file_close(file);
 }
 
+/* ------------------------------------------------------------------------
+ * Sorter: sort and compress
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
+                                   uint32_t          id,
                                    nowdb_store_t *store) {
 	nowdb_err_t err;
 	nowdb_file_t *src=NULL;
 	nowdb_file_t *reader=NULL;
 	char *buf=NULL;
 
-	// fprintf(stderr, "SORTING\n");
+	// fprintf(stderr, "%s.%u SORTING\n", wrk->name, id);
 
-	// get waiting
+	/* get waiting file 
+	 * we have to free it in case of error! */
 	err = nowdb_store_getWaiting(store, &src);
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
 
-	// find max/min
-	err = findMinMax(src);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(src); free(src); return err;
-	}
-
-	// get (or create) reader with space
-	err = getReader(store, &reader);
-	if (err != NOWDB_OK) {
-		nowdb_file_destroy(src); free(src); return err;
-	}
-
+	/* get content from source */
 	buf = malloc(src->size);
 	if (buf == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, wrk->name,
 		                            "allocating large buffer");
-		nowdb_file_destroy(reader); free(reader);
+		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 	err = getContent(wrk, src, buf);
 	if (err != NOWDB_OK) {
-		nowdb_file_destroy(reader); free(reader); free(buf);
-		nowdb_file_destroy(src); free(src); return err;
+		nowdb_store_releaseWaiting(store, src);
+		nowdb_file_destroy(src); free(src);
+		free(buf); return err;
 	}
 
-	// sort buf -- if compare is not NULL!
+	/* find min/max (if this is edges) */
+	if (store->recsize == 64) { /* not too convincing */
+		err = findMinMax(buf, src);
+		if (err != NOWDB_OK) {
+			nowdb_store_releaseWaiting(store, src);
+			nowdb_file_destroy(src); free(src);
+			free(buf); return err;
+		}
+	}
+
+	/* sort buf -- if compare is not NULL! */
 	if (store->compare != NULL) {
 		nowdb_mem_sort(buf, src->size/store->recsize,
 		                    store->recsize,
 		                    store->compare, NULL);
-		reader->ctrl |= NOWDB_FILE_SORT;
-		setMinMax(src, reader);
 	}
 
-	// write to reader (potentially compressing)
+	/* prepare compression */
+	if (store->comp == NOWDB_COMP_ZSTD) {
+		err = getZSTDResources(store, buf, src->size);
+		if (err != NOWDB_OK) {
+			nowdb_store_releaseWaiting(store, src);
+			nowdb_file_destroy(src); free(src);
+			free(buf); return err;
+		}
+	}
+
+	/* get (or create) reader with space left */
+	err = getReader(store, &reader);
+	if (err != NOWDB_OK) {
+		nowdb_store_releaseWaiting(store, src);
+		nowdb_file_destroy(src); free(src);
+		free(buf); return err;
+	}
+
+	/* set file sorted */
+	if (store->compare != NULL) {
+		reader->ctrl |= NOWDB_FILE_SORT;
+	}
+
+	/* set and reset min/max */
+	if (store->recsize == 64) { /* not too convincing */
+		setMinMax(src, reader);
+		src->oldest = NOWDB_TIME_DAWN;
+		src->newest = NOWDB_TIME_DUSK;
+	}
+
+	/* write to reader (potentially compressing) */
 	err = putContent(buf, src->size, reader);
 	if (err != NOWDB_OK) {
+		releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader); free(buf);
+		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// insert into index
-
-	// we don't need it anymore
+	/* we don't need it anymore */
 	free(buf);
 
-	// promote to reader 
+	/* release compression context */
+	if (reader->cctx != NULL) {
+		err = nowdb_compctx_releaseCCtx(store->ctx, reader->cctx);
+		if (err != NOWDB_OK) {
+			/* not really anything to do on error */
+			nowdb_err_print(err); nowdb_err_release(err);
+		}
+		reader->cctx = NULL;
+	}
+
+	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
+		nowdb_store_releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader);
+		nowdb_store_releaseWaiting(store, src);
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// erase waiting... 
+	/* erase waiting... */
 	err = nowdb_file_erase(src);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	// ...and donate it
+	/* ...and donate it */
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 
-	// fprintf(stderr, "DONE SORTING\n");
+	// fprintf(stderr, "%s.%u DONE\n", wrk->name, id);
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Sorter: just a wrapper around 'compsort'
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
+                           uint32_t              id,
                            nowdb_wrk_message_t *msg) {
-	return compsort(wrk, wrk->rsc);
+	return compsort(wrk, id, wrk->rsc);
 }

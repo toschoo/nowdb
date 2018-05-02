@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "cannot init error manager\n");
 		return EXIT_FAILURE;
 	}
-	err = nowdb_store_init(&store, path, 0, 64, NOWDB_MEGA);
+	err = nowdb_store_init(&store, path, 0, 64, NOWDB_MEGA, NOWDB_GIGA);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init store\n");
 		nowdb_err_print(err);
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
 		if (x>=0 && x<20) {
 			fprintf(stdout, "\b\b\b:-|"); x++;
 		} else if (x>=20 && x<50) {
-			fprintf(stdout, "\b\b\b:-O"); x++;
+			fprintf(stdout, "\b\b\b<-O"); x++;
 		} else x=0;
 		fflush(stdout);
 		err = nowdb_task_sleep(DELAY);

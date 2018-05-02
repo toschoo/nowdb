@@ -101,6 +101,38 @@ nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
                           char            *object,
                           char             *info);
 
+
+/* ------------------------------------------------------------------------
+ * Get and fill error descriptor with explicit OS error code
+ * -----------------------------
+ *
+ * Parameters:
+ * - error code
+ * - OS error code
+ * - the object reporting the error
+ * - additional info
+ *
+ * Return:
+ * the error descriptor or NULL in case we ran out of memory
+ * 
+ * NOTE: 'cause' is set to NULL and should be set
+ *       explicitly  by the application.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_getRC(nowdb_errcode_t errcode,
+                            int               osErr,
+                            char            *object,
+                            char             *info);
+
+/* ------------------------------------------------------------------------
+ * Cascase error
+ * -------------
+ * corresponds to err.cause = cause.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_cascade(nowdb_err_t error,
+                              nowdb_err_t cause);
+
 /* ------------------------------------------------------------------------
  * Release error descriptor
  * ------------------------
@@ -112,6 +144,10 @@ nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
  */
 void nowdb_err_release(nowdb_err_t err);
 
+/* ------------------------------------------------------------------------
+ * Release the error descriptor
+ * ------------------------------------------------------------------------
+ */
 inline void NOWDB_IGNORE(nowdb_err_t err) {
 	nowdb_err_release(err);
 }
@@ -209,12 +245,13 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_version         43
 #define nowdb_err_comp            44
 #define nowdb_err_decomp          45
-#define nowdb_err_store           46
-#define nowdb_err_context         47
-#define nowdb_err_scope           48
-#define nowdb_err_stat            49
-#define nowdb_err_create          50
-#define nowdb_err_magic           51
+#define nowdb_err_compdict        46
+#define nowdb_err_store           47
+#define nowdb_err_context         48
+#define nowdb_err_scope           49
+#define nowdb_err_stat            50
+#define nowdb_err_create          51
+#define nowdb_err_magic           52
 #define nowdb_err_unknown       9999
 
 #endif

@@ -37,20 +37,20 @@ void nowdb_err_destroy() {
 }
 
 /* ------------------------------------------------------------------------
- * Get and fill error descriptor
+ * Helper: get and fill error descriptor
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
-                          nowdb_bool_t   getOsErr,
-                          char            *object,
-                          char             *info)
+static inline nowdb_err_t errget(nowdb_errcode_t errcode,
+                                 int               osErr,
+                                 char            *object,
+                                 char              *info)
 {
 	nowdb_err_t err = nowdb_errman_get();
 	if (err == NULL) return NULL;
 
 	err->info = NULL;
 	err->cause = NULL;
-	err->oserr = 0;
+	err->oserr = osErr;
 	strcpy(err->object, "unknown");
 
 	err->errcode = errcode;
@@ -62,10 +62,45 @@ nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
 			nowdb_errman_release(err);
 			return NULL;
 		}
-		strcpy(err->info, info);
+		strcpy(err->info, info); err->info[l] = 0;
 	}
-	if (getOsErr) err->oserr = errno;
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Get and fill error descriptor
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
+                          nowdb_bool_t   getOsErr,
+                          char            *object,
+                          char             *info) {
+	return errget(errcode, getOsErr?errno:0, object, info);
+}
+
+/* ------------------------------------------------------------------------
+ * Get and fill error descriptor with explicit OS error code
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_getRC(nowdb_errcode_t errcode,
+                            int               osErr,
+                            char            *object,
+                            char             *info) {
+	return errget(errcode, osErr, object, info);
+}
+
+/* ------------------------------------------------------------------------
+ * Cascade error
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_cascade(nowdb_err_t error,
+                              nowdb_err_t cause) {
+	if (error == NOWDB_OK) {
+		nowdb_err_release(cause);
+		return NOWDB_OK;
+	}
+	error->cause = cause;
+	return error;
 }
 
 /* ------------------------------------------------------------------------
@@ -227,6 +262,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_version: return "cannot read version";
 	case nowdb_err_comp: return "compression failed";
 	case nowdb_err_decomp: return "decompression failed";
+	case nowdb_err_compdict: return "error creating compression dictionary";
 	case nowdb_err_store: return "operation on store failed";
 	case nowdb_err_context: return "operation on context failed";
 	case nowdb_err_scope: return "operation on scope failed";

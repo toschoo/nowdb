@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "cannot init error manager\n");
 		return EXIT_FAILURE;
 	}
-	err = nowdb_store_init(&store, path, 0, 64, NOWDB_MEGA);
+	err = nowdb_store_init(&store, path, 0, 64, NOWDB_MEGA, NOWDB_MEGA);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
