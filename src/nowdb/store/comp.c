@@ -164,9 +164,11 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 	ssize_t x;
 	FILE *d;
 
+	/* we already have a dictionary */
 	if (ctx->cdict != NULL &&
 	    ctx->ddict != NULL) NOWDB_OK;
 	
+	/* otherwise clean up the mess and start */
 	if (ctx->cdict != NULL) {
 		ZSTD_freeCDict(ctx->cdict); ctx->cdict = NULL;
 	}
@@ -174,13 +176,18 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 		ZSTD_freeDDict(ctx->ddict); ctx->ddict = NULL;
 	}
 
+	/* path to dict */
 	p = nowdb_path_append(path, DICTNAME);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                   FALSE, "store", "append to path");
+
+	/* if we cannot stat return an error */
 	if (stat(p, &st) != 0) {
 		err = nowdb_err_get(nowdb_err_stat, TRUE, "store", p);
 		free(p); return err;
 	}
+
+	/* load the dictionary */
 	buf = malloc(st.st_size);
 	if (buf == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store", p);
@@ -198,12 +205,15 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 	}
 	fclose(d); free(p);
 
+	/* create compression dictionary */
 	ctx->cdict = ZSTD_createCDict(buf, st.st_size, NOWDB_ZSTD_LEVEL);
 	if (ctx->cdict == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                      "cannot load ZSTD dictionary");
 		free(buf); return err;
 	}
+
+	/* create decompression dictionary */
 	ctx->ddict = ZSTD_createDDict(buf, st.st_size);
 	if (ctx->cdict == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
@@ -238,27 +248,38 @@ nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                                 "allocating buffer");
 	}
+
+	/* NOTE: as long as NOWDB_IDX_PAGE divides size,
+	         there is no issue with remainders here! */
 	nm = size/NOWDB_IDX_PAGE;
 	if (nm == 0) {
 		err = nowdb_err_get(nowdb_err_invalid, FALSE, "store",
 		                          "training buffer too small");
 		free(dictbuf); return err;
 	}
+
+	/* 'nm' samples, so 'nm' times the size */
 	samplesz = malloc(nm*sizeof(size_t));
 	if (samplesz == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
 		                                "allocating buffer"); 
 		free(dictbuf); return err;
 	}
+
+	/* the samples all have the same size */
 	for(int i=0;i<nm;i++) {
 		samplesz[i] = NOWDB_IDX_PAGE;
 	}
+
+	/* train samples */
 	dsz = ZDICT_trainFromBuffer(dictbuf, DICTSIZE, buf, samplesz, nm);
 	if (ZDICT_isError(dsz)) {
 		err = nowdb_err_get(nowdb_err_compdict, FALSE, "store",
 		                       (char*)ZDICT_getErrorName(dsz));
 		free(dictbuf); free(samplesz); return err;
 	}
+
+	/* now write the dictionary to disk */
 	p = nowdb_path_append(path, DICTNAME);
 	if (p == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store",
@@ -488,4 +509,3 @@ nowdb_err_t nowdb_compctx_getDDict(nowdb_compctx_t *ctx,
 
 	return nowdb_unlock(&ctx->lock);
 }
-

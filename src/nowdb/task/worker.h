@@ -34,19 +34,29 @@ typedef struct {
 /* ------------------------------------------------------------------------
  * Worker
  * ------
+ * Workers block on a queue until a message is found or until a timeout,
+ * called 'period' here, expires.
+ *
  * Workers may be periodic or aperiodic.
  * Periodic workers perform their job every 'period' nanoseconds.
- *          They also perform their job, when a message is sent.
+ *          They also perform their job, when they receive a message.
  *          (This means that periodic workers must be able to perform
  *           their job without a message!)
  * Aperiodic workers by contrast perform their job
  *           only when a message is sent.
+ *
+ * Workers consist of one or more tasks. 'pool' defines how many tasks
+ * this specific worker will have. The tasks of a worker read the queue
+ * concurrently. The application has to make sure that shared resources
+ * are protected appropriately.
+ *
  * 'rsc' is an additional resource that can be used
  * by the user-defined job.
+ *
  * 'errqueue' may be NULL. In that case, errors are announced on
  * stderr. Otherwise, errors are sent to that queue (which shall
- * be initialised and opened beforehand).
- * If an error occurs writing to the error queue,
+ * be initialised and opened beforehand). 
+ * If an error occurs while writing to the error queue,
  * errors (including that error) are announced on stderr.
  * ------------------------------------------------------------------------
  */
@@ -64,19 +74,12 @@ typedef struct {
 } nowdb_worker_t;
 
 /* ------------------------------------------------------------------------
- * Worker states
+ * Job to be performed by a worker
  * ------------------------------------------------------------------------
  */
-#define NOWDB_WRK_STOPPED 0
-#define NOWDB_WRK_RUNNING 1
-
-/* ------------------------------------------------------------------------
- * Job to be done by a worker
- * ------------------------------------------------------------------------
- */
-typedef nowdb_err_t (*nowdb_job_t)(nowdb_worker_t      *wrk,
-                                   uint32_t              id,
-                                   nowdb_wrk_message_t *msg);
+typedef nowdb_err_t (*nowdb_job_t)(nowdb_worker_t      *wrk,  /* the worker */
+                                   uint32_t              id,  /* task id    */
+                                   nowdb_wrk_message_t *msg); /* message    */
 
 /* ------------------------------------------------------------------------
  * Allocate and initialise a worker
@@ -89,6 +92,7 @@ typedef nowdb_err_t (*nowdb_job_t)(nowdb_worker_t      *wrk,
  *       Otherwise, you need to destroy your content and
  *       the user data (cont) itself.                ---
  *       The drain method shall ignore messages with type < 10!
+ *
  * NOTE: The worker is immediately available,
  *       when the function has returned.
  * ------------------------------------------------------------------------

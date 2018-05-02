@@ -10,7 +10,7 @@
 /* ------------------------------------------------------------------------
  * DELAY is used for the queue (which will check for messages
  *       every 'DELAY' nanoseconds, i.e. every 50ms).
- * MINOR is used to checking the states on 'stop' (i.e. every 10ms).
+ * MINOR is used to check the states on 'stop' (i.e. every 10ms).
  * ------------------------------------------------------------------------
  */
 #define DELAY 25000000
@@ -32,8 +32,8 @@ static inline void reportError(nowdb_worker_t *wrk,
 			nowdb_err_release(err);
 			nowdb_err_print(error);
 			nowdb_err_release(error);
-			return;
 		}
+		return;
 	}
 	nowdb_err_print(error);
 	nowdb_err_release(error);
@@ -52,42 +52,51 @@ static void *wrkentry(void *p) {
 
 	job = wrk->job;
 
+	/* lock to obtain and set running */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) {
 		reportError(wrk, err); return NULL;
 	}
 
+	/* this is my id */
 	idx = wrk->running;
+
+	/* this is how many tasks are running */
 	wrk->running++;
 
+	/* unlock worker */
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) {
 		reportError(wrk, err); return NULL;
 	}
+
+	/* now we run forever (or until we receive a stop message */
 	for(;;) {
-		// fprintf(stderr, "%s dequeueing\n", wrk->name);
+		/* dequeue */
 		err = nowdb_queue_dequeue(&wrk->jobqueue,
 		                           wrk->period,   /* wait for   */
 		                           (void**)&msg); /* one period */
 		if (err != NOWDB_OK) {
+
 			/* on timeout: perform the job without message */
 			if (err->errcode == nowdb_err_timeout) {
 				nowdb_err_release(err);
 				err = job(wrk, idx, NULL);
 				if (err != NOWDB_OK) reportError(wrk, err);
-				nowdb_err_release(err);
 			} else {
 				reportError(wrk, err);
-				nowdb_err_release(err);
 			}
 			continue;
 		}
 
-		/* aperiodic event */
+		/* aperiodic event.
+		 * empty message: ignore */
 		if (msg == NULL) continue;
-		if (msg->type == NOWDB_WRK_STOP) {
-			/* free(msg); */ break;
-		}
+
+		/* stop message: end loop */
+		if (msg->type == NOWDB_WRK_STOP) break;
+
+		/* do your job */
 		err = job(wrk, idx, msg);
 		if (err != NOWDB_OK) reportError(wrk, err);
 
@@ -236,12 +245,16 @@ nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
  */
 static inline void destroy(nowdb_worker_t *wrk) {
 	if (wrk == NULL) return;
+
 	nowdb_queue_destroy(&wrk->jobqueue);
 	nowdb_lock_destroy(&wrk->lock);
-	for(uint32_t i=0;i<wrk->pool;i++) {
-		nowdb_task_destroy(wrk->tasks[i]);
+
+	if (wrk->tasks != NULL) {
+		for(uint32_t i=0;i<wrk->pool;i++) {
+			nowdb_task_destroy(wrk->tasks[i]);
+		}
+		free(wrk->tasks); wrk->tasks = NULL;
 	}
-	free(wrk->tasks); wrk->tasks = 0;
 }
 
 /* ------------------------------------------------------------------------
@@ -253,6 +266,9 @@ nowdb_err_t nowdb_worker_do(nowdb_worker_t      *wrk,
 	nowdb_err_t err;
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid,
 	              FALSE, "worker", "worker object is NULL");
+
+	/* should we forbid sending empty messages ? */
+
 	err = nowdb_queue_enqueue(&wrk->jobqueue, msg);
 	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
@@ -269,14 +285,17 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid,
 	              FALSE, "worker", "worker object is NULL");
 
-	/* if the worker is already stopped,
-	 * there is nothing to do */
+	/* lock to check if we are already stopped */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
+	/* if the worker is already stopped,
+	 * there is nothing to do */
 	if (wrk->running == 0) {
 		return nowdb_unlock(&wrk->lock);
 	}
+
+	/* unlock */
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
 
@@ -290,7 +309,7 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	err = waitFor(wrk, 0, tmo);
 	if (err != NOWDB_OK) return err;
 
-	/* wait for thread to terminate */
+	/* wait for threads to terminate */
 	for(uint32_t i=0;i<wrk->pool;i++) {
 		err = nowdb_task_join(wrk->tasks[i]);
 		if (err != NOWDB_OK) return err;

@@ -77,7 +77,8 @@ nowdb_err_t nowdb_compctx_loadDict(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Train dictionary and store it to disk
- * ---------------
+ * ----------------
+ * NOTE: the size of the buffer shall be multiple of IDX_PAGE (8192)
  * NOTE: This function does not lock.
  *       The context must be locked explicitly,
  *                when this function is called!   
@@ -91,7 +92,8 @@ nowdb_err_t nowdb_compctx_trainDict(nowdb_compctx_t *ctx,
 /* ------------------------------------------------------------------------
  * Get a compression context
  * -------------------------
- * fails if there are no new compression contexts available
+ * Fails if there are no new compression contexts available.
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_getCCtx(nowdb_compctx_t *ctx,
@@ -101,8 +103,9 @@ nowdb_err_t nowdb_compctx_getCCtx(nowdb_compctx_t *ctx,
  * Get a decompression context
  * ---------------------------
  * If all preallocated decompression contexts are in use,
- * an new one is allocated.
+ * a new one is allocated.
  * Fails if no new decompression contexts can be allocated.
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_getDCtx(nowdb_compctx_t *ctx,
@@ -110,6 +113,7 @@ nowdb_err_t nowdb_compctx_getDCtx(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Release compression context
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_releaseCCtx(nowdb_compctx_t *ctx,
@@ -117,6 +121,7 @@ nowdb_err_t nowdb_compctx_releaseCCtx(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Release decompression context
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_releaseDCtx(nowdb_compctx_t *ctx,
@@ -124,6 +129,7 @@ nowdb_err_t nowdb_compctx_releaseDCtx(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Get compression dictionary
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_getCDict(nowdb_compctx_t *ctx,
@@ -131,6 +137,7 @@ nowdb_err_t nowdb_compctx_getCDict(nowdb_compctx_t *ctx,
 
 /* ------------------------------------------------------------------------
  * Get decompression dictionary
+ * NOTE: This function locks!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_compctx_getDDict(nowdb_compctx_t *ctx,
