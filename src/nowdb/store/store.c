@@ -1458,7 +1458,6 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 		                                     "list append");
 		goto unlock;
 	}
-
 unlock:
 	err2 = nowdb_unlock_read(&store->lock);
 	if (err2 != NOWDB_OK) {
@@ -1562,6 +1561,15 @@ nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * A reader is free if ...
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t isFree(void *ignore, void *file) {
+	return (!((nowdb_file_t*)file)->used &&
+	         ((nowdb_file_t*)file)->size < NOWDB_FILE_MAXSIZE);
+}
+
+/* ------------------------------------------------------------------------
  * Find reader with capacity to store more
  * ------------------------------------------------------------------------
  */
@@ -1569,52 +1577,36 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
                                       nowdb_file_t  **file) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
-	ts_algo_list_node_t   *runner;
-	ts_algo_list_t      *tmp=NULL;
-	nowdb_file_t  *candidate=NULL;
+	nowdb_file_t  *tmp=NULL;
 
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                 OBJECT, "store object is NULL");
 	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                      OBJECT, "pointer to file object is NULL");
 
-	err = nowdb_lock_read(&store->lock);
+	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
 	/* nothing available */
 	if (store->readers.count == 0) goto unlock;
 
-	/* this is not optimal! */
-	tmp = ts_algo_tree_toList(&store->readers);
-	if (tmp == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                  "readers.toList");
-		goto unlock;
-	}
-	for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
-		candidate = runner->cont;
-		if (candidate->size < NOWDB_FILE_MAXSIZE && !candidate->used) {
-			*file = malloc(sizeof(nowdb_file_t));
-			if (file == NULL) {
-				err = nowdb_err_get(nowdb_err_no_mem,
-				                       FALSE, OBJECT,
-				       "allocating file descriptor");
-				break;
-			}
-			err = nowdb_file_copy(candidate, *file);
-			if (err != NOWDB_OK) {
-				free(*file); *file = NULL; break;
-			}
-			candidate->used = TRUE;
-			break;
-		}
-	}
-
-unlock:
+	/* search the tree */
+	tmp = ts_algo_tree_search(&store->readers, &isFree);
 	if (tmp != NULL) {
-		ts_algo_list_destroy(tmp); free(tmp);
+		*file = malloc(sizeof(nowdb_file_t));
+		if (*file == NULL) {
+			err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+				              "allocating file descriptor");
+			goto unlock;
+		}
+		err = nowdb_file_copy(tmp, *file);
+		if (err != NOWDB_OK) {
+			free(*file); *file = NULL; goto unlock;
+		}
+		tmp->used = TRUE;
 	}
-	err2 = nowdb_unlock_read(&store->lock);
+unlock:
+	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
