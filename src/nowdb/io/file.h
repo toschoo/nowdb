@@ -78,13 +78,14 @@ typedef struct {
 	uint32_t        state; /* current state of the descriptor    */
 	uint32_t          pos; /* current position in the file       */
 	nowdb_bool_t    dirty; /* map was written                    */
+	nowdb_bool_t     used; /* reader is in use for writing       */
 	int                fd; /* os file descriptor                 */
 	char            *mptr; /* pointer for mapping                */
 	char            *bptr; /* pointer for buffered reading       */
 	char             *tmp; /* temporary buffer for decompression */
 	int               off; /* current position within tmp        */
-	void           *cdict; /* compression dictionary             */
-	void           *ddict; /* decompression dictionary           */
+	ZSTD_CDict     *cdict; /* compression dictionary             */
+	ZSTD_DDict     *ddict; /* decompression dictionary           */
 	ZSTD_CCtx       *cctx; /* ZSTD compression context           */
 	ZSTD_DCtx       *dctx; /* ZSTD decompression context         */
 	uint32_t      bufsize; /* map or buf size                    */

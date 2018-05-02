@@ -64,6 +64,7 @@ nowdb_bool_t closeStore(nowdb_store_t *store) {
 nowdb_store_t *xBootstrap(nowdb_path_t       path,
                           nowdb_comprsc_t compare,
                           nowdb_comp_t   compress,
+                          uint32_t        tasknum,
                           uint32_t          block,
                           uint32_t          large) {
 	nowdb_err_t      err;
@@ -91,6 +92,13 @@ nowdb_store_t *xBootstrap(nowdb_path_t       path,
 		nowdb_err_release(err);
 		goto failure;
 	}
+	err = nowdb_store_configWorkers(store, tasknum);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot configure store.Workers\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		goto failure;
+	}
 	if (!createStore(store)) goto failure;
 	if (!openStore(store)) goto failure;
 	return store;
@@ -101,5 +109,6 @@ failure:
 }
 
 nowdb_store_t *bootstrap(nowdb_path_t path) {
-	return xBootstrap(path, NULL, NOWDB_COMP_FLAT, NOWDB_MEGA, NOWDB_MEGA);
+	return xBootstrap(path, NULL, NOWDB_COMP_FLAT, 1,
+	                         NOWDB_MEGA, NOWDB_MEGA);
 }

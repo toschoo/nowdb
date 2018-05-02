@@ -86,6 +86,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->tmpsize  = 0;
 	file->pos      = 0;
 	file->dirty    = FALSE;
+	file->used     = FALSE;
 	file->fd       = -1;
 	file->state    = nowdb_file_state_closed;
 	file->order    = 0;
@@ -281,6 +282,7 @@ nowdb_err_t nowdb_file_update(nowdb_file_t *source, nowdb_file_t *target) {
 	target->blocksize = source->blocksize;
 	target->recordsize = source->recordsize;
 	target->ctrl = source->ctrl;
+	target->used = source->used;
 	target->comp = source->comp;
 	target->encp = source->encp;
 	target->grain = source->grain;

@@ -9,7 +9,8 @@ nowdb_bool_t closeStore(nowdb_store_t *store);
 nowdb_store_t *bootstrap(nowdb_path_t path);
 nowdb_store_t *xBootstrap(nowdb_path_t path,
                           nowdb_comprsc_t compare,
-                          nowdb_comp_t   compress,
-                          uint32_t          block,
-                          uint32_t          large);
+                          nowdb_comp_t    compress,
+                          uint32_t        tasknum,
+                          uint32_t        block,
+                          uint32_t        large);
 
