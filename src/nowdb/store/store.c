@@ -84,7 +84,7 @@ static ts_algo_rc_t update(void *ignore, void *o, void *n) {
  * Tree callbacks for readers: delete (we do not delete files...?)
  * ------------------------------------------------------------------------
  */
-static void delete (void *ignore, void **n) {}
+static void delete(void *ignore, void **n) {}
 
 /* ------------------------------------------------------------------------
  * Tree callbacks for readers: destroy
@@ -751,9 +751,7 @@ static inline nowdb_err_t writeCatalogLine(char *buf, int *off,
  * ------------------------------------------------------------------------
  */
 static inline uint32_t measureCatalogSize(nowdb_store_t *store) {
-	struct stat st;
-	if (stat(store->catalog, &st) != 0) return 0;
-	return st.st_size;
+	return nowdb_path_filesize(store->catalog);
 }
 
 /* ------------------------------------------------------------------------
@@ -923,21 +921,7 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
  */
 static inline nowdb_err_t readCatalogFile(nowdb_store_t *store,
                                            char *buf, int size) {
-	ssize_t x;
-	FILE *cat;
-
-	cat = fopen(store->catalog, "r");
-	if (cat == NULL) return nowdb_err_get(nowdb_err_open, TRUE, OBJECT,
-	                                                   store->catalog);
-	x = fread(buf, 1, size, cat);
-	if (x != size) {
-		fclose(cat);
-		return nowdb_err_get(nowdb_err_read, TRUE, OBJECT,
-		                                  store->catalog);
-	}
-	if (fclose(cat) != 0) return nowdb_err_get(nowdb_err_close,
-	                             TRUE, OBJECT, store->catalog);
-	return NOWDB_OK;
+	return nowdb_readFile(store->catalog, buf, size);
 }
 
 /* ------------------------------------------------------------------------
@@ -1009,55 +993,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
  */
 static inline nowdb_err_t writeCatalogFile(nowdb_store_t *store,
                                             char *buf, int size) {
-	nowdb_err_t  err;
-	nowdb_path_t   p=NULL;
-	nowdb_bool_t bkp;
-	ssize_t x;
-	FILE *cat;
-
-	bkp = nowdb_path_exists(store->catalog, NOWDB_DIR_TYPE_ANY);
-
-	if (bkp) {
-		p = nowdb_path_append(store->path, "catalog.bkp");
-		if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
-		               FALSE, OBJECT, "allocating backup path");
-		err = nowdb_path_move(store->catalog, p);
-		if (err != NOWDB_OK) {
-			free(p); return err;
-		}
-	}
-	cat = fopen(store->catalog, "w");
-	if (cat == NULL) {
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_open, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	x = fwrite(buf, 1, size, cat);
-	if (x != size) {
-		fprintf(stderr, "%d - %lu\n", size, x);
-		fclose(cat);
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	if (fclose(cat) != 0) {
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	if (bkp) {
-		nowdb_path_remove(p); free(p);
-	}
-	return NOWDB_OK;
+	return nowdb_writeFileWithBkp(store->path, store->catalog, buf, size);
 }
 
 /* ------------------------------------------------------------------------
@@ -1445,8 +1381,10 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	if (store->readers.count > 0) {
 		ts_algo_list_t tmp;
 		nowdb_file_t   pattern;
+
 		pattern.oldest = start;
 		pattern.newest = end;
+		ts_algo_list_init(&tmp);
 		if (ts_algo_tree_filter(&store->readers,
 		              &tmp, &pattern, &inPeriod) != TS_ALGO_OK)
 		{

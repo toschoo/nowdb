@@ -70,6 +70,16 @@ nowdb_path_t nowdb_path_filename(nowdb_path_t path) {
 }
 
 /* ------------------------------------------------------------------------
+ * filesize
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_path_filesize(nowdb_path_t path) {
+	struct stat st;
+	if (stat(path, &st) != 0) return 0;
+	return (uint32_t)st.st_size;
+}
+
+/* ------------------------------------------------------------------------
  * object represented by path exists
  * ------------------------------------------------------------------------
  */
@@ -77,8 +87,8 @@ nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
                               nowdb_dir_type_t t) {
 	struct stat st;
 	if (stat(path, &st) != 0) return FALSE;
-	if (t & NOWDB_DIR_TYPE_DIR) return S_ISDIR(st.st_mode);
-	if (t & NOWDB_DIR_TYPE_FILE) return S_ISREG(st.st_mode);
+	if ((t & NOWDB_DIR_TYPE_DIR) && S_ISDIR(st.st_mode)) return TRUE;
+	if ((t & NOWDB_DIR_TYPE_FILE) && S_ISREG(st.st_mode)) return TRUE;
 	if (t == NOWDB_DIR_TYPE_ANY) {
 		if (S_ISLNK(st.st_mode)) return TRUE;
 		if (S_ISSOCK(st.st_mode)) return TRUE;
@@ -197,3 +207,86 @@ nowdb_err_t nowdb_dir_content(nowdb_path_t path,
 	closedir(d);
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * Write file with backup
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_writeFileWithBkp(nowdb_path_t base,
+                                   nowdb_path_t file,
+                            char *buf, uint32_t size) {
+	nowdb_err_t  err;
+	nowdb_path_t p=NULL;
+	// nowdb_bool_t bkp;
+	int bkp;
+	ssize_t x;
+	FILE *f;
+
+	bkp = nowdb_path_exists(file, NOWDB_DIR_TYPE_ANY);
+	if (bkp) {
+		p = nowdb_path_append(base, ".bkp");
+		if (p == NULL) {
+			err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "allocating backup path");
+			return err;
+		}
+		err = nowdb_path_move(file, p);
+		if (err != NOWDB_OK) {
+			free(p); return err;
+		}
+	}
+	f = fopen(file, "w");
+	if (f == NULL) {
+		if (bkp) {
+			NOWDB_IGNORE(nowdb_path_move(p, file));
+			free(p);
+		}
+		return nowdb_err_get(nowdb_err_open, TRUE, OBJECT, file);
+	}
+	x = fwrite(buf, 1, size, f);
+	if (x != size) {
+		fprintf(stderr, "%d - %lu\n", size, x);
+		fclose(f);
+		if (bkp) {
+			NOWDB_IGNORE(nowdb_path_move(p, file));
+			free(p);
+		}
+		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT, file);
+	}
+	if (fclose(f) != 0) {
+		if (bkp) {
+			NOWDB_IGNORE(nowdb_path_move(p, file));
+			free(p);
+		}
+		return nowdb_err_get(nowdb_err_close, TRUE, OBJECT, file);
+	}
+	if (bkp) {
+		nowdb_path_remove(p); free(p);
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Read file 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_readFile(nowdb_path_t file,
+                   char *buf, uint32_t size)
+{
+	ssize_t x;
+	FILE   *f;
+
+	f = fopen(file, "rb");
+	if (f == NULL) return nowdb_err_get(nowdb_err_open,
+	                               TRUE, OBJECT, file);
+	x = fread(buf, 1, size, f);
+	if (x != size) {
+		fclose(f);
+		return nowdb_err_get(nowdb_err_read,
+		                TRUE, OBJECT, file);
+	}
+	if (fclose(f) != 0) return nowdb_err_get(nowdb_err_close,
+	                                     TRUE, OBJECT, file);
+	return NOWDB_OK;
+}
+

@@ -72,6 +72,12 @@ nowdb_bool_t nowdb_path_exists(nowdb_path_t  path,
                                nowdb_dir_type_t t);
 
 /* ------------------------------------------------------------------------
+ * File size of path
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_path_filesize(nowdb_path_t path);
+
+/* ------------------------------------------------------------------------
  * Create directory
  * ------------------------------------------------------------------------
  */
@@ -114,6 +120,21 @@ nowdb_err_t nowdb_dir_content(nowdb_path_t path,
  * ------------------------------------------------------------------------
  */
 void nowdb_dir_content_destroy(ts_algo_list_t *list);
+
+/* ------------------------------------------------------------------------
+ * Write file with backup
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_writeFileWithBkp(nowdb_path_t base,
+                                   nowdb_path_t file,
+                           char *buf, uint32_t size);
+
+/* ------------------------------------------------------------------------
+ * Read file 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_readFile(nowdb_path_t file,
+                   char *buf, uint32_t size);
 
 #endif
 

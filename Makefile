@@ -45,7 +45,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
-      $(SRC)/store/storewrk.o
+      $(SRC)/store/storewrk.o \
+      $(SRC)/scope/scope.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
@@ -60,7 +61,8 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
-      $(SRC)/store/storewrk.h
+      $(SRC)/store/storewrk.h \
+      $(SRC)/scope/scope.h
 
 default:	lib 
 
@@ -76,17 +78,17 @@ bench: bin/readplainbench  \
        bin/writestorebench \
        bin/qstress
 
-smoke:	compileme               \
-	$(SMK)/errsmoke         \
-	$(SMK)/timesmoke        \
-	$(SMK)/pathsmoke        \
-	$(SMK)/tasksmoke        \
-	$(SMK)/queuesmoke       \
-	$(SMK)/workersmoke      \
-	$(SMK)/filesmoke        \
-	$(SMK)/storesmoke       \
-	$(SMK)/insertstoresmoke \
-	$(SMK)/insertandsortstoresmoke
+smoke:	$(SMK)/errsmoke                \
+	$(SMK)/timesmoke               \
+	$(SMK)/pathsmoke               \
+	$(SMK)/tasksmoke               \
+	$(SMK)/queuesmoke              \
+	$(SMK)/workersmoke             \
+	$(SMK)/filesmoke               \
+	$(SMK)/storesmoke              \
+	$(SMK)/insertstoresmoke        \
+	$(SMK)/insertandsortstoresmoke \
+	$(SMK)/scopesmoke
 
 tests: smoke
 
@@ -196,6 +198,11 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			                         $(COM)/stores.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
+
+$(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
 		
 		
 # BENCHMARKS
@@ -272,7 +279,11 @@ clean:
 	rm -f $(RSC)/*.bin
 	rm -f $(RSC)/*.binz
 	rm -rf $(RSC)/teststore
+	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
+	rm -rf $(RSC)/testscope
+	rm -rf $(RSC)/scope?
+	rm -rf $(RSC)/scope??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -283,6 +294,7 @@ clean:
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/insertandsortstoresmoke
+	rm -f $(SMK)/scopesmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile
