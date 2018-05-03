@@ -1409,6 +1409,19 @@ static inline nowdb_err_t setDecomp(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * To be with the period means
+ * ------------------------------------------------------------------------
+ */
+static nowdb_bool_t inPeriod(void *rsc,
+                       const void *pattern,
+                       const void *node) {
+	return (((nowdb_file_t*)node)->oldest <=
+	        ((nowdb_file_t*)pattern)->newest &&
+	        ((nowdb_file_t*)node)->newest >=
+	        ((nowdb_file_t*)pattern)->oldest);
+}
+
+/* ------------------------------------------------------------------------
  * Get all readers for period start - end
  * ------------------------------------------------------------------------
  */
@@ -1416,7 +1429,6 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
                                  ts_algo_list_t *list,
                                  nowdb_time_t   start,
                                  nowdb_time_t    end) {
-	ts_algo_list_t      *tmp;
 	nowdb_file_t       *file;
 	nowdb_err_t  err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
@@ -1431,14 +1443,19 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	
 	/* readers */
 	if (store->readers.count > 0) {
-		tmp = ts_algo_tree_toList(&store->readers);
-		if (tmp == NULL) {
+		ts_algo_list_t tmp;
+		nowdb_file_t   pattern;
+		pattern.oldest = start;
+		pattern.newest = end;
+		if (ts_algo_tree_filter(&store->readers,
+		              &tmp, &pattern, &inPeriod) != TS_ALGO_OK)
+		{
 			err = nowdb_err_get(nowdb_err_no_mem,
 			     FALSE, OBJECT, "readers toList");
 			goto unlock;
 		}
-		err = copyFileList(tmp, list, start, end);
-		ts_algo_list_destroy(tmp); free(tmp);
+		err = copyFileList(&tmp, list, start, end);
+		ts_algo_list_destroy(&tmp);
 		if (err != NOWDB_OK) goto unlock;
 	}
 	
@@ -1564,7 +1581,9 @@ nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
  * A reader is free if ...
  * ------------------------------------------------------------------------
  */
-static ts_algo_bool_t isFree(void *ignore, void *file) {
+static ts_algo_bool_t isFree(void *rsc,
+                       const void *pattern,
+                       const void *file) {
 	return (!((nowdb_file_t*)file)->used &&
 	         ((nowdb_file_t*)file)->size < NOWDB_FILE_MAXSIZE);
 }
@@ -1591,7 +1610,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 	if (store->readers.count == 0) goto unlock;
 
 	/* search the tree */
-	tmp = ts_algo_tree_search(&store->readers, &isFree);
+	tmp = ts_algo_tree_search(&store->readers, NULL, &isFree);
 	if (tmp != NULL) {
 		*file = malloc(sizeof(nowdb_file_t));
 		if (*file == NULL) {
