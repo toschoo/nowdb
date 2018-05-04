@@ -64,43 +64,43 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 
 	if (options & NOWDB_CONFIG_SIZE_TINY) {
 
-		cfg->allocsize = 1;
-		cfg->largesize = 1;
+		cfg->allocsize = NOWDB_MEGA;
+		cfg->largesize = NOWDB_MEGA;
 		cfg->sorters   = 1;
 		cfg->comp      = NOWDB_COMP_FLAT;
 
 	} else if (options & NOWDB_CONFIG_SIZE_SMALL) {
 
-		cfg->allocsize = 1;
-		cfg->largesize = 8;
+		cfg->allocsize = NOWDB_MEGA;
+		cfg->largesize = 8 * NOWDB_MEGA;
 		cfg->sorters   = 1;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_NORMAL) {
 
-		cfg->allocsize = 8;
-		cfg->largesize = 64;
+		cfg->allocsize = 8 * NOWDB_MEGA;
+		cfg->largesize = 64 * NOWDB_MEGA;
 		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_BIG) {
 
-		cfg->allocsize = 8;
-		cfg->largesize = 128;
+		cfg->allocsize = 8 * NOWDB_MEGA;
+		cfg->largesize = 128 * NOWDB_MEGA;
 		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_LARGE) {
 
-		cfg->allocsize = 8;
-		cfg->largesize = 256;
+		cfg->allocsize = 8 * NOWDB_MEGA;
+		cfg->largesize = 256 * NOWDB_MEGA;
 		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_HUGE) {
 
-		cfg->allocsize = 8;
-		cfg->largesize = 1024;
+		cfg->allocsize = 8 * NOWDB_MEGA;
+		cfg->largesize = 1024 * NOWDB_MEGA;
 		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 	}
@@ -305,10 +305,6 @@ static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
 	uint32_t nCtx   = 0;
 
 	nCtx += scope->contexts.count;
-
-	fprintf(stderr, "computing catalog size with %d = %u\n",
-	      scope->contexts.count, once + nCtx * perline + 1);
-
 	return once + nCtx * perline + 1;
 }
 
@@ -418,8 +414,8 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	err = contexterr(*ctx,
 	      nowdb_store_init(&(*ctx)->store, p, ver,
 	                         sizeof(nowdb_edge_t),
-	                  NOWDB_MEGA * cfg->allocsize,
-	                 NOWDB_MEGA * cfg->largesize));
+	                               cfg->allocsize,
+	                              cfg->largesize));
 	free(p);
 	if (err != NOWDB_OK) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -508,8 +504,6 @@ static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
 	if (i > 255) return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 	                                                "no context name");
 	/* fprintf(stderr, "opening %s\n", buf+*off); */
-
-	fprintf(stderr, "config %s: %u / %u\n", buf+*off, cfg.allocsize, cfg.largesize);
 
 	err = initContext(scope, buf+*off, &cfg, ver, &ctx);
 	if (err != NOWDB_OK) return err;
