@@ -46,7 +46,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 }
 */
 
-nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint32_t count) {
+nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 	nowdb_err_t err;
 	nowdb_edge_t e;
 
@@ -81,14 +81,14 @@ nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint32_t count) {
 	return TRUE;
 }
 
-uint32_t global_count = 1000;
+uint64_t global_count = 1000;
 uint32_t global_report = 1;
 char *global_context = NULL;
 
 int parsecmd(int argc, char **argv) {
 	int err = 0;
 
-	global_count = (uint32_t)ts_algo_args_findUint(
+	global_count = ts_algo_args_findUint(
 	            argc, argv, 2, "count", 1000, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
@@ -178,11 +178,11 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 		options = NOWDB_CONFIG_SIZE_NORMAL |
 		          NOWDB_CONFIG_INSERT_CONSTANT;
 
-	} else if (global_count < 10000000000) {
+	} else if (global_count < 10000000000lu) {
 		options = NOWDB_CONFIG_SIZE_BIG |
 		          NOWDB_CONFIG_INSERT_STRESS;
 
-	} else if (global_count < 100000000000) {
+	} else if (global_count < 100000000000lu) {
 		options = NOWDB_CONFIG_SIZE_LARGE |
 		          NOWDB_CONFIG_INSERT_STRESS;
 	} else {
@@ -247,7 +247,7 @@ int main(int argc, char **argv) {
 		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
-	fprintf(stderr, "count: %u\n", global_count);
+	fprintf(stderr, "count: %lu\n", global_count);
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "cannot init library\n");

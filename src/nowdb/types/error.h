@@ -27,7 +27,7 @@ typedef uint32_t nowdb_errcode_t;
 typedef struct nowdb_errdesc_st {
 	nowdb_errcode_t        errcode; /* nowdb error code */
 	int32_t                  oserr; /* OS error code    */
-	char                 object[8]; /* nowdb object     */
+	char                object[32]; /* nowdb object     */
 	char                     *info; /* additional info  */
 	struct nowdb_errdesc_st *cause; /* previous error   */
 } nowdb_errdesc_t;

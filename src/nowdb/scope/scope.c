@@ -106,7 +106,7 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 	}
 	if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
 
-		if (cfg->sorters < 2) cfg->sorters = 1;
+		if (cfg->sorters < 2) cfg->sorters = 2;
 
 	} else if (options & NOWDB_CONFIG_INSERT_STRESS) {
 
@@ -116,6 +116,7 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 
 		cfg->sorters += 2;
 		cfg->allocsize *= 2;
+		cfg->largesize = 1024;
 	}
 }
 
@@ -305,6 +306,9 @@ static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
 
 	nCtx += scope->contexts.count;
 
+	fprintf(stderr, "computing catalog size with %d = %u\n",
+	      scope->contexts.count, once + nCtx * perline + 1);
+
 	return once + nCtx * perline + 1;
 }
 
@@ -315,7 +319,6 @@ static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
 static inline void writeCatalogLine(nowdb_context_t *ctx,
                                 char *buf, uint32_t *off) {
 
-	int dummy = 0;
 	uint32_t s = strlen(ctx->name)+1;
 
 	/*
@@ -326,7 +329,7 @@ static inline void writeCatalogLine(nowdb_context_t *ctx,
 	memcpy(buf+*off, &ctx->store.largesize, 4); *off += 4;
 	memcpy(buf+*off, &ctx->store.tasknum, 4); *off += 4;
 	memcpy(buf+*off, &ctx->store.comp, 4); *off += 4;
-	memcpy(buf+*off, &dummy, 4); *off += 4;
+	memset(buf+*off, 0, 4); *off += 4;
 	memcpy(buf+*off, ctx->name, s); *off += s;
 }
 
@@ -407,7 +410,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		                          "allocating context path");
 	}
 	p = nowdb_path_append(tmp, name); free(tmp);
-	if (tmp == NULL) {
+	if (p == NULL) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                     "allocating context/name path");
@@ -424,20 +427,24 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	}
 	err = nowdb_store_configSort(&(*ctx)->store, &nowdb_store_edge_compare);
 	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx);
 		return err;
 	}
 	err = nowdb_store_configCompression(&(*ctx)->store, cfg->comp);
 	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
 	err = nowdb_store_configWorkers(&(*ctx)->store, cfg->sorters);
 	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
 	if (ts_algo_tree_insert(&scope->contexts, *ctx) != TS_ALGO_OK) {
+		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                      "tree.insert");
@@ -486,6 +493,9 @@ static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
 	nowdb_context_t   *ctx;
 	nowdb_ctx_config_t cfg;
 	uint32_t i;
+
+	cfg.sort = 1;
+	cfg.encp = NOWDB_ENCP_NONE;
 
 	memcpy(&cfg.allocsize, buf+*off, 4); *off += 4;
 	memcpy(&cfg.largesize, buf+*off, 4); *off += 4;

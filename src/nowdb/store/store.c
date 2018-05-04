@@ -523,7 +523,7 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 	
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
-	if (err != NOWDB_OK) {
+	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
 	return err;
