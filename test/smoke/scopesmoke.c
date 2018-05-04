@@ -63,6 +63,8 @@ nowdb_scope_t *createScope(nowdb_path_t path) {
 	scope = mkScope(path);
 	if (scope == NULL) return NULL;
 
+	fprintf(stderr, "creating %s\n", path);
+
 	err = nowdb_scope_create(scope);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -75,6 +77,7 @@ nowdb_scope_t *createScope(nowdb_path_t path) {
 
 int dropScope(nowdb_scope_t *scope) {
 	nowdb_err_t err;
+	fprintf(stderr, "dropping %s\n", scope->path);
 	err = nowdb_scope_drop(scope);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -91,15 +94,20 @@ int testCreateDrop(nowdb_path_t path) {
 	scope = mkScope(path);
 	if (scope == NULL) return 0;
 
+	fprintf(stderr, "creating %s\n", path);
+
 	err = nowdb_scope_create(scope);
 	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create scope\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		nowdb_scope_destroy(scope); free(scope);
 		return 0;
 	}
+	fprintf(stderr, "dropping %s\n", path);
 	err = nowdb_scope_drop(scope);
 	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot drop scope\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		nowdb_scope_destroy(scope); free(scope);
@@ -112,6 +120,7 @@ int testCreateDrop(nowdb_path_t path) {
 int testOpenClose(nowdb_scope_t *scope) {
 	nowdb_err_t err;
 
+	fprintf(stderr, "opening %s\n", scope->path);
 	err = nowdb_scope_open(scope);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "could not open scope\n");
@@ -119,6 +128,7 @@ int testOpenClose(nowdb_scope_t *scope) {
 		nowdb_err_release(err);
 		return 0;
 	}
+	fprintf(stderr, "closing %s\n", scope->path);
 	err = nowdb_scope_close(scope);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "could not close scope\n");
@@ -126,6 +136,72 @@ int testOpenClose(nowdb_scope_t *scope) {
 		nowdb_err_release(err);
 		return 0;
 	}
+	return 1;
+}
+
+int openScope(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "opening %s\n", scope->path);
+	err = nowdb_scope_open(scope);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+	return 1;
+}
+
+int closeScope(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "closing %s\n", scope->path);
+	err = nowdb_scope_close(scope);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+	return 1;
+}
+
+int createContext(nowdb_scope_t *scope, char *name) {
+	nowdb_err_t err;
+	nowdb_ctx_config_t cfg;
+
+	cfg.allocsize = 1;
+	cfg.largesize = 1;
+	cfg.sorters   = 1;
+	cfg.sort      = 1;
+	cfg.comp      = NOWDB_COMP_ZSTD;
+	cfg.encp      = NOWDB_ENCP_NONE;
+
+	fprintf(stderr, "creating context %s\n", name);
+	err = nowdb_scope_createContext(scope, name, &cfg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "create context failed\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+	return 1;
+}
+
+int dropContext(nowdb_scope_t *scope, char *name) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "dropping context %s\n", name);
+	err = nowdb_scope_dropContext(scope, name);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "drop context failed\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+	return 1;
+}
+
+int testCreateDropContext(nowdb_scope_t *scope) {
+	if (!openScope(scope)) return 0;
+	if (!createContext(scope, "testctx")) return 0;
+	if (!dropContext(scope, "testctx")) return 0;
+	if (!closeScope(scope)) return 0;
 	return 1;
 }
 
@@ -150,8 +226,9 @@ int main() {
 		fprintf(stderr, "mkScope failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+
 	NOWDB_IGNORE(nowdb_scope_drop(scope));
-	nowdb_scope_destroy(scope); free(scope);
+	nowdb_scope_destroy(scope); free(scope); scope = NULL;
 
 	if (!testCreateDrop("rsc/scope1")) {
 		fprintf(stderr, "testCreateDrop failed\n");
@@ -166,6 +243,72 @@ int main() {
 		fprintf(stderr, "testOpenClose failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (!testCreateDropContext(scope)) {
+		fprintf(stderr, "testCreateDropContext failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!openScope(scope)) {
+		fprintf(stderr, "cannot open scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "CTX_ONE")) {
+		fprintf(stderr, "cannot create context one\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "CTX_TWO")) {
+		fprintf(stderr, "cannot create context two\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!closeScope(scope)) {
+		fprintf(stderr, "cannot close scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!openScope(scope)) {
+		fprintf(stderr, "cannot open scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "CTX_FOUR")) {
+		fprintf(stderr, "cannot create context four\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "CTX_THREE")) {
+		fprintf(stderr, "cannot create context three\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!dropContext(scope, "CTX_FOUR")) {
+		fprintf(stderr, "cannot drop context\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!closeScope(scope)) {
+		fprintf(stderr, "cannot close scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!openScope(scope)) {
+		fprintf(stderr, "cannot open scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (createContext(scope, "CTX_TWO")) {
+		fprintf(stderr, "duplicated context two\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "CTX_FIVE")) {
+		fprintf(stderr, "cannot create context five\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!closeScope(scope)) {
+		fprintf(stderr, "cannot close scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!openScope(scope)) {
+		fprintf(stderr, "cannot open scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (scope->contexts.count != 4) {
+		fprintf(stderr, "there should be 4 contexts, ");
+		fprintf(stderr, "but there are %d\n",
+		                   scope->contexts.count);
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 
 cleanup:
 	if (scope != NULL) {
@@ -175,6 +318,7 @@ cleanup:
 			rc = EXIT_FAILURE;
 		}
 		*/
+		NOWDB_IGNORE(nowdb_scope_close(scope));
 		nowdb_scope_destroy(scope); free(scope);
 	}
 	nowdb_err_destroy();

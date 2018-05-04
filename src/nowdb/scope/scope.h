@@ -60,12 +60,16 @@ typedef struct {
 	nowdb_encp_t  encp;
 } nowdb_ctx_config_t;
 
+#define NOWDB_SCOPE_CLOSED 0
+#define NOWDB_SCOPE_OPEN 1
+
 /* -----------------------------------------------------------------------
  * Scope
  * -----------------------------------------------------------------------
  */
 typedef struct {
 	nowdb_rwlock_t lock;     /* read/write lock */
+	uint32_t       state;    /* open or closed  */
 	nowdb_path_t   path;     /* base path       */
 	nowdb_path_t   catalog;  /* catalog path    */
 	nowdb_version_t ver;     /* db version      */
