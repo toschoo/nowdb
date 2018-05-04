@@ -60,8 +60,34 @@ typedef struct {
 	nowdb_encp_t  encp;
 } nowdb_ctx_config_t;
 
-#define NOWDB_SCOPE_CLOSED 0
-#define NOWDB_SCOPE_OPEN 1
+/* -----------------------------------------------------------------------
+ * Predefine configurations
+ * ------------------------
+ * as combinations of SIZE and INSERT values.
+ * -----------------------------------------------------------------------
+ */
+void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
+                      nowdb_bitmap64_t options);
+
+/* -----------------------------------------------------------------------
+ * Context SIZE 
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_CONFIG_SIZE_TINY    1
+#define NOWDB_CONFIG_SIZE_SMALL   2
+#define NOWDB_CONFIG_SIZE_NORMAL  4
+#define NOWDB_CONFIG_SIZE_BIG     8
+#define NOWDB_CONFIG_SIZE_LARGE  16
+#define NOWDB_CONFIG_SIZE_HUGE   32
+
+/* -----------------------------------------------------------------------
+ * Context INSERT pattern
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_CONFIG_INSERT_MODERATE  128
+#define NOWDB_CONFIG_INSERT_CONSTANT  256
+#define NOWDB_CONFIG_INSERT_STRESS    512 
+#define NOWDB_CONFIG_INSERT_INSANE   1024 
 
 /* -----------------------------------------------------------------------
  * Scope
@@ -79,6 +105,13 @@ typedef struct {
 	                         /* model           */
 	                         /* strings         */
 } nowdb_scope_t;
+
+/* -----------------------------------------------------------------------
+ * Scope state (open/closed)
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_SCOPE_CLOSED 0
+#define NOWDB_SCOPE_OPEN 1
 
 /* -----------------------------------------------------------------------
  * Allocate and initialise a new scope
