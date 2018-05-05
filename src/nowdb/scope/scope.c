@@ -10,117 +10,6 @@
 static char *OBJECT = "scope";
 
 /* ------------------------------------------------------------------------
- * Wrap error into 'context' error
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t contexterr(nowdb_context_t *ctx,
-                                     nowdb_err_t      err) {
-	if (err == NOWDB_OK) return NOWDB_OK;
-	return (nowdb_err_cascade(
-	        nowdb_err_get(nowdb_err_context,
-	        FALSE, "ctx", ctx->name), err));
-}
-
-/* ------------------------------------------------------------------------
- * Destroy context
- * ------------------------------------------------------------------------
- */
-void nowdb_context_destroy(nowdb_context_t *ctx) {
-	if (ctx == NULL) return;
-	if (ctx->name != NULL) {
-		free(ctx->name); ctx->name = NULL;
-	}
-	nowdb_store_destroy(&ctx->store);
-}
-
-/* ------------------------------------------------------------------------
- * Insert one record
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_context_insert(nowdb_context_t *ctx,
-                                 void           *data) {
-	return contexterr(ctx, nowdb_store_insert(&ctx->store, data));
-}
-
-/* ------------------------------------------------------------------------
- * Insert n records
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_context_insertBulk(nowdb_context_t *ctx,
-                                     void           *data,
-                                     uint32_t      count);
-
-/* -----------------------------------------------------------------------
- * Predefine configurations
- * -----------------------------------------------------------------------
- */
-void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
-                      nowdb_bitmap64_t options) {
-
-	if (cfg == NULL) return;
-
-	cfg->sort = 1;
-	cfg->encp = NOWDB_ENCP_NONE;
-
-	if (options & NOWDB_CONFIG_SIZE_TINY) {
-
-		cfg->allocsize = NOWDB_MEGA;
-		cfg->largesize = NOWDB_MEGA;
-		cfg->sorters   = 1;
-		cfg->comp      = NOWDB_COMP_FLAT;
-
-	} else if (options & NOWDB_CONFIG_SIZE_SMALL) {
-
-		cfg->allocsize = NOWDB_MEGA;
-		cfg->largesize = 8 * NOWDB_MEGA;
-		cfg->sorters   = 1;
-		cfg->comp      = NOWDB_COMP_ZSTD;
-
-	} else if (options & NOWDB_CONFIG_SIZE_NORMAL) {
-
-		cfg->allocsize = 8 * NOWDB_MEGA;
-		cfg->largesize = 64 * NOWDB_MEGA;
-		cfg->sorters   = 2;
-		cfg->comp      = NOWDB_COMP_ZSTD;
-
-	} else if (options & NOWDB_CONFIG_SIZE_BIG) {
-
-		cfg->allocsize = 8 * NOWDB_MEGA;
-		cfg->largesize = 128 * NOWDB_MEGA;
-		cfg->sorters   = 2;
-		cfg->comp      = NOWDB_COMP_ZSTD;
-
-	} else if (options & NOWDB_CONFIG_SIZE_LARGE) {
-
-		cfg->allocsize = 8 * NOWDB_MEGA;
-		cfg->largesize = 256 * NOWDB_MEGA;
-		cfg->sorters   = 2;
-		cfg->comp      = NOWDB_COMP_ZSTD;
-
-	} else if (options & NOWDB_CONFIG_SIZE_HUGE) {
-
-		cfg->allocsize = 8 * NOWDB_MEGA;
-		cfg->largesize = 1024 * NOWDB_MEGA;
-		cfg->sorters   = 2;
-		cfg->comp      = NOWDB_COMP_ZSTD;
-	}
-	if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
-
-		if (cfg->sorters < 2) cfg->sorters = 2;
-
-	} else if (options & NOWDB_CONFIG_INSERT_STRESS) {
-
-		cfg->sorters += 1;
-
-	} else if (options & NOWDB_CONFIG_INSERT_INSANE) {
-
-		cfg->sorters += 2;
-		cfg->allocsize *= 2;
-		cfg->largesize = 1024;
-	}
-}
-
-/* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare
  * ------------------------------------------------------------------------
  */
@@ -411,7 +300,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                     "allocating context/name path");
 	}
-	err = contexterr(*ctx,
+	err = nowdb_context_err(*ctx,
 	      nowdb_store_init(&(*ctx)->store, p, ver,
 	                         sizeof(nowdb_edge_t),
 	                               cfg->allocsize,
@@ -508,7 +397,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
 	err = initContext(scope, buf+*off, &cfg, ver, &ctx);
 	if (err != NOWDB_OK) return err;
 
-	err = contexterr(ctx, nowdb_store_open(&ctx->store));
+	err = nowdb_context_err(ctx, nowdb_store_open(&ctx->store));
 	if (err != NOWDB_OK) return err;
 
 	*off += i + 1;
@@ -578,7 +467,7 @@ static inline nowdb_err_t dropAllContexts(nowdb_scope_t *scope) {
 
 		NOWDB_IGNORE(nowdb_store_close(&ctx->store));
 
-		err = contexterr(ctx, nowdb_store_drop(&ctx->store));
+		err = nowdb_context_err(ctx, nowdb_store_drop(&ctx->store));
 		if (err != NOWDB_OK) {
 			ts_algo_list_destroy(tmp); free(tmp);
 			return err;
@@ -609,7 +498,7 @@ static inline nowdb_err_t closeAllContexts(nowdb_scope_t *scope) {
 
 		/* fprintf(stderr, "closing %s\n", ctx->name); */
 
-		err = contexterr(ctx, nowdb_store_close(&ctx->store));
+		err = nowdb_context_err(ctx, nowdb_store_close(&ctx->store));
 		if (err != NOWDB_OK) {
 			ts_algo_list_destroy(tmp); free(tmp);
 			return err;
@@ -884,12 +773,12 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 	err = initContext(scope, name, cfg, scope->ver, &ctx);
 	if (err != NOWDB_OK) goto unlock;
 
-	err = contexterr(ctx, nowdb_store_create(&ctx->store));
+	err = nowdb_context_err(ctx, nowdb_store_create(&ctx->store));
 	if (err != NOWDB_OK) {
 		ts_algo_tree_delete(&scope->contexts, ctx);
 		goto unlock;
 	}
-	err = contexterr(ctx, nowdb_store_open(&ctx->store));
+	err = nowdb_context_err(ctx, nowdb_store_open(&ctx->store));
 	if (err != NOWDB_OK) goto unlock;
 
 	err = storeCatalog(scope);

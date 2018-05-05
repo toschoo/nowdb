@@ -46,6 +46,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/storewrk.o \
+      $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o
 
 DEP = $(SRC)/types/types.h    \
@@ -62,6 +63,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/storewrk.h \
+      $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h
 
 default:	lib 
