@@ -176,7 +176,8 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 
 	} else if (global_count < 100000000) {
 		options = NOWDB_CONFIG_SIZE_NORMAL |
-		          NOWDB_CONFIG_INSERT_CONSTANT;
+		          NOWDB_CONFIG_INSERT_STRESS;
+		fprintf(stderr, "%lu\n", options);
 
 	} else if (global_count < 10000000000lu) {
 		options = NOWDB_CONFIG_SIZE_BIG |

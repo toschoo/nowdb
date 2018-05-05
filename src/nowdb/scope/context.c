@@ -112,7 +112,7 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 	} else if (options & NOWDB_CONFIG_INSERT_INSANE) {
 
 		cfg->sorters += 2;
-		cfg->allocsize *= 2;
+		if (cfg->allocsize < 8) cfg->allocsize = 8;
 		cfg->largesize = 1024;
 	}
 }
