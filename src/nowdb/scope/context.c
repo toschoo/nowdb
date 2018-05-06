@@ -115,5 +115,10 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 		if (cfg->allocsize < 8) cfg->allocsize = 8;
 		cfg->largesize = 1024;
 	}
+	if (options & NOWDB_CONFIG_DISK_HDD) {
+		if (cfg->largesize < 128 * NOWDB_MEGA) {
+			cfg->largesize = 128 * NOWDB_MEGA;
+		}
+	}
 }
 

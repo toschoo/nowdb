@@ -88,9 +88,16 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
  * Context INSERT pattern
  * -----------------------------------------------------------------------
  */
-#define NOWDB_CONFIG_INSERT_MODERATE  128
-#define NOWDB_CONFIG_INSERT_CONSTANT  256
-#define NOWDB_CONFIG_INSERT_STRESS    512 
-#define NOWDB_CONFIG_INSERT_INSANE   1024 
+#define NOWDB_CONFIG_INSERT_CONSTANT 128
+#define NOWDB_CONFIG_INSERT_STRESS   256 
+#define NOWDB_CONFIG_INSERT_INSANE   512  
+
+/* -----------------------------------------------------------------------
+ * Disk Type
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_CONFIG_DISK_SSD  1024
+#define NOWDB_CONFIG_DISK_HDD  2048
+#define NOWDB_CONFIG_DISK_RAID 4096
 
 #endif
