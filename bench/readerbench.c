@@ -191,29 +191,50 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "not enough memory\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+
+	overhead = calloc(global_iter, sizeof(uint64_t));
+	if (overhead == NULL) {
+		fprintf(stderr, "not enough memory\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	for(int i=0; i<global_iter; i++) {
 		if (!performRead(ctx, &res)) {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
-		overall[i] = res.overall;
+		overall[i]  = res.overall;
+		overhead[i] = res.overhead;
 		as += res.overall;
 		hs += res.overhead;
 		if (amx < res.overall) amx = res.overall;
 		if (amn > res.overall) amn = res.overall;
+		if (hmx < res.overhead) hmx = res.overhead;
+		if (hmn > res.overhead) hmn = res.overhead;
 	}
 	sort(overall, global_iter);
 
 	fprintf(stdout, "effectively read: %lu\n", res.count);
 
-	fprintf(stdout, "overall average : %lu\n", as/global_iter);
-	fprintf(stdout, "overall median  : %lu\n", median(overall, global_iter));
-	fprintf(stdout, "overall max     : %lu\n", amx);
-	fprintf(stdout, "overall min     : %lu\n", amn);
-	fprintf(stdout, "overall 75%%     : %lu\n", percentile(overall, global_iter, 75));
-	fprintf(stdout, "overall 90%%     : %lu\n", percentile(overall, global_iter, 90));
-	fprintf(stdout, "overall 95%%     : %lu\n", percentile(overall, global_iter, 95));
-	fprintf(stdout, "overall 99%%     : %lu\n", percentile(overall, global_iter, 99));
-	fprintf(stdout, "overall run time: %luus\n", as);
+	fprintf(stdout, "average : %lu / %lu\n",
+	                       as/global_iter,
+	                       hs/global_iter);
+	fprintf(stdout, "median  : %lu / %lu\n",
+	          median(overall, global_iter),
+	          median(overhead, global_iter));
+	fprintf(stdout, "max     : %lu / %lu\n", amx, hmx);
+	fprintf(stdout, "min     : %lu / %lu\n", amn, hmn);
+	fprintf(stdout, "75%%     : %lu / %lu\n", 
+	                percentile(overall, global_iter, 75),
+	                percentile(overhead, global_iter, 75));
+	fprintf(stdout, "90%%     : %lu / %lu\n",
+	                percentile(overall, global_iter, 90),
+	                percentile(overhead, global_iter, 90));
+	fprintf(stdout, "95%%     : %lu / %lu\n",
+	                percentile(overall, global_iter, 95),
+	                percentile(overhead, global_iter, 95));
+	fprintf(stdout, "99%%     : %lu / %lu\n",
+	                percentile(overall, global_iter, 99),
+	                percentile(overhead, global_iter, 99));
+	fprintf(stdout, "run time: %luus / %luus\n", as, hs);
 
 cleanup:
 	if (overall != NULL) free(overall);
