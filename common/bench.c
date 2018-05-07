@@ -40,7 +40,7 @@ int compare(const void *left, const void *right) {
 	return (*(uint64_t*)left - *(uint64_t*)right);
 }
 
-void sort(char *buf, int size) {
+void sort(void *buf, int size) {
 	qsort(buf, size, sizeof(uint64_t), &compare);
 }
 

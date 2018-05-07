@@ -81,6 +81,7 @@ tools:	bin/randomfile    \
 bench: bin/readplainbench    \
        bin/writestorebench   \
        bin/writecontextbench \
+       bin/readerbench       \
        bin/qstress
 
 smoke:	$(SMK)/errsmoke                \
@@ -246,6 +247,17 @@ $(BIN)/writestorebench:	$(LIB) $(DEP) $(BENCH)/writestorebench.o \
 			                       $(COM)/cmd.o               \
 			                 $(libs) -lnowdb
 
+$(BIN)/readerbench:	$(LIB) $(DEP) $(BENCH)/readerbench.o \
+			              $(COM)/progress.o          \
+			              $(COM)/bench.o             \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(BENCH)/readerbench.o \
+			                       $(COM)/progress.o          \
+			                       $(COM)/bench.o             \
+			                       $(COM)/cmd.o               \
+			                 $(libs) -lnowdb
+
 $(BIN)/writecontextbench:	$(LIB) $(DEP) $(BENCH)/writecontextbench.o \
 			                      $(COM)/progress.o            \
 			                      $(COM)/bench.o               \
@@ -329,6 +341,7 @@ clean:
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench
 	rm -f $(BIN)/writecontextbench
+	rm -f $(BIN)/readerbench
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/qstress
