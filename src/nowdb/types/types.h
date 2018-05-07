@@ -60,6 +60,12 @@ typedef uint32_t nowdb_version_t;
 
 typedef uint32_t nowdb_roleid_t;
 
+typedef uint8_t nowdb_content_t;
+
+#define NOWDB_CONT_UNKNOWN 0
+#define NOWDB_CONT_VERTEX  1
+#define NOWDB_CONT_EDGE    2
+
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
 
@@ -93,6 +99,9 @@ typedef struct {
 	nowdb_type_t   vtype; /* type of the value         */
 	nowdb_roleid_t  role; /* role identifier           */
 } nowdb_vertex_t;
+
+void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 
 /* ------------------------------------------------------------------------
  * Edge

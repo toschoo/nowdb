@@ -47,7 +47,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/storewrk.o \
       $(SRC)/scope/context.o  \
-      $(SRC)/scope/scope.o
+      $(SRC)/scope/scope.o    \
+      $(SRC)/reader/reader.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
@@ -64,7 +65,8 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/storewrk.h \
       $(SRC)/scope/context.h  \
-      $(SRC)/scope/scope.h
+      $(SRC)/scope/scope.h    \
+      $(SRC)/reader/reader.h
 
 default:	lib 
 
@@ -91,6 +93,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/storesmoke              \
 	$(SMK)/insertstoresmoke        \
 	$(SMK)/insertandsortstoresmoke \
+	$(SMK)/readersmoke             \
 	$(SMK)/scopesmoke
 
 tests: smoke
@@ -192,6 +195,16 @@ $(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
 			                         $(COM)/stores.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
+
+$(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
+			$(COM)/stores.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                 $(COM)/stores.o \
+			                 $(COM)/bench.o  \
+				         $(libs) -lnowdb
+
 
 $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			        $(COM)/stores.o \
@@ -307,6 +320,7 @@ clean:
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
+	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(BIN)/compileme

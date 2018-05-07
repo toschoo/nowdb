@@ -1358,7 +1358,64 @@ static nowdb_bool_t inPeriod(void *rsc,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get all readers for period start - end
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getReaders(nowdb_store_t *store,
+                                     ts_algo_list_t *list,
+                                     nowdb_time_t   start,
+                                     nowdb_time_t     end) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t tmp;
+	nowdb_file_t   pattern;
+
+	if (store->readers.count == 0) return NOWDB_OK;
+
+	pattern.oldest = start;
+	pattern.newest = end;
+
+	ts_algo_list_init(&tmp);
+	if (ts_algo_tree_filter(&store->readers,
+	              &tmp, &pattern, &inPeriod) != TS_ALGO_OK)
+	{
+		err = nowdb_err_get(nowdb_err_no_mem,
+		     FALSE, OBJECT, "readers toList");
+		ts_algo_list_destroy(&tmp);
+		return err;
+	}
+	err = copyFileList(&tmp, list, start, end);
+	ts_algo_list_destroy(&tmp);
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Get all readers for period start - end
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
+                                   ts_algo_list_t *list,
+                                   nowdb_time_t   start,
+                                   nowdb_time_t    end) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "list pointer is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+	err = getReaders(store, list, start, end);
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return setDecomp(store, list);
+}
+
+/* ------------------------------------------------------------------------
+ * Get all files for period start - end
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
@@ -1378,30 +1435,13 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	if (err != NOWDB_OK) return err;
 	
 	/* readers */
-	if (store->readers.count > 0) {
-		ts_algo_list_t tmp;
-		nowdb_file_t   pattern;
+	err = getReaders(store, list, start, end);
+	if (err != NOWDB_OK) goto unlock;
 
-		pattern.oldest = start;
-		pattern.newest = end;
-		ts_algo_list_init(&tmp);
-		if (ts_algo_tree_filter(&store->readers,
-		              &tmp, &pattern, &inPeriod) != TS_ALGO_OK)
-		{
-			err = nowdb_err_get(nowdb_err_no_mem,
-			     FALSE, OBJECT, "readers toList");
-			goto unlock;
-		}
-		err = copyFileList(&tmp, list, start, end);
-		ts_algo_list_destroy(&tmp);
-		if (err != NOWDB_OK) goto unlock;
-	}
-	
 	/* pending */
 	if (store->waiting.len > 0) {
 		err = copyFileList(&store->waiting, list, start, end);
 		if (err != NOWDB_OK) goto unlock;
-		
 	}
 	/* writer */
 	err = copyFile(store->writer, &file);
