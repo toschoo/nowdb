@@ -153,7 +153,7 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 		}
 	}
 	nowdb_reader_destroy(reader); free(reader);
-	if (s != FULL) {
+	if (s != 2*FULL) {
 		fprintf(stderr, "count does not match: %lu/%d\n", s, FULL);
 		return FALSE;
 	}
@@ -173,7 +173,7 @@ int main() {
 		fprintf(stderr, "cannot bootstrap\n");
 		return EXIT_FAILURE;
 	}
-	if (!insertEdges(store1, FULL+HALF, 0)) {
+	if (!insertEdges(store1, 2*FULL+HALF, 0)) {
 		fprintf(stderr, "cannot insert edges\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -207,7 +207,7 @@ int main() {
 		fprintf(stderr, "cannot bootstrap\n");
 		return EXIT_FAILURE;
 	}
-	if (!insertEdges(store2, FULL+HALF, 0)) {
+	if (!insertEdges(store2, 2*FULL+HALF, 0)) {
 		fprintf(stderr, "cannot insert edges\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
