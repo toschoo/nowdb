@@ -13,11 +13,48 @@
 
 #include <stdlib.h>
 
+/* ------------------------------------------------------------------------
+ * HELP!
+ * ------------------------------------------------------------------------
+ */
+void helptxt(char *progname) {
+	fprintf(stderr, "%s <path-to-scope> [options]\n", progname);
+	fprintf(stderr, "the scope must exist!\n");
+	fprintf(stderr, "all options are in the format -opt value\n");
+	fprintf(stderr, "-count n: number of edges to read\n");
+	fprintf(stderr, "-conext c: existing contet within that scope\n");
+	fprintf(stderr, "-query t: query type; possible values:\n");
+	fprintf(stderr, "          'fullscan' : performs a simple fullscan\n");
+	fprintf(stderr, "          'fullscan+': performs a fullscan +\n");
+	fprintf(stderr, "                       a scan over pending files\n");
+	fprintf(stderr, "          'search'   : performs an index search\n");
+	fprintf(stderr, "          'search+'  : performs an index search +\n");
+	fprintf(stderr, "                       a scan over pending files\n");
+	fprintf(stderr, "          'range'    : performs a range scan\n");
+	fprintf(stderr, "          'range+'   : performs a range scan +\n");
+	fprintf(stderr, "                       a scan over pending files\n");
+	fprintf(stderr, "-iter   n: number of iterations (default: 1)\n");
+}
+
+/* ------------------------------------------------------------------------
+ * options
+ * -------
+ * global_count: we will try to read as many edges and terminate,
+ *               when we have read more
+ * global_iter: repeat n times
+ * global_qry_type: fullscan, index search, etc.
+ * global_context: that the context from which we will read
+ * ------------------------------------------------------------------------
+ */
 uint32_t global_count = 1000000;
 uint32_t global_iter = 1;
 char *global_qry_type = NULL;
 char *global_context  = NULL;
 
+/* ------------------------------------------------------------------------
+ * get options
+ * ------------------------------------------------------------------------
+ */
 int parsecmd(int argc, char **argv) {
 	int err = 0;
 
@@ -48,31 +85,20 @@ int parsecmd(int argc, char **argv) {
 	return 0;
 }
 
-void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-scope> [options]\n", progname);
-	fprintf(stderr, "the scope must exist!\n");
-	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "-count n: number of edges to read\n");
-	fprintf(stderr, "-conext c: existing contet within that scope\n");
-	fprintf(stderr, "-query t: query type; possible values:\n");
-	fprintf(stderr, "          'fullscan' : performs a simple fullscan\n");
-	fprintf(stderr, "          'fullscan+': performs a fullscan +\n");
-	fprintf(stderr, "                       a scan over pending files\n");
-	fprintf(stderr, "          'search'   : performs an index search\n");
-	fprintf(stderr, "          'search+'  : performs an index search +\n");
-	fprintf(stderr, "                       a scan over pending files\n");
-	fprintf(stderr, "          'range'    : performs a range scan\n");
-	fprintf(stderr, "          'range+'   : performs a range scan +\n");
-	fprintf(stderr, "                       a scan over pending files\n");
-	fprintf(stderr, "-iter   n: number of iterations (default: 1)\n");
-}
-
+/* ------------------------------------------------------------------------
+ * results
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	uint64_t     count;
 	nowdb_time_t overall;
 	nowdb_time_t overhead;
 } result_t;
 
+/* ------------------------------------------------------------------------
+ * do the benchmarks
+ * ------------------------------------------------------------------------
+ */
 nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 	struct timespec t1, t2, t3;
 
@@ -130,6 +156,10 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 	return TRUE;
 }
 
+/* ------------------------------------------------------------------------
+ * do the benchmarks
+ * ------------------------------------------------------------------------
+ */
 int main(int argc, char **argv) {
 	nowdb_err_t err;
 	int rc = EXIT_SUCCESS;

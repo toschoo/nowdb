@@ -10,42 +10,28 @@
 #include <common/cmd.h>
 #include <common/bench.h>
 
-/*
-void makeEdgePattern(nowdb_edge_t *e) {
-	e->origin   = 1;
-	e->destin   = 1;
-	e->edge     = 1;
-	e->label    = 0;
-	e->weight2  = 0;
-	e->wtype[0] = NOWDB_TYP_UINT;
-	e->wtype[1] = NOWDB_TYP_NOTHING;
+/* -----------------------------------------------------------------------
+ * get a little help for my friends
+ * -----------------------------------------------------------------------
+ */
+void helptxt(char *progname) {
+	fprintf(stderr, "%s <path-to-file> [options]\n", progname);
+	fprintf(stderr, "all options are in the format -opt value\n");
+	fprintf(stderr, "-count n: number of edges to insert\n");
+	fprintf(stderr, "-nocomp b: don't use compression\n");
+	fprintf(stderr, "-nosort b: don't use sorting\n");
+	fprintf(stderr, "           (b: 1/0, t/f, true/false)\n");
+	fprintf(stderr, "-report n: report every n inserts\n");
+	fprintf(stderr, "-context <name>: name of the context to use\n");
+	fprintf(stderr, "                 if the context does not exists\n");
+	fprintf(stderr, "                 it will be created.\n");
 }
 
-nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
-	nowdb_err_t err;
-	nowdb_edge_t e;
-
-	makeEdgePattern(&e);
-	err = nowdb_time_now(&e.timestamp);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
-	}
-	for(uint32_t i=0; i<count; i++) {
-		e.weight = (uint64_t)i;
-		err = nowdb_store_insert(store, &e);
-		if (err != NOWDB_OK) {
-			fprintf(stderr, "insert error\n");
-			nowdb_err_print(err);
-			nowdb_err_release(err);
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-*/
-
+/* -----------------------------------------------------------------------
+ * For large values of 'count', this will insert around 100K 'keys'
+ * where key means, distinct values for origin, destin and edge
+ * -----------------------------------------------------------------------
+ */
 nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 	nowdb_err_t err;
 	nowdb_edge_t e;
@@ -81,11 +67,26 @@ nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 	return TRUE;
 }
 
+/* -----------------------------------------------------------------------
+ * options
+ * -------
+ * global_count: how many edges we will insert
+ * global_report: report back every n edges
+ * global_context: the context in which to insert
+ * global_nocomp: don't compress
+ * global_nosort: don't sort
+ * -----------------------------------------------------------------------
+ */
 uint64_t global_count = 1000;
 uint32_t global_report = 1;
-int global_nocomp = 0;
 char *global_context = NULL;
+int global_nocomp = 0;
+int global_nosort = 0;
 
+/* -----------------------------------------------------------------------
+ * get options
+ * -----------------------------------------------------------------------
+ */
 int parsecmd(int argc, char **argv) {
 	int err = 0;
 
@@ -97,6 +98,12 @@ int parsecmd(int argc, char **argv) {
 	}
 	global_nocomp = ts_algo_args_findBool(
 	            argc, argv, 2, "nocomp", 0, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_nocomp = ts_algo_args_findBool(
+	            argc, argv, 2, "nosort", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -116,6 +123,10 @@ int parsecmd(int argc, char **argv) {
 	return 0;
 }
 
+/* -----------------------------------------------------------------------
+ * try to open scope, create it if not there
+ * -----------------------------------------------------------------------
+ */
 nowdb_scope_t *getScope(nowdb_path_t path) {
 	nowdb_err_t err;
 	nowdb_scope_t *scope;
@@ -153,12 +164,17 @@ nowdb_scope_t *getScope(nowdb_path_t path) {
 	return scope;
 }
 
+/* -----------------------------------------------------------------------
+ * get context, create it if not there
+ * -----------------------------------------------------------------------
+ */
 nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 	nowdb_context_t *ctx;
 	nowdb_ctx_config_t cfg;
 	nowdb_err_t err;
 	nowdb_bitmap64_t options;
 
+	/* if the context does already exist, we use it */
 	err = nowdb_scope_getContext(scope, name, &ctx);
 	if (err == NOWDB_OK) return ctx;
 
@@ -168,9 +184,10 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 		nowdb_err_release(err);
 		return NULL;
 	}
-
 	nowdb_err_release(err);
 
+	/* otherwise we create it 
+	 * with the following configuration */
 	if (global_count < 100000) {
 		options = NOWDB_CONFIG_SIZE_TINY;
 
@@ -199,6 +216,7 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 	}
 
 	if (global_nocomp) options |= NOWDB_CONFIG_NOCOMP;
+	if (global_nosort) options |= NOWDB_CONFIG_NOSORT;
 
 	nowdb_ctx_config(&cfg, options);
 
@@ -219,16 +237,10 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 	return ctx;
 }
 
-void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-file> [options]\n", progname);
-	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "-count n: number of edges to insert\n");
-	fprintf(stderr, "-report n: report every n inserts\n");
-	fprintf(stderr, "-context <name>: name of the context to use\n");
-	fprintf(stderr, "                 if the context does not exists\n");
-	fprintf(stderr, "                 it will be created.\n");
-}
-
+/* -----------------------------------------------------------------------
+ * get context, create it if not there
+ * -----------------------------------------------------------------------
+ */
 int main(int argc, char **argv) {
 	int rc = EXIT_SUCCESS;
 	nowdb_err_t      err;
@@ -293,7 +305,6 @@ int main(int argc, char **argv) {
 	}
 	fprintf(stdout, "Running time: %luus\n", d);
 	nowdb_task_sleep(1000000000);
-
 cleanup:
 	if (scope != NULL) {
 		err = nowdb_scope_close(scope);
@@ -307,4 +318,3 @@ cleanup:
 	nowdb_err_destroy();
 	return rc;
 }
-
