@@ -136,6 +136,7 @@ int main(int argc, char **argv) {
 	nowdb_scope_t *scope = NULL;
 	nowdb_context_t *ctx = NULL;
 	nowdb_path_t path;
+	progress_t p;
 	result_t res;
 	uint64_t *overall=NULL;
 	uint64_t *overhead=NULL;
@@ -197,6 +198,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "not enough memory\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	init_progress(&p, stdout, global_iter);
 	for(int i=0; i<global_iter; i++) {
 		if (!performRead(ctx, &res)) {
 			rc = EXIT_FAILURE; goto cleanup;
@@ -209,7 +211,10 @@ int main(int argc, char **argv) {
 		if (amn > res.overall) amn = res.overall;
 		if (hmx < res.overhead) hmx = res.overhead;
 		if (hmn > res.overhead) hmn = res.overhead;
+		update_progress(&p, i);
 	}
+	close_progress(&p);
+	fprintf(stdout, "\n");
 	sort(overall, global_iter);
 
 	fprintf(stdout, "effectively read: %lu\n", res.count);

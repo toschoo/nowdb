@@ -50,25 +50,25 @@ nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 	nowdb_err_t err;
 	nowdb_edge_t e;
 
-	for(uint32_t i=0; i<count; i++) {
+	memset(&e,0,64);
+	e.wtype[0] = NOWDB_TYP_UINT;
 
-		memset(&e,0,64);
+	for(uint32_t i=0; i<count; i++) {
 
 		do e.origin = rand()%100; while(e.origin == 0);
 		do e.destin = rand()%100; while(e.destin == 0);
 		do e.edge   = rand()%10; while(e.edge == 0);
-		do e.label  = rand()%10; while(e.label == 0);
-		err = nowdb_time_now(&e.timestamp);
-		if (err != NOWDB_OK) {
-			fprintf(stderr, "insert error\n");
-			nowdb_err_print(err);
-			nowdb_err_release(err);
-			return FALSE;
-		}
 		e.weight = (uint64_t)i;
-		e.weight2  = 0;
-		e.wtype[0] = NOWDB_TYP_UINT;
-		e.wtype[1] = NOWDB_TYP_NOTHING;
+		// do e.label  = rand()%10; while(e.label == 0);
+		if (i%10 == 0) {
+			err = nowdb_time_now(&e.timestamp);
+			if (err != NOWDB_OK) {
+				fprintf(stderr, "insert error\n");
+				nowdb_err_print(err);
+				nowdb_err_release(err);
+				return FALSE;
+			}
+		}
 
 		err = nowdb_context_insert(ctx, &e);
 		if (err != NOWDB_OK) {
