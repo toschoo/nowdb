@@ -100,4 +100,11 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 #define NOWDB_CONFIG_DISK_HDD  2048
 #define NOWDB_CONFIG_DISK_RAID 4096
 
+/* -----------------------------------------------------------------------
+ * Miscellaneous options
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_CONFIG_NOCOMP 1048576
+#define NOWDB_CONFIG_NOSORT 2097152
+
 #endif

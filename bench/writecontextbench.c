@@ -83,6 +83,7 @@ nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 
 uint64_t global_count = 1000;
 uint32_t global_report = 1;
+int global_nocomp = 0;
 char *global_context = NULL;
 
 int parsecmd(int argc, char **argv) {
@@ -90,6 +91,12 @@ int parsecmd(int argc, char **argv) {
 
 	global_count = ts_algo_args_findUint(
 	            argc, argv, 2, "count", 1000, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_nocomp = ts_algo_args_findBool(
+	            argc, argv, 2, "nocomp", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -190,6 +197,8 @@ nowdb_context_t *getContext(nowdb_scope_t *scope, char *name) {
 		options = NOWDB_CONFIG_SIZE_HUGE |
 		          NOWDB_CONFIG_INSERT_INSANE;
 	}
+
+	if (global_nocomp) options |= NOWDB_CONFIG_NOCOMP;
 
 	nowdb_ctx_config(&cfg, options);
 
