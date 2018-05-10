@@ -77,6 +77,7 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
+	bin/writecsv
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -304,6 +305,15 @@ $(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
 			                 $(libs) -lnowdb
+
+$(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/writecsv.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                       $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -317,6 +327,8 @@ clean:
 	rm -f $(RSC)/*.dbz
 	rm -f $(RSC)/*.bin
 	rm -f $(RSC)/*.binz
+	rm -f $(RSC)/*.csv
+	rm -f $(RSC)/*.csv.zip
 	rm -rf $(RSC)/teststore
 	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
@@ -344,6 +356,7 @@ clean:
 	rm -f $(BIN)/readerbench
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
+	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 
