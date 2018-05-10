@@ -1,0 +1,75 @@
+toschoo@catull:~/pj/nowdb$ bin/writecontextbench /opt/dbs/bench -context medium -count 100000000
+count: 100000000
+got context medium
+Running time: 17163548us
+toschoo@catull:~/pj/nowdb$ bin/waitstore /opt/dbs/bench/context/medium
+00000000
+toschoo@catull:~/pj/nowdb$ bin/writecontextbench /opt/dbs/bench -context large -count 1000000000
+count: 1000000000
+got context large
+Running time: 169765012us
+toschoo@catull:~/pj/nowdb$ bin/waitstore /opt/dbs/bench/context/large
+00000000
+toschoo@catull:~/pj/nowdb$ bin/writecontextbench /opt/dbs/bench -context nocomp -count 100000000 -nocomp 1
+count: 100000000
+got context nocomp
+Running time: 18466197us
+toschoo@catull:~/pj/nowdb$ bin/waitstore /opt/dbs/bench/context/nocomp
+00000000
+toschoo@catull:~/pj/nowdb$ du -h /opt/dbs/bench/context
+9.4G	/opt/dbs/bench/context/large
+1.0G	/opt/dbs/bench/context/medium
+6.1G	/opt/dbs/bench/context/nocomp
+17G	/opt/dbs/bench/context
+toschoo@catull:~/pj/nowdb$ bin/readerbench /opt/dbs/bench -context nocomp -count 100000000 -iter 10
+count: 100000000
+[XXXXXXXXXX]
+effectively read: 100000000
+average : 715765 / 27
+median  : 700009 / 23
+max     : 822446 / 60
+min     : 697774 / 23
+75%     : 707122 / 23
+90%     : 822446 / 23
+95%     : 822446 / 23
+99%     : 822446 / 23
+run time: 7157653us / 270us
+toschoo@catull:~/pj/nowdb$ bin/readerbench /opt/dbs/bench -context medium -count 100000000 -iter 10
+count: 100000000
+[XXXXXXXXXX]
+effectively read: 99876864
+average : 3106641 / 23
+median  : 3100261 / 23
+max     : 3134322 / 42
+min     : 3098407 / 6
+75%     : 3102909 / 24
+90%     : 3134322 / 22
+95%     : 3134322 / 22
+99%     : 3134322 / 22
+run time: 31066417us / 233us
+toschoo@catull:~/pj/nowdb$ bin/readerbench /opt/dbs/bench -context large -count 100000000 -iter 10
+count: 100000000
+[XXXXXXXXXX]
+effectively read: 100000000
+average : 3085233 / 32
+median  : 3079200 / 30
+max     : 3116135 / 69
+min     : 3076658 / 15
+75%     : 3087158 / 32
+90%     : 3116135 / 29
+95%     : 3116135 / 29
+99%     : 3116135 / 29
+run time: 30852337us / 327us
+toschoo@catull:~/pj/nowdb$ bin/readerbench /opt/dbs/bench -context large -count 1000000000 -iter 10
+count: 1000000000
+[XXXXXXXXXX]
+effectively read: 999948288
+average : 30898488 / 30
+median  : 30877469 / 26
+max     : 31123556 / 74
+min     : 30777224 / 24
+75%     : 30909427 / 25
+90%     : 31123556 / 25
+95%     : 31123556 / 25
+99%     : 31123556 / 25
+run time: 308984885us / 301us

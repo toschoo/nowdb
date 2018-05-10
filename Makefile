@@ -45,7 +45,10 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
-      $(SRC)/store/storewrk.o
+      $(SRC)/store/storewrk.o \
+      $(SRC)/scope/context.o  \
+      $(SRC)/scope/scope.o    \
+      $(SRC)/reader/reader.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
@@ -60,7 +63,10 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
-      $(SRC)/store/storewrk.h
+      $(SRC)/store/storewrk.h \
+      $(SRC)/scope/context.h  \
+      $(SRC)/scope/scope.h    \
+      $(SRC)/reader/reader.h
 
 default:	lib 
 
@@ -71,22 +77,26 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
+	bin/writecsv
 
-bench: bin/readplainbench  \
-       bin/writestorebench \
+bench: bin/readplainbench    \
+       bin/writestorebench   \
+       bin/writecontextbench \
+       bin/readerbench       \
        bin/qstress
 
-smoke:	compileme               \
-	$(SMK)/errsmoke         \
-	$(SMK)/timesmoke        \
-	$(SMK)/pathsmoke        \
-	$(SMK)/tasksmoke        \
-	$(SMK)/queuesmoke       \
-	$(SMK)/workersmoke      \
-	$(SMK)/filesmoke        \
-	$(SMK)/storesmoke       \
-	$(SMK)/insertstoresmoke \
-	$(SMK)/insertandsortstoresmoke
+smoke:	$(SMK)/errsmoke                \
+	$(SMK)/timesmoke               \
+	$(SMK)/pathsmoke               \
+	$(SMK)/tasksmoke               \
+	$(SMK)/queuesmoke              \
+	$(SMK)/workersmoke             \
+	$(SMK)/filesmoke               \
+	$(SMK)/storesmoke              \
+	$(SMK)/insertstoresmoke        \
+	$(SMK)/insertandsortstoresmoke \
+	$(SMK)/readersmoke             \
+	$(SMK)/scopesmoke
 
 tests: smoke
 
@@ -188,6 +198,16 @@ $(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
 
+$(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
+			$(COM)/stores.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                 $(COM)/stores.o \
+			                 $(COM)/bench.o  \
+				         $(libs) -lnowdb
+
+
 $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			        $(COM)/stores.o \
 			        $(COM)/bench.o
@@ -196,6 +216,11 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			                         $(COM)/stores.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
+
+$(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
 		
 		
 # BENCHMARKS
@@ -221,6 +246,28 @@ $(BIN)/writestorebench:	$(LIB) $(DEP) $(BENCH)/writestorebench.o \
 			                       $(COM)/bench.o             \
 			              	       $(COM)/stores.o            \
 			                       $(COM)/cmd.o               \
+			                 $(libs) -lnowdb
+
+$(BIN)/readerbench:	$(LIB) $(DEP) $(BENCH)/readerbench.o \
+			              $(COM)/progress.o          \
+			              $(COM)/bench.o             \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(BENCH)/readerbench.o \
+			                       $(COM)/progress.o          \
+			                       $(COM)/bench.o             \
+			                       $(COM)/cmd.o               \
+			                 $(libs) -lnowdb
+
+$(BIN)/writecontextbench:	$(LIB) $(DEP) $(BENCH)/writecontextbench.o \
+			                      $(COM)/progress.o            \
+			                      $(COM)/bench.o               \
+			                      $(COM)/cmd.o
+				$(LNKMSG)
+				$(CC) $(LDFLAGS) -o $@ $(BENCH)/writecontextbench.o \
+			                               $(COM)/progress.o            \
+			              	               $(COM)/bench.o               \
+			                               $(COM)/cmd.o                 \
 			                 $(libs) -lnowdb
 
 $(BIN)/qstress:		$(LIB) $(DEP) $(BENCH)/qstress.o \
@@ -258,6 +305,15 @@ $(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
 			                 $(libs) -lnowdb
+
+$(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/writecsv.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                       $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -271,8 +327,14 @@ clean:
 	rm -f $(RSC)/*.dbz
 	rm -f $(RSC)/*.bin
 	rm -f $(RSC)/*.binz
+	rm -f $(RSC)/*.csv
+	rm -f $(RSC)/*.csv.zip
 	rm -rf $(RSC)/teststore
+	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
+	rm -rf $(RSC)/testscope
+	rm -rf $(RSC)/scope?
+	rm -rf $(RSC)/scope??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -282,14 +344,19 @@ clean:
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
+	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
+	rm -f $(SMK)/scopesmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile
 	rm -f $(BIN)/readplainbench
 	rm -f $(BIN)/writestorebench
+	rm -f $(BIN)/writecontextbench
+	rm -f $(BIN)/readerbench
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
+	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 

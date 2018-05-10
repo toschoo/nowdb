@@ -29,7 +29,7 @@
 #define NOWDB_IDX_PAGE 8192
 #define NOWDB_CMP_PAGE 8192
 #define NOWDB_MAX_PATH 4096
-#define NOWDB_MAX_NAME 4096
+#define NOWDB_MAX_NAME  256
 
 #define NOWDB_KILO 1024
 #define NOWDB_MEGA 1048576
@@ -59,6 +59,12 @@ typedef int64_t nowdb_time_t;
 typedef uint32_t nowdb_version_t;
 
 typedef uint32_t nowdb_roleid_t;
+
+typedef uint8_t nowdb_content_t;
+
+#define NOWDB_CONT_UNKNOWN 0
+#define NOWDB_CONT_VERTEX  1
+#define NOWDB_CONT_EDGE    2
 
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
@@ -93,6 +99,9 @@ typedef struct {
 	nowdb_type_t   vtype; /* type of the value         */
 	nowdb_roleid_t  role; /* role identifier           */
 } nowdb_vertex_t;
+
+void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 
 /* ------------------------------------------------------------------------
  * Edge

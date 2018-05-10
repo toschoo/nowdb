@@ -268,6 +268,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_scope: return "operation on scope failed";
 	case nowdb_err_stat: return "stat operation failed";
 	case nowdb_err_create: return "create operation failed";
+	case nowdb_err_drop: return "drop operation failed";
 	case nowdb_err_magic: return "wrong magic number in catalog";
 	default: return "unknown";
 	}

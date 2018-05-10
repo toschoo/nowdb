@@ -84,7 +84,7 @@ static ts_algo_rc_t update(void *ignore, void *o, void *n) {
  * Tree callbacks for readers: delete (we do not delete files...?)
  * ------------------------------------------------------------------------
  */
-static void delete (void *ignore, void **n) {}
+static void delete(void *ignore, void **n) {}
 
 /* ------------------------------------------------------------------------
  * Tree callbacks for readers: destroy
@@ -523,7 +523,7 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 	
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
-	if (err != NOWDB_OK) {
+	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
 	return err;
@@ -751,9 +751,7 @@ static inline nowdb_err_t writeCatalogLine(char *buf, int *off,
  * ------------------------------------------------------------------------
  */
 static inline uint32_t measureCatalogSize(nowdb_store_t *store) {
-	struct stat st;
-	if (stat(store->catalog, &st) != 0) return 0;
-	return st.st_size;
+	return nowdb_path_filesize(store->catalog);
 }
 
 /* ------------------------------------------------------------------------
@@ -923,21 +921,7 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
  */
 static inline nowdb_err_t readCatalogFile(nowdb_store_t *store,
                                            char *buf, int size) {
-	ssize_t x;
-	FILE *cat;
-
-	cat = fopen(store->catalog, "r");
-	if (cat == NULL) return nowdb_err_get(nowdb_err_open, TRUE, OBJECT,
-	                                                   store->catalog);
-	x = fread(buf, 1, size, cat);
-	if (x != size) {
-		fclose(cat);
-		return nowdb_err_get(nowdb_err_read, TRUE, OBJECT,
-		                                  store->catalog);
-	}
-	if (fclose(cat) != 0) return nowdb_err_get(nowdb_err_close,
-	                             TRUE, OBJECT, store->catalog);
-	return NOWDB_OK;
+	return nowdb_readFile(store->catalog, buf, size);
 }
 
 /* ------------------------------------------------------------------------
@@ -1009,55 +993,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
  */
 static inline nowdb_err_t writeCatalogFile(nowdb_store_t *store,
                                             char *buf, int size) {
-	nowdb_err_t  err;
-	nowdb_path_t   p=NULL;
-	nowdb_bool_t bkp;
-	ssize_t x;
-	FILE *cat;
-
-	bkp = nowdb_path_exists(store->catalog, NOWDB_DIR_TYPE_ANY);
-
-	if (bkp) {
-		p = nowdb_path_append(store->path, "catalog.bkp");
-		if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
-		               FALSE, OBJECT, "allocating backup path");
-		err = nowdb_path_move(store->catalog, p);
-		if (err != NOWDB_OK) {
-			free(p); return err;
-		}
-	}
-	cat = fopen(store->catalog, "w");
-	if (cat == NULL) {
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_open, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	x = fwrite(buf, 1, size, cat);
-	if (x != size) {
-		fprintf(stderr, "%d - %lu\n", size, x);
-		fclose(cat);
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	if (fclose(cat) != 0) {
-		if (bkp) {
-			NOWDB_IGNORE(nowdb_path_move(p, store->catalog));
-			free(p);
-		}
-		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                   store->catalog);
-	}
-	if (bkp) {
-		nowdb_path_remove(p); free(p);
-	}
-	return NOWDB_OK;
+	return nowdb_writeFileWithBkp(store->path, store->catalog, buf, size);
 }
 
 /* ------------------------------------------------------------------------
@@ -1409,14 +1345,83 @@ static inline nowdb_err_t setDecomp(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * To be with the period means
+ * ------------------------------------------------------------------------
+ */
+static nowdb_bool_t inPeriod(void *rsc,
+                       const void *pattern,
+                       const void *node) {
+	return (((nowdb_file_t*)node)->oldest <=
+	        ((nowdb_file_t*)pattern)->newest &&
+	        ((nowdb_file_t*)node)->newest >=
+	        ((nowdb_file_t*)pattern)->oldest);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: get all readers for period start - end
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getReaders(nowdb_store_t *store,
+                                     ts_algo_list_t *list,
+                                     nowdb_time_t   start,
+                                     nowdb_time_t     end) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t tmp;
+	nowdb_file_t   pattern;
+
+	if (store->readers.count == 0) return NOWDB_OK;
+
+	pattern.oldest = start;
+	pattern.newest = end;
+
+	ts_algo_list_init(&tmp);
+	if (ts_algo_tree_filter(&store->readers,
+	              &tmp, &pattern, &inPeriod) != TS_ALGO_OK)
+	{
+		err = nowdb_err_get(nowdb_err_no_mem,
+		     FALSE, OBJECT, "readers toList");
+		ts_algo_list_destroy(&tmp);
+		return err;
+	}
+	err = copyFileList(&tmp, list, start, end);
+	ts_algo_list_destroy(&tmp);
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Get all readers for period start - end
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
+                                   ts_algo_list_t *list,
+                                   nowdb_time_t   start,
+                                   nowdb_time_t    end) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "list pointer is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+	err = getReaders(store, list, start, end);
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return setDecomp(store, list);
+}
+
+/* ------------------------------------------------------------------------
+ * Get all files for period start - end
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
                                  ts_algo_list_t *list,
                                  nowdb_time_t   start,
                                  nowdb_time_t    end) {
-	ts_algo_list_t      *tmp;
 	nowdb_file_t       *file;
 	nowdb_err_t  err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
@@ -1430,23 +1435,13 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	if (err != NOWDB_OK) return err;
 	
 	/* readers */
-	if (store->readers.count > 0) {
-		tmp = ts_algo_tree_toList(&store->readers);
-		if (tmp == NULL) {
-			err = nowdb_err_get(nowdb_err_no_mem,
-			     FALSE, OBJECT, "readers toList");
-			goto unlock;
-		}
-		err = copyFileList(tmp, list, start, end);
-		ts_algo_list_destroy(tmp); free(tmp);
-		if (err != NOWDB_OK) goto unlock;
-	}
-	
+	err = getReaders(store, list, start, end);
+	if (err != NOWDB_OK) goto unlock;
+
 	/* pending */
 	if (store->waiting.len > 0) {
 		err = copyFileList(&store->waiting, list, start, end);
 		if (err != NOWDB_OK) goto unlock;
-		
 	}
 	/* writer */
 	err = copyFile(store->writer, &file);
@@ -1564,7 +1559,9 @@ nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
  * A reader is free if ...
  * ------------------------------------------------------------------------
  */
-static ts_algo_bool_t isFree(void *ignore, void *file) {
+static ts_algo_bool_t isFree(void *rsc,
+                       const void *pattern,
+                       const void *file) {
 	return (!((nowdb_file_t*)file)->used &&
 	         ((nowdb_file_t*)file)->size < NOWDB_FILE_MAXSIZE);
 }
@@ -1591,7 +1588,7 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 	if (store->readers.count == 0) goto unlock;
 
 	/* search the tree */
-	tmp = ts_algo_tree_search(&store->readers, &isFree);
+	tmp = ts_algo_tree_search(&store->readers, NULL, &isFree);
 	if (tmp != NULL) {
 		*file = malloc(sizeof(nowdb_file_t));
 		if (*file == NULL) {

@@ -141,13 +141,22 @@ nowdb_err_t nowdb_store_insertBulk(nowdb_store_t *store,
                                    uint32_t       count);
 
 /* ------------------------------------------------------------------------
- * Get all readers for period start - end
+ * Get all files for period start - end
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_getFiles(nowdb_store_t  *store,
                                  ts_algo_list_t *files,
                                  nowdb_time_t    start,
                                  nowdb_time_t     end);
+
+/* ------------------------------------------------------------------------
+ * Get all readers (readers only) for period start - end
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getReaders(nowdb_store_t  *store,
+                                   ts_algo_list_t *files,
+                                   nowdb_time_t    start,
+                                   nowdb_time_t     end);
 
 /* ------------------------------------------------------------------------
  * Destroy files and list
