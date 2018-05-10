@@ -102,13 +102,13 @@ int parsecmd(int argc, char **argv) {
 	int err = 0;
 
 	global_count = ts_algo_args_findUint(
-	            argc, argv, 2, "count", 1000, &err);
+	            argc, argv, 1, "count", 1000, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
 	}
 	global_vertex = ts_algo_args_findBool(
-	            argc, argv, 2, "vertex", 0, &err);
+	            argc, argv, 1, "vertex", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
