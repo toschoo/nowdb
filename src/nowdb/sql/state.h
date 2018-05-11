@@ -1,0 +1,55 @@
+#ifndef nowdb_sql_state_decl
+#define nowdb_sql_state_decl
+
+#include <nowdb/query/ast.h>
+
+#define NOWDB_SQL_ERR_NO_MEM     1
+#define NOWDB_SQL_ERR_SYNTAX     2
+#define NOWDB_SQL_ERR_INCOMPLETE 3
+#define NOWDB_SQL_ERR_LEX        4
+#define NOWDB_SQL_ERR_PARSER     5
+#define NOWDB_SQL_ERR_STACK      6
+#define NOWDB_SQL_ERR_EOF        7
+#define NOWDB_SQL_ERR_PANIC     99
+#define NOWDB_SQL_ERR_UNKNOWN  100
+
+#define NOWDB_SQL_ERR_SIZE 128
+
+typedef struct nowdbsql_stack_st nowdbsql_stack_t;
+
+typedef struct {
+	int             errcode;
+	char            *errmsg;
+	nowdbsql_stack_t *stack;
+} nowdbsql_state_t;
+
+const char *nowdbsql_err_desc(int err);
+void nowdbsql_errmsg(nowdbsql_state_t *res, char *msg, char *token);
+
+int nowdbsql_state_init(nowdbsql_state_t *res);
+void nowdbsql_state_reinit(nowdbsql_state_t *res);
+void nowdbsql_state_destroy(nowdbsql_state_t *res);
+
+nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res);
+
+void nowdbsql_state_pushScope(nowdbsql_state_t *res, char *scope);
+void nowdbsql_state_pushIndex(nowdbsql_state_t *res, char *index);
+void nowdbsql_state_pushContext(nowdbsql_state_t *res, char *ctx);
+void nowdbsql_state_pushVertex(nowdbsql_state_t *res);
+void nowdbsql_state_pushOption(nowdbsql_state_t *res,
+                              int option, char *value);
+void nowdbsql_state_pushSizing(nowdbsql_state_t *res, int sizing);
+void nowdbsql_state_pushThroughput(nowdbsql_state_t *res, int sizing);
+void nowdbsql_state_pushDisk(nowdbsql_state_t *res, int sizing);
+void nowdbsql_state_pushNocomp(nowdbsql_state_t *res);
+void nowdbsql_state_pushNosort(nowdbsql_state_t *res);
+
+void nowdbsql_state_pushDDL(nowdbsql_state_t *res);
+void nowdbsql_state_pushCreate(nowdbsql_state_t *res);
+void nowdbsql_state_pushDrop(nowdbsql_state_t *res);
+void nowdbsql_state_pushAlter(nowdbsql_state_t *res);
+
+void nowdbsql_state_pushDLL(nowdbsql_state_t *res);
+void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
+
+#endif

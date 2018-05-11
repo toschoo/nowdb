@@ -1,0 +1,69 @@
+%{
+#include <nowdb/sql/nowdbsql.h>
+%}
+
+%option reentrant
+
+%%
+
+";"			return NOWDB_SQL_SEMICOLON;
+"="			return NOWDB_SQL_EQUAL;
+","			return NOWDB_SQL_COMMA;
+
+(?i:CREATE)		return NOWDB_SQL_CREATE;
+(?i:DROP)		return NOWDB_SQL_DROP;
+(?i:ALTER)		return NOWDB_SQL_ALTER;
+(?i:LOAD)		return NOWDB_SQL_LOAD;
+
+(?i:SCOPE)		return NOWDB_SQL_SCOPE;
+(?i:SCHEMA)		return NOWDB_SQL_SCOPE;
+(?i:DATABASE)		return NOWDB_SQL_SCOPE;
+(?i:CONTEXT)		return NOWDB_SQL_CONTEXT;
+(?i:TABLE)		return NOWDB_SQL_CONTEXT;
+(?i:INDEX)		return NOWDB_SQL_INDEX;
+(?i:VERTEX)		return NOWDB_SQL_VERTEX;
+
+(?i:INTO) 		return NOWDB_SQL_INTO;
+(?i:SET)		return NOWDB_SQL_SET;
+
+(?i:WITH)		return NOWDB_SQL_WITH;
+(?i:WITHOUT)		return NOWDB_SQL_WITHOUT;
+(?i:ON)			return NOWDB_SQL_ON;
+
+(?i:THROUGHPUT)		return NOWDB_SQL_THROUGHPUT;
+
+(?i:HDD)		return NOWDB_SQL_HDD;
+(?i:SSD)		return NOWDB_SQL_SSD;
+(?i:RAID)		return NOWDB_SQL_RAID;
+
+(?i:TINY)		return NOWDB_SQL_TINY;
+(?i:SMALL)		return NOWDB_SQL_SMALL;
+(?i:MEDIUM)		return NOWDB_SQL_MEDIUM;
+(?i:BIG)		return NOWDB_SQL_BIG;
+(?i:LARGE)		return NOWDB_SQL_LARGE;
+(?i:HUGE)		return NOWDB_SQL_HUGE;
+
+(?i:MODERATE)		return NOWDB_SQL_MODERATE;
+(?i:STRESS)		return NOWDB_SQL_STRESS;
+(?i:INSANE)		return NOWDB_SQL_INSANE;
+
+(?i:ALLOCSIZE)		return NOWDB_SQL_ALLOCSIZE;
+(?i:LARGESIZE)		return NOWDB_SQL_LARGESIZE;
+(?i:SORTERS)		return NOWDB_SQL_SORTERS;
+(?i:COMPRESSION)	return NOWDB_SQL_COMPRESSION;
+(?i:ENCRYPTION)		return NOWDB_SQL_ENCRYPTION;
+
+(?i:IGNORE)		return NOWDB_SQL_IGNORE;
+(?i:HEADER)		return NOWDB_SQL_HEADER;
+
+[ \t\r\n]		;
+[a-zA-Z][a-zA-Z0-9_]*   return NOWDB_SQL_IDENTIFIER;
+'[\40-\176]*'		return NOWDB_SQL_STRING;
+[0-9]*			return NOWDB_SQL_INTEGER;
+.			fprintf(stderr, "unexpected char\n");
+
+%%
+
+int yywrap(void *yyscanner) {
+	return 1;
+}
