@@ -350,3 +350,63 @@ static void showme(nowdb_ast_t *n, char *before) {
 void nowdb_ast_show(nowdb_ast_t *n) {
 	showme(n, "+");
 }
+
+nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL:
+	case NOWDB_AST_DLL: return ast->kids[0];
+
+	case NOWDB_AST_DML:
+	case NOWDB_AST_DQL: return NULL;
+
+	default: return NULL;
+	}
+}
+
+nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL:
+	case NOWDB_AST_DLL: return nowdb_ast_target(
+		                   nowdb_ast_operation(ast));
+
+	case NOWDB_AST_CREATE:
+	case NOWDB_AST_ALTER:
+	case NOWDB_AST_DROP: return ast->kids[0];
+
+	case NOWDB_AST_LOAD: return ast->kids[0];
+
+	case NOWDB_AST_DML:
+	case NOWDB_AST_DQL: return NULL;
+
+	default: return NULL;
+	}
+}
+
+nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL:
+	case NOWDB_AST_DLL: return nowdb_ast_option(
+		                   nowdb_ast_operation(ast), option);
+	case NOWDB_AST_CREATE:
+	case NOWDB_AST_ALTER:
+	case NOWDB_AST_DROP: return ast->kids[1];
+
+	case NOWDB_AST_LOAD: return ast->kids[1];
+
+	case NOWDB_AST_OPTION:
+		if (option == 0) return ast;
+		if (ast->stype == option) return ast;
+		return nowdb_ast_option(ast->kids[0], option);
+
+	case NOWDB_AST_DML:
+	case NOWDB_AST_DQL: return NULL;
+
+	default: return NULL;
+	}
+}

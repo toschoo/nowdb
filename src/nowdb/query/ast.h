@@ -1,5 +1,5 @@
-#ifndef nowdbsql_ast_decl
-#define nowdbsql_ast_decl
+#ifndef nowdb_ast_decl
+#define nowdb_ast_decl
 
 #define NOWDB_AST_DDL 1000
 #define NOWDB_AST_DLL 2000
@@ -71,5 +71,30 @@ int nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k);
 
 void nowdb_ast_show(nowdb_ast_t *n);
+
+/* -----------------------------------------------------------------------
+ * AST Navigator
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_AST_DDL_OPERATION 0
+
+#define NOWDB_AST_CREATE_TARGET 0
+#define NOWDB_AST_CREATE_OPTION 1
+
+#define NOWDB_AST_OPTION_OPTION 0
+
+#define NOWDB_AST_DROP_TARGET   0
+
+#define NOWDB_AST_ALTER_TARGET  0
+#define NOWDB_AST_ALTER_OPTION  0
+
+#define NOWDB_AST_DLL_OPERATION 0
+
+#define NOWDB_AST_LOAD_TARGET   0
+#define NOWDB_AST_LOAD_OPTION   1
+
+nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
 
 #endif
