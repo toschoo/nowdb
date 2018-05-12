@@ -63,23 +63,54 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
                         nowdb_ast_t        *trg,
                         nowdb_bool_t        ign,
                         nowdb_qry_result_t *res) {
-	nowdb_err_t      err;
+	FILE *stream;
+	nowdb_err_t err=NOWDB_OK;
 	nowdb_context_t *ctx;
+	nowdb_loader_t   ldr;
+	nowdb_bitmap32_t flg=0;
+
+	if (ign) flg |= NOWDB_CSV_HAS_HEADER;
+
+	stream = fopen(path, "rb");
+	if (stream == NULL) return nowdb_err_get(nowdb_err_open,
+		                            TRUE, OBJECT, path);
 
 	switch(trg->stype) {
 	case NOWDB_AST_VERTEX:
 		fprintf(stderr, "loading '%s' into vertex\n", path);
-		return NOWDB_OK;
+
+		flg |= NOWDB_CSV_VERTEX;
+		err = nowdb_loader_init(&ldr, stream, stderr,
+		                      &scope->vertices, flg);
+		if (err != NOWDB_OK) {
+			fclose(stream); return err;
+		}
+		break;
 
 	case NOWDB_AST_CONTEXT:
 		if (trg->value == NULL) INVALIDAST("no target name in AST");
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
 		if (err != NOWDB_OK) return err;
+
 		fprintf(stderr, "loading '%s' into '%s'\n", path, ctx->name);
-		return NOWDB_OK;
+
+		err = nowdb_loader_init(&ldr, stream, stderr,
+		                           &ctx->store, flg);
+		if (err != NOWDB_OK) {
+			fclose(stream); return err;
+		}
+		break;
 	
-	default: INVALIDAST("invalid target for load");
+	default:
+		fclose(stream); 
+		INVALIDAST("invalid target for load");
 	}
+
+	err = nowdb_loader_run(&ldr);
+
+	fclose(stream); 
+	nowdb_loader_destroy(&ldr); // <- will destroy the error!
+	return err;
 }
 
 static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,

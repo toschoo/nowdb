@@ -35,7 +35,7 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -lpthread -ltsalgo -lzstd
+libs = -lm -lpthread -ltsalgo -lzstd -lcsv
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -53,6 +53,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/store/storewrk.o \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
+      $(SRC)/scope/loader.o   \
       $(SRC)/reader/reader.o  \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
@@ -77,6 +78,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/store/storewrk.h \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
+      $(SRC)/scope/loader.h   \
       $(SRC)/reader/reader.h  \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \

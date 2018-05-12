@@ -15,6 +15,7 @@
 #include <nowdb/io/dir.h>
 #include <nowdb/store/store.h>
 #include <nowdb/scope/context.h>
+#include <nowdb/scope/loader.h>
 
 #include <tsalgo/tree.h>
 
@@ -147,4 +148,13 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope);
 nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
                                char        *context,
                                void          *data);
+
+/* ------------------------------------------------------------------------
+ * Load csv
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_load(nowdb_scope_t *scope,
+                             nowdb_context_t *ctx,
+                             nowdb_path_t    path,
+                             nowdb_loader_t *ldr);
 #endif
