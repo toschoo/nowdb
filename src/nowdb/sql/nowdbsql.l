@@ -1,5 +1,6 @@
 %{
 #include <nowdb/sql/nowdbsql.h>
+#include <nowdb/sql/state.h>
 %}
 
 %option reentrant
@@ -57,6 +58,8 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
+"/*".*"*/"		return NOWDB_SQL_COMMENT;
+"--".*[\r\n]		return NOWDB_SQL_COMMENT;
 [ \t\r\n]		;
 [a-zA-Z][a-zA-Z0-9_]*   return NOWDB_SQL_IDENTIFIER;
 '[\40-\176]*'		return NOWDB_SQL_STRING;

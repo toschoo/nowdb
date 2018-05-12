@@ -10,10 +10,13 @@
 #define NOWDB_SQL_ERR_PARSER     5
 #define NOWDB_SQL_ERR_STACK      6
 #define NOWDB_SQL_ERR_EOF        7
+#define NOWDB_SQL_ERR_INPUT      8
 #define NOWDB_SQL_ERR_PANIC     99
 #define NOWDB_SQL_ERR_UNKNOWN  100
 
 #define NOWDB_SQL_ERR_SIZE 128
+
+#define NOWDB_SQL_COMMENT -17
 
 typedef struct nowdbsql_stack_st nowdbsql_stack_t;
 
