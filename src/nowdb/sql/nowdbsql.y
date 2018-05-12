@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <nowdb/scope/context.h>
 #include <nowdb/query/ast.h>
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
@@ -48,6 +49,9 @@ sql ::= ddl SEMICOLON. {
 sql ::= dll SEMICOLON. {
 	nowdbsql_state_pushDLL(nowdbres);
 }
+sql ::= misc SEMICOLON. {
+	nowdbsql_state_pushMisc(nowdbres);
+}
 ddl ::= CREATE target. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
@@ -71,6 +75,10 @@ ddl ::= DROP context_target. {
 
 ddl ::= ALTER context_only SET context_options. {
 	nowdbsql_state_pushAlter(nowdbres);
+}
+
+misc ::= USE IDENTIFIER(I). {
+	nowdbsql_state_pushUse(nowdbres, I);
 }
 
 target ::= SCOPE IDENTIFIER(I). {
@@ -130,22 +138,22 @@ context_spec ::= with_disk without_comp.
 context_spec ::= with_disk without_sort.
 
 sizing ::= TINY. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_TINY);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_TINY);
 }
 sizing ::= SMALL. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_SMALL);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_SMALL);
 }
 sizing ::= MEDIUM. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_MEDIUM);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_MEDIUM);
 }
 sizing ::= BIG. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_BIG);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_BIG);
 }
 sizing ::= LARGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_LARGE);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_LARGE);
 }
 sizing ::= HUGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_HUGE);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_HUGE);
 }
 
 with_throughput ::= WITH stress_spec THROUGHPUT.
@@ -158,22 +166,22 @@ without_sort ::= WITHOUT SORTING. {
 	nowdbsql_state_pushNosort(nowdbres);
 }
 disk_spec ::= HDD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_HDD);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_HDD);
 }
 disk_spec ::= SSD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_SSD);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_SSD);
 }
 disk_spec ::= RAID. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_RAID);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
 }
-stress_spec ::= MODERATE. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_MODERATE);
+stress_spec ::= CONSTANT. {
+	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_CONSTANT);
 }
 stress_spec ::= STRESS. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_STRESS);
+	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_STRESS);
 }
 stress_spec ::= INSANE. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_INSANE);
+	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_INSANE);
 }
 dll ::= LOAD STRING(S) INTO dml_target. {
 	nowdbsql_state_pushLoad(nowdbres, S);

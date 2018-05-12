@@ -52,4 +52,7 @@ void nowdbsql_state_pushAlter(nowdbsql_state_t *res);
 void nowdbsql_state_pushDLL(nowdbsql_state_t *res);
 void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
 
+void nowdbsql_state_pushMisc(nowdbsql_state_t *res);
+void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name);
+
 #endif

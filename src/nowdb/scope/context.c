@@ -73,7 +73,7 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 		cfg->sorters   = 1;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
-	} else if (options & NOWDB_CONFIG_SIZE_NORMAL) {
+	} else if (options & NOWDB_CONFIG_SIZE_MEDIUM) {
 
 		cfg->allocsize = 8 * NOWDB_MEGA;
 		cfg->largesize = 64 * NOWDB_MEGA;

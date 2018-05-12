@@ -14,6 +14,7 @@
 (?i:DROP)		return NOWDB_SQL_DROP;
 (?i:ALTER)		return NOWDB_SQL_ALTER;
 (?i:LOAD)		return NOWDB_SQL_LOAD;
+(?i:USE)		return NOWDB_SQL_USE;
 
 (?i:SCOPE)		return NOWDB_SQL_SCOPE;
 (?i:SCHEMA)		return NOWDB_SQL_SCOPE;
@@ -43,7 +44,7 @@
 (?i:LARGE)		return NOWDB_SQL_LARGE;
 (?i:HUGE)		return NOWDB_SQL_HUGE;
 
-(?i:MODERATE)		return NOWDB_SQL_MODERATE;
+(?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
 (?i:STRESS)		return NOWDB_SQL_STRESS;
 (?i:INSANE)		return NOWDB_SQL_INSANE;
 

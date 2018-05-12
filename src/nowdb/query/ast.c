@@ -38,6 +38,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_DLL:
 	case NOWDB_AST_DML: ASTCALLOC(1);
 	case NOWDB_AST_DQL: ASTCALLOC(5); 
+	case NOWDB_AST_MISC: ASTCALLOC(1); 
 
 	case NOWDB_AST_CREATE: ASTCALLOC(2);
 	case NOWDB_AST_ALTER: ASTCALLOC(2);
@@ -58,6 +59,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_ORDER:  
 	case NOWDB_AST_JOIN: UNDEFINED(ntype); 
 
+	case NOWDB_AST_USE: ASTCALLOC(0);
+
 	case NOWDB_AST_TARGET:   ASTCALLOC(0);
 	case NOWDB_AST_OPTION:   ASTCALLOC(1);
 	case NOWDB_AST_PATH:     ASTCALLOC(0);
@@ -76,6 +79,7 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_DLL: return "data loading";
 	case NOWDB_AST_DML: return "data manipulation";
 	case NOWDB_AST_DQL: return "data query";
+	case NOWDB_AST_MISC: return "miscellaneous";
 
 	case NOWDB_AST_CREATE: return "create";
 	case NOWDB_AST_ALTER: return "alter";
@@ -95,6 +99,8 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_GROUP:  return "group";
 	case NOWDB_AST_ORDER:  return "order";
 	case NOWDB_AST_JOIN: return "join";
+
+	case NOWDB_AST_USE: return "use";
 
 	case NOWDB_AST_TARGET:
 		switch(stype) {
@@ -211,6 +217,14 @@ static inline int ad3ql(nowdb_ast_t *n,
 	}
 }
 
+static inline int addmisc(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_USE: ADDKID(0);
+	default: return -1;
+	}
+}
+
 static inline int addcreate(nowdb_ast_t *n,
                             nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -278,6 +292,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_DLL: return ad3ll(n,k);
 	case NOWDB_AST_DML: return ad3ml(n,k);
 	case NOWDB_AST_DQL: return ad3ql(n,k); 
+	case NOWDB_AST_MISC: return addmisc(n,k); 
 
 	case NOWDB_AST_CREATE: return addcreate(n,k);
 	case NOWDB_AST_ALTER: return addalter(n,k);
@@ -361,6 +376,8 @@ nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
 	case NOWDB_AST_DML:
 	case NOWDB_AST_DQL: return NULL;
 
+	case NOWDB_AST_MISC: return ast->kids[0];
+
 	default: return NULL;
 	}
 }
@@ -410,3 +427,34 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	default: return NULL;
 	}
 }
+
+int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value) {
+	char *end;
+	if (node->value == NULL) return -1;
+	if (value == NULL) return -1;
+	if (node->vtype == NOWDB_AST_V_INTEGER) {
+		*value = (uint64_t)(node->value);
+		return 0;
+	}
+	*value = strtoul(node->value, &end, 10);
+	if (*end != 0) return -1;
+	return 0;
+}
+
+int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value) {
+	char *end;
+	if (node->value == NULL) return -1;
+	if (value == NULL) return -1;
+	if (node->vtype == NOWDB_AST_V_INTEGER) {
+		*value = (int64_t)(node->value);
+		return 0;
+	}
+	*value = strtol(node->value, &end, 10);
+	if (*end != 0) return -1;
+	return 0;
+}
+
+char *nowdb_ast_getString(nowdb_ast_t *node) {
+	return node->value;
+}
+

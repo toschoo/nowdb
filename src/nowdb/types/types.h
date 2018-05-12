@@ -25,6 +25,8 @@
 
 #define NOWDB_MAGIC 0x450099db
 
+#define NOWDB_VERSION 1
+
 #define NOWDB_OS_PAGE  4096
 #define NOWDB_IDX_PAGE 8192
 #define NOWDB_CMP_PAGE 8192

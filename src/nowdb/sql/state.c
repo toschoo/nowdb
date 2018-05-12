@@ -313,6 +313,18 @@ void nowdbsql_state_pushDLL(nowdbsql_state_t *res) {
 	PUSHN(n);
 }
 
+void nowdbsql_state_pushMisc(nowdbsql_state_t *res) {
+	int p;
+	int misc = NOWDB_AST_USE;
+	nowdb_ast_t *n,*k;
+
+	CREATE(&n, NOWDB_AST_MISC, 0, 0, NULL);
+	POP(n, &k, &misc, 1, p);
+	ADDKID(n,k,p);
+	RESET();
+	PUSHN(n);
+}
+
 void nowdbsql_state_pushDrop(nowdbsql_state_t *res) {
 	int p;
 	int target = NOWDB_AST_TARGET;
@@ -376,5 +388,11 @@ void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path) {
 		TRYPOP(&k,&option,1,p);
 	}
 	RESET();
+	PUSHN(n);
+}
+
+void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name) {
+	nowdb_ast_t *n;
+	CREATE(&n, NOWDB_AST_USE, 0, NOWDB_AST_V_STRING, name);
 	PUSHN(n);
 }

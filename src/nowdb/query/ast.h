@@ -1,10 +1,14 @@
 #ifndef nowdb_ast_decl
 #define nowdb_ast_decl
 
-#define NOWDB_AST_DDL 1000
-#define NOWDB_AST_DLL 2000
-#define NOWDB_AST_DML 3000
-#define NOWDB_AST_DQL 4000
+#include <stdlib.h>
+#include <stdint.h>
+
+#define NOWDB_AST_DDL  1000
+#define NOWDB_AST_DLL  2000
+#define NOWDB_AST_DML  3000
+#define NOWDB_AST_DQL  4000
+#define NOWDB_AST_MISC 5000
 
 #define NOWDB_AST_CREATE 1001
 #define NOWDB_AST_ALTER  1002
@@ -24,6 +28,8 @@
 #define NOWDB_AST_GROUP  4007
 #define NOWDB_AST_ORDER  4008
 #define NOWDB_AST_JOIN   4009
+
+#define NOWDB_AST_USE    5001
 
 #define NOWDB_AST_TARGET   10100
 #define NOWDB_AST_SCOPE    10101
@@ -96,5 +102,9 @@ void nowdb_ast_show(nowdb_ast_t *n);
 nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
+
+int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value);
+int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value);
+char *nowdb_ast_getString(nowdb_ast_t *node);
 
 #endif

@@ -79,7 +79,7 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
  */
 #define NOWDB_CONFIG_SIZE_TINY    1
 #define NOWDB_CONFIG_SIZE_SMALL   2
-#define NOWDB_CONFIG_SIZE_NORMAL  4
+#define NOWDB_CONFIG_SIZE_MEDIUM  4
 #define NOWDB_CONFIG_SIZE_BIG     8
 #define NOWDB_CONFIG_SIZE_LARGE  16
 #define NOWDB_CONFIG_SIZE_HUGE   32

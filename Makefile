@@ -5,7 +5,7 @@
 CC = @gcc
 CXX = @g++
 AR = @ar
-LEM = @lemon -Tlemon/lempar.c
+LEM = @nowlemon -Tlemon/lempar.c
 LEX = @flex
 
 LNKMSG = @printf "linking   $@\n"
@@ -94,7 +94,8 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
-	bin/writecsv
+	bin/writecsv      \
+	bin/scopetool
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -152,14 +153,14 @@ lemon/lemon.o:	lemon/lemon.c
 		$(CMPMSG)
 		$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-lemon/lemon:	lemon/lemon.o
+lemon/nowlemon:	lemon/lemon.o
 		$(LNKMSG)
-		$(CC) -o lemon/lemon lemon/lemon.o
+		$(CC) -o lemon/nowlemon lemon/lemon.o
 
-/usr/local/bin/lemon:	lemon/lemon
-			sudo cp lemon/lemon /usr/local/bin/
+/usr/local/bin/nowlemon:	lemon/nowlemon
+				sudo cp lemon/nowlemon /usr/local/bin/
 
-lemon:		/usr/local/bin/lemon
+lemon:		/usr/local/bin/nowlemon
 
 # sql parser stuff
 $(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c
@@ -388,6 +389,15 @@ $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                       $(libs) -lnowdb
+
+$(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                 $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -401,7 +411,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
 	rm -f lemon/*.o
-	rm -f lemon/lemon
+	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
@@ -441,6 +451,7 @@ clean:
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/writecsv
+	rm -f $(BIN)/scopetool
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 
