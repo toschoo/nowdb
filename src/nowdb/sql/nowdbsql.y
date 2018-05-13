@@ -123,16 +123,16 @@ context_option ::= ENCRYPTION EQUAL STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
 }
 
-context_spec ::= with_throughput with_disk without_comp without_sort.
-context_spec ::= with_throughput with_disk.
-context_spec ::= with_throughput.
+context_spec ::= with_stress with_disk without_comp without_sort.
+context_spec ::= with_stress with_disk.
+context_spec ::= with_stress.
 context_spec ::= with_disk.
 context_spec ::= without_comp.
 context_spec ::= without_sort.
 context_spec ::= without_comp without_sort.
-context_spec ::= with_throughput without_comp without_sort.
-context_spec ::= with_throughput without_sort.
-context_spec ::= with_throughput without_comp.
+context_spec ::= with_stress without_comp without_sort.
+context_spec ::= with_stress without_sort.
+context_spec ::= with_stress without_comp.
 context_spec ::= with_disk without_comp without_sort.
 context_spec ::= with_disk without_comp.
 context_spec ::= with_disk without_sort.
@@ -156,7 +156,16 @@ sizing ::= HUGE. {
 	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_HUGE);
 }
 
-with_throughput ::= WITH stress_spec THROUGHPUT.
+with_stress ::= WITH MODERATE STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_MODERATE);
+}
+with_stress ::= WITH CONSTANT STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_CONSTANT);
+}
+with_stress ::= WITH INSANE STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_INSANE);
+}
+
 with_disk ::= ON disk_spec.
 
 without_comp ::= WITHOUT COMPRESSION. {
@@ -174,23 +183,17 @@ disk_spec ::= SSD. {
 disk_spec ::= RAID. {
 	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
 }
-stress_spec ::= CONSTANT. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_CONSTANT);
-}
-stress_spec ::= STRESS. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_STRESS);
-}
-stress_spec ::= INSANE. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_CONFIG_INSERT_INSANE);
-}
 dll ::= LOAD STRING(S) INTO dml_target. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
-dll ::= LOAD STRING(S) INTO dml_target ignore_header. {
+dll ::= LOAD STRING(S) INTO dml_target header_clause. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
-ignore_header ::= IGNORE HEADER. {
+header_clause ::= IGNORE HEADER. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_IGNORE, NULL);
+}
+header_clause ::= USE HEADER. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_USE, NULL);
 }
 
 dml_target ::= IDENTIFIER(I). {

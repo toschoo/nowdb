@@ -120,7 +120,7 @@ static inline char *tellType(int ntype, int stype) {
 			case NOWDB_AST_SORT: return "option sort";
 			case NOWDB_AST_COMP: return "option comp";
 			case NOWDB_AST_ENCP: return "option encp";
-			case NOWDB_AST_THROUGHP: return "option throughput";
+			case NOWDB_AST_STRESS: return "option stress";
 			case NOWDB_AST_DISK: return "option disk";
 			case NOWDB_AST_IGNORE: return "option ignore";
 			default: return "unknown option";

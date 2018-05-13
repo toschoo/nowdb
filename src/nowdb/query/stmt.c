@@ -120,8 +120,8 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 	uint64_t utmp;
 
 	if (opts == NULL) {
-		cfgopts = NOWDB_CONFIG_SIZE_BIG      |
-		          NOWDB_CONFIG_INSERT_STRESS | 
+		cfgopts = NOWDB_CONFIG_SIZE_BIG        |
+		          NOWDB_CONFIG_INSERT_CONSTANT | 
 		          NOWDB_CONFIG_DISK_HDD;
 		nowdb_ctx_config(cfg, cfgopts);
 		return NOWDB_OK;
@@ -135,8 +135,8 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		cfgopts |= utmp;
 	}
 
-	o = nowdb_ast_option(opts, NOWDB_AST_THROUGHP);
-	if (o == NULL) cfgopts |= NOWDB_CONFIG_INSERT_STRESS;
+	o = nowdb_ast_option(opts, NOWDB_AST_STRESS);
+	if (o == NULL) cfgopts |= NOWDB_CONFIG_INSERT_CONSTANT;
 	else {
 		if (nowdb_ast_getUInt(o, &utmp) != 0)
 			INVALIDAST("invalid ast: invalid throughput");

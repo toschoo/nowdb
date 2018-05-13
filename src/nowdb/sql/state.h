@@ -42,7 +42,7 @@ void nowdbsql_state_pushVertex(nowdbsql_state_t *res);
 void nowdbsql_state_pushOption(nowdbsql_state_t *res,
                               int option, char *value);
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res, int sizing);
-void nowdbsql_state_pushThroughput(nowdbsql_state_t *res, int sizing);
+void nowdbsql_state_pushStress(nowdbsql_state_t *res, int sizing);
 void nowdbsql_state_pushDisk(nowdbsql_state_t *res, int sizing);
 void nowdbsql_state_pushNocomp(nowdbsql_state_t *res);
 void nowdbsql_state_pushNosort(nowdbsql_state_t *res);

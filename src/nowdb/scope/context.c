@@ -101,11 +101,11 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 	}
-	if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
+	if (options & NOWDB_CONFIG_INSERT_MODERATE) {
 
 		if (cfg->sorters < 3) cfg->sorters = 3;
 
-	} else if (options & NOWDB_CONFIG_INSERT_STRESS) {
+	} else if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
 
 		cfg->sorters += 2;
 

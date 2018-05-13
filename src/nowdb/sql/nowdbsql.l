@@ -32,8 +32,6 @@
 (?i:WITHOUT)		return NOWDB_SQL_WITHOUT;
 (?i:ON)			return NOWDB_SQL_ON;
 
-(?i:THROUGHPUT)		return NOWDB_SQL_THROUGHPUT;
-
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;
 (?i:RAID)		return NOWDB_SQL_RAID;
@@ -45,8 +43,8 @@
 (?i:LARGE)		return NOWDB_SQL_LARGE;
 (?i:HUGE)		return NOWDB_SQL_HUGE;
 
-(?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
 (?i:STRESS)		return NOWDB_SQL_STRESS;
+(?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
 (?i:INSANE)		return NOWDB_SQL_INSANE;
 
 (?i:ALLOCSIZE)		return NOWDB_SQL_ALLOCSIZE;

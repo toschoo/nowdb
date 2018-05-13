@@ -219,10 +219,10 @@ void nowdbsql_state_pushSizing(nowdbsql_state_t *res,
 	     (void*)(uint64_t)size); /* this is an SQL constant! */
 }
 
-void nowdbsql_state_pushThroughput(nowdbsql_state_t *res,
-                                                int size) {
+void nowdbsql_state_pushStress(nowdbsql_state_t *res,
+                                            int size) {
 	PUSH(res, NOWDB_AST_OPTION, 
-	          NOWDB_AST_THROUGHP,
+	          NOWDB_AST_STRESS,
 	          NOWDB_AST_V_INTEGER,
 	       (void*)(uint64_t)size); /* this is an SQL constant! */
 }
@@ -272,6 +272,14 @@ void nowdbsql_state_pushOption(nowdbsql_state_t *res,
 			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_IGNORE, 0, NULL);
 		} else {
 			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_IGNORE,
+			          NOWDB_AST_V_STRING, value);
+		}
+		break;
+	case NOWDB_SQL_USE:
+		if (value == NULL) {
+			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_USE, 0, NULL);
+		} else {
+			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_USE,
 			          NOWDB_AST_V_STRING, value);
 		}
 		break;
