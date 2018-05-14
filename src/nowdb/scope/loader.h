@@ -2,6 +2,13 @@
  * (c) Tobias Schoofs, 2018
  * ========================================================================
  * Loader: CSV Loader for the canonical formal (context and vertex)
+ *   TODO: The loader concept should be generic.
+ *         In particular, it should be able to:
+ *         - load CSV ('canoncial format' with numerical identifiers,
+ *                     that's what we have)
+ *         - load CSV ('canonical format' with strings, using the DBs
+ *                     datamodel)
+ *         - load binary formats (using, e.g., avro)
  * ========================================================================
  */
 #ifndef nowdb_loader_decl

@@ -122,8 +122,14 @@ typedef struct {
 	nowdb_type_t   wtype[2]; /* type of the weights     */
 } nowdb_edge_t;
 
-void nowdb_edge_writeValue(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_readValue(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+
+void nowdb_edge_readWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+
+int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 
 #endif
 

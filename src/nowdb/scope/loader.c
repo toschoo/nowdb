@@ -94,8 +94,8 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	}
 
 	if (csv_init(&ldr->csv->p, 0) != 0) {
-		err = nowdb_err_get(nowdb_err_no_mem,
-		    FALSE, OBJECT, "csv parser init");
+		err = nowdb_err_get(nowdb_err_loader, FALSE, OBJECT, 
+		      (char*)csv_strerror(csv_error(&ldr->csv->p)));
 		free(ldr->csv); ldr->csv = NULL;
 		return err;
 	}
@@ -188,27 +188,37 @@ static inline void cleanBuf(nowdb_loader_t *ldr) {
 }
 
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
+	nowdb_err_t err;
 	size_t r, sz, off=0;
 
 	do {
-		ldr->err = fillbuf(ldr->stream, ldr->csv->inbuf+off,
-		                                INBUFSIZE-off, &sz);
-		if (ldr->err != NOWDB_OK) return ldr->err;
+		err = fillbuf(ldr->stream, ldr->csv->inbuf+off,
+		                           INBUFSIZE-off, &sz);
+		if (err != NOWDB_OK) return err;
 		r = csv_parse(&ldr->csv->p, ldr->csv->inbuf, sz,
 		                   ldr->fproc, ldr->rproc, ldr);
-		if (ldr->err != NOWDB_OK) return ldr->err;
+		if (ldr->err != NOWDB_OK) {
+			err = ldr->err; ldr->err = NOWDB_OK;
+			return err;
+		}
 		off = sz - r;
 		if (off > 0) {
-			// memcpy(ldr->csv->inbuf, ldr->csv->inbuf+r, off);
-			fprintf(stderr, "CANNOT PARSE\n");
+			return nowdb_err_get(nowdb_err_loader, FALSE, OBJECT,
+			       (char*)csv_strerror(csv_error(&ldr->csv->p)));
 		}
 	} while(sz == INBUFSIZE);
 
 	csv_fini(&ldr->csv->p, ldr->fproc, ldr->rproc, ldr);
-	if (ldr->err != NOWDB_OK) return ldr->err;
+	if (ldr->err != NOWDB_OK) {
+		err = ldr->err; ldr->err = NOWDB_OK;
+		return err;
+	}
 
 	cleanBuf(ldr);
-	if (ldr->err != NOWDB_OK) return ldr->err;
+	if (ldr->err != NOWDB_OK) {
+		err = ldr->err; ldr->err = NOWDB_OK;
+		return err;
+	}
 	
 	return NOWDB_OK;
 }
@@ -267,7 +277,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		memcpy(target, &n, sizeof(uint64_t)); return 0;
 	}
 	if (tohlp(csv, data, len, 64) != 0) return -1;
-	n = (uint32_t)strtol(csv->hlp, &tmp, 10);
+	n = (uint32_t)strtol(csv->hlp+64, &tmp, 10);
 	if (*tmp != 0) return -1;
 	memcpy(target, &n, sizeof(uint32_t));
 	return 0;
@@ -301,7 +311,28 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 	if (toUInt32(ldr->csv, data, l,\
 	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
 	{ \
-		REJECT(name, "invalid type"); \
+		REJECT(name, "invalid value"); \
+	}
+
+#define GETTYPEDVALUE(name, fld) \
+	if (fld == WEIGHT) { \
+		if (nowdb_edge_strtow((nowdb_edge_t*)(ldr->csv->buf+ \
+		                                      ldr->csv->pos), \
+		                    *((nowdb_type_t*)(ldr->csv->buf+ \
+		                                      ldr->csv->pos+ \
+		                                      WTYPE)),       \
+		                     ldr->csv->hlp) != 0) { \
+			REJECT(name, "invalid weight"); \
+		} \
+	} else { \
+		if (nowdb_edge_strtow2((nowdb_edge_t*)(ldr->csv->buf+ \
+		                                       ldr->csv->pos), \
+		                     *((nowdb_type_t*)(ldr->csv->buf+ \
+		                                       ldr->csv->pos+ \
+		                                       WTYPE2)), \
+		                     ldr->csv->hlp+32) != 0) { \
+			REJECT(name, "invalid weight"); \
+		} \
 	}
 
 void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
@@ -331,35 +362,12 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE:
 		GETTYPE(data, len, "WTYPE", WTYPE);
+		GETTYPEDVALUE("WEIGHT", WEIGHT);
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE2:
 		GETTYPE(data, len, "WTYPE2", WTYPE2);
+		GETTYPEDVALUE("WEIGHT2", WEIGH2);
 		ldr->csv->cur = 0;
-	}
-}
-
-/* consider implementing this as writeValue */
-static inline void computeValues(nowdb_csv_t *csv) {
-	uint64_t n = 0;
-
-	nowdb_type_t type = *(nowdb_type_t*)(csv->buf+csv->pos+WTYPE);
-
-	switch(type) {
-	case NOWDB_TYP_NOTHING:
-
-	case NOWDB_TYP_FLOAT:
-
-	case NOWDB_TYP_INT:
-	case NOWDB_TYP_UINT:
-
-	/* ignored... */
-	case NOWDB_TYP_TIME:
-	case NOWDB_TYP_TEXT:
-	case NOWDB_TYP_DATE:
-	case NOWDB_TYP_COMPLEX:
-	case NOWDB_TYP_LONGTEXT:
-	default:
-		memcpy(csv->buf+csv->pos+WEIGHT, &n, sizeof(uint64_t)); break;
 	}
 }
 
@@ -371,8 +379,6 @@ void nowdb_csv_row_context(int c, void *rsc) {
 		/* count errors */
 		return;
 	}
-
-	computeValues(ldr->csv);
 
 	ldr->csv->pos+=ldr->csv->recsize;
 	ldr->csv->fbcnt++;
