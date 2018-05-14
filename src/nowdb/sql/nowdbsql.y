@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <nowdb/scope/context.h>
 #include <nowdb/query/ast.h>
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
@@ -30,16 +31,12 @@
 
 %parse_failure {
 	nowdbres->errcode = NOWDB_SQL_ERR_SYNTAX;
-	// nowdbsql_errmsg(nowdbres, "syntax error", NULL); 
-	// nowdbsql_errmsg(nowdbres, "syntax error", TOKEN); 
-	fprintf(stderr, "FAILED!\n");
 }
 
 %syntax_error {
 	nowdbres->errcode = NOWDB_SQL_ERR_SYNTAX;
 	nowdbsql_errmsg(nowdbres, "syntax error", (char*)yyminor); 
 	// fprintf(stderr, "near '%s': syntax error\n", (char*)yyminor);
-	// fprintf(stderr, "incomplete input\n");
 }
 
 sql ::= ddl SEMICOLON. {
@@ -48,29 +45,59 @@ sql ::= ddl SEMICOLON. {
 sql ::= dll SEMICOLON. {
 	nowdbsql_state_pushDLL(nowdbres);
 }
+sql ::= misc SEMICOLON. {
+	nowdbsql_state_pushMisc(nowdbres);
+}
 ddl ::= CREATE target. {
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE target IF NOT EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
 ddl ::= CREATE context_target. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
+ddl ::= CREATE context_target IF NOT EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushCreate(nowdbres);
+}
 ddl ::= CREATE context_target context_spec. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target SET context_options. {
+ddl ::= CREATE context_target IF NOT EXISTS context_spec. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE context_target context_options. {
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE context_target IF NOT EXISTS SET context_options. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
 
 ddl ::= DROP target. {
 	nowdbsql_state_pushDrop(nowdbres);
 }
-
+ddl ::= DROP target IF EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushDrop(nowdbres);
+}
 ddl ::= DROP context_target. {
+	nowdbsql_state_pushDrop(nowdbres);
+}
+ddl ::= DROP context_target IF EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushDrop(nowdbres);
 }
 
 ddl ::= ALTER context_only SET context_options. {
 	nowdbsql_state_pushAlter(nowdbres);
+}
+
+misc ::= USE IDENTIFIER(I). {
+	nowdbsql_state_pushUse(nowdbres, I);
 }
 
 target ::= SCOPE IDENTIFIER(I). {
@@ -115,40 +142,49 @@ context_option ::= ENCRYPTION EQUAL STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
 }
 
-context_spec ::= with_throughput with_disk without_comp without_sort.
-context_spec ::= with_throughput with_disk.
-context_spec ::= with_throughput.
+context_spec ::= with_stress with_disk without_comp without_sort.
+context_spec ::= with_stress with_disk.
+context_spec ::= with_stress.
 context_spec ::= with_disk.
 context_spec ::= without_comp.
 context_spec ::= without_sort.
 context_spec ::= without_comp without_sort.
-context_spec ::= with_throughput without_comp without_sort.
-context_spec ::= with_throughput without_sort.
-context_spec ::= with_throughput without_comp.
+context_spec ::= with_stress without_comp without_sort.
+context_spec ::= with_stress without_sort.
+context_spec ::= with_stress without_comp.
 context_spec ::= with_disk without_comp without_sort.
 context_spec ::= with_disk without_comp.
 context_spec ::= with_disk without_sort.
 
 sizing ::= TINY. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_TINY);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_TINY);
 }
 sizing ::= SMALL. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_SMALL);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_SMALL);
 }
 sizing ::= MEDIUM. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_MEDIUM);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_MEDIUM);
 }
 sizing ::= BIG. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_BIG);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_BIG);
 }
 sizing ::= LARGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_LARGE);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_LARGE);
 }
 sizing ::= HUGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_SQL_HUGE);
+	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_HUGE);
 }
 
-with_throughput ::= WITH stress_spec THROUGHPUT.
+with_stress ::= WITH MODERATE STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_MODERATE);
+}
+with_stress ::= WITH CONSTANT STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_CONSTANT);
+}
+with_stress ::= WITH INSANE STRESS. {
+	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_INSANE);
+}
+
 with_disk ::= ON disk_spec.
 
 without_comp ::= WITHOUT COMPRESSION. {
@@ -158,31 +194,25 @@ without_sort ::= WITHOUT SORTING. {
 	nowdbsql_state_pushNosort(nowdbres);
 }
 disk_spec ::= HDD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_HDD);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_HDD);
 }
 disk_spec ::= SSD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_SSD);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_SSD);
 }
 disk_spec ::= RAID. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_SQL_RAID);
-}
-stress_spec ::= MODERATE. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_MODERATE);
-}
-stress_spec ::= STRESS. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_STRESS);
-}
-stress_spec ::= INSANE. {
-	nowdbsql_state_pushThroughput(nowdbres, NOWDB_SQL_INSANE);
+	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
 }
 dll ::= LOAD STRING(S) INTO dml_target. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
-dll ::= LOAD STRING(S) INTO dml_target ignore_header. {
+dll ::= LOAD STRING(S) INTO dml_target header_clause. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
-ignore_header ::= IGNORE HEADER. {
+header_clause ::= IGNORE HEADER. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_IGNORE, NULL);
+}
+header_clause ::= USE HEADER. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_USE, NULL);
 }
 
 dml_target ::= IDENTIFIER(I). {

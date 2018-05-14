@@ -1,6 +1,15 @@
 %{
 #include <nowdb/sql/nowdbsql.h>
+#include <nowdb/sql/state.h>
 %}
+
+	/* TODO:
+	 * multi-line comments...
+	 * with the lexer alone, this appears to be complex.
+	 * here's how to do it:
+	 * http://westes.github.io/flex/manual/
+	 * How-can-I-match-C_002dstyle-comments_003f.html
+	 */
 
 %option reentrant
 
@@ -14,6 +23,7 @@
 (?i:DROP)		return NOWDB_SQL_DROP;
 (?i:ALTER)		return NOWDB_SQL_ALTER;
 (?i:LOAD)		return NOWDB_SQL_LOAD;
+(?i:USE)		return NOWDB_SQL_USE;
 
 (?i:SCOPE)		return NOWDB_SQL_SCOPE;
 (?i:SCHEMA)		return NOWDB_SQL_SCOPE;
@@ -30,7 +40,9 @@
 (?i:WITHOUT)		return NOWDB_SQL_WITHOUT;
 (?i:ON)			return NOWDB_SQL_ON;
 
-(?i:THROUGHPUT)		return NOWDB_SQL_THROUGHPUT;
+(?i:IF)			return NOWDB_SQL_IF;
+(?i:NOT)		return NOWDB_SQL_NOT;
+(?i:EXISTS)		return NOWDB_SQL_EXISTS;
 
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;
@@ -43,8 +55,8 @@
 (?i:LARGE)		return NOWDB_SQL_LARGE;
 (?i:HUGE)		return NOWDB_SQL_HUGE;
 
-(?i:MODERATE)		return NOWDB_SQL_MODERATE;
 (?i:STRESS)		return NOWDB_SQL_STRESS;
+(?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
 (?i:INSANE)		return NOWDB_SQL_INSANE;
 
 (?i:ALLOCSIZE)		return NOWDB_SQL_ALLOCSIZE;
@@ -56,10 +68,11 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
-[ \t\r\n]		;
 [a-zA-Z][a-zA-Z0-9_]*   return NOWDB_SQL_IDENTIFIER;
 '[\40-\176]*'		return NOWDB_SQL_STRING;
 [0-9]*			return NOWDB_SQL_INTEGER;
+"--".*[\r\n]		return NOWDB_SQL_COMMENT;
+[ \t\r\n]		;
 .			fprintf(stderr, "unexpected char\n");
 
 %%

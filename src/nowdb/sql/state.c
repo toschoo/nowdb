@@ -219,10 +219,10 @@ void nowdbsql_state_pushSizing(nowdbsql_state_t *res,
 	     (void*)(uint64_t)size); /* this is an SQL constant! */
 }
 
-void nowdbsql_state_pushThroughput(nowdbsql_state_t *res,
-                                                int size) {
+void nowdbsql_state_pushStress(nowdbsql_state_t *res,
+                                            int size) {
 	PUSH(res, NOWDB_AST_OPTION, 
-	          NOWDB_AST_THROUGHP,
+	          NOWDB_AST_STRESS,
 	          NOWDB_AST_V_INTEGER,
 	       (void*)(uint64_t)size); /* this is an SQL constant! */
 }
@@ -275,6 +275,17 @@ void nowdbsql_state_pushOption(nowdbsql_state_t *res,
 			          NOWDB_AST_V_STRING, value);
 		}
 		break;
+	case NOWDB_SQL_USE:
+		if (value == NULL) {
+			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_USE, 0, NULL);
+		} else {
+			PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_USE,
+			          NOWDB_AST_V_STRING, value);
+		}
+		break;
+	case NOWDB_SQL_EXISTS:
+		PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_IFEXISTS, 0, NULL);
+		break;
 	default:
 		fprintf(stderr, "unknown option: %d, %s\n",
 		                            option, value);
@@ -313,14 +324,32 @@ void nowdbsql_state_pushDLL(nowdbsql_state_t *res) {
 	PUSHN(n);
 }
 
+void nowdbsql_state_pushMisc(nowdbsql_state_t *res) {
+	int p;
+	int misc = NOWDB_AST_USE;
+	nowdb_ast_t *n,*k;
+
+	CREATE(&n, NOWDB_AST_MISC, 0, 0, NULL);
+	POP(n, &k, &misc, 1, p);
+	ADDKID(n,k,p);
+	RESET();
+	PUSHN(n);
+}
+
 void nowdbsql_state_pushDrop(nowdbsql_state_t *res) {
 	int p;
 	int target = NOWDB_AST_TARGET;
+	int option = NOWDB_AST_OPTION;
 	nowdb_ast_t *n, *k;
 	
 	CREATE(&n, NOWDB_AST_DROP, 0, 0, NULL);
 	POP(n, &k, &target, 1, p);
 	ADDKID(n,k,p);
+	TRYPOP(&k, &option, 1, p);
+	while(k!=NULL) {
+		ADDKID(n,k,p);
+		TRYPOP(&k,&option,1,p);
+	}
 	RESET();
 	PUSHN(n);
 }
@@ -376,5 +405,11 @@ void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path) {
 		TRYPOP(&k,&option,1,p);
 	}
 	RESET();
+	PUSHN(n);
+}
+
+void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name) {
+	nowdb_ast_t *n;
+	CREATE(&n, NOWDB_AST_USE, 0, NOWDB_AST_V_STRING, name);
 	PUSHN(n);
 }

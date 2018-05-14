@@ -87,9 +87,12 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 	if (p->lp == NULL) return NOWDB_SQL_ERR_NO_MEM;
 
 	while((nToken = yylex(p->sc)) != 0) {
-		have=1;
 
 		/* announce(nToken, p->sc); */
+
+		if (nToken == NOWDB_SQL_COMMENT) continue;
+
+		have=1;
 
 		str = strdup(yyget_text(p->sc));
 		if (str == NULL) {

@@ -1,10 +1,14 @@
-#ifndef nowdbsql_ast_decl
-#define nowdbsql_ast_decl
+#ifndef nowdb_ast_decl
+#define nowdb_ast_decl
 
-#define NOWDB_AST_DDL 1000
-#define NOWDB_AST_DLL 2000
-#define NOWDB_AST_DML 3000
-#define NOWDB_AST_DQL 4000
+#include <stdlib.h>
+#include <stdint.h>
+
+#define NOWDB_AST_DDL  1000
+#define NOWDB_AST_DLL  2000
+#define NOWDB_AST_DML  3000
+#define NOWDB_AST_DQL  4000
+#define NOWDB_AST_MISC 5000
 
 #define NOWDB_AST_CREATE 1001
 #define NOWDB_AST_ALTER  1002
@@ -25,6 +29,8 @@
 #define NOWDB_AST_ORDER  4008
 #define NOWDB_AST_JOIN   4009
 
+#define NOWDB_AST_USE    5001
+
 #define NOWDB_AST_TARGET   10100
 #define NOWDB_AST_SCOPE    10101
 #define NOWDB_AST_CONTEXT  10102
@@ -40,8 +46,10 @@
 #define NOWDB_AST_ENCP     10206
 #define NOWDB_AST_SIZING   10207
 #define NOWDB_AST_DISK     10208
-#define NOWDB_AST_THROUGHP 10209
+#define NOWDB_AST_STRESS   10209
 #define NOWDB_AST_IGNORE   10210
+
+#define NOWDB_AST_IFEXISTS 10301
 
 #define NOWDB_AST_DATA     10300
 #define NOWDB_AST_KEYVAL   10301
@@ -71,5 +79,34 @@ int nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k);
 
 void nowdb_ast_show(nowdb_ast_t *n);
+
+/* -----------------------------------------------------------------------
+ * AST Navigator
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_AST_DDL_OPERATION 0
+
+#define NOWDB_AST_CREATE_TARGET 0
+#define NOWDB_AST_CREATE_OPTION 1
+
+#define NOWDB_AST_OPTION_OPTION 0
+
+#define NOWDB_AST_DROP_TARGET   0
+
+#define NOWDB_AST_ALTER_TARGET  0
+#define NOWDB_AST_ALTER_OPTION  0
+
+#define NOWDB_AST_DLL_OPERATION 0
+
+#define NOWDB_AST_LOAD_TARGET   0
+#define NOWDB_AST_LOAD_OPTION   1
+
+nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
+
+int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value);
+int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value);
+char *nowdb_ast_getString(nowdb_ast_t *node);
 
 #endif

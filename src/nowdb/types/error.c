@@ -118,6 +118,16 @@ void nowdb_err_release(nowdb_err_t err) {
 }
 
 /* ------------------------------------------------------------------------
+ * Error does contain a certain error code 
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc) {
+	if (err == NULL) return FALSE;
+	if (err->errcode == rc) return TRUE;
+	return nowdb_err_contains(err->cause, rc);
+}
+
+/* ------------------------------------------------------------------------
  * Transform error descriptor into human readable string (helper)
  * ------------------------------------------------------------------------
  */
@@ -270,6 +280,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_create: return "create operation failed";
 	case nowdb_err_drop: return "drop operation failed";
 	case nowdb_err_magic: return "wrong magic number in catalog";
+	case nowdb_err_loader: return "loader failed";
 	default: return "unknown";
 	}
 }

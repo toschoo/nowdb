@@ -5,7 +5,7 @@
 CC = @gcc
 CXX = @g++
 AR = @ar
-LEM = @lemon -Tlemon/lempar.c
+LEM = @nowlemon -Tlemon/lempar.c
 LEX = @flex
 
 LNKMSG = @printf "linking   $@\n"
@@ -35,7 +35,7 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -lpthread -ltsalgo -lzstd
+libs = -lm -lpthread -ltsalgo -lzstd -lcsv
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -53,8 +53,10 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/store/storewrk.o \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
+      $(SRC)/scope/loader.o   \
       $(SRC)/reader/reader.o  \
       $(SRC)/query/ast.o      \
+      $(SRC)/query/stmt.o     \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
@@ -76,8 +78,10 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/store/storewrk.h \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
+      $(SRC)/scope/loader.h   \
       $(SRC)/reader/reader.h  \
       $(SRC)/query/ast.h      \
+      $(SRC)/query/stmt.h     \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
@@ -92,7 +96,8 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
-	bin/writecsv
+	bin/writecsv      \
+	bin/scopetool
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -150,14 +155,14 @@ lemon/lemon.o:	lemon/lemon.c
 		$(CMPMSG)
 		$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-lemon/lemon:	lemon/lemon.o
+lemon/nowlemon:	lemon/lemon.o
 		$(LNKMSG)
-		$(CC) -o lemon/lemon lemon/lemon.o
+		$(CC) -o lemon/nowlemon lemon/lemon.o
 
-/usr/local/bin/lemon:	lemon/lemon
-			sudo cp lemon/lemon /usr/local/bin/
+/usr/local/bin/nowlemon:	lemon/nowlemon
+				sudo cp lemon/nowlemon /usr/local/bin/
 
-lemon:		/usr/local/bin/lemon
+lemon:		/usr/local/bin/nowlemon
 
 # sql parser stuff
 $(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c
@@ -278,11 +283,11 @@ $(SMK)/nowdbsqlsmoke:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(SMK)/nowdbsqlsmoke.o
 			$(LNKMSG)
-			$(CC) -o $(SMK)/nowdbsqlsmoke \
+			$(CC) $(LDFLAGS) -o $(SMK)/nowdbsqlsmoke \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/query/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o \
-			         $(SMK)/nowdbsqlsmoke.o $(libs)
+			         $(SMK)/nowdbsqlsmoke.o $(libs) -lnowdb
 		
 # BENCHMARKS
 $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
@@ -342,11 +347,11 @@ $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(BENCH)/parserbench.o $(COM)/bench.o
 			$(LNKMSG)
-			$(CC) -o $(BIN)/parserbench  \
+			$(CC) $(LDFLAGS) -o $(BIN)/parserbench  \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/query/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
-			         $(BENCH)/parserbench.o
+			         $(BENCH)/parserbench.o -lnowdb
 		
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
@@ -386,6 +391,15 @@ $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                       $(libs) -lnowdb
+
+$(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                 $(libs) -lnowdb
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -399,7 +413,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
 	rm -f lemon/*.o
-	rm -f lemon/lemon
+	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
@@ -439,6 +453,7 @@ clean:
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/writecsv
+	rm -f $(BIN)/scopetool
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 

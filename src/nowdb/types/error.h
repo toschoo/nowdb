@@ -153,6 +153,12 @@ inline void NOWDB_IGNORE(nowdb_err_t err) {
 }
 
 /* ------------------------------------------------------------------------
+ * Error does contain a certain error code 
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc);
+
+/* ------------------------------------------------------------------------
  * Produces a human readable description of the error code
  * ------------------------------------------------------------------------
  */
@@ -253,6 +259,7 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_create          51
 #define nowdb_err_drop            52
 #define nowdb_err_magic           53
+#define nowdb_err_loader          54
 #define nowdb_err_unknown       9999
 
 #endif

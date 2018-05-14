@@ -10,10 +10,13 @@
 #define NOWDB_SQL_ERR_PARSER     5
 #define NOWDB_SQL_ERR_STACK      6
 #define NOWDB_SQL_ERR_EOF        7
+#define NOWDB_SQL_ERR_INPUT      8
 #define NOWDB_SQL_ERR_PANIC     99
 #define NOWDB_SQL_ERR_UNKNOWN  100
 
 #define NOWDB_SQL_ERR_SIZE 128
+
+#define NOWDB_SQL_COMMENT -17
 
 typedef struct nowdbsql_stack_st nowdbsql_stack_t;
 
@@ -39,7 +42,7 @@ void nowdbsql_state_pushVertex(nowdbsql_state_t *res);
 void nowdbsql_state_pushOption(nowdbsql_state_t *res,
                               int option, char *value);
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res, int sizing);
-void nowdbsql_state_pushThroughput(nowdbsql_state_t *res, int sizing);
+void nowdbsql_state_pushStress(nowdbsql_state_t *res, int sizing);
 void nowdbsql_state_pushDisk(nowdbsql_state_t *res, int sizing);
 void nowdbsql_state_pushNocomp(nowdbsql_state_t *res);
 void nowdbsql_state_pushNosort(nowdbsql_state_t *res);
@@ -51,5 +54,8 @@ void nowdbsql_state_pushAlter(nowdbsql_state_t *res);
 
 void nowdbsql_state_pushDLL(nowdbsql_state_t *res);
 void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
+
+void nowdbsql_state_pushMisc(nowdbsql_state_t *res);
+void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name);
 
 #endif
