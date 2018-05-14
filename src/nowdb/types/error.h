@@ -153,6 +153,12 @@ inline void NOWDB_IGNORE(nowdb_err_t err) {
 }
 
 /* ------------------------------------------------------------------------
+ * Error does contain a certain error code 
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc);
+
+/* ------------------------------------------------------------------------
  * Produces a human readable description of the error code
  * ------------------------------------------------------------------------
  */

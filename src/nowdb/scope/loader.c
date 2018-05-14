@@ -10,6 +10,8 @@
 
 #include <csv.h>
 
+#include <time.h>
+
 #define INBUFSIZE 131072
 #define BLOCK       8192
 #define BUFSIZE    64000
@@ -190,6 +192,12 @@ static inline void cleanBuf(nowdb_loader_t *ldr) {
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	nowdb_err_t err;
 	size_t r, sz, off=0;
+	struct timespec t1, t2;
+
+	ldr->loaded = 0;
+	ldr->errors = 0;
+
+	nowdb_timestamp(&t1);
 
 	do {
 		err = fillbuf(ldr->stream, ldr->csv->inbuf+off,
@@ -219,6 +227,10 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 		err = ldr->err; ldr->err = NOWDB_OK;
 		return err;
 	}
+
+	nowdb_timestamp(&t2);
+
+	ldr->runtime = nowdb_time_minus(&t2, &t1)/1000;
 	
 	return NOWDB_OK;
 }
@@ -376,6 +388,7 @@ void nowdb_csv_row_context(int c, void *rsc) {
 
 	if (ldr->csv->rejected) {
 		ldr->csv->rejected = 0;
+		ldr->errors++;
 		/* count errors */
 		return;
 	}
@@ -392,6 +405,7 @@ void nowdb_csv_row_context(int c, void *rsc) {
 			/* give feedback */
 		}
 	}
+	if (ldr->err == NOWDB_OK) ldr->loaded++;
 }
 
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc) {

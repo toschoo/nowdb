@@ -59,8 +59,18 @@ int parsecmd(int argc, char **argv) {
  * -----------------------------------------------------------------------
  */
 int printReport(nowdb_qry_result_t *res) {
-	fprintf(stderr, "I don't know how to print reports :-(\n");
-	return -1;
+	nowdb_qry_report_t *rep;
+	if (res->result == NULL) {
+		fprintf(stderr, "NO REPORT!\n");
+		return -1;
+	}
+	rep = res->result;
+	fprintf(stderr, "%lu rows loaded with %lu errors in %ldus\n",
+	                rep->affected,
+	                rep->errors,
+	                rep->runtime);
+	free(res->result); res->result = NULL;
+	return 0;
 }
 
 /* -----------------------------------------------------------------------

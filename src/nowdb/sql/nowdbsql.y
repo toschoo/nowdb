@@ -55,13 +55,29 @@ sql ::= misc SEMICOLON. {
 ddl ::= CREATE target. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
+ddl ::= CREATE target IF NOT EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushCreate(nowdbres);
+}
 ddl ::= CREATE context_target. {
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE context_target IF NOT EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
 ddl ::= CREATE context_target context_spec. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target SET context_options. {
+ddl ::= CREATE context_target IF NOT EXISTS context_spec. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE context_target context_options. {
+	nowdbsql_state_pushCreate(nowdbres);
+}
+ddl ::= CREATE context_target IF NOT EXISTS SET context_options. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
 

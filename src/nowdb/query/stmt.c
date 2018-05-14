@@ -5,8 +5,10 @@
 
 static char *OBJECT = "stmt";
 
-static nowdb_err_t createScope(nowdb_path_t base,
-                               char        *name) {
+static nowdb_err_t createScope(nowdb_ast_t  *op,
+                               nowdb_path_t  base,
+                               char         *name) {
+	nowdb_ast_t *o;
 	nowdb_path_t p;
 	nowdb_scope_t *scope;
 	nowdb_err_t err;
@@ -15,8 +17,12 @@ static nowdb_err_t createScope(nowdb_path_t base,
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                        FALSE, OBJECT, "path.append");
 
-	/* if not exists...
-	 */
+	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+	if (o != NULL) {
+		if (nowdb_path_exists(p, NOWDB_DIR_TYPE_DIR)) {
+			free(p); return NOWDB_OK;
+		}
+	}
 
 	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
 	if (err != NOWDB_OK) return err;
@@ -68,6 +74,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	nowdb_context_t *ctx;
 	nowdb_loader_t   ldr;
 	nowdb_bitmap32_t flg=0;
+	nowdb_qry_report_t *rep;
 
 	if (ign) flg |= NOWDB_CSV_HAS_HEADER;
 
@@ -107,8 +114,18 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	}
 
 	err = nowdb_loader_run(&ldr);
-
 	fclose(stream); 
+
+	rep = calloc(1, sizeof(nowdb_qry_report_t));
+	if (rep == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                               "allocating report");
+	} else {
+		rep->affected = ldr.loaded;
+		rep->errors = ldr.errors;
+		rep->runtime = ldr.runtime;
+		res->result = rep;
+	}
 	nowdb_loader_destroy(&ldr); // <- will destroy the error!
 	return err;
 }
@@ -191,14 +208,41 @@ static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
 	return NOWDB_OK;
 }
 
+static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
+                                             char          *name,
+                                             nowdb_bool_t  *b) {
+	nowdb_err_t err;
+	nowdb_context_t *ctx;
+
+	err = nowdb_scope_getContext(scope, name, &ctx);
+	if (err == NOWDB_OK) {
+		*b = TRUE; return NOWDB_OK;
+	}
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		nowdb_err_release(err);
+		*b = FALSE; return NOWDB_OK;
+	}
+	return err;
+}
+
 static nowdb_err_t createContext(nowdb_ast_t  *op,
                                  char       *name,
                              nowdb_scope_t *scope) {
 	nowdb_err_t err;
-	nowdb_ast_t *opts;
+	nowdb_ast_t *opts, *o;
 	nowdb_ctx_config_t cfg;
 
 	opts = nowdb_ast_option(op, 0);
+
+	if (opts != NULL) {
+		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_bool_t x = FALSE;
+			err = checkContextExists(scope, name, &x);
+			if (err != NOWDB_OK) return err;
+			if (x) return NOWDB_OK;
+		}
+	}
 
 	err = applyCreateOptions(opts, &cfg);
 	if (err != NOWDB_OK) return err;
@@ -248,7 +292,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 
 	if (op->ntype == NOWDB_AST_CREATE) {
 		switch(trg->stype) {
-		case NOWDB_AST_SCOPE: return createScope(base, trg->value);
+		case NOWDB_AST_SCOPE:
+			return createScope(op, base, trg->value);
 		case NOWDB_AST_CONTEXT:
 			return createContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
@@ -300,7 +345,7 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 	nowdb_ast_t *op;
 	nowdb_ast_t *trg;
 	
-	res->resType = NOWDB_QRY_RESULT_NOTHING; /* report ! */
+	res->resType = NOWDB_QRY_RESULT_REPORT;
 	res->result = NULL;
 	
 	op = nowdb_ast_operation(ast);

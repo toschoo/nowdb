@@ -211,3 +211,28 @@ nowdb_time_t nowdb_time_day() {
 nowdb_time_t nowdb_time_week() {
 	return (7*24*3600*nowdb_time_sec());
 }
+
+/* ------------------------------------------------------------------------
+ * Benchmarking: get monotonic timestamp
+ * ------------------------------------------------------------------------
+ */
+void nowdb_timestamp(struct timespec *t) {
+	clock_gettime(CLOCK_MONOTONIC, t);
+}
+
+/* ------------------------------------------------------------------------
+ * Benchmarking: subtract two timespecs
+ * ------------------------------------------------------------------------
+ */
+#define NPERSEC 1000000000
+uint64_t nowdb_time_minus(struct timespec *t1,
+                          struct timespec *t2) {
+	uint64_t d;
+	if (t2->tv_nsec > t1->tv_nsec) {
+		t1->tv_nsec += NPERSEC;
+		t1->tv_sec  -= 1;
+	}
+	d = NPERSEC * (t1->tv_sec - t2->tv_sec);
+	d += t1->tv_nsec - t2->tv_nsec;
+	return d;
+}

@@ -118,6 +118,16 @@ void nowdb_err_release(nowdb_err_t err) {
 }
 
 /* ------------------------------------------------------------------------
+ * Error does contain a certain error code 
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc) {
+	if (err == NULL) return FALSE;
+	if (err->errcode == rc) return TRUE;
+	return nowdb_err_contains(err->cause, rc);
+}
+
+/* ------------------------------------------------------------------------
  * Transform error descriptor into human readable string (helper)
  * ------------------------------------------------------------------------
  */

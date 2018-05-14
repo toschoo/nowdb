@@ -22,5 +22,11 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_path_t    base,
                       nowdb_qry_result_t *res);
 
+typedef struct {
+	uint64_t    affected;
+	uint64_t      errors;
+	nowdb_time_t runtime;
+} nowdb_qry_report_t;
+
 
 #endif

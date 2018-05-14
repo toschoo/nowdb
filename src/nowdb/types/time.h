@@ -124,5 +124,17 @@ nowdb_time_t nowdb_time_week();
  */
 nowdb_err_t nowdb_time_now(nowdb_time_t *time);
 
+/* ------------------------------------------------------------------------
+ * Benchmarking: get monotonic timestamp
+ * ------------------------------------------------------------------------
+ */
+void nowdb_timestamp(struct timespec *t);
+
+/* ------------------------------------------------------------------------
+ * Benchmarking: subtract two timespecs
+ * ------------------------------------------------------------------------
+ */
+uint64_t nowdb_time_minus(struct timespec *t1,
+                          struct timespec *t2);
 #endif
 

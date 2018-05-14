@@ -32,6 +32,10 @@
 (?i:WITHOUT)		return NOWDB_SQL_WITHOUT;
 (?i:ON)			return NOWDB_SQL_ON;
 
+(?i:IF)			return NOWDB_SQL_IF;
+(?i:NOT)		return NOWDB_SQL_NOT;
+(?i:EXISTS)		return NOWDB_SQL_EXISTS;
+
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;
 (?i:RAID)		return NOWDB_SQL_RAID;

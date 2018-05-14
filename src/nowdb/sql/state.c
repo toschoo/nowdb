@@ -283,6 +283,9 @@ void nowdbsql_state_pushOption(nowdbsql_state_t *res,
 			          NOWDB_AST_V_STRING, value);
 		}
 		break;
+	case NOWDB_SQL_EXISTS:
+		PUSH(res, NOWDB_AST_OPTION, NOWDB_AST_IFEXISTS, 0, NULL);
+		break;
 	default:
 		fprintf(stderr, "unknown option: %d, %s\n",
 		                            option, value);

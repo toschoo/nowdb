@@ -283,11 +283,11 @@ $(SMK)/nowdbsqlsmoke:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(SMK)/nowdbsqlsmoke.o
 			$(LNKMSG)
-			$(CC) -o $(SMK)/nowdbsqlsmoke \
+			$(CC) $(LDFLAGS) -o $(SMK)/nowdbsqlsmoke \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/query/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o \
-			         $(SMK)/nowdbsqlsmoke.o $(libs)
+			         $(SMK)/nowdbsqlsmoke.o $(libs) -lnowdb
 		
 # BENCHMARKS
 $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
@@ -347,11 +347,11 @@ $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(BENCH)/parserbench.o $(COM)/bench.o
 			$(LNKMSG)
-			$(CC) -o $(BIN)/parserbench  \
+			$(CC) $(LDFLAGS) -o $(BIN)/parserbench  \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/query/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
-			         $(BENCH)/parserbench.o
+			         $(BENCH)/parserbench.o -lnowdb
 		
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
