@@ -31,16 +31,12 @@
 
 %parse_failure {
 	nowdbres->errcode = NOWDB_SQL_ERR_SYNTAX;
-	// nowdbsql_errmsg(nowdbres, "syntax error", NULL); 
-	// nowdbsql_errmsg(nowdbres, "syntax error", TOKEN); 
-	fprintf(stderr, "FAILED!\n");
 }
 
 %syntax_error {
 	nowdbres->errcode = NOWDB_SQL_ERR_SYNTAX;
 	nowdbsql_errmsg(nowdbres, "syntax error", (char*)yyminor); 
 	// fprintf(stderr, "near '%s': syntax error\n", (char*)yyminor);
-	// fprintf(stderr, "incomplete input\n");
 }
 
 sql ::= ddl SEMICOLON. {
@@ -84,8 +80,15 @@ ddl ::= CREATE context_target IF NOT EXISTS SET context_options. {
 ddl ::= DROP target. {
 	nowdbsql_state_pushDrop(nowdbres);
 }
-
+ddl ::= DROP target IF EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
+	nowdbsql_state_pushDrop(nowdbres);
+}
 ddl ::= DROP context_target. {
+	nowdbsql_state_pushDrop(nowdbres);
+}
+ddl ::= DROP context_target IF EXISTS. {
+	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushDrop(nowdbres);
 }
 

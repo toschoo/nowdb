@@ -36,6 +36,37 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
 	return NOWDB_OK;
 }
 
+static nowdb_err_t dropScope(nowdb_ast_t  *op,
+                             nowdb_path_t  base,
+                             char         *name) {
+	nowdb_ast_t *o;
+	nowdb_path_t p;
+	nowdb_scope_t *scope;
+	nowdb_err_t err;
+
+	p = nowdb_path_append(base, name);
+	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                        FALSE, OBJECT, "path.append");
+
+	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+	if (o != NULL) {
+		if (!nowdb_path_exists(p, NOWDB_DIR_TYPE_DIR)) {
+			free(p); return NOWDB_OK;
+		}
+	}
+
+	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
+	if (err != NOWDB_OK) return err;
+	
+	err = nowdb_scope_drop(scope);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope); free(scope);
+		return err;
+	}
+	nowdb_scope_destroy(scope); free(scope);
+	return NOWDB_OK;
+}
+
 static nowdb_err_t openScope(nowdb_path_t     base,
                              char            *name,
                              nowdb_scope_t **scope) {
@@ -62,6 +93,13 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
                            nowdb_scope_t *scope) {
 	return nowdb_err_get(nowdb_err_not_supp,
 	           FALSE, OBJECT, "createIndex");
+}
+
+static nowdb_err_t dropIndex(nowdb_ast_t  *op,
+                             char       *name,
+                         nowdb_scope_t *scope) {
+	return nowdb_err_get(nowdb_err_not_supp,
+	            FALSE, OBJECT, "dropIndex");
 }
 
 static nowdb_err_t load(nowdb_scope_t    *scope,
@@ -253,6 +291,32 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
 	return nowdb_scope_createContext(scope, name, &cfg);
 }
 
+static nowdb_err_t dropContext(nowdb_ast_t  *op,
+                              char          *name,
+                              nowdb_scope_t *scope) {
+	nowdb_ast_t *o;
+	nowdb_err_t err;
+	nowdb_bool_t  b;
+
+	err = checkContextExists(scope, name, &b);
+	if (err != NOWDB_OK) return err;
+	if (!b) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+		return nowdb_err_get(nowdb_err_key_not_found,
+		                        FALSE, OBJECT, name);
+	}
+	err = nowdb_scope_dropContext(scope, name);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope); free(scope);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
 static nowdb_err_t handleUse(nowdb_ast_t        *ast,
                              nowdb_path_t       base,
                              nowdb_qry_result_t *res) {
@@ -290,6 +354,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 
 	if (trg->value == NULL) INVALIDAST("no target name in AST");
 
+	/* create */
 	if (op->ntype == NOWDB_AST_CREATE) {
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
@@ -302,7 +367,18 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		}
 	}
 	// alter
-	// drop
+	/* drop */
+	else if (op->ntype == NOWDB_AST_DROP) {
+		switch(trg->stype) {
+		case NOWDB_AST_SCOPE:
+			return dropScope(op, base, trg->value);
+		case NOWDB_AST_CONTEXT:
+			return dropContext(op, trg->value, scope);
+		case NOWDB_AST_INDEX:
+			return dropIndex(op, trg->value, scope);
+		default: INVALIDAST("invalid target in AST");
+		}
+	}
 	return nowdb_err_get(nowdb_err_not_supp,
 	            FALSE, OBJECT, "handleDDL");
 }

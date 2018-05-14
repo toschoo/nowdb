@@ -3,6 +3,14 @@
 #include <nowdb/sql/state.h>
 %}
 
+	/* TODO:
+	 * multi-line comments...
+	 * with the lexer alone, this appears to be complex.
+	 * here's how to do it:
+	 * http://westes.github.io/flex/manual/
+	 * How-can-I-match-C_002dstyle-comments_003f.html
+	 */
+
 %option reentrant
 
 %%
@@ -60,12 +68,11 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
-"/*".*"*/"		return NOWDB_SQL_COMMENT;
-"--".*[\r\n]		return NOWDB_SQL_COMMENT;
-[ \t\r\n]		;
 [a-zA-Z][a-zA-Z0-9_]*   return NOWDB_SQL_IDENTIFIER;
 '[\40-\176]*'		return NOWDB_SQL_STRING;
 [0-9]*			return NOWDB_SQL_INTEGER;
+"--".*[\r\n]		return NOWDB_SQL_COMMENT;
+[ \t\r\n]		;
 .			fprintf(stderr, "unexpected char\n");
 
 %%

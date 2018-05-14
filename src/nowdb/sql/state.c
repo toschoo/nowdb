@@ -339,11 +339,17 @@ void nowdbsql_state_pushMisc(nowdbsql_state_t *res) {
 void nowdbsql_state_pushDrop(nowdbsql_state_t *res) {
 	int p;
 	int target = NOWDB_AST_TARGET;
+	int option = NOWDB_AST_OPTION;
 	nowdb_ast_t *n, *k;
 	
 	CREATE(&n, NOWDB_AST_DROP, 0, 0, NULL);
 	POP(n, &k, &target, 1, p);
 	ADDKID(n,k,p);
+	TRYPOP(&k, &option, 1, p);
+	while(k!=NULL) {
+		ADDKID(n,k,p);
+		TRYPOP(&k,&option,1,p);
+	}
 	RESET();
 	PUSHN(n);
 }

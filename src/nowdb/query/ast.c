@@ -42,7 +42,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_CREATE: ASTCALLOC(2);
 	case NOWDB_AST_ALTER: ASTCALLOC(2);
-	case NOWDB_AST_DROP:  ASTCALLOC(1);
+	case NOWDB_AST_DROP:  ASTCALLOC(2);
 
 	case NOWDB_AST_LOAD:  ASTCALLOC(2); 
 
@@ -247,6 +247,7 @@ static inline int ad3rop(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_TARGET: ADDKID(0);
+	case NOWDB_AST_OPTION: ADDKID(1);
 	default: return -1;
 	}
 }
