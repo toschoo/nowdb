@@ -16,10 +16,17 @@
 #include <nowdb/query/plan.h>
 
 typedef struct {
+	nowdb_store_t *store;
+	ts_algo_list_t files;
+} nowdb_storefile_t;
+
+
+typedef struct {
 	uint32_t         numr;
 	nowdb_reader_t **rdrs;
 	uint32_t         disc;
-
+	nowdb_storefile_t stf; /* should be a list of stf! */
+	/* filter */
 	/* projection !             */
 	/* grouping, ordering, etc. */
 	/* sub-queries?             */
@@ -29,7 +36,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
                              ts_algo_list_t  *plan,
                              nowdb_cursor_t **cur);
 
-nowdb_err_t nowdb_cursor_destroy(nowdb_cursor_t *cur);
+void nowdb_cursor_destroy(nowdb_cursor_t *cur);
 
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,
