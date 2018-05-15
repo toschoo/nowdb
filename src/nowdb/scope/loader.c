@@ -72,10 +72,10 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 
 	if (flags & NOWDB_CSV_VERTEX) {
 		ldr->fproc = &nowdb_csv_field_vertex;
-		ldr->rproc = &nowdb_csv_row_vertex;
+		ldr->rproc = &nowdb_csv_row;
 	} else {
 		ldr->fproc = &nowdb_csv_field_context;
-		ldr->rproc = &nowdb_csv_row_context;
+		ldr->rproc = &nowdb_csv_row;
 	}
 
 	ldr->csv = malloc(sizeof(nowdb_csv_t));
@@ -235,6 +235,31 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	return NOWDB_OK;
 }
 
+void nowdb_csv_row(int c, void *rsc) {
+	nowdb_loader_t *ldr = rsc;
+
+	if (ldr->csv->rejected) {
+		ldr->csv->rejected = 0;
+		ldr->errors++;
+		/* count errors */
+		return;
+	}
+
+	ldr->csv->pos+=ldr->csv->recsize;
+	ldr->csv->fbcnt++;
+	ldr->csv->total++;
+
+	if (ldr->csv->pos >= BUFSIZE) {
+		insertBuf(ldr);
+		ldr->csv->pos = 0;
+		if (ldr->csv->fbcnt >= FEEDBACK) {
+			ldr->csv->fbcnt = 0;
+			/* give feedback */
+		}
+	}
+	if (ldr->err == NOWDB_OK) ldr->loaded++;
+}
+
 #define EDGE    0
 #define ORIGIN  8
 #define DESTIN 16
@@ -313,7 +338,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		REJECT(name, "invalid timestamp"); \
 	}
 
-#define GETVALUE(d, l, name, fld) \
+#define GETWEIGHT(d, l, name, fld) \
 	if (tohlp(ldr->csv, data, l, 4*(fld-WEIGHT)) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
@@ -326,7 +351,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		REJECT(name, "invalid value"); \
 	}
 
-#define GETTYPEDVALUE(name, fld) \
+#define GETTYPEDWEIGHT(name, fld) \
 	if (fld == WEIGHT) { \
 		if (nowdb_edge_strtow((nowdb_edge_t*)(ldr->csv->buf+ \
 		                                      ldr->csv->pos), \
@@ -367,51 +392,64 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 		GETTMSTMP(data, len, "TIMESTAMP", TMSTMP);
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WEIGHT:
-		GETVALUE(data, len, "WEIGHT", WEIGHT);
+		GETWEIGHT(data, len, "WEIGHT", WEIGHT);
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WEIGHT2:
-		GETVALUE(data, len, "WEIGHT2", WEIGH2);
+		GETWEIGHT(data, len, "WEIGHT2", WEIGH2);
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE:
 		GETTYPE(data, len, "WTYPE", WTYPE);
-		GETTYPEDVALUE("WEIGHT", WEIGHT);
+		GETTYPEDWEIGHT("WEIGHT", WEIGHT);
 		ldr->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE2:
 		GETTYPE(data, len, "WTYPE2", WTYPE2);
-		GETTYPEDVALUE("WEIGHT2", WEIGH2);
+		GETTYPEDWEIGHT("WEIGHT2", WEIGH2);
 		ldr->csv->cur = 0;
 	}
 }
 
-void nowdb_csv_row_context(int c, void *rsc) {
-	nowdb_loader_t *ldr = rsc;
+#define VERTEX  0
+#define PROP    8
+#define VALUE  16
+#define VTYPE  24
+#define ROLE   28
 
-	if (ldr->csv->rejected) {
-		ldr->csv->rejected = 0;
-		ldr->errors++;
-		/* count errors */
-		return;
+#define GETVALUE(d, l, name, fld) \
+	if (tohlp(ldr->csv, data, l, 0) != 0) \
+	{ \
+		REJECT(name, "invalid value"); \
 	}
 
-	ldr->csv->pos+=ldr->csv->recsize;
-	ldr->csv->fbcnt++;
-	ldr->csv->total++;
-
-	if (ldr->csv->pos >= BUFSIZE) {
-		insertBuf(ldr);
-		ldr->csv->pos = 0;
-		if (ldr->csv->fbcnt >= FEEDBACK) {
-			ldr->csv->fbcnt = 0;
-			/* give feedback */
-		}
-	}
-	if (ldr->err == NOWDB_OK) ldr->loaded++;
-}
+#define GETTYPEDVALUE(name, fld) \
+	if (nowdb_vertex_strtov((nowdb_vertex_t*)(ldr->csv->buf+  \
+		                                  ldr->csv->pos), \
+		              *((nowdb_type_t*)(ldr->csv->buf+    \
+		                                ldr->csv->pos+    \
+		                                        VTYPE)),  \
+		                ldr->csv->hlp) != 0) { \
+		REJECT(name, "invalid value"); \
+	} \
 
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc) {
-}
+	nowdb_loader_t *ldr = rsc;
 
-void nowdb_csv_row_vertex(int c, void *rsc) {
+	switch(ldr->csv->cur) {
+	case NOWDB_FIELD_VERTEX:
+		GETKEY(data, len, "VERTEX", VERTEX);
+		ldr->csv->cur++; break;
+	case NOWDB_FIELD_PROPERTY:
+		GETKEY(data, len, "PROPERTY", PROP);
+		ldr->csv->cur++; break;
+	case NOWDB_FIELD_VALUE:
+		GETVALUE(data, len, "VALUE", VALUE);
+		ldr->csv->cur++; break;
+	case NOWDB_FIELD_VTYPE:
+		GETTYPE(data, len, "VTYPE", VTYPE);
+		GETTYPEDVALUE("VALUE", VALUE);
+		ldr->csv->cur++; break;
+	case NOWDB_FIELD_ROLE:
+		GETTYPE(data, len, "ROLE", ROLE);
+		ldr->csv->cur = 0;
+	}
 }
-
 

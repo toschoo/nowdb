@@ -104,6 +104,7 @@ typedef struct {
 
 void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 /* ------------------------------------------------------------------------
  * Edge

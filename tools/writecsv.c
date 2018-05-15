@@ -26,7 +26,7 @@ void helptxt(char *progname) {
 }
 
 /* -----------------------------------------------------------------------
- * write buffer to file
+ * write buffer of edges to file
  * -----------------------------------------------------------------------
  */
 void edges(FILE *csv, nowdb_edge_t *buf, uint32_t size) {
@@ -41,6 +41,21 @@ void edges(FILE *csv, nowdb_edge_t *buf, uint32_t size) {
 		             buf[i].weight2,
 		             buf[i].wtype[0],
 		             buf[i].wtype[1]);
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * write buffer of vertices to file
+ * -----------------------------------------------------------------------
+ */
+void vertices(FILE *csv, nowdb_vertex_t *buf, uint32_t size) {
+	for(int32_t i=0; i<size; i++) {
+		fprintf(csv, "%lu;%lu;%lu;%u;%u\n",
+		             buf[i].vertex,
+		             buf[i].property,
+		             buf[i].value,
+		             buf[i].vtype,
+		             buf[i].role);
 	}
 }
 
@@ -80,7 +95,35 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 		}
 	}
 	if (j>0 && j<1024) edges(csv, buf, j);
+	return TRUE;
+}
 
+/* -----------------------------------------------------------------------
+ * For large values of 'count', this will insert around 100K 'keys'
+ * where key means, distinct values for vertex, property, role  
+ * -----------------------------------------------------------------------
+ */
+nowdb_bool_t writeVertices(FILE *csv, uint64_t count) {
+	nowdb_vertex_t buf[1024];
+	int j = 0;
+
+	memset(&buf,0,32*1024);
+
+	for(uint32_t i=0; i<count; i++) {
+
+		do buf[j].vertex   = rand()%100; while(buf[j].vertex == 0);
+		do buf[j].property = rand()%100; while(buf[j].property == 0);
+		do buf[j].role     = rand()%10; while(buf[j].role == 0);
+
+		buf[j].value = (uint64_t)i;
+		buf[j].vtype = NOWDB_TYP_UINT;
+
+		j++;
+		if (j == 1024) {
+			vertices(csv, buf, j); j=0;
+		}
+	}
+	if (j>0 && j<1024) vertices(csv, buf, j);
 	return TRUE;
 }
 
@@ -132,8 +175,14 @@ int main(int argc, char **argv) {
 	fprintf(stderr, "count: %lu\n", global_count);
 
 	timestamp(&t1);
-	if (!writeEdges(stdout, global_count)) {
-		rc = EXIT_FAILURE; goto cleanup;
+	if (global_vertex) {
+		if (!writeVertices(stdout, global_count)) {
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	} else {
+		if (!writeEdges(stdout, global_count)) {
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 	}
 	timestamp(&t2);
 	d = minus(&t2, &t1)/1000;

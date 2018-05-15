@@ -81,8 +81,6 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr);
 void nowdb_csv_field_context(void *data, size_t len, void *rsc);
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc);
 
-void nowdb_csv_row_context(int c, void *rsc);
-void nowdb_csv_row_vertex(int c, void *rsc);
-
+void nowdb_csv_row(int c, void *rsc);
 #endif
 
