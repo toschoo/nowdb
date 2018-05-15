@@ -133,19 +133,23 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	nowdb_edge_t *e=NULL;
 	uint64_t j = start;
 	uint64_t c = 0;
+	nowdb_bool_t closeit = FALSE;
 	// uint32_t max = file->size / file->bufsize;
 
-	err = nowdb_file_open(file);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return FALSE;
+	if (file->state == nowdb_file_state_closed) {
+		err = nowdb_file_open(file);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+		closeit = TRUE;
 	}
 	err = nowdb_file_rewind(file);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_file_close(file));
+		if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
 	fprintf(stderr, "file size: %u\n", file->size);
@@ -157,14 +161,14 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 		if (err != NOWDB_OK) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			NOWDB_IGNORE(nowdb_file_close(file));
+			if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 			return FALSE;
 		}
 		for(int i=0;i<file->bufsize;i+=file->recordsize) {
 			e = (nowdb_edge_t*)(file->bptr+i);
 			if (e->weight != j) {
 				fprintf(stderr, "wrong number: %lu\n", e->weight);
-				NOWDB_IGNORE(nowdb_file_close(file));
+				if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 				return FALSE;
 			}
 			j++; c++;
@@ -172,21 +176,23 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	}
 	if (e == NULL) {
 		fprintf(stderr, "no edge\n");
-		NOWDB_IGNORE(nowdb_file_close(file));
+		if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
 	if (e->weight != start + count) {
 		fprintf(stderr, "last number is wrong: %lu (%lu)\n",
 		                            e->weight, start+count);
-		NOWDB_IGNORE(nowdb_file_close(file));
+		if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
-	err = nowdb_file_close(file);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		NOWDB_IGNORE(nowdb_file_close(file));
-		return FALSE;
+	if (closeit) {
+		err = nowdb_file_close(file);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			NOWDB_IGNORE(nowdb_file_close(file));
+			return FALSE;
+		}
 	}
 	return TRUE;
 }

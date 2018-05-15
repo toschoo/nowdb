@@ -39,7 +39,7 @@ typedef char nowdb_ordering_t;  /* just for the moment */
 typedef struct {
 	uint32_t                type; /* reader type                   */
 	uint32_t             recsize; /* set according to first file   */
-	ts_algo_list_t         files; /* list of relevant files        */
+	ts_algo_list_t        *files; /* list of relevant files        */
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	ts_algo_tree_t       readers; /* files for index-based readers */
 	char                    *buf; /* for buffer-based readers      */
@@ -47,6 +47,7 @@ typedef struct {
 	nowdb_filter_t       *filter; /* filter                        */
 	nowdb_ordering_t      *order; /* ordering                      */
 	nowdb_index_t         *index; /* index                         */
+	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
 	uint32_t                 off; /* offset into win               */
 	void                    *key; /* current key                   */

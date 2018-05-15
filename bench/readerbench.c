@@ -51,6 +51,13 @@ uint32_t global_iter = 1;
 char *global_qry_type = NULL;
 char *global_context  = NULL;
 
+#define FULLSCAN     10
+#define FULLSCANPLUS 11
+#define SEARCH       20
+#define SEARCHPLUS   21
+#define RANGE        30
+#define RANGEPLUS    31
+
 /* ------------------------------------------------------------------------
  * get options
  * ------------------------------------------------------------------------
@@ -99,7 +106,7 @@ typedef struct {
  * do the benchmarks
  * ------------------------------------------------------------------------
  */
-nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
+nowdb_bool_t performRead(nowdb_context_t *ctx, int qt, result_t *res) {
 	struct timespec t1, t2, t3;
 
 	nowdb_err_t err;
@@ -110,11 +117,22 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 	timestamp(&t1);
 
 	ts_algo_list_init(&files);
-	err = nowdb_store_getReaders(&ctx->store, &files,
-	                                 NOWDB_TIME_DAWN,
-	                                 NOWDB_TIME_DUSK);
+
+	if (qt == FULLSCAN) {
+		err = nowdb_store_getReaders(&ctx->store, &files,
+		                                 NOWDB_TIME_DAWN,
+		                                 NOWDB_TIME_DUSK);
+	} else if (qt == FULLSCANPLUS) {
+		err = nowdb_store_getFiles(&ctx->store, &files,
+		                               NOWDB_TIME_DAWN,
+		                               NOWDB_TIME_DUSK);
+	} else {
+		fprintf(stderr, "unknown query type\n");
+		ts_algo_list_destroy(&files);
+		return FALSE;
+	}
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot get readers :-(\n");
+		fprintf(stderr, "cannot get files:-(\n");
 		nowdb_err_print(err); nowdb_err_release(err);
 		return FALSE;
 	}
@@ -125,7 +143,6 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 		nowdb_store_destroyFiles(&ctx->store, &files);
 		return FALSE;
 	}
-	nowdb_store_destroyFiles(&ctx->store, &files);
 
 	timestamp(&t2);
 
@@ -137,16 +154,20 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 				nowdb_err_print(err);
 				nowdb_err_release(err);
 				nowdb_reader_destroy(reader); free(reader);
+				nowdb_store_destroyFiles(&ctx->store, &files);
 				return FALSE;
 			}
 			nowdb_err_release(err); break;
 		}
 		for(int i=0; i<NOWDB_IDX_PAGE; i+= reader->recsize) {
+			/* check if page is NULL!!! */
 			s++;
 		}
 		if (s >= global_count) break;
 	}
 	nowdb_reader_destroy(reader); free(reader);
+	nowdb_store_destroyFiles(&ctx->store, &files);
+
 	timestamp(&t3);
 
 	res->count    = s;
@@ -163,6 +184,7 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, result_t *res) {
 int main(int argc, char **argv) {
 	nowdb_err_t err;
 	int rc = EXIT_SUCCESS;
+	int qt = FULLSCAN;
 	nowdb_scope_t *scope = NULL;
 	nowdb_context_t *ctx = NULL;
 	nowdb_path_t path;
@@ -193,6 +215,18 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	fprintf(stderr, "count: %u\n", global_count);
+	fprintf(stderr, "query: %s\n", global_qry_type);
+
+	if (strcmp(global_qry_type, "fullscan") == 0 ||
+	    strcmp(global_qry_type, "FULLSCAN") == 0 ||
+	    strcmp(global_qry_type, "f")        == 0) qt = FULLSCAN;
+	else if (strcmp(global_qry_type, "fullscan+") == 0 || 
+	         strcmp(global_qry_type, "FULLSCAN+") == 0 ||
+	         strcmp(global_qry_type, "f+")        == 0)  qt = FULLSCANPLUS;
+	else {
+		fprintf(stderr, "unknown query type\n");
+		return EXIT_FAILURE;
+	}
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "cannot init library\n");
@@ -230,7 +264,7 @@ int main(int argc, char **argv) {
 	}
 	init_progress(&p, stdout, global_iter);
 	for(int i=0; i<global_iter; i++) {
-		if (!performRead(ctx, &res)) {
+		if (!performRead(ctx, qt, &res)) {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		overall[i]  = res.overall;
