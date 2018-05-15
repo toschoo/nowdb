@@ -57,6 +57,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/reader/reader.o  \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
+      $(SRC)/query/plan.o     \
+      $(SRC)/query/cursor.o   \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
@@ -82,6 +84,8 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/reader/reader.h  \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \
+      $(SRC)/query/plan.h     \
+      $(SRC)/query/cursor.h   \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
