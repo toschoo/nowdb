@@ -108,7 +108,10 @@ static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	nowdb_err_t err;
 
 	err = nowdb_file_move(reader->current->cont);
-	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err == NOWDB_OK) {
+		reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
+		return NOWDB_OK;
+	}
 
 	if (err->errcode != nowdb_err_eof) return err;
 	nowdb_err_release(err);
@@ -134,7 +137,11 @@ static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	err = nowdb_file_rewind(reader->current->cont);
 	if (err != NOWDB_OK) return err;
 
-	return nowdb_file_move(reader->current->cont);
+	err = nowdb_file_move(reader->current->cont);
+	if (err != NOWDB_OK) return err;
+
+	reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -194,7 +201,9 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
  * Page
  * ------------------------------------------------------------------------
  */
-char *nowb_reader_page(nowdb_reader_t *reader);
+char *nowdb_reader_page(nowdb_reader_t *reader) {
+	return reader->page;
+}
 
 /* ------------------------------------------------------------------------
  * Pageid

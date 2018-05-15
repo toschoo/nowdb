@@ -10,6 +10,15 @@
 #include <string.h>
 #include <stdio.h>
 
+char nowdb_nullrec[64] = {0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0,
+                          0,0,0,0,0,0,0,0};
+
 static inline void setWeight(nowdb_edge_t *e, nowdb_type_t typ,
                                        void *value, char what) 
 {

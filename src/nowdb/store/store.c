@@ -12,14 +12,7 @@
 
 static char *OBJECT = "store";
 
-static char nullrec[64] = {0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0};
+extern char nowdb_nullrec[64];
 
 #define MAX_FILE_NAME 32
 
@@ -685,8 +678,8 @@ static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 			if (err != NOWDB_OK) break;
 			pos = 0;
 		}
-		if (memcmp(store->writer->mptr+pos,nullrec,
-		               store->recsize) == 0) break;
+		if (memcmp(store->writer->mptr+pos,nowdb_nullrec,
+		                     store->recsize) == 0) break;
 		
 		/*
 		fprintf(stderr, "%u/%u/%u\n", store->writer->pos, pos,

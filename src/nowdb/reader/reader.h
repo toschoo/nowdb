@@ -85,7 +85,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader);
  * Returns the current page
  * ------------------------------------------------------------------------
  */
-char *nowb_reader_page(nowdb_reader_t *reader);
+char *nowdb_reader_page(nowdb_reader_t *reader);
 
 /* ------------------------------------------------------------------------
  * Pageid

@@ -161,6 +161,8 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, int qt, result_t *res) {
 		}
 		for(int i=0; i<NOWDB_IDX_PAGE; i+= reader->recsize) {
 			/* check if page is NULL!!! */
+			if (memcmp(nowdb_reader_page(reader)+i,
+			           nowdb_nullrec, 64) == 0) break;
 			s++;
 		}
 		if (s >= global_count) break;

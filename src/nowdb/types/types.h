@@ -88,6 +88,8 @@ typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
 
+extern char nowdb_nullrec[64];
+
 /* ------------------------------------------------------------------------
  * Vertex Property
  * ---------------
