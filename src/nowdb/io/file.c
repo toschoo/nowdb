@@ -211,7 +211,7 @@ void nowdb_file_destroy(nowdb_file_t *file) {
 	if (file->state == nowdb_file_state_mapped) {
 		NOWDB_IGNORE(nowdb_file_umap(file));
 	}
-	if (file->state == nowdb_file_state_closed) {
+	if (file->state != nowdb_file_state_closed) {
 		NOWDB_IGNORE(nowdb_file_close(file));
 	}
 	if (file->bptr != NULL) {

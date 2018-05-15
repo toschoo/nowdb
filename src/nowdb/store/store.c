@@ -12,14 +12,7 @@
 
 static char *OBJECT = "store";
 
-static char nullrec[64] = {0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0,
-                           0,0,0,0,0,0,0,0};
+extern char nowdb_nullrec[64];
 
 #define MAX_FILE_NAME 32
 
@@ -122,6 +115,7 @@ static inline nowdb_err_t copyFile(nowdb_file_t  *source,
  */
 static inline nowdb_err_t copyFileList(ts_algo_list_t *source,
                                        ts_algo_list_t *target,
+                                       nowdb_bool_t    openit,
                                        nowdb_time_t     start,
                                        nowdb_time_t       end) {
 	ts_algo_list_node_t *runner;
@@ -135,6 +129,10 @@ static inline nowdb_err_t copyFileList(ts_algo_list_t *source,
 
 		err = copyFile(runner->cont, &file);
 		if (err != NOWDB_OK) return err;
+		if (openit) {
+			err = nowdb_file_open(file);
+			if (err != NOWDB_OK) return err;
+		}
 		if (ts_algo_list_append(target, file) != TS_ALGO_OK) {
 			free(file);
 			return nowdb_err_get(nowdb_err_no_mem,  
@@ -680,8 +678,8 @@ static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 			if (err != NOWDB_OK) break;
 			pos = 0;
 		}
-		if (memcmp(store->writer->mptr+pos,nullrec,
-		               store->recsize) == 0) break;
+		if (memcmp(store->writer->mptr+pos,nowdb_nullrec,
+		                     store->recsize) == 0) break;
 		
 		/*
 		fprintf(stderr, "%u/%u/%u\n", store->writer->pos, pos,
@@ -1383,7 +1381,7 @@ static inline nowdb_err_t getReaders(nowdb_store_t *store,
 		ts_algo_list_destroy(&tmp);
 		return err;
 	}
-	err = copyFileList(&tmp, list, start, end);
+	err = copyFileList(&tmp, list, FALSE, start, end);
 	ts_algo_list_destroy(&tmp);
 	return err;
 }
@@ -1415,6 +1413,46 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get all files for period start - end
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getFiles(nowdb_store_t *store,
+                                   ts_algo_list_t *list,
+                                   nowdb_time_t   start,
+                                   nowdb_time_t     end) {
+	nowdb_file_t *file;
+	nowdb_err_t    err;
+	
+	/* readers */
+	err = getReaders(store, list, start, end);
+	if (err != NOWDB_OK) return err;
+
+	/* set decompression settings to readers */
+	err = setDecomp(store, list);
+	if (err != NOWDB_OK) return err;
+
+	/* pending */
+	if (store->waiting.len > 0) {
+		err = copyFileList(&store->waiting, list, TRUE, start, end);
+		if (err != NOWDB_OK) return err;
+	}
+	/* writer */
+	err = copyFile(store->writer, &file);
+	if (err != NOWDB_OK) return err;
+	err = nowdb_file_makeReader(file);
+	if (err != NOWDB_OK) return err;
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) return err;
+
+	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                     "list append");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get all files for period start - end
  * ------------------------------------------------------------------------
  */
@@ -1422,45 +1460,60 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
                                  ts_algo_list_t *list,
                                  nowdb_time_t   start,
                                  nowdb_time_t    end) {
-	nowdb_file_t       *file;
 	nowdb_err_t  err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
 
 	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                   FALSE, OBJECT, "store object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	if (list  == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                   FALSE, OBJECT, "list pointer is NULL");
 
 	err = nowdb_lock_read(&store->lock);
 	if (err != NOWDB_OK) return err;
-	
-	/* readers */
-	err = getReaders(store, list, start, end);
+
+	err = getFiles(store, list, start, end);
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Get n copies of all files for period start - end
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getNFiles(nowdb_store_t  *store,
+                                  uint32_t       copies,
+                                  ts_algo_list_t *lists,
+                                  nowdb_time_t    start,
+                                  nowdb_time_t      end) {
+	nowdb_err_t  err=NOWDB_OK;
+	nowdb_err_t err2=NOWDB_OK;
+
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+	if (lists == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "list pointer is NULL");
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	for(uint32_t i=0;i<copies;i++) {
+		err = getFiles(store, lists+i, start, end);
+		if (err != NOWDB_OK) break;
+	}
 	if (err != NOWDB_OK) goto unlock;
 
-	/* pending */
-	if (store->waiting.len > 0) {
-		err = copyFileList(&store->waiting, list, start, end);
-		if (err != NOWDB_OK) goto unlock;
-	}
-	/* writer */
-	err = copyFile(store->writer, &file);
-	if (err != NOWDB_OK) goto unlock;
-	err = nowdb_file_makeReader(file);
-	if (err != NOWDB_OK) goto unlock;
-	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "list append");
-		goto unlock;
-	}
 unlock:
 	err2 = nowdb_unlock_read(&store->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
-	if (err != NOWDB_OK) return err;
-	return setDecomp(store, list);
+	return err;
 }
+
 
 /* ------------------------------------------------------------------------
  * Find file in spares

@@ -36,8 +36,6 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->order= NULL;
 	reader->current = NULL;
 
-	ts_algo_list_init(&reader->files);
-
 	return NOWDB_OK;
 }
 
@@ -63,55 +61,20 @@ static inline nowdb_err_t newReader(nowdb_reader_t **reader) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
-	reader->current = reader->files.head;
+	nowdb_err_t err;
+
+	reader->current = reader->files->head;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
 	                                           FALSE, OBJECT, NULL);
+	reader->closeit = FALSE;
 	reader->page = NULL; 
 	reader->off = 0; 
-	return nowdb_file_open(reader->current->cont);
-}
 
-/* ------------------------------------------------------------------------
- * Helper: allocate and initialise a new reader
- * ------------------------------------------------------------------------
- */
-static inline void destroyFiles(ts_algo_list_t *files) {
-	ts_algo_list_node_t *runner, *tmp;
-	runner = files->head;
-	while(runner != NULL) {
-		nowdb_file_destroy(runner->cont);
-		free(runner->cont); tmp = runner->nxt;
-		ts_algo_list_remove(files, runner);
-		free(runner); runner = tmp;
-	}
-}
-
-/* ------------------------------------------------------------------------
- * Helper: allocate and initialise a new reader
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t copyFiles(ts_algo_list_t *source,
-                                    ts_algo_list_t *target) {
-	nowdb_err_t err;
-	ts_algo_list_node_t *runner;
-	nowdb_file_t        *file;
-
-	for(runner=source->head; runner!=NULL; runner=runner->nxt) {
-		file = malloc(sizeof(nowdb_file_t));
-		if (file == NULL) {
-			destroyFiles(target);
-			return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-			                       "allocating file descriptor");
-		}
-		err = nowdb_file_copy(runner->cont, file);
-		if (err != NOWDB_OK) {
-			destroyFiles(target); return err;
-		}
-		if (ts_algo_list_append(target, file) != TS_ALGO_OK) {
-			destroyFiles(target);
-			return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-			                                      "list.append");
-		}
+	if (((nowdb_file_t*)reader->current->cont)->state ==
+	      nowdb_file_state_closed) {
+		err = nowdb_file_open(reader->current->cont);
+		if (err != NOWDB_OK) return err;
+		reader->closeit = TRUE;
 	}
 	return NOWDB_OK;
 }
@@ -124,7 +87,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 	if (reader == NULL) return;
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
-		destroyFiles(&reader->files);
+		reader->files = NULL;
 		return;
 
 	case NOWDB_READER_SEARCH:
@@ -145,24 +108,40 @@ static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	nowdb_err_t err;
 
 	err = nowdb_file_move(reader->current->cont);
-	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err == NOWDB_OK) {
+		reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
+		return NOWDB_OK;
+	}
 
 	if (err->errcode != nowdb_err_eof) return err;
 	nowdb_err_release(err);
 
-	err = nowdb_file_close(reader->current->cont);
-	if (err != NOWDB_OK) return err;
+	if (reader->closeit) {
+		err = nowdb_file_close(reader->current->cont);
+		if (err != NOWDB_OK) return err;
+	}
 
 	reader->current = reader->current->nxt;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
 	                                           FALSE, OBJECT, NULL);
-	err = nowdb_file_open(reader->current->cont);
-	if (err != NOWDB_OK) return err;
+	
+	if (((nowdb_file_t*)reader->current->cont)->state ==
+	      nowdb_file_state_closed) {
+		err = nowdb_file_open(reader->current->cont);
+		if (err != NOWDB_OK) return err;
+		reader->closeit = TRUE;
+	} else {
+		reader->closeit = FALSE;
+	}
 
 	err = nowdb_file_rewind(reader->current->cont);
 	if (err != NOWDB_OK) return err;
 
-	return nowdb_file_move(reader->current->cont);
+	err = nowdb_file_move(reader->current->cont);
+	if (err != NOWDB_OK) return err;
+
+	reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -222,7 +201,9 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
  * Page
  * ------------------------------------------------------------------------
  */
-char *nowb_reader_page(nowdb_reader_t *reader);
+char *nowdb_reader_page(nowdb_reader_t *reader) {
+	return reader->page;
+}
 
 /* ------------------------------------------------------------------------
  * Pageid
@@ -272,11 +253,8 @@ nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
 	(*reader)->type = NOWDB_READER_FULLSCAN;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
-	err = copyFiles(files, &(*reader)->files);
-	if (err != NOWDB_OK) {
-		nowdb_reader_destroy(*reader); free(*reader);
-		return err;
-	}
+	(*reader)->files = files;
+
 	err = rewindFullscan(*reader);
 	if (err != NOWDB_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);

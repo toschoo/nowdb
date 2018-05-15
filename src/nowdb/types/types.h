@@ -88,6 +88,8 @@ typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
 
+extern char nowdb_nullrec[64];
+
 /* ------------------------------------------------------------------------
  * Vertex Property
  * ---------------
@@ -104,6 +106,7 @@ typedef struct {
 
 void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 /* ------------------------------------------------------------------------
  * Edge

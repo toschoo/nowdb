@@ -135,7 +135,6 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 		nowdb_store_destroyFiles(store, &files);
 		return FALSE;
 	}
-	nowdb_store_destroyFiles(store, &files);
 	for(;;) {
 		err = nowdb_reader_move(reader);
 		if (err != NOWDB_OK) {
@@ -144,6 +143,7 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 				nowdb_err_print(err);
 				nowdb_err_release(err);
 				nowdb_reader_destroy(reader); free(reader);
+				nowdb_store_destroyFiles(store, &files);
 				return FALSE;
 			}
 			nowdb_err_release(err); break;
@@ -153,6 +153,7 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 		}
 	}
 	nowdb_reader_destroy(reader); free(reader);
+	nowdb_store_destroyFiles(store, &files);
 	if (s != 5*FULL) {
 		fprintf(stderr, "count does not match: %lu/%d\n", s, 5*FULL);
 		return FALSE;
