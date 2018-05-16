@@ -39,7 +39,6 @@ nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_filter_newBool(nowdb_filter_t **filter, int op) {
-	int x;
 
 	*filter = calloc(1, sizeof(nowdb_filter_t));
 	if (*filter == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE,
@@ -51,34 +50,6 @@ nowdb_err_t nowdb_filter_newBool(nowdb_filter_t **filter, int op) {
 	(*filter)->left = NULL;
 	(*filter)->right = NULL;
 
-	switch(op) {
-	case NOWDB_FILTER_TRUE:
-	case NOWDB_FILTER_FALSE: x = 0; break;
-	case NOWDB_FILTER_JUST:
-	case NOWDB_FILTER_NOT: x = 1; break;
-	case NOWDB_FILTER_AND:
-	case NOWDB_FILTER_OR: x = 2; break;
-	default: 
-		free(*filter); *filter = NULL;
-		return nowdb_err_get(nowdb_err_invalid, FALSE, "filter",
-		                                   "invalid operation");
-	}
-	if (x >= 1) {
-		(*filter)->left = calloc(1, sizeof(nowdb_filter_t));
-		if ((*filter)->left == NULL) {
-			free(*filter); *filter = NULL;
-			return nowdb_err_get(nowdb_err_invalid, FALSE,
-			          "filter", "allocating filter node");
-		}
-	}
-	if (x == 2) {
-		(*filter)->right = calloc(1, sizeof(nowdb_filter_t));
-		if ((*filter)->right == NULL) {
-			free(*filter); *filter = NULL;
-			return nowdb_err_get(nowdb_err_invalid, FALSE,
-			          "filter", "allocating filter node");
-		}
-	}
 	return NOWDB_OK;
 }
 
