@@ -55,6 +55,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/reader/reader.o  \
+      $(SRC)/reader/filter.o  \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/plan.o     \
@@ -82,6 +83,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
       $(SRC)/reader/reader.h  \
+      $(SRC)/reader/filter.h  \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -121,6 +123,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertstoresmoke        \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
+	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
 	$(SMK)/nowdbsqlsmoke
 
@@ -264,6 +267,10 @@ $(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
 			                 $(COM)/bench.o  \
 				         $(libs) -lnowdb
 
+$(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
 
 $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			        $(COM)/stores.o \
@@ -443,6 +450,7 @@ clean:
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/readersmoke
+	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/nowdbsqlsmoke
