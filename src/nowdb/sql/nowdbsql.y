@@ -45,6 +45,9 @@ sql ::= ddl SEMICOLON. {
 sql ::= dll SEMICOLON. {
 	nowdbsql_state_pushDLL(nowdbres);
 }
+sql ::= dql SEMICOLON. {
+	nowdbsql_state_pushDQL(nowdbres);
+}
 sql ::= misc SEMICOLON. {
 	nowdbsql_state_pushMisc(nowdbres);
 }
@@ -126,19 +129,19 @@ context_only ::= CONTEXT IDENTIFIER(I). {
 context_options ::= context_option.
 context_options ::= context_option COMMA context_options.
 
-context_option ::= ALLOCSIZE EQUAL INTEGER(I). {
+context_option ::= ALLOCSIZE EQ INTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ALLOCSIZE, I);
 }
-context_option ::= LARGESIZE EQUAL INTEGER(I). {
+context_option ::= LARGESIZE EQ INTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_LARGESIZE, I);
 }
-context_option ::= SORTERS EQUAL INTEGER(I). {
+context_option ::= SORTERS EQ INTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_SORTERS, I);
 }
-context_option ::= COMPRESSION EQUAL STRING(I). {
+context_option ::= COMPRESSION EQ STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_COMPRESSION, I);
 }
-context_option ::= ENCRYPTION EQUAL STRING(I). {
+context_option ::= ENCRYPTION EQ STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
 }
 
@@ -219,5 +222,78 @@ dml_target ::= IDENTIFIER(I). {
 	nowdbsql_state_pushContext(nowdbres, I);
 }
 dml_target ::= VERTEX. {
-	nowdbsql_state_pushVertex(nowdbres);
+	nowdbsql_state_pushVertex(nowdbres, NULL);
 }
+
+/* MINIMAL VIABLE SQL */
+dql ::= projection_clause from_clause. {
+	nowdbsql_state_pushDQL(nowdbres);
+}
+dql ::= projection_clause from_clause where_clause.
+
+projection_clause ::= SELECT STAR. {
+	nowdbsql_state_pushProjection(nowdbres);
+}
+
+from_clause ::= FROM table_list. {
+	nowdbsql_state_pushFrom(nowdbres);
+}
+
+where_clause ::= WHERE condition. {
+	nowdbsql_state_pushWhere(nowdbres);
+}
+where_clause ::= WHERE condition more_conditions. {
+	nowdbsql_state_pushWhere(nowdbres);
+}
+
+condition ::= field comparison value.
+condition ::= LPAR field comparison value RPART.
+ 
+more_conditions ::= connector condition.
+more_conditions ::= connector condition more_conditions.
+more_conditions ::= connector condition LPAR more_conditions RPAR.
+more_conditions ::= connector condition NOT LPAR more_conditions RPAR.
+
+connector ::= AND.
+connector ::= OR.
+
+table_list ::= table_spec.
+table_list ::= table_spec COMMA table_list.
+
+table_spec ::= VERTEX. {
+	nowdbsql_state_pushVertex(nowdbres, NULL);
+}
+table_spec ::= VERTEX AS IDENTIFIER(A). {
+	nowdbsql_state_pushVertex(nowdbres, A);
+}
+table_spec ::= IDENTIFIER(I). {
+	nowdbsql_state_pushTable(nowdbres, I, NULL);
+}
+table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
+	nowdbsql_state_pushTable(nowdbres, T, A);
+}
+
+comparison ::= EQ. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_EQ);
+}
+comparison ::= LE. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LE);
+}
+comparison ::= GE. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GE);
+}
+comparison ::= LT. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LT);
+}
+comparison ::= GT. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GT);
+}
+comparison ::= NE. {
+	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_NE);
+}
+
+field ::= IDENTIFIER.
+
+value ::= IDENTIFIER.
+value ::= STRING.
+

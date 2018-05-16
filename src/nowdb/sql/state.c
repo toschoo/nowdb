@@ -84,8 +84,21 @@ static inline void clean(nowdbsql_stack_t *stack, int pos) {
 static inline void resetStack(nowdbsql_stack_t *stack) {
 	for(int i=stack->hi; i>=stack->lo; i--) {
 		if (stack->chunks[i] != NULL) break;
-		if (stack->hi > 0) stack->hi--;
+		if (stack->hi > stack->lo) stack->hi--;
 	}
+}
+
+static inline void incStack(nowdbsql_stack_t *stack) {
+	stack->lo++; 
+	if (stack->hi < stack->lo) stack->hi = stack->lo;
+}
+
+static inline void decStack(nowdbsql_stack_t *stack) {
+	stack->lo--; stack->hi = stack->lo;
+}
+
+static inline void setAllStack(nowdbsql_stack_t *stack) {
+	stack->lo=0;
 }
 
 static inline void cleanStack(nowdbsql_stack_t *stack) {
@@ -180,6 +193,15 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
 #define RESET() \
 	resetStack(res->stack)
 
+#define INC() \
+	incStack(res->stack);
+
+#define DEC() \
+	decStack(res->stack);
+
+#define REOPEN() \
+	setAllStack(res->stack);
+
 static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) {
 	nowdb_ast_t *n;
 	n = nowdb_ast_create(nt, st);
@@ -207,8 +229,50 @@ void nowdbsql_state_pushContext(nowdbsql_state_t *res,
 	PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT, NOWDB_AST_V_STRING, ctx);
 }
 
-void nowdbsql_state_pushVertex(nowdbsql_state_t *res) {
-	PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX, 0, NULL);
+void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias) {
+	if (alias == NULL) {
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX, 0, NULL);
+	} else {
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX,
+		          NOWDB_AST_V_STRING, alias);
+	}
+}
+
+void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name, char *alias) {
+	if (alias == NULL) 
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT,
+		          NOWDB_AST_V_STRING, name);
+	else {
+		fprintf(stderr, "PUSH TABLE NAME WITH ALIAS!!!\n");
+		res->errcode = NOWDB_SQL_ERR_PARSER;
+	}
+}
+
+void nowdbsql_state_pushComparison(nowdbsql_state_t *res,
+                                                int comp) {
+	switch(comp) {
+	case NOWDB_SQL_EQ:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_EQ, 0, NULL);
+		break;
+	case NOWDB_SQL_LE:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_LE, 0, NULL);
+		break;
+	case NOWDB_SQL_GE:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_GE, 0, NULL);
+		break;
+	case NOWDB_SQL_LT:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_LT, 0, NULL);
+		break;
+	case NOWDB_SQL_GT:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_GT, 0, NULL);
+		break;
+	case NOWDB_SQL_NE:
+		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_NE, 0, NULL);
+		break;
+	default:
+		fprintf(stderr, "UNKNOWN COMPARISON: %d\n", comp);
+		res->errcode = NOWDB_SQL_ERR_PARSER;
+	}
 }
 
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res,
@@ -412,4 +476,59 @@ void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name) {
 	nowdb_ast_t *n;
 	CREATE(&n, NOWDB_AST_USE, 0, NOWDB_AST_V_STRING, name);
 	PUSHN(n);
+}
+
+void nowdbsql_state_pushDQL(nowdbsql_state_t *res) {
+	int p;
+	int select = NOWDB_AST_SELECT;
+	int   from = NOWDB_AST_FROM;
+	int  where = NOWDB_AST_WHERE;
+	nowdb_ast_t *n, *k;
+	
+	REOPEN();
+
+	CREATE(&n, NOWDB_AST_DQL, 0, 0, NULL);
+
+	POP(n, &k, &select, 1, p);
+	ADDKID(n,k,p);
+
+	POP(n, &k, &from, 1, p);
+	ADDKID(n,k,p);
+
+	TRYPOP(&k, &where, 1, p);
+	if (k!=NULL) ADDKID(n,k,p);
+
+	RESET();
+	PUSHN(n);
+}
+
+void nowdbsql_state_pushProjection(nowdbsql_state_t *res) {
+	nowdb_ast_t *n;
+
+	CREATE(&n, NOWDB_AST_SELECT, NOWDB_AST_ALL, 0, NULL);
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushFrom(nowdbsql_state_t *res) {
+	int p;
+	int target = NOWDB_AST_TARGET;
+	nowdb_ast_t *n, *k;
+
+	CREATE(&n, NOWDB_AST_FROM, 0, 0, NULL);
+	POP(n, &k, &target, 1, p);
+	ADDKID(n,k,p);
+	TRYPOP(&k, &target, 1, p);
+	while(k!=NULL) {
+		ADDKID(n,k,p);
+		TRYPOP(&k,&target,1,p);
+	}
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushWhere(nowdbsql_state_t *res) {
+	fprintf(stderr, "WHERE IS NOT IMPLEMENTED\n");
 }

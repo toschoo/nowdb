@@ -21,11 +21,15 @@ static char *OBJECT = "plan";
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
-	nowdb_ast_t *trg;
+	nowdb_err_t   err;
+	nowdb_ast_t  *trg, *from;
 	nowdb_plan_t *stp;
 
-	trg = nowdb_ast_target(ast);
-	if (trg == NULL) INVALIDAST("no target in AST");
+	from = nowdb_ast_from(ast);
+	if (from == NULL) INVALIDAST("no 'from' in DQL");
+
+	trg = nowdb_ast_target(from);
+	if (trg == NULL) INVALIDAST("no target in from");
 
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -40,17 +44,33 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	                FALSE, OBJECT, "list append");
 	}
 	stp = malloc(sizeof(nowdb_plan_t));
-	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                      FALSE, OBJECT, "allocating plan");
+	if (stp == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                         "allocating plan");
+		nowdb_plan_destroy(plan); return err;
+	}
 	stp->ntype = NOWDB_PLAN_READER;
 	stp->stype = NOWDB_READER_FS_;
 	stp->target = trg->stype;
 	stp->name = trg->value;
 
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
-		return nowdb_err_get(nowdb_err_no_mem,
-	                FALSE, OBJECT, "list append");
+		err = nowdb_err_get(nowdb_err_no_mem,
+	               FALSE, OBJECT, "list append");
+		nowdb_plan_destroy(plan); return err;
 	}
 	return NOWDB_OK;
+}
+
+void nowdb_plan_destroy(ts_algo_list_t *plan) {
+	ts_algo_list_node_t *runner, *tmp;
+
+	if (plan == NULL) return;
+	runner = plan->head;
+	while(runner!=NULL) {
+		free(runner->cont); tmp = runner->nxt;
+		ts_algo_list_remove(plan, runner);
+		free(runner); runner = tmp;
+	}
 }
 

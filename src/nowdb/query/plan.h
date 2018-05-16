@@ -43,5 +43,6 @@ typedef struct {
 } nowdb_plan_t;
 
 nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan);
+void nowdb_plan_destroy(ts_algo_list_t *plan);
 
 #endif

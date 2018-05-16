@@ -51,12 +51,12 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_FROM:
 	case NOWDB_AST_SELECT:
-	case NOWDB_AST_WHERE:  
-	case NOWDB_AST_AND:    
+	case NOWDB_AST_WHERE:
+	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:     
 	case NOWDB_AST_NOT:    
 	case NOWDB_AST_GROUP:  
-	case NOWDB_AST_ORDER:  
+	case NOWDB_AST_ORDER: ASTCALLOC(2); 
 	case NOWDB_AST_JOIN: UNDEFINED(ntype); 
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
@@ -91,7 +91,10 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_UPDATE: return "update";
 
 	case NOWDB_AST_FROM: return "from";
-	case NOWDB_AST_SELECT: return "select";
+	case NOWDB_AST_SELECT: 
+		if (stype == NOWDB_AST_ALL) return "select *";
+		else return "select";
+
 	case NOWDB_AST_WHERE: return "where";
 	case NOWDB_AST_AND: return "and";
 	case NOWDB_AST_OR: return "or";
@@ -125,6 +128,17 @@ static inline char *tellType(int ntype, int stype) {
 			case NOWDB_AST_IFEXISTS: return "if (not) exists";
 			case NOWDB_AST_IGNORE: return "option ignore";
 			default: return "unknown option";
+		}
+
+	case NOWDB_AST_COMPARE: 
+		switch(stype) {
+			case NOWDB_AST_EQ: return "=";
+			case NOWDB_AST_LE: return "<=";
+			case NOWDB_AST_GE: return ">=";
+			case NOWDB_AST_LT: return "<";
+			case NOWDB_AST_GT: return ">";
+			case NOWDB_AST_NE: return "!=";
+			default: return "unknown compare";
 		}
 
 	case NOWDB_AST_DATA:
@@ -210,8 +224,7 @@ static inline int ad3ql(nowdb_ast_t *n,
 	case NOWDB_AST_FROM: ADDKID(0);
 	case NOWDB_AST_WHERE:
 	case NOWDB_AST_AND:
-	case NOWDB_AST_OR:
-	case NOWDB_AST_NOT: ADDKID(2);
+	case NOWDB_AST_OR: ADDKID(2);
 	case NOWDB_AST_GROUP: ADDKID(3);
 	case NOWDB_AST_ORDER: ADDKID(4);
 	default: return -1;
@@ -287,6 +300,22 @@ static inline int ad3ata(nowdb_ast_t *n,
 	}
 }
 
+static inline int addsel(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	default: return -1;
+	}
+}
+
+static inline int addfrom(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TARGET: ADDKID(0);
+	default: return -1;
+	}
+}
+
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	switch(n->ntype) {
 
@@ -305,8 +334,8 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_INSERT: return addins(n,k);
 	case NOWDB_AST_UPDATE: return -1;
 
-	case NOWDB_AST_FROM: return -1;
-	case NOWDB_AST_SELECT: return -1;
+	case NOWDB_AST_FROM: return addfrom(n,k);
+	case NOWDB_AST_SELECT: return addsel(n,k);
 	case NOWDB_AST_WHERE:   return -1;
 	case NOWDB_AST_AND:     return -1;
 	case NOWDB_AST_OR:      return -1;
@@ -399,10 +428,27 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	case NOWDB_AST_LOAD: return ast->kids[0];
 
 	case NOWDB_AST_DML:
-	case NOWDB_AST_DQL: return NULL;
+	case NOWDB_AST_DQL: return nowdb_ast_target(
+	                           nowdb_ast_from(ast));
+
+	case NOWDB_AST_FROM: return ast->kids[0];
 
 	default: return NULL;
 	}
+}
+
+nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *ast) {
+	if (ast->ntype != NOWDB_AST_DQL) return NULL;
+	return ast->kids[1];
+}
+
+nowdb_ast_t *nowdb_ast_from(nowdb_ast_t *ast) {
+	if (ast->ntype != NOWDB_AST_DQL) return NULL;
+	return ast->kids[0];
+}
+
+nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *ast) {
+	return NULL;
 }
 
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {

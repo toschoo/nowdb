@@ -16,8 +16,18 @@
 %%
 
 ";"			return NOWDB_SQL_SEMICOLON;
-"="			return NOWDB_SQL_EQUAL;
+"="			return NOWDB_SQL_EQ;
 ","			return NOWDB_SQL_COMMA;
+"*"			return NOWDB_SQL_STAR;
+"("			return NOWDB_SQL_LPAR;
+")"			return NOWDB_SQL_RPAR;
+"<"			return NOWDB_SQL_LT;
+">"			return NOWDB_SQL_GT;
+
+"<="			return NOWDB_SQL_LE;
+">="			return NOWDB_SQL_GE;
+"!="			return NOWDB_SQL_NE;
+"<>"			return NOWDB_SQL_NE;
 
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
@@ -33,6 +43,13 @@
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
 
+(?i:SELECT)		return NOWDB_SQL_SELECT;
+(?i:FROM)		return NOWDB_SQL_FROM;
+(?i:WHERE)		return NOWDB_SQL_WHERE;
+(?i:AND)		return NOWDB_SQL_AND;
+(?i:OR)			return NOWDB_SQL_OR;
+(?i:NOT)		return NOWDB_SQL_NOT;
+
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
 
@@ -41,8 +58,9 @@
 (?i:ON)			return NOWDB_SQL_ON;
 
 (?i:IF)			return NOWDB_SQL_IF;
-(?i:NOT)		return NOWDB_SQL_NOT;
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;
+
+(?i:AS)			return NOWDB_SQL_AS;
 
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;

@@ -28,6 +28,7 @@
 #define NOWDB_AST_GROUP  4007
 #define NOWDB_AST_ORDER  4008
 #define NOWDB_AST_JOIN   4009
+#define NOWDB_AST_ALL    4010
 
 #define NOWDB_AST_USE    5001
 
@@ -54,9 +55,18 @@
 #define NOWDB_AST_DATA     10300
 #define NOWDB_AST_KEYVAL   10301
 #define NOWDB_AST_VALLIST  10302
+#define NOWDB_AST_FIELD    10303
 
 #define NOWDB_AST_PATH     10009
 #define NOWDB_AST_LOC      10010
+
+#define NOWDB_AST_COMPARE  10500
+#define NOWDB_AST_EQ       10501
+#define NOWDB_AST_LE       10502
+#define NOWDB_AST_GE       10503
+#define NOWDB_AST_LT       10504
+#define NOWDB_AST_GT       10505
+#define NOWDB_AST_NE       10506
 
 #define NOWDB_AST_V_STRING  1
 #define NOWDB_AST_V_INTEGER 2
@@ -104,6 +114,10 @@ void nowdb_ast_show(nowdb_ast_t *n);
 nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
+
+nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_from(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *node);
 
 int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value);
 int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value);

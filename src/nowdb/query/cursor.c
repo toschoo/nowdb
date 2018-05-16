@@ -26,8 +26,11 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	nowdb_store_t *store;
 	nowdb_context_t *ctx;
 
-	if (plan->stype == NOWDB_AST_VERTEX) store = &scope->vertices;
-	else {
+	if (plan->target == NOWDB_AST_VERTEX) {
+		cur->recsize = 32;
+		store = &scope->vertices;
+	} else {
+		cur->recsize = 64;
 		err = nowdb_scope_getContext(scope, plan->name, &ctx);
 		if (err != NOWDB_OK) return err;
 		store = &ctx->store;
@@ -65,6 +68,10 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                 "allocating cusor");
 
+	/*
+	fprintf(stderr, "[CURSOR] Targets: %d\n", stp->target);
+	*/
+
 	(*cur)->rdrs = calloc(stp->target, sizeof(nowdb_reader_t));
 	if ((*cur)->rdrs == NULL) {
 		free(*cur); *cur = NULL;
@@ -93,7 +100,7 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	if (cur->rdrs != NULL) {
 		for(int i=0; i<cur->numr; i++) {
 			nowdb_reader_destroy(cur->rdrs[i]);
-			cur->rdrs[i] = NULL;
+			free(cur->rdrs[i]); cur->rdrs[i] = NULL;
 		}
 		free(cur->rdrs); cur->rdrs = NULL;
 	}
@@ -103,9 +110,53 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	}
 }
 
+nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
+	nowdb_err_t err = NOWDB_OK;
+
+	cur->off = 0;
+
+	for (int i=0; i<cur->numr;i++) {
+		err = nowdb_reader_move(cur->rdrs[0]);
+		if (err != NOWDB_OK) break;
+	}
+	return err;
+}
+
+static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
+                                   char *buf, uint32_t sz,
+                                            uint32_t *osz) 
+{
+	nowdb_err_t err;
+	uint32_t x = 0;
+	uint32_t recsz = cur->rdrs[0]->recsize;
+	char *src = nowdb_reader_page(cur->rdrs[0]);
+
+	*osz = 0;
+	for(uint32_t i=0;i<sz;i+=recsz) {
+		if (cur->off >= NOWDB_IDX_PAGE) {
+			err = nowdb_reader_move(cur->rdrs[0]);
+			if (err != NOWDB_OK) return err;
+			src = nowdb_reader_page(cur->rdrs[0]);
+			cur->off = 0;
+		}
+		/* apply filter ! */
+		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
+			cur->off = NOWDB_IDX_PAGE; continue;
+		}
+		memcpy(buf+x, src+cur->off, recsz);
+		x += recsz; cur->off += recsz; *osz += recsz;
+	}
+	return NOWDB_OK;
+}
+
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,
-                                      uint32_t *osz);
+                                       uint32_t *osz)
+{
+	if (cur->numr == 1) return simplefetch(cur, buf, sz, osz);
+	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	             "only simple fetch is implemented :-(\n");
+}
 
 nowdb_err_t nowdb_cursor_rewind(nowdb_cursor_t *cur);
 

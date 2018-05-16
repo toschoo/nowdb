@@ -7,6 +7,7 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/query/ast.h>
 #include <nowdb/query/stmt.h>
+#include <nowdb/query/cursor.h>
 #include <nowdb/sql/parser.h>
 #include <nowdb/io/dir.h>
 #include <common/progress.h>
@@ -73,6 +74,51 @@ int printReport(nowdb_qry_result_t *res) {
 	return 0;
 }
 
+char buf[8192];
+
+/* -----------------------------------------------------------------------
+ * Process Cursor
+ * -----------------------------------------------------------------------
+ */
+int processCursor(nowdb_cursor_t *cur) {
+	uint32_t osz;
+	uint64_t total=0;
+	nowdb_err_t err=NOWDB_OK;
+
+	fprintf(stderr, "I have a cursor :-)\n");
+
+	err = nowdb_cursor_open(cur);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+		goto cleanup;
+	}
+
+	for(;;) {
+		err = nowdb_cursor_fetch(cur, buf, 8192, &osz);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				err = NOWDB_OK;
+			}
+			break;
+		}
+		total += osz/cur->recsize;
+	}
+	fprintf(stderr, "Read: %lu\n", total);
+
+cleanup:
+	nowdb_cursor_destroy(cur); free(cur);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
 /* -----------------------------------------------------------------------
  * Handle ast
  * -----------------------------------------------------------------------
@@ -93,6 +139,8 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_NOTHING: break;
 	case NOWDB_QRY_RESULT_REPORT: return printReport(&res);
 	case NOWDB_QRY_RESULT_SCOPE: global_scope = res.result; break;
+	case NOWDB_QRY_RESULT_CURSOR: return processCursor(res.result);
+
 	case NOWDB_QRY_RESULT_PLAN:
 		fprintf(stderr, 
 		"I have a plan, but no plan what to do with it\n");

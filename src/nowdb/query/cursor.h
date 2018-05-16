@@ -26,6 +26,8 @@ typedef struct {
 	nowdb_reader_t **rdrs;
 	uint32_t         disc;
 	nowdb_storefile_t stf; /* should be a list of stf! */
+	uint32_t          off; /* offset in the current reader */
+	uint32_t      recsize; /* record size */
 	/* filter */
 	/* projection !             */
 	/* grouping, ordering, etc. */
@@ -37,6 +39,8 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
                              nowdb_cursor_t **cur);
 
 void nowdb_cursor_destroy(nowdb_cursor_t *cur);
+
+nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur);
 
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,

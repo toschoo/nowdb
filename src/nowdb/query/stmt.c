@@ -1,4 +1,6 @@
 #include <nowdb/query/stmt.h>
+#include <nowdb/query/plan.h>
+#include <nowdb/query/cursor.h>
 
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
@@ -423,7 +425,7 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 	
 	res->resType = NOWDB_QRY_RESULT_REPORT;
 	res->result = NULL;
-	
+
 	op = nowdb_ast_operation(ast);
 	if (op == NULL) INVALIDAST("no operation in AST");
 	
@@ -445,8 +447,25 @@ static nowdb_err_t handleDML(nowdb_ast_t *ast,
 static nowdb_err_t handleDQL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
-	return nowdb_err_get(nowdb_err_not_supp,
-	            FALSE, OBJECT, "handleDQL");
+	nowdb_err_t err;
+	nowdb_cursor_t *cur;
+	ts_algo_list_t plan;
+
+	res->resType = NOWDB_QRY_RESULT_CURSOR;
+	res->result = NULL;
+
+	ts_algo_list_init(&plan);
+	err = nowdb_plan_fromAst(ast, &plan);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_cursor_new(scope, &plan, &cur);
+	if (err != NOWDB_OK) {
+		nowdb_plan_destroy(&plan);
+		return err;
+	}
+	nowdb_plan_destroy(&plan);
+	res->result = cur;
+	return NOWDB_OK;
 }
 
 static nowdb_err_t handleMisc(nowdb_ast_t *ast,

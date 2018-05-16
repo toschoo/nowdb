@@ -38,7 +38,10 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res);
 void nowdbsql_state_pushScope(nowdbsql_state_t *res, char *scope);
 void nowdbsql_state_pushIndex(nowdbsql_state_t *res, char *index);
 void nowdbsql_state_pushContext(nowdbsql_state_t *res, char *ctx);
-void nowdbsql_state_pushVertex(nowdbsql_state_t *res);
+void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias);
+void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name,
+                                                   char *alias);
+void nowdbsql_state_pushComparison(nowdbsql_state_t *res, int comp);
 void nowdbsql_state_pushOption(nowdbsql_state_t *res,
                               int option, char *value);
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res, int sizing);
@@ -57,5 +60,10 @@ void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
 
 void nowdbsql_state_pushMisc(nowdbsql_state_t *res);
 void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name);
+
+void nowdbsql_state_pushDQL(nowdbsql_state_t *res);
+void nowdbsql_state_pushProjection(nowdbsql_state_t *res);
+void nowdbsql_state_pushFrom(nowdbsql_state_t *res);
+void nowdbsql_state_pushWhere(nowdbsql_state_t *res);
 
 #endif
