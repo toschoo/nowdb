@@ -97,7 +97,17 @@ static inline void decStack(nowdbsql_stack_t *stack) {
 	stack->lo--; stack->hi = stack->lo;
 }
 
-static inline void setAllStack(nowdbsql_stack_t *stack) {
+static inline void limitStack(nowdbsql_stack_t *stack,
+                                int *nTypes, int size) {
+	for(int i=stack->hi; i>=0; i--) {
+		if (hitType(stack->chunks[i], nTypes, size)) {
+			stack->lo = i+1;
+			stack->hi = stack->lo; break;
+		}
+	}
+}
+
+static inline void unlimitStack(nowdbsql_stack_t *stack) {
 	stack->lo=0;
 }
 
@@ -174,7 +184,9 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
 #define POP(n, k, t, s, p) \
 	*k = popType(res->stack, t, s, &p); \
 	if (*k == NULL) { \
-		nowdb_ast_destroy(n); free(n); \
+		if (n != NULL) { \
+			nowdb_ast_destroy(n); free(n); \
+		} \
 		res->errcode = NOWDB_SQL_ERR_PARSER; \
 		return; \
 	}
@@ -199,8 +211,11 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
 #define DEC() \
 	decStack(res->stack);
 
+#define LIMIT(o, s) \
+	limitStack(res->stack, o, s);
+
 #define REOPEN() \
-	setAllStack(res->stack);
+	unlimitStack(res->stack);
 
 static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) {
 	nowdb_ast_t *n;
@@ -209,7 +224,7 @@ static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) 
 		res->errcode = NOWDB_SQL_ERR_NO_MEM;
 		return;
 	}
-	if (st != 0) nowdb_ast_setValue(n, vt, v);
+	if (vt != 0) nowdb_ast_setValue(n, vt, v);
 	PUSHN(n);
 }
 
@@ -238,6 +253,7 @@ void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias) {
 	}
 }
 
+/* table or table spec ??? */
 void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name, char *alias) {
 	if (alias == NULL) 
 		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT,
@@ -246,6 +262,18 @@ void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name, char *alias) {
 		fprintf(stderr, "PUSH TABLE NAME WITH ALIAS!!!\n");
 		res->errcode = NOWDB_SQL_ERR_PARSER;
 	}
+}
+
+void nowdbsql_state_pushField(nowdbsql_state_t *res, char *name) {
+	// fprintf(stderr, "Field: '%s'\n", name);
+	PUSH(res, NOWDB_AST_FIELD, 0,
+	          NOWDB_AST_V_STRING, name);
+}
+
+void nowdbsql_state_pushValue(nowdbsql_state_t *res, int typ, char *name) {
+	// fprintf(stderr, "VALUE: '%s' (%d)\n", name, typ);
+	PUSH(res, NOWDB_AST_VALUE, typ,
+	          NOWDB_AST_V_STRING, name);
 }
 
 void nowdbsql_state_pushComparison(nowdbsql_state_t *res,
@@ -530,5 +558,55 @@ void nowdbsql_state_pushFrom(nowdbsql_state_t *res) {
 }
 
 void nowdbsql_state_pushWhere(nowdbsql_state_t *res) {
-	fprintf(stderr, "WHERE IS NOT IMPLEMENTED\n");
+	int p;
+	int from = NOWDB_AST_FROM;
+	int cond = NOWDB_AST_CONDITION;
+	nowdb_ast_t *n, *k;
+
+	LIMIT(&from, 1);
+
+	CREATE(&n, NOWDB_AST_WHERE, 0, 0, NULL);
+	POP(n, &k, &cond, 1, p);
+	ADDKID(n,k,p);
+
+	/* instead search for and/ors
+	TRYPOP(&k, &cond, 1, p);
+	while(k!=NULL) {
+		ADDKID(n,k,p);
+		TRYPOP(&k,&cond,1,p);
+	}
+	*/
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushCondition(nowdbsql_state_t *res) {
+	int p,p1;
+	int no = NOWDB_AST_NOT;
+	int comp  = NOWDB_AST_COMPARE;
+	int field = NOWDB_AST_FIELD;
+	int value = NOWDB_AST_VALUE;
+	nowdb_ast_t *n, *k, *g;
+
+	POP(NULL, &k, &comp, 1, p1);
+
+	POP(k, &g, &field, 1, p);
+	ADDKID(k,g,p);
+
+	POP(k, &g, &value, 1, p);
+	ADDKID(k,g,p);
+
+	CREATE(&n, NOWDB_AST_CONDITION, NOWDB_AST_JUST, 0, NULL);
+	ADDKID(n,k,p1);
+
+	TRYPOP(&k, &no, 1, p);
+	if (k != NULL) {
+		n->stype =  NOWDB_AST_NOT; 
+		nowdb_ast_destroy(k); free(k);
+		clean(res->stack, p);
+	}
+	RESET();
+	PUSHN(n);
+	INC();
 }

@@ -16,10 +16,11 @@
 
 #define NOWDB_PLAN_SUMMARY    1
 #define NOWDB_PLAN_READER     2
-#define NOWDB_PLAN_ITERATOR   3
-#define NOWDB_PLAN_GROUPING   4
-#define NOWDB_PLAN_ORDERING   5
-#define NOWDB_PLAN_PROJECTION 6
+#define NOWDB_PLAN_ITER       3
+#define NOWDB_PLAN_FILTER     4
+#define NOWDB_PLAN_GROUPING   5
+#define NOWDB_PLAN_ORDERING   6
+#define NOWDB_PLAN_PROJECTION 7
 
 #define NOWDB_READER_FS       10 
 #define NOWDB_READER_FS_      11  
@@ -40,6 +41,7 @@ typedef struct {
 	uint32_t stype;
 	int     target;
 	char     *name;
+	void     *load;
 } nowdb_plan_t;
 
 nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan);

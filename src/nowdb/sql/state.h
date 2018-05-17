@@ -41,6 +41,9 @@ void nowdbsql_state_pushContext(nowdbsql_state_t *res, char *ctx);
 void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias);
 void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name,
                                                    char *alias);
+void nowdbsql_state_pushField(nowdbsql_state_t *res, char *name);
+void nowdbsql_state_pushValue(nowdbsql_state_t *res, int type,
+                                                  char *value);
 void nowdbsql_state_pushComparison(nowdbsql_state_t *res, int comp);
 void nowdbsql_state_pushOption(nowdbsql_state_t *res,
                               int option, char *value);
@@ -65,5 +68,6 @@ void nowdbsql_state_pushDQL(nowdbsql_state_t *res);
 void nowdbsql_state_pushProjection(nowdbsql_state_t *res);
 void nowdbsql_state_pushFrom(nowdbsql_state_t *res);
 void nowdbsql_state_pushWhere(nowdbsql_state_t *res);
+void nowdbsql_state_pushCondition(nowdbsql_state_t *res);
 
 #endif

@@ -92,7 +92,16 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		free(*cur); *cur = NULL;
 		return err;
 	}
-	
+
+	runner = runner->nxt;
+	if (runner == NULL) return NOWDB_OK;
+	stp = runner->cont;
+
+	/* this should be sent per reader and added
+	 * to the specific reader... */
+	if (stp->ntype == NOWDB_PLAN_FILTER) {
+		(*cur)->rdrs[0]->filter = stp->load;
+	}
 	return NOWDB_OK;
 }
 

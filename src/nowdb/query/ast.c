@@ -59,6 +59,12 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_ORDER: ASTCALLOC(2); 
 	case NOWDB_AST_JOIN: UNDEFINED(ntype); 
 
+	case NOWDB_AST_CONDITION: ASTCALLOC(1);
+	case NOWDB_AST_COMPARE: ASTCALLOC(2);
+
+	case NOWDB_AST_FIELD: ASTCALLOC(0);
+	case NOWDB_AST_VALUE: ASTCALLOC(0);
+
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
 	case NOWDB_AST_TARGET:   ASTCALLOC(0);
@@ -103,6 +109,9 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_ORDER:  return "order";
 	case NOWDB_AST_JOIN: return "join";
 
+	case NOWDB_AST_FIELD: return "field"; 
+	case NOWDB_AST_VALUE: return "value"; 
+
 	case NOWDB_AST_USE: return "use";
 
 	case NOWDB_AST_TARGET:
@@ -116,36 +125,43 @@ static inline char *tellType(int ntype, int stype) {
 
 	case NOWDB_AST_OPTION: 
 		switch(stype) {
-			case NOWDB_AST_SIZING: return "option sizing";
-			case NOWDB_AST_ALLOCSZ: return "option alloc size";
-			case NOWDB_AST_LARGESZ: return "option large size";
-			case NOWDB_AST_SORTERS: return "option sorters";
-			case NOWDB_AST_SORT: return "option sort";
-			case NOWDB_AST_COMP: return "option comp";
-			case NOWDB_AST_ENCP: return "option encp";
-			case NOWDB_AST_STRESS: return "option stress";
-			case NOWDB_AST_DISK: return "option disk";
-			case NOWDB_AST_IFEXISTS: return "if (not) exists";
-			case NOWDB_AST_IGNORE: return "option ignore";
-			default: return "unknown option";
+		case NOWDB_AST_SIZING: return "option sizing";
+		case NOWDB_AST_ALLOCSZ: return "option alloc size";
+		case NOWDB_AST_LARGESZ: return "option large size";
+		case NOWDB_AST_SORTERS: return "option sorters";
+		case NOWDB_AST_SORT: return "option sort";
+		case NOWDB_AST_COMP: return "option comp";
+		case NOWDB_AST_ENCP: return "option encp";
+		case NOWDB_AST_STRESS: return "option stress";
+		case NOWDB_AST_DISK: return "option disk";
+		case NOWDB_AST_IFEXISTS: return "if (not) exists";
+		case NOWDB_AST_IGNORE: return "option ignore";
+		default: return "unknown option";
 		}
 
 	case NOWDB_AST_COMPARE: 
 		switch(stype) {
-			case NOWDB_AST_EQ: return "=";
-			case NOWDB_AST_LE: return "<=";
-			case NOWDB_AST_GE: return ">=";
-			case NOWDB_AST_LT: return "<";
-			case NOWDB_AST_GT: return ">";
-			case NOWDB_AST_NE: return "!=";
-			default: return "unknown compare";
+		case NOWDB_AST_EQ: return "=";
+		case NOWDB_AST_LE: return "<=";
+		case NOWDB_AST_GE: return ">=";
+		case NOWDB_AST_LT: return "<";
+		case NOWDB_AST_GT: return ">";
+		case NOWDB_AST_NE: return "!=";
+		default: return "unknown compare";
+		}
+
+	case NOWDB_AST_CONDITION: 
+		switch(stype) {
+		case NOWDB_AST_JUST: return "just";
+		case NOWDB_AST_NOT: return "not";
+		default: return "joke";
 		}
 
 	case NOWDB_AST_DATA:
 		switch(stype) {
-			case NOWDB_AST_KEYVAL: return "data as pairs";
-			case NOWDB_AST_VALLIST: return "data as list";
-			default: return "data in unknown format";
+		case NOWDB_AST_KEYVAL: return "data as pairs";
+		case NOWDB_AST_VALLIST: return "data as list";
+		default: return "data in unknown format";
 		}
 
 	case NOWDB_AST_PATH:   return "path";
@@ -161,6 +177,9 @@ void nowdb_ast_destroy(nowdb_ast_t *n) {
 			free(n->value);
 		}
 		n->value = NULL;
+	}
+	if (n->conv != NULL) {
+		free(n->conv); n->conv = NULL;
 	}
 	for(int i=0;i<n->nKids;i++) {
 		nowdb_ast_destroy(n->kids[i]); free(n->kids[i]);
@@ -316,6 +335,33 @@ static inline int addfrom(nowdb_ast_t *n,
 	}
 }
 
+static inline int addwhere(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_CONDITION: ADDKID(0);
+	// case NOWDB_AST_AND: ADDKID(1);
+	// case NOWDB_AST_OR: ADDKID(1);
+	default: return -1;
+	}
+}
+
+static inline int addcond(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_COMPARE: ADDKID(0);
+	default: return -1;
+	}
+}
+
+static inline int addcompare(nowdb_ast_t *n,
+                             nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_VALUE: ADDKID(1);
+	default: return -1;
+	}
+}
+
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	switch(n->ntype) {
 
@@ -336,13 +382,16 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_FROM: return addfrom(n,k);
 	case NOWDB_AST_SELECT: return addsel(n,k);
-	case NOWDB_AST_WHERE:   return -1;
+	case NOWDB_AST_WHERE: return addwhere(n,k);
 	case NOWDB_AST_AND:     return -1;
 	case NOWDB_AST_OR:      return -1;
 	case NOWDB_AST_NOT:     return -1;
 	case NOWDB_AST_GROUP:   return -1;
 	case NOWDB_AST_ORDER:   return -1;
 	case NOWDB_AST_JOIN:  return -1;
+
+	case NOWDB_AST_CONDITION: return addcond(n,k);
+	case NOWDB_AST_COMPARE: return addcompare(n,k);
 
 	case NOWDB_AST_TARGET:   return -1;
 	case NOWDB_AST_OPTION:   return addopt(n,k);
@@ -448,7 +497,36 @@ nowdb_ast_t *nowdb_ast_from(nowdb_ast_t *ast) {
 }
 
 nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *ast) {
-	return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_DQL: return ast->kids[2];
+	case NOWDB_AST_DML: return NULL;
+	default: return NULL;
+	}
+}
+
+nowdb_ast_t *nowdb_ast_condition(nowdb_ast_t *ast) {
+	switch(ast->ntype) {
+	case NOWDB_AST_WHERE: 
+	case NOWDB_AST_AND: 
+	case NOWDB_AST_OR: return ast->kids[0];
+	default: return NULL; 
+	}
+}
+
+nowdb_ast_t *nowdb_ast_compare(nowdb_ast_t *ast) {
+	switch(ast->ntype) {
+	case NOWDB_AST_CONDITION: return ast->kids[0]; 
+	default: return NULL; 
+	}
+}
+
+nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *ast, int i) {
+	switch(ast->ntype) {
+	case NOWDB_AST_COMPARE: 
+		if (i == 1) return ast->kids[0];
+		return ast->kids[1];
+	default: return NULL; 
+	}
 }
 
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {

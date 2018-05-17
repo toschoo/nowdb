@@ -24,10 +24,10 @@
 #define NOWDB_AST_WHERE  4003
 #define NOWDB_AST_AND    4004
 #define NOWDB_AST_OR     4005
-#define NOWDB_AST_NOT    4006
+#define NOWDB_AST_MWhere 4006
 #define NOWDB_AST_GROUP  4007
 #define NOWDB_AST_ORDER  4008
-#define NOWDB_AST_JOIN   4009
+#define NOWDB_AST_JOIN   4019
 #define NOWDB_AST_ALL    4010
 
 #define NOWDB_AST_USE    5001
@@ -56,9 +56,14 @@
 #define NOWDB_AST_KEYVAL   10301
 #define NOWDB_AST_VALLIST  10302
 #define NOWDB_AST_FIELD    10303
+#define NOWDB_AST_VALUE    10304
 
 #define NOWDB_AST_PATH     10009
 #define NOWDB_AST_LOC      10010
+
+#define NOWDB_AST_CONDITION 10550
+#define NOWDB_AST_JUST      10551
+#define NOWDB_AST_NOT       10552
 
 #define NOWDB_AST_COMPARE  10500
 #define NOWDB_AST_EQ       10501
@@ -76,6 +81,7 @@ typedef struct nowdb_ast_st {
 	int                  stype;
 	int                  vtype;
 	void                *value;
+	void                 *conv;
 	int                  nKids;
 	struct nowdb_ast_st **kids;
 } nowdb_ast_t;
@@ -118,6 +124,9 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
 nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_from(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_condition(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_compare(nowdb_ast_t *node);
+nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *node, int i);
 
 int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value);
 int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value);

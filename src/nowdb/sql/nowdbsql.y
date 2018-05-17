@@ -246,13 +246,17 @@ where_clause ::= WHERE condition more_conditions. {
 	nowdbsql_state_pushWhere(nowdbres);
 }
 
-condition ::= field comparison value.
-condition ::= LPAR field comparison value RPART.
+/* it's more like 'expression' compare 'expression' */
+condition ::= operand comparison operand . {
+	nowdbsql_state_pushCondition(nowdbres);
+}
+condition ::= LPAR operand comparison operand RPART. {
+	nowdbsql_state_pushCondition(nowdbres);
+}
  
 more_conditions ::= connector condition.
 more_conditions ::= connector condition more_conditions.
-more_conditions ::= connector condition LPAR more_conditions RPAR.
-more_conditions ::= connector condition NOT LPAR more_conditions RPAR.
+more_conditions ::= connector LPAR condition more_conditions RPAR.
 
 connector ::= AND.
 connector ::= OR.
@@ -292,8 +296,16 @@ comparison ::= NE. {
 	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_NE);
 }
 
-field ::= IDENTIFIER.
+operand ::= field.
+operand ::= value.
 
-value ::= IDENTIFIER.
-value ::= STRING.
+field ::= IDENTIFIER(I). {
+	nowdbsql_state_pushField(nowdbres, I);
+}
+value ::= STRING(S). {
+	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_STRING, S);
+}
+value ::= INTEGER(I). {
+	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_INTEGER, I);
+}
 
