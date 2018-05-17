@@ -191,33 +191,234 @@ nowdb_filter_t *mkCompare(int op, int off, int size, int typ, void *val) {
 	return f;
 }
 
+int testEQUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[EQUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testNEUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[NEUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testLEUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[LEUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testGEUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[GEUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testLTUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[LTUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testGTUInt() {
+	nowdb_edge_t e;
+	int64_t v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: v++; break;
+		case 3: v++; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
+		              NOWDB_TYP_UINT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[GTUInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
+
 int testEQInt() {
 	nowdb_edge_t e;
 	int64_t v;
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	e.weight = 5;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; v--; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
 
-	if (!x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	e.weight = 6;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[EQInt] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
 	return 1;
 }
 
@@ -227,170 +428,131 @@ int testLEInt() {
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	e.weight = 5;
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
 
-	if (!x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	e.weight = 6;
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[LEInt] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
-	e.weight = 4;
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
 	return 1;
 }
 
-int testEQUInt() {
+int testLTInt() {
 	nowdb_edge_t e;
-	uint64_t v;
+	int64_t v;
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	e.weight = 5;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_UINT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
 
-	if (!x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	e.weight = 6;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_UINT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[LTInt] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
 	return 1;
 }
 
-int testEQFloat() {
+int testGEInt() {
 	nowdb_edge_t e;
-	double v;
+	int64_t v;
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; v--; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
 
-	if (!x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	v = 5.1;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[GEInt] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
-	v = 5;
-	f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		}
+	}
 	return 1;
 }
 
-int testLEFloat() {
+int testGTInt() {
 	nowdb_edge_t e;
-	double v;
+	int64_t v;
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; v--; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
 
-	if (!x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	v = 5.1;
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[GTInt] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
-	v = 5;
-	f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (x) return 0; break;
+		}
+	}
 	return 1;
 }
-
 
 int testNEInt() {
 	nowdb_edge_t e;
@@ -398,67 +560,247 @@ int testNEInt() {
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	e.weight = 6;
-	f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-	              NOWDB_TYP_INT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<4;i++) {
+		switch(i) {
+		case 0: v = 5; e.weight = 5; break;
+		case 1: e.weight++; break;
+		case 2: e.weight *= -1; break;
+		case 3: v *= -1; v--; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-	return x;
+		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
+		              NOWDB_TYP_INT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[NEInt] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testEQFloat() {
+	nowdb_edge_t e;
+	double  v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 0.11111; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[EQFloat] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (x) return 0; break;
+		case 4: if (!x) return 0; break;
+		}
+	}
+	return 1;
 }
 
 int testNEFloat() {
 	nowdb_edge_t e;
-	double v;
+	double  v;
 	nowdb_bool_t    x;
 	nowdb_filter_t *f;
 
-	v = 5;
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 0.11111; break;
+		}
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
+		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
 
-	if (x) return 0;
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
 
-	v = 5.1;
-	f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
+		fprintf(stderr, "[NEFloat] case %d: %d\n", i, x);
 
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
-	memcpy(&e.weight, &v, 8);
-	f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
-	v = 5;
-	f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-	              NOWDB_TYP_FLOAT, &v);
-	if (f == NULL)  return 0;
-
-	x = nowdb_filter_eval(f,&e);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		case 4: if (x) return 0; break;
+		}
+	}
 	return 1;
 }
 
+int testLEFloat() {
+	nowdb_edge_t e;
+	double  v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 1.11111; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[LEFloat] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (!x) return 0; break;
+		case 4: if (!x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testGEFloat() {
+	nowdb_edge_t e;
+	double v;
+	// double t;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 1.11111; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[GEFloat] case %d: %d\n", i, x);
+		/*
+		memcpy(&t, &e.weight, 8);
+		fprintf(stderr, "%.6f >= %.6f\n", t, v);
+		*/
+
+		switch(i) {
+		case 0: if (!x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (!x) return 0; break;
+		case 3: if (x) return 0; break;
+		case 4: if (!x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testLTFloat() {
+	nowdb_edge_t e;
+	double  v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 1.11111; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[LTFloat] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (!x) return 0; break;
+		case 4: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testGTFloat() {
+	nowdb_edge_t e;
+	double  v;
+	nowdb_bool_t    x;
+	nowdb_filter_t *f;
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
+		case 1: v /= 3; break;
+		case 2: 
+		case 4: memcpy(&e.weight, &v, 8); break;
+		case 3: v *= 1.11111; break;
+		}
+
+		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
+		              NOWDB_TYP_FLOAT, &v);
+		if (f == NULL)  return 0;
+
+		x = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[GTFloat] case %d: %d\n", i, x);
+
+		switch(i) {
+		case 0: if (x) return 0; break;
+		case 1: if (!x) return 0; break;
+		case 2: if (x) return 0; break;
+		case 3: if (x) return 0; break;
+		case 4: if (x) return 0; break;
+		}
+	}
+	return 1;
+}
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -491,6 +833,30 @@ int main() {
 		fprintf(stderr, "testAnd() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (!testEQUInt()) {
+		fprintf(stderr, "testEQUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testNEUInt()) {
+		fprintf(stderr, "testNEUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testLEUInt()) {
+		fprintf(stderr, "testLEUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testGEUInt()) {
+		fprintf(stderr, "testGEUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testLTUInt()) {
+		fprintf(stderr, "testLTUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testGTUInt()) {
+		fprintf(stderr, "testGTUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (!testEQInt()) {
 		fprintf(stderr, "testEQInt() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -499,24 +865,44 @@ int main() {
 		fprintf(stderr, "testLEInt() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testNEInt()) {
-		fprintf(stderr, "testNEInt() failed\n");
+	if (!testLTInt()) {
+		fprintf(stderr, "testLTInt() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testEQUInt()) {
-		fprintf(stderr, "testEQUint() failed\n");
+	if (!testGEInt()) {
+		fprintf(stderr, "testGEInt() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testGTInt()) {
+		fprintf(stderr, "testGTInt() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testNEInt()) {
+		fprintf(stderr, "testNEInt() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!testEQFloat()) {
 		fprintf(stderr, "testEQFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (!testNEFloat()) {
+		fprintf(stderr, "testNEFloat() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (!testLEFloat()) {
 		fprintf(stderr, "testLEFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testNEFloat()) {
-		fprintf(stderr, "testNEFloat() failed\n");
+	if (!testGEFloat()) {
+		fprintf(stderr, "testGEFloat() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testLTFloat()) {
+		fprintf(stderr, "testLTFloat() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testGTFloat()) {
+		fprintf(stderr, "testGTFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

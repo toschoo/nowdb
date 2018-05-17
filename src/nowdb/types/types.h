@@ -159,4 +159,3 @@ int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 
 #endif
-
