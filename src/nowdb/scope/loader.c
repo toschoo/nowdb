@@ -260,15 +260,15 @@ void nowdb_csv_row(int c, void *rsc) {
 	if (ldr->err == NOWDB_OK) ldr->loaded++;
 }
 
-#define EDGE    0
-#define ORIGIN  8
-#define DESTIN 16
-#define LABEL  24
-#define TMSTMP 32
-#define WEIGHT 40
-#define WEIGH2 48
-#define WTYPE  56
-#define WTYPE2 60
+#define EDGE    NOWDB_OFF_EDGE
+#define ORIGIN  NOWDB_OFF_ORIGIN
+#define DESTIN  NOWDB_OFF_DESTIN
+#define LABEL   NOWDB_OFF_LABEL
+#define TMSTMP  NOWDB_OFF_TMSTMP
+#define WEIGHT  NOWDB_OFF_WEIGHT
+#define WEIGH2  NOWDB_OFF_WEIGHT2
+#define WTYPE   NOWDB_OFF_WTYPE
+#define WTYPE2  NOWDB_OFF_WTYPE2
 
 static inline int tohlp(nowdb_csv_t *csv, char *data,
                             size_t len, uint32_t off) {
@@ -408,11 +408,11 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 	}
 }
 
-#define VERTEX  0
-#define PROP    8
-#define VALUE  16
-#define VTYPE  24
-#define ROLE   28
+#define VERTEX  NOWDB_OFF_VERTEX
+#define PROP    NOWDB_OFF_PROP
+#define VALUE   NOWDB_OFF_VALUE
+#define VTYPE   NOWDB_OFF_VTYPE
+#define ROLE    NOWDB_OFF_ROLE
 
 #define GETVALUE(d, l, name, fld) \
 	if (tohlp(ldr->csv, data, l, 0) != 0) \
