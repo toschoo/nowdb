@@ -56,6 +56,34 @@ int parsecmd(int argc, char **argv) {
 }
 
 /* -----------------------------------------------------------------------
+ * Print vertices
+ * -----------------------------------------------------------------------
+ */
+void printVertex(nowdb_vertex_t *buf, uint32_t sz) {
+	for(uint32_t i=0; i<sz; i++) {
+		fprintf(stdout, "%lu(%u).%lu: %lu (%u)\n",
+		                 buf[i].vertex, buf[i].role,
+		                 buf[i].property,
+		                 buf[i].value, buf[i].vtype);
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Print vertices
+ * -----------------------------------------------------------------------
+ */
+void printEdge(nowdb_edge_t *buf, uint32_t sz) {
+	for(uint32_t i=0; i<sz; i++) {
+		fprintf(stdout, "%lu -[%lu]-> %lu #%lu @%ld: ",
+		                buf[i].origin, buf[i].edge, buf[i].destin,
+		                buf[i].label, buf[i].timestamp);
+		fprintf(stdout, "%lu (%u), %lu (%u)\n",
+		                buf[i].weight, buf[i].wtype[0],
+		                buf[i].weight2, buf[i].wtype[1]);
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Print report
  * -----------------------------------------------------------------------
  */
@@ -85,8 +113,6 @@ int processCursor(nowdb_cursor_t *cur) {
 	uint64_t total=0;
 	nowdb_err_t err=NOWDB_OK;
 
-	fprintf(stderr, "I have a cursor :-)\n");
-
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
@@ -106,6 +132,11 @@ int processCursor(nowdb_cursor_t *cur) {
 			break;
 		}
 		total += osz/cur->recsize;
+		if (cur->recsize == 32) {
+			printVertex((nowdb_vertex_t*)buf, osz/32);
+		} else if (cur->recsize == 64) {
+			printEdge((nowdb_edge_t*)buf, osz/64);
+		}
 	}
 	fprintf(stderr, "Read: %lu\n", total);
 

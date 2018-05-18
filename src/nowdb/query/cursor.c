@@ -108,6 +108,11 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	if (cur->rdrs != NULL) {
 		for(int i=0; i<cur->numr; i++) {
+			if (cur->rdrs[i]->filter != NULL) {
+				nowdb_filter_destroy(cur->rdrs[i]->filter);
+				free(cur->rdrs[i]->filter);
+				cur->rdrs[i]->filter = NULL;
+			}
 			nowdb_reader_destroy(cur->rdrs[i]);
 			free(cur->rdrs[i]); cur->rdrs[i] = NULL;
 		}
@@ -138,6 +143,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	nowdb_err_t err;
 	uint32_t x = 0;
 	uint32_t recsz = cur->rdrs[0]->recsize;
+	nowdb_filter_t *filter = cur->rdrs[0]->filter;
 	char *src = nowdb_reader_page(cur->rdrs[0]);
 
 	*osz = 0;
@@ -148,9 +154,11 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			src = nowdb_reader_page(cur->rdrs[0]);
 			cur->off = 0;
 		}
-		/* apply filter ! */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = NOWDB_IDX_PAGE; continue;
+		}
+		if (filter != NULL && !nowdb_filter_eval(filter, buf+x)) {
+			cur->off += recsz; continue;
 		}
 		memcpy(buf+x, src+cur->off, recsz);
 		x += recsz; cur->off += recsz; *osz += recsz;

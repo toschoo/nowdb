@@ -96,8 +96,8 @@ static inline nowdb_err_t getField(char    *name,
 }
 
 static inline nowdb_err_t getValue(char   *str,
-                                   int     typ,
                                    uint32_t sz,
+                                   int     typ,
                                  void **value) {
 	char *tmp;
 
@@ -146,9 +146,11 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	if (op1->value == NULL) INVALIDAST("first operand in compare is NULL");
 	if (op2->value == NULL) INVALIDAST("second operand in compare is NULL");
 
+	/* check whether op1 is field or value */
 	err = getField(op1->value, &off, &sz, &typ);
 	if (err != NOWDB_OK) return err;
 
+	/* check whether op2 is field or value */
 	err = getValue(op2->value, sz, typ, &ast->conv);
 	if (err != NOWDB_OK) return err;
 
@@ -164,23 +166,27 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
  * we must consider fields that we do not know beforehand */
 static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	nowdb_err_t   err;
-	nowdb_ast_t  *comp;
+	nowdb_ast_t  *cond, *comp;
 	nowdb_plan_t *stp;
 	nowdb_filter_t *b=NULL;
 	nowdb_filter_t *c=NULL;
 
 	if (ast == NULL) return NOWDB_OK;
 
-	comp = nowdb_ast_compare(ast);
-	if (comp == NULL) INVALIDAST("no 'compare' in condition");
-	if (ast->stype == NOWDB_AST_NOT) {
+	cond = nowdb_ast_condition(ast);
+	if (cond == NULL) INVALIDAST("no condition in where");
+
+	comp = nowdb_ast_compare(cond);
+	if (comp == NULL) INVALIDAST("no compare in condition");
+
+	if (cond->stype == NOWDB_AST_NOT) {
 		err = nowdb_filter_newBool(&b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
 	}
 	err = getCompare(&c, comp);
 	if (err != NOWDB_OK) {
 		if (b != NULL) nowdb_filter_destroy(b);
-		INVALIDAST("No field in compare");
+		return err;
 	}
 	if (b != NULL) b->left = c;
 
@@ -250,7 +256,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 		nowdb_plan_destroy(plan); return err;
 	}
 
-	err = addWhere(nowdb_ast_condition(ast), plan);
+	err = addWhere(nowdb_ast_where(ast), plan);
 	if (err != NOWDB_OK) {
 		nowdb_plan_destroy(plan); return err;
 	}
