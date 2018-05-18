@@ -133,17 +133,20 @@ static inline nowdb_bool_t cval(nowdb_filter_t *filter, char *data) {
 	case NOWDB_TYP_TEXT:
 	case NOWDB_TYP_LONGTEXT:
 	case NOWDB_TYP_UINT:
-		COMPARE((data+filter->off), filter->val, uint64_t);
+		if (filter->size == 4) {
+			COMPARE((data+filter->off), filter->val, uint32_t);
+		} else {
+			COMPARE((data+filter->off), filter->val, uint64_t);
+		}
 
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_INT:
-		/*
-		fprintf(stderr, "comparing %ld and %ld\n",
-		            *(int64_t*)(filter->val),
-		            *(int64_t*)(data+filter->off));
-		*/
-		COMPARE((data+filter->off), filter->val, int64_t);
+		if (filter->size == 4) {
+			COMPARE((data+filter->off), filter->val, int32_t);
+		} else {
+			COMPARE((data+filter->off), filter->val, int64_t);
+		}
 
 	case NOWDB_TYP_FLOAT:
 		COMPARE((data+filter->off), filter->val, double);

@@ -157,7 +157,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = NOWDB_IDX_PAGE; continue;
 		}
-		if (filter != NULL && !nowdb_filter_eval(filter, buf+x)) {
+		if (filter != NULL &&
+		    !nowdb_filter_eval(filter, src+cur->off)) {
 			cur->off += recsz; continue;
 		}
 		memcpy(buf+x, src+cur->off, recsz);
