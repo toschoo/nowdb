@@ -173,13 +173,13 @@ static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 
 	if (ast == NULL) return NOWDB_OK;
 
-	cond = nowdb_ast_condition(ast);
-	if (cond == NULL) INVALIDAST("no condition in where");
+	cond = nowdb_ast_operand(ast,1);
+	if (cond == NULL) INVALIDAST("no first operand in where");
 
-	comp = nowdb_ast_compare(cond);
-	if (comp == NULL) INVALIDAST("no compare in condition");
+	comp = nowdb_ast_operand(cond,1);
+	if (comp == NULL) INVALIDAST("no first operand in condition");
 
-	if (cond->stype == NOWDB_AST_NOT) {
+	if (cond->ntype == NOWDB_AST_NOT) {
 		err = nowdb_filter_newBool(&b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
 	}

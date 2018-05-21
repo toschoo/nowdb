@@ -125,7 +125,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
-	$(SMK)/nowdbsqlsmoke
+	$(SMK)/sqlsmoke
 
 tests: smoke
 
@@ -286,19 +286,19 @@ $(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
-$(SMK)/nowdbsqlsmoke.o:	$(SMK)/nowdbsqlsmoke.c
+$(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-$(SMK)/nowdbsqlsmoke:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
+$(SMK)/sqlsmoke:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
-			$(SMK)/nowdbsqlsmoke.o
+			$(SMK)/sqlsmoke.o
 			$(LNKMSG)
-			$(CC) $(LDFLAGS) -o $(SMK)/nowdbsqlsmoke \
+			$(CC) $(LDFLAGS) -o $(SMK)/sqlsmoke \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/query/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o \
-			         $(SMK)/nowdbsqlsmoke.o $(libs) -lnowdb
+			         $(SMK)/sqlsmoke.o $(libs) -lnowdb
 		
 # BENCHMARKS
 $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
@@ -453,7 +453,7 @@ clean:
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
-	rm -f $(SMK)/nowdbsqlsmoke
+	rm -f $(SMK)/sqlsmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile

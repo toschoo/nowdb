@@ -26,11 +26,12 @@
 #define NOWDB_AST_WHERE  4003
 #define NOWDB_AST_AND    4004
 #define NOWDB_AST_OR     4005
-#define NOWDB_AST_MWhere 4006
-#define NOWDB_AST_GROUP  4007
-#define NOWDB_AST_ORDER  4008
-#define NOWDB_AST_JOIN   4019
-#define NOWDB_AST_ALL    4010
+#define NOWDB_AST_JUST   4006
+#define NOWDB_AST_NOT    4007
+#define NOWDB_AST_GROUP  4008
+#define NOWDB_AST_ORDER  4009
+#define NOWDB_AST_JOIN   4010
+#define NOWDB_AST_ALL    4011
 
 #define NOWDB_AST_USE    5001
 
@@ -62,10 +63,6 @@
 
 #define NOWDB_AST_PATH     10009
 #define NOWDB_AST_LOC      10010
-
-#define NOWDB_AST_CONDITION 10550
-#define NOWDB_AST_JUST      10551
-#define NOWDB_AST_NOT       10552
 
 #define NOWDB_AST_COMPARE  10500
 

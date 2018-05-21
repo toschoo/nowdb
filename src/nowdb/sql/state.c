@@ -82,7 +82,7 @@ static inline void clean(nowdbsql_stack_t *stack, int pos) {
 }
 
 static inline void resetStack(nowdbsql_stack_t *stack) {
-	for(int i=stack->hi; i>=stack->lo; i--) {
+	for(int i=stack->hi-1; i>=stack->lo; i--) {
 		if (stack->chunks[i] != NULL) break;
 		if (stack->hi > stack->lo) stack->hi--;
 	}
@@ -90,7 +90,7 @@ static inline void resetStack(nowdbsql_stack_t *stack) {
 
 static inline void incStack(nowdbsql_stack_t *stack) {
 	stack->lo++; 
-	if (stack->hi < stack->lo) stack->hi = stack->lo;
+	if (stack->hi < stack->lo) stack->hi = stack->lo+1;
 }
 
 static inline void decStack(nowdbsql_stack_t *stack) {
@@ -102,7 +102,10 @@ static inline void limitStack(nowdbsql_stack_t *stack,
 	for(int i=stack->hi; i>=0; i--) {
 		if (hitType(stack->chunks[i], nTypes, size)) {
 			stack->lo = i+1;
-			stack->hi = stack->lo; break;
+			if (stack->hi < stack->lo) {
+				stack->hi = stack->lo+1;
+			}
+			break;
 		}
 	}
 }
@@ -127,6 +130,19 @@ static inline void destroyStack(nowdbsql_stack_t *stack) {
 	if (stack->chunks != NULL) {
 		cleanStack(stack);
 		free(stack->chunks); stack->chunks = NULL;
+	}
+}
+
+static inline void showStack(nowdbsql_stack_t *stack) {
+
+	fprintf(stderr, "stack:\n");
+	for(int i=0; i<=stack->hi; i++) {
+		if (stack->chunks[i] == NULL) {
+			fprintf(stderr, "%d: NULL\n", i);
+		} else {
+			fprintf(stderr, "%d: %d\n", i,
+			     stack->chunks[i]->ntype);
+		}
 	}
 }
 
@@ -557,55 +573,85 @@ void nowdbsql_state_pushFrom(nowdbsql_state_t *res) {
 	INC();
 }
 
+void setCondition(int *cond) {
+	cond[0] = NOWDB_AST_JUST;
+	cond[1] = NOWDB_AST_AND;
+	cond[2] = NOWDB_AST_OR;
+	cond[3] = NOWDB_AST_NOT;
+}
+
 void nowdbsql_state_pushWhere(nowdbsql_state_t *res) {
 	int p;
 	int from = NOWDB_AST_FROM;
-	int cond = NOWDB_AST_CONDITION;
+	int cond[4];
 	nowdb_ast_t *n, *k;
+
+	setCondition(cond);
 
 	LIMIT(&from, 1);
 
 	CREATE(&n, NOWDB_AST_WHERE, 0, 0, NULL);
-	POP(n, &k, &cond, 1, p);
+
+	POP(n, &k, cond, 4, p);
 	ADDKID(n,k,p);
 
-	/* instead search for and/ors
-	TRYPOP(&k, &cond, 1, p);
-	while(k!=NULL) {
-		ADDKID(n,k,p);
-		TRYPOP(&k,&cond,1,p);
-	}
-	*/
 	RESET();
 	PUSHN(n);
 	INC();
 }
 
-void nowdbsql_state_pushCondition(nowdbsql_state_t *res) {
+void nowdbsql_state_pushAndOr(nowdbsql_state_t *res, int what, char neg) {
+	int p;
+	int from = NOWDB_AST_FROM;
+	int cond[4];
+	nowdb_ast_t *n, *k;
+
+	setCondition(cond);
+
+	LIMIT(&from, 1);
+
+	CREATE(&n, what, 0, 0, NULL);
+
+	POP(n, &k, cond, 4, p);
+	ADDKID(n,k,p);
+
+	TRYPOP(&k, cond, 4, p);
+	if (k != NULL) ADDKID(n,k,p);
+
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushCondition(nowdbsql_state_t *res, char neg) {
 	int p,p1;
-	int no = NOWDB_AST_NOT;
 	int comp  = NOWDB_AST_COMPARE;
-	int field = NOWDB_AST_FIELD;
-	int value = NOWDB_AST_VALUE;
+	int op[2];
 	nowdb_ast_t *n, *k, *g;
 
-	POP(NULL, &k, &comp, 1, p1);
-
-	POP(k, &g, &field, 1, p);
-	ADDKID(k,g,p);
-
-	POP(k, &g, &value, 1, p);
-	ADDKID(k,g,p);
-
-	CREATE(&n, NOWDB_AST_CONDITION, NOWDB_AST_JUST, 0, NULL);
-	ADDKID(n,k,p1);
-
-	TRYPOP(&k, &no, 1, p);
-	if (k != NULL) {
-		n->stype =  NOWDB_AST_NOT; 
-		nowdb_ast_destroy(k); free(k);
-		clean(res->stack, p);
+	if (neg) {
+		CREATE(&n, NOWDB_AST_NOT, 0, 0, NULL);
+	} else {
+		CREATE(&n, NOWDB_AST_JUST, 0, 0, NULL);
 	}
+
+	POP(n, &k, &comp, 1, p1);
+
+	op[0] = NOWDB_AST_FIELD;
+	op[1] = NOWDB_AST_VALUE;
+
+	TRYPOP(&g, op, 2, p);
+	if (g!=NULL) {
+		// fprintf(stderr, "%d %s\n", g->ntype, (char*)g->value);
+		ADDKID(k,g,p);
+	}
+	TRYPOP(&g, op, 2, p);
+	if (g!=NULL) {
+		// fprintf(stderr, "%d %s\n", g->ntype, (char*)g->value);
+		ADDKID(k,g,p);
+	}
+
+	ADDKID(n,k,p1);
 	RESET();
 	PUSHN(n);
 	INC();

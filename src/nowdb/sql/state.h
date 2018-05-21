@@ -68,6 +68,7 @@ void nowdbsql_state_pushDQL(nowdbsql_state_t *res);
 void nowdbsql_state_pushProjection(nowdbsql_state_t *res);
 void nowdbsql_state_pushFrom(nowdbsql_state_t *res);
 void nowdbsql_state_pushWhere(nowdbsql_state_t *res);
-void nowdbsql_state_pushCondition(nowdbsql_state_t *res);
+void nowdbsql_state_pushAndOr(nowdbsql_state_t *res, int what, char neg);
+void nowdbsql_state_pushCondition(nowdbsql_state_t *res, char neg);
 
 #endif

@@ -246,20 +246,32 @@ where_clause ::= WHERE condition more_conditions. {
 	nowdbsql_state_pushWhere(nowdbres);
 }
 
-/* it's more like 'expression' compare 'expression' */
 condition ::= operand comparison operand . {
-	nowdbsql_state_pushCondition(nowdbres);
+	nowdbsql_state_pushCondition(nowdbres, 0);
 }
-condition ::= LPAR operand comparison operand RPART. {
-	nowdbsql_state_pushCondition(nowdbres);
+condition ::= NOT operand comparison operand . {
+	nowdbsql_state_pushCondition(nowdbres, 1);
+}
+condition ::= LPAR operand comparison operand RPAR. {
+	nowdbsql_state_pushCondition(nowdbres, 0);
+}
+condition ::= NOT LPAR operand comparison operand RPAR. {
+	nowdbsql_state_pushCondition(nowdbres, 1);
 }
  
-more_conditions ::= connector condition.
-more_conditions ::= connector condition more_conditions.
-more_conditions ::= connector LPAR condition more_conditions RPAR.
+more_conditions ::= AND condition. {
+	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
+}
+more_conditions ::= AND condition more_conditions. {
+	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
+}
 
-connector ::= AND.
-connector ::= OR.
+more_conditions ::= OR condition.
+more_conditions ::= OR condition more_conditions.
+more_conditions ::= AND LPAR condition more_conditions RPAR.
+more_conditions ::= OR LPAR condition more_conditions RPAR.
+more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
+more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
 
 table_list ::= table_spec.
 table_list ::= table_spec COMMA table_list.
