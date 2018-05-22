@@ -380,9 +380,74 @@ more_conditions(M) ::= AND LPAR condition(C) more_conditions(M2) RPAR more_condi
 	NOWDB_SQL_ADDKID(M, M3);
 }
 
-more_conditions ::= OR LPAR condition more_conditions RPAR.
-more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
-more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
+more_conditions(M) ::= OR LPAR condition(C) more_conditions(M2) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(M2, C);
+	NOWDB_SQL_ADDKID(M, M2);
+}
+
+more_conditions(M) ::= OR LPAR condition(C) more_conditions(M2) RPAR more_conditions (M3). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(M2, C);
+	NOWDB_SQL_ADDKID(M3, M2);
+	NOWDB_SQL_ADDKID(M, M3);
+}
+
+more_conditions(M) ::= AND NOT LPAR condition(C) more_conditions(M2) RPAR. {
+	nowdb_ast_t *ast;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(M2,C);
+	NOWDB_SQL_ADDKID(ast,M2);
+	NOWDB_SQL_ADDKID(M,ast);
+}
+
+more_conditions(M) ::= AND NOT LPAR condition(C) more_conditions(M2) RPAR more_conditions(M3). {
+	nowdb_ast_t *not,*and;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&not, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_CREATEAST(&and, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(M2,C);
+	NOWDB_SQL_ADDKID(not,M2);
+	NOWDB_SQL_ADDKID(and,not);
+	if (M3->ntype == NOWDB_AST_OR) {
+		NOWDB_SQL_ADDKID(M3,and);
+		M = M3;
+	} else {
+		NOWDB_SQL_ADDKID(and,M3);
+		M = and;
+	}
+}
+
+more_conditions(M) ::= OR NOT LPAR condition(C) more_conditions(M2) RPAR. {
+	nowdb_ast_t *ast;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(M2,C);
+	NOWDB_SQL_ADDKID(ast,M2);
+	NOWDB_SQL_ADDKID(M,ast);
+}
+
+more_conditions(M) ::= OR NOT LPAR condition(C) more_conditions(M2) RPAR more_conditions(M3). {
+	nowdb_ast_t *not,*or;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&not, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_CREATEAST(&or, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(M2,C);
+	NOWDB_SQL_ADDKID(not,M2);
+	NOWDB_SQL_ADDKID(or,not);
+	if (M3->ntype == NOWDB_AST_AND) {
+		NOWDB_SQL_ADDKID(M3,or);
+		M = M3;
+	} else {
+		NOWDB_SQL_ADDKID(or,M3);
+		M = or;
+	}
+}
 
 comparison(C) ::= EQ. {
 	NOWDB_SQL_CHECKSTATE();
