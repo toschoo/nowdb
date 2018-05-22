@@ -50,8 +50,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_UPDATE: UNDEFINED(ntype);
 
 	case NOWDB_AST_FROM:
-	case NOWDB_AST_SELECT:
-	case NOWDB_AST_WHERE:
+	case NOWDB_AST_SELECT: ASTCALLOC(2);
+	case NOWDB_AST_WHERE: ASTCALLOC(1);
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR: ASTCALLOC(2);
 	case NOWDB_AST_NOT:    
@@ -335,6 +335,17 @@ static inline int addfrom(nowdb_ast_t *n,
 static inline int addwhere(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
+	case NOWDB_AST_AND:
+	case NOWDB_AST_OR:
+	case NOWDB_AST_NOT:
+	case NOWDB_AST_JUST: ADDKID(0);
+	default: return -1;
+	}
+}
+
+static inline int addbool(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
 	case NOWDB_AST_COMPARE:
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:
@@ -404,9 +415,9 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_FROM: return addfrom(n,k);
 	case NOWDB_AST_SELECT: return addsel(n,k);
-	case NOWDB_AST_WHERE:
+	case NOWDB_AST_WHERE: return addwhere(n,k);
 	case NOWDB_AST_AND:
-	case NOWDB_AST_OR:  return addwhere(n,k);
+	case NOWDB_AST_OR:  return addbool(n,k);
 	case NOWDB_AST_NOT: 
 	case NOWDB_AST_JUST: return addnot(n,k);
 	case NOWDB_AST_GROUP:   return -1;
@@ -544,8 +555,9 @@ nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *ast, int i) {
 	case NOWDB_AST_JUST:
 	case NOWDB_AST_COMPARE: 
 		if (i == 1) return ast->kids[0];
-		if (ast->ntype == NOWDB_AST_NOT ||
-		    ast->ntype == NOWDB_AST_JUST) return NULL;
+		if (ast->ntype == NOWDB_AST_NOT  ||
+		    ast->ntype == NOWDB_AST_JUST ||
+		    ast->ntype == NOWDB_AST_WHERE) return NULL;
 		return ast->kids[1];
 	default: return NULL; 
 	}

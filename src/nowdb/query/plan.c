@@ -147,11 +147,15 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	if (op2->value == NULL) INVALIDAST("second operand in compare is NULL");
 
 	/* check whether op1 is field or value */
-	err = getField(op1->value, &off, &sz, &typ);
-	if (err != NOWDB_OK) return err;
-
-	/* check whether op2 is field or value */
-	err = getValue(op2->value, sz, typ, &ast->conv);
+	if (op1->ntype == NOWDB_AST_FIELD) {
+		err = getField(op1->value, &off, &sz, &typ);
+		if (err != NOWDB_OK) return err;
+		err = getValue(op2->value, sz, typ, &ast->conv);
+	} else {
+		err = getField(op2->value, &off, &sz, &typ);
+		if (err != NOWDB_OK) return err;
+		err = getValue(op1->value, sz, typ, &ast->conv);
+	}
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_filter_newCompare(comp, ast->stype,
@@ -161,34 +165,53 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	return NOWDB_OK;
 }
 
+static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
+	int op;
+	nowdb_err_t err;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_COMPARE: return getCompare(b, ast);
+	case NOWDB_AST_JUST: return getCondition(b, nowdb_ast_operand(ast,1));
+
+	case NOWDB_AST_NOT:
+		err = nowdb_filter_newBool(b, NOWDB_FILTER_NOT);
+		if (err != NOWDB_OK) return err;
+		return getCondition(&(*b)->left, nowdb_ast_operand(ast, 1));
+
+	case NOWDB_AST_AND:
+	case NOWDB_AST_OR:
+		op = ast->ntype==NOWDB_AST_AND?NOWDB_FILTER_AND:
+		                               NOWDB_FILTER_OR;
+		err = nowdb_filter_newBool(b,op);
+		if (err != NOWDB_OK) return err;
+		err = getCondition(&(*b)->left, nowdb_ast_operand(ast,1));
+		if (err != NOWDB_OK) return err;
+		return getCondition(&(*b)->right, nowdb_ast_operand(ast,2));
+
+	default:
+		fprintf(stderr, "unknown: %d\n", ast->ntype); 
+		INVALIDAST("unknown condition type in ast");
+	}
+}
+
 /* this is way to simple. we need to get the where *per target* and
  * we have to consider aliases. Also, the target may be derived, so
  * we must consider fields that we do not know beforehand */
 static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	nowdb_err_t   err;
-	nowdb_ast_t  *cond, *comp;
+	nowdb_ast_t  *cond;
 	nowdb_plan_t *stp;
 	nowdb_filter_t *b=NULL;
-	nowdb_filter_t *c=NULL;
 
 	if (ast == NULL) return NOWDB_OK;
 
 	cond = nowdb_ast_operand(ast,1);
 	if (cond == NULL) INVALIDAST("no first operand in where");
 
-	comp = nowdb_ast_operand(cond,1);
-	if (comp == NULL) INVALIDAST("no first operand in condition");
+	// fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
 
-	if (cond->ntype == NOWDB_AST_NOT) {
-		err = nowdb_filter_newBool(&b, NOWDB_FILTER_NOT);
-		if (err != NOWDB_OK) return err;
-	}
-	err = getCompare(&c, comp);
-	if (err != NOWDB_OK) {
-		if (b != NULL) nowdb_filter_destroy(b);
-		return err;
-	}
-	if (b != NULL) b->left = c;
+	err = getCondition(&b, cond);
+	if (err != NOWDB_OK) return err;
 
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -197,7 +220,7 @@ static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	stp->stype = 0;
 	stp->target = 0;
 	stp->name = NULL;
-	stp->load = b==NULL?c:b;
+	stp->load = b;
 
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,

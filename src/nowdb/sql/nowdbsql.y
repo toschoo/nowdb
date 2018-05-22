@@ -265,10 +265,15 @@ more_conditions ::= AND condition. {
 more_conditions ::= AND condition more_conditions. {
 	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
 }
+more_conditions ::= OR condition. {
+	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
+}
+more_conditions ::= OR condition more_conditions. {
+	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
+}
 
-more_conditions ::= OR condition.
-more_conditions ::= OR condition more_conditions.
 more_conditions ::= AND LPAR condition more_conditions RPAR.
+more_conditions ::= AND LPAR condition more_conditions RPAR more_conditions.
 more_conditions ::= OR LPAR condition more_conditions RPAR.
 more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
 more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
