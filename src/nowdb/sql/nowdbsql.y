@@ -272,8 +272,19 @@ more_conditions ::= OR condition more_conditions. {
 	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
 }
 
+// change how the parser is done:
+// instead of pushing everything to a linear stack,
+// => create here a condition (= NOWDB_AST_COMPARE)
+// => create a more_conditions (=AND/OR/JUST/NOT) 
 more_conditions ::= AND LPAR condition more_conditions RPAR.
-more_conditions ::= AND LPAR condition more_conditions RPAR more_conditions.
+more_conditions ::= AND LPAR condition more_conditions RPAR more_conditions. {
+	/*
+	nowdb_ast_t *ast = calloc(1, sizeof(nowdb_ast_t));
+	nowdb_ast_init(ast, NOWDB_AST_AND, 0);
+	nowdb_ast_add(ast, C);
+	nowdb_ast_add(ast, MC);
+	*/
+}
 more_conditions ::= OR LPAR condition more_conditions RPAR.
 more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
 more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
