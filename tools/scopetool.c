@@ -202,7 +202,10 @@ int queries(nowdb_path_t path, FILE *stream) {
 		if (rc == NOWDB_SQL_ERR_EOF) {
 			rc = 0; break;
 		}
-		if (rc != 0) break;
+		if (rc != 0) {
+			fprintf(stderr, "parsing error\n");
+			break;
+		}
 		if (ast == NULL) {
 			fprintf(stderr, "no error, no ast :-(\n");
 			rc = NOWDB_SQL_ERR_UNKNOWN; break;

@@ -164,7 +164,7 @@ static inline char *tellType(int ntype, int stype) {
 	}
 }
 
-void nowdb_ast_destroy(nowdb_ast_t *n) {
+static void destroy(nowdb_ast_t *n, char r) {
 	if (n == NULL) return;
 	if (n->value != NULL) {
 		if (n->vtype == NOWDB_AST_V_STRING) {
@@ -175,7 +175,7 @@ void nowdb_ast_destroy(nowdb_ast_t *n) {
 	if (n->conv != NULL) {
 		free(n->conv); n->conv = NULL;
 	}
-	for(int i=0;i<n->nKids;i++) {
+	for(int i=0;r && i<n->nKids;i++) {
 		if (n->kids[i] != NULL) {
 			nowdb_ast_destroy(n->kids[i]);
 			free(n->kids[i]);
@@ -184,6 +184,20 @@ void nowdb_ast_destroy(nowdb_ast_t *n) {
 	if (n->kids != NULL) {
 		free(n->kids); n->kids = NULL;
 	}
+}
+
+void nowdb_ast_destroy(nowdb_ast_t *n) {
+	destroy(n,1);
+}
+
+void nowdb_ast_destroyNR(nowdb_ast_t *n) {
+	destroy(n,0);
+}
+
+void nowdb_ast_destroyAndFree(nowdb_ast_t *n) {
+	if (n == NULL) return;
+	nowdb_ast_destroy(n);
+	free(n);
 }
 
 int nowdb_ast_setValue(nowdb_ast_t *n,

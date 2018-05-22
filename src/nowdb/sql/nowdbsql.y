@@ -23,6 +23,19 @@
 	UNUSED_VAR_SILENCER();
 	free($$);
 }
+
+%type condition {nowdb_ast_t*}
+%destructor condition {nowdb_ast_destroyAndFree($$);}
+
+%type more_conditions {nowdb_ast_t*}
+%destructor more_conditions {nowdb_ast_destroyAndFree($$);}
+
+%type comparison {nowdb_ast_t*}
+%destructor comparison {nowdb_ast_destroyAndFree($$);}
+
+%type operand {nowdb_ast_t*}
+%destructor operand {nowdb_ast_destroyAndFree($$);}
+
 %extra_argument { nowdbsql_state_t *nowdbres }
 
 %parse_accept {
@@ -239,56 +252,6 @@ from_clause ::= FROM table_list. {
 	nowdbsql_state_pushFrom(nowdbres);
 }
 
-where_clause ::= WHERE condition. {
-	nowdbsql_state_pushWhere(nowdbres);
-}
-where_clause ::= WHERE condition more_conditions. {
-	nowdbsql_state_pushWhere(nowdbres);
-}
-
-condition ::= operand comparison operand . {
-	nowdbsql_state_pushCondition(nowdbres, 0);
-}
-condition ::= NOT operand comparison operand . {
-	nowdbsql_state_pushCondition(nowdbres, 1);
-}
-condition ::= LPAR operand comparison operand RPAR. {
-	nowdbsql_state_pushCondition(nowdbres, 0);
-}
-condition ::= NOT LPAR operand comparison operand RPAR. {
-	nowdbsql_state_pushCondition(nowdbres, 1);
-}
- 
-more_conditions ::= AND condition. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
-}
-more_conditions ::= AND condition more_conditions. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
-}
-more_conditions ::= OR condition. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
-}
-more_conditions ::= OR condition more_conditions. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
-}
-
-// change how the parser is done:
-// instead of pushing everything to a linear stack,
-// => create here a condition (= NOWDB_AST_COMPARE)
-// => create a more_conditions (=AND/OR/JUST/NOT) 
-more_conditions ::= AND LPAR condition more_conditions RPAR.
-more_conditions ::= AND LPAR condition more_conditions RPAR more_conditions. {
-	/*
-	nowdb_ast_t *ast = calloc(1, sizeof(nowdb_ast_t));
-	nowdb_ast_init(ast, NOWDB_AST_AND, 0);
-	nowdb_ast_add(ast, C);
-	nowdb_ast_add(ast, MC);
-	*/
-}
-more_conditions ::= OR LPAR condition more_conditions RPAR.
-more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
-more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
-
 table_list ::= table_spec.
 table_list ::= table_spec COMMA table_list.
 
@@ -305,35 +268,167 @@ table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
 	nowdbsql_state_pushTable(nowdbres, T, A);
 }
 
-comparison ::= EQ. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_EQ);
+where_clause ::= WHERE condition(C). {
+	NOWDB_SQL_CHECKSTATE();
+	nowdbsql_state_pushAst(nowdbres,C);
+	nowdbsql_state_pushWhere(nowdbres);
 }
-comparison ::= LE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LE);
-}
-comparison ::= GE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GE);
-}
-comparison ::= LT. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LT);
-}
-comparison ::= GT. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GT);
-}
-comparison ::= NE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_NE);
+where_clause ::= WHERE condition(C) more_conditions(M). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(M,C);
+	nowdbsql_state_pushAst(nowdbres, M);
+	nowdbsql_state_pushWhere(nowdbres);
 }
 
-operand ::= field.
-operand ::= value.
+where_clause ::= WHERE LPAR condition(C) more_conditions(M) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(M,C);
+	nowdbsql_state_pushAst(nowdbres, M);
+	nowdbsql_state_pushWhere(nowdbres);
+}
 
-field ::= IDENTIFIER(I). {
-	nowdbsql_state_pushField(nowdbres, I);
+where_clause ::= WHERE LPAR condition(C) more_conditions(M1) RPAR more_conditions(M2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(M1,C);
+	NOWDB_SQL_ADDKID(M2,M1);
+	nowdbsql_state_pushAst(nowdbres, M2);
+	nowdbsql_state_pushWhere(nowdbres);
 }
-value ::= STRING(S). {
-	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_STRING, S);
+
+condition(C) ::= operand(O1) comparison(O) operand(O2) . {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,O1);
+	NOWDB_SQL_ADDKID(O,O2);
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
 }
-value ::= INTEGER(I). {
-	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_INTEGER, I);
+condition(C) ::= NOT operand(O1) comparison(O) operand(O2) . {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,O1);
+	NOWDB_SQL_ADDKID(O,O2);
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+condition(C) ::= LPAR operand(O1) comparison(O) operand(O2) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,O1);
+	NOWDB_SQL_ADDKID(O,O2);
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+condition(C) ::= NOT LPAR operand(O1) comparison(O) operand(O2) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,O1);
+	NOWDB_SQL_ADDKID(O,O2);
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+ 
+more_conditions(M) ::= AND condition(C). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(M,C);
+}
+
+more_conditions(M) ::= AND condition(C) more_conditions(M2). {
+	nowdb_ast_t *ast;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_AND, 0);
+	if (M2->ntype == NOWDB_AST_OR) {
+		NOWDB_SQL_ADDKID(ast,C);
+		NOWDB_SQL_ADDKID(M2,ast);
+		M = M2;
+		
+	} else {
+		NOWDB_SQL_ADDKID(M2,C);
+		NOWDB_SQL_ADDKID(ast,M2);
+		M = ast;
+	}
+}
+
+more_conditions(M) ::= OR condition(C). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(M,C);
+}
+
+more_conditions(M) ::= OR condition(C) more_conditions(M2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
+	if (M2->ntype == NOWDB_AST_AND) {
+		NOWDB_SQL_ADDKID(M2,C);
+		NOWDB_SQL_ADDKID(M,M2);
+	} else {
+		NOWDB_SQL_ADDKID(M,C);
+		NOWDB_SQL_ADDKID(M,M2);
+	}
+}
+
+more_conditions(M) ::= AND LPAR condition(C) more_conditions(M2) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(M2, C);
+	NOWDB_SQL_ADDKID(M, M2);
+}
+
+more_conditions(M) ::= AND LPAR condition(C) more_conditions(M2) RPAR more_conditions (M3). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(M2, C);
+	NOWDB_SQL_ADDKID(M3, M2);
+	NOWDB_SQL_ADDKID(M, M3);
+}
+
+more_conditions ::= OR LPAR condition more_conditions RPAR.
+more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
+more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
+
+comparison(C) ::= EQ. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_EQ);
+}
+
+comparison(C) ::= LE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LE);
+}
+comparison(C) ::= GE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GE);
+}
+comparison(C) ::= LT. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LT);
+}
+comparison(C) ::= GT. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GT);
+}
+comparison(C) ::= NE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_NE);
+}
+
+operand(O) ::= field(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, F);
+}
+
+operand(O) ::= value(V). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_VALUE, 0);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, V);
+}
+
+field(F) ::= IDENTIFIER(I). {
+	F=I;
+}
+value(V) ::= STRING(S). {
+	V=S;
+}
+value(V) ::= INTEGER(I). {
+	V=I;
 }
 

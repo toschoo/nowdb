@@ -280,45 +280,6 @@ void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name, char *alias) {
 	}
 }
 
-void nowdbsql_state_pushField(nowdbsql_state_t *res, char *name) {
-	// fprintf(stderr, "Field: '%s'\n", name);
-	PUSH(res, NOWDB_AST_FIELD, 0,
-	          NOWDB_AST_V_STRING, name);
-}
-
-void nowdbsql_state_pushValue(nowdbsql_state_t *res, int typ, char *name) {
-	// fprintf(stderr, "VALUE: '%s' (%d)\n", name, typ);
-	PUSH(res, NOWDB_AST_VALUE, typ,
-	          NOWDB_AST_V_STRING, name);
-}
-
-void nowdbsql_state_pushComparison(nowdbsql_state_t *res,
-                                                int comp) {
-	switch(comp) {
-	case NOWDB_SQL_EQ:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_EQ, 0, NULL);
-		break;
-	case NOWDB_SQL_LE:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_LE, 0, NULL);
-		break;
-	case NOWDB_SQL_GE:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_GE, 0, NULL);
-		break;
-	case NOWDB_SQL_LT:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_LT, 0, NULL);
-		break;
-	case NOWDB_SQL_GT:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_GT, 0, NULL);
-		break;
-	case NOWDB_SQL_NE:
-		PUSH(res, NOWDB_AST_COMPARE, NOWDB_AST_NE, 0, NULL);
-		break;
-	default:
-		fprintf(stderr, "UNKNOWN COMPARISON: %d\n", comp);
-		res->errcode = NOWDB_SQL_ERR_PARSER;
-	}
-}
-
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res,
                                             int size) {
 	PUSH(res, NOWDB_AST_OPTION, 
@@ -600,59 +561,7 @@ void nowdbsql_state_pushWhere(nowdbsql_state_t *res) {
 	INC();
 }
 
-void nowdbsql_state_pushAndOr(nowdbsql_state_t *res, int what, char neg) {
-	int p;
-	int from = NOWDB_AST_FROM;
-	int cond[4];
-	nowdb_ast_t *n, *k;
-
-	setCondition(cond);
-
-	LIMIT(&from, 1);
-
-	CREATE(&n, what, 0, 0, NULL);
-
-	POP(n, &k, cond, 4, p);
-	ADDKID(n,k,p);
-
-	TRYPOP(&k, cond, 4, p);
-	if (k != NULL) ADDKID(n,k,p);
-
-	RESET();
+void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *n) {
 	PUSHN(n);
-	INC();
 }
 
-void nowdbsql_state_pushCondition(nowdbsql_state_t *res, char neg) {
-	int p,p1;
-	int comp  = NOWDB_AST_COMPARE;
-	int op[2];
-	nowdb_ast_t *n, *k, *g;
-
-	if (neg) {
-		CREATE(&n, NOWDB_AST_NOT, 0, 0, NULL);
-	} else {
-		CREATE(&n, NOWDB_AST_JUST, 0, 0, NULL);
-	}
-
-	POP(n, &k, &comp, 1, p1);
-
-	op[0] = NOWDB_AST_FIELD;
-	op[1] = NOWDB_AST_VALUE;
-
-	TRYPOP(&g, op, 2, p);
-	if (g!=NULL) {
-		// fprintf(stderr, "%d %s\n", g->ntype, (char*)g->value);
-		ADDKID(k,g,p);
-	}
-	TRYPOP(&g, op, 2, p);
-	if (g!=NULL) {
-		// fprintf(stderr, "%d %s\n", g->ntype, (char*)g->value);
-		ADDKID(k,g,p);
-	}
-
-	ADDKID(n,k,p1);
-	RESET();
-	PUSHN(n);
-	INC();
-}

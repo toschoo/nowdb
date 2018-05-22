@@ -91,6 +91,7 @@ void freeme(void*);
 nowdb_ast_t *nowdb_ast_create(int ntype, int stype);
 int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype);
 void nowdb_ast_destroy(nowdb_ast_t *n);
+void nowdb_ast_destroyAndFree(nowdb_ast_t *n);
 int nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k);
 
