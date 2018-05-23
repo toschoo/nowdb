@@ -36,7 +36,7 @@ function mkwhere() {
 
 	for i in {0..1}
 	do
-		x=$(($RANDOM%3))
+		x=$(($RANDOM%2))
 		if [ $x -eq 0 ]
 		then
 			case $i in
