@@ -111,7 +111,14 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_JOIN: return "join";
 
 	case NOWDB_AST_FIELD: return "field"; 
-	case NOWDB_AST_VALUE: return "value"; 
+	case NOWDB_AST_VALUE:
+		switch(stype) {
+		case NOWDB_AST_TEXT: return "text value"; 
+		case NOWDB_AST_FLOAT: return "float value"; 
+		case NOWDB_AST_UINT: return "uint value"; 
+		case NOWDB_AST_INT: return "int value"; 
+		default: return "unknown type of value";
+		}
 
 	case NOWDB_AST_USE: return "use";
 

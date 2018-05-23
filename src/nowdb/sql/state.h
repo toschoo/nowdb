@@ -17,6 +17,7 @@
 #define NOWDB_SQL_ERR_SIZE 128
 
 #define NOWDB_SQL_COMMENT -17
+#define NOWDB_SQL_UNEXPECTED -1
 
 typedef struct nowdbsql_stack_st nowdbsql_stack_t;
 

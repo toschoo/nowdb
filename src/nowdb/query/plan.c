@@ -95,18 +95,31 @@ static inline nowdb_err_t getField(char    *name,
 	                                     "unknown field");
 }
 
-static inline nowdb_err_t getValue(char   *str,
-                                   uint32_t sz,
-                                   int     typ,
-                                 void **value) {
+static inline nowdb_err_t getValue(char    *str,
+                                   uint32_t  sz,
+                                   int     *typ,
+                                   int    stype,
+                                   void **value) {
 	char *tmp;
 
 	*value = malloc(sz);
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		             FALSE, OBJECT, "allocating buffer");
 	
-	switch(typ) {
-	case 0: *value = NULL; return NOWDB_OK; /* must be converted later! */
+	if (*typ == 0) {
+		switch(stype) {
+		case NOWDB_AST_FLOAT: *typ = NOWDB_TYP_FLOAT; break;
+		case NOWDB_AST_UINT: *typ = NOWDB_TYP_UINT; break;
+		case NOWDB_AST_INT: *typ = NOWDB_TYP_INT; break;
+		case NOWDB_AST_TEXT:
+		default: *value = NULL; return NOWDB_OK;
+		}
+	}
+
+	switch(*typ) {
+	case NOWDB_TYP_FLOAT:
+		**(double**)value = (double)strtod(str, &tmp);
+		break;
 
 	case NOWDB_TYP_UINT:
 		if (sz == 4) 
@@ -150,11 +163,11 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	if (op1->ntype == NOWDB_AST_FIELD) {
 		err = getField(op1->value, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op2->value, sz, typ, &ast->conv);
+		err = getValue(op2->value, sz, &typ, op2->stype, &ast->conv);
 	} else {
 		err = getField(op2->value, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op1->value, sz, typ, &ast->conv);
+		err = getValue(op1->value, sz, &typ, op1->stype, &ast->conv);
 	}
 	if (err != NOWDB_OK) return err;
 

@@ -290,14 +290,9 @@ $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-$(SMK)/sqlsmoke:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
-			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
-			$(SMK)/sqlsmoke.o
+$(SMK)/sqlsmoke:	$(LIB) $(DEP) $(SMK)/sqlsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $(SMK)/sqlsmoke \
-			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
-			         $(SRC)/query/ast.o $(SQL)/state.o \
-			         $(SQL)/parser.o \
 			         $(SMK)/sqlsmoke.o $(libs) -lnowdb
 		
 # BENCHMARKS

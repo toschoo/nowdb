@@ -33,6 +33,9 @@
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
 
+%type value {nowdb_ast_t*}
+%destructor value {nowdb_ast_destroyAndFree($$);}
+
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
 
@@ -349,16 +352,29 @@ operand(O) ::= field(F). {
 
 operand(O) ::= value(V). {
 	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_VALUE, 0);
-	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, V);
+	O=V;
 }
 
 field(F) ::= IDENTIFIER(I). {
 	F=I;
 }
 value(V) ::= STRING(S). {
-	V=S;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, S);
+}
+value(V) ::= UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_UINT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, I);
 }
 value(V) ::= INTEGER(I). {
-	V=I;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_INT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, I);
+}
+value(V) ::= FLOAT(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_FLOAT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
 }

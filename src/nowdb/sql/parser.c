@@ -50,7 +50,7 @@ void nowdbsql_parser_destroy(nowdbsql_parser_t *p) {
 }
 
 static inline void getErrMsg(nowdbsql_parser_t *p) {
-	if (p->errmsg == NULL) {
+	if (p->errmsg != NULL) {
 		free(p->errmsg); p->errmsg = NULL;
 	}
 	if (p->st.errmsg != NULL) {
@@ -88,8 +88,13 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 
 	while((nToken = yylex(p->sc)) != 0) {
 
-		/* announce(nToken, p->sc); */
+		// announce(nToken, p->sc);
 
+		if (nToken == NOWDB_SQL_UNEXPECTED) {
+			p->st.errcode = NOWDB_SQL_ERR_LEX;
+			// write error message to state
+			break;
+		}
 		if (nToken == NOWDB_SQL_COMMENT) continue;
 
 		have=1;
