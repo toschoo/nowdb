@@ -29,12 +29,13 @@ function mkwhere() {
 	l=$1
 
 	line=$(head -$l $file | tail -1)
-	vars=$(echo $line | cut -d";" -f1-3)
+	vars=$(echo $line | cut -d";" -f1-5)
 	edge=$(echo $vars | cut -d";" -f1)
 	origin=$(echo $vars | cut -d";" -f2)
 	destin=$(echo $vars | cut -d";" -f3)
+	tmstmp=$(echo $vars | cut -d";" -f5)
 
-	for i in {0..1}
+	for i in {0..3}
 	do
 		x=$(($RANDOM%2))
 		if [ $x -eq 0 ]
@@ -42,24 +43,39 @@ function mkwhere() {
 			case $i in
 			0) c1="or" ;;
 			1) c2="or" ;;
+			2) c3="or" ;;
 			esac
 		else 
 			case $i in
 			0) c1="and" ;;
 			1) c2="and" ;;
+			2) c3="and" ;;
 			esac
 		fi
 	done
 
 	# we still need parentheses
-	x=$(($RANDOM%3))
+	x=$(($RANDOM%4))
 	case $x in
-		0) e="edge=$edge"; o="origin=$origin"; d="destin=$destin" ;;
-		1) e="(edge=$edge"; o="origin=$origin"; d="destin=$destin)" ;;
-		2) e="edge=$edge";o="(origin=$origin"; d="destin=$destin)";;
+		0) 
+			e="edge=$edge"; o="origin=$origin";
+			d="destin=$destin"; t="timestamp=$tmstmp"
+			;;
+		1) 
+			e="(edge=$edge"; o="origin=$origin"; 
+			d="destin=$destin)"; t="timestamp=$tmstmp" 
+			;;
+		2) 
+			e="edge=$edge";o="(origin=$origin"; 
+			d="destin=$destin)"; t="timestamp=$tmstmp"
+			;;
+		3) 
+			e="edge=$edge";o="(origin=$origin"; 
+			d="destin=$destin)"; t="timestamp=$tmstmp"
+			;;
 	esac
 
-	w="where $e $c1 $o $c2 $d"
+	w="where $e $c1 $o $c2 $d $c3 $t"
 
 	printf "%s\n" "$w"
 }
@@ -86,7 +102,7 @@ do
 	whereclause=$(mkwhere $line)
 	csvsql="$csvsqlprfx$whereclause$csvsqlsufx"
 	nowdbsql="$nowsqlprfx$whereclause$nowsqlsufx"
-	csvout=$(csvsql -d";" --query="$csvsql" $csv 2>&1)
+	csvout=$(csvsql -I -d";" --query="$csvsql" $csv 2>&1)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in csvsql '%s':\n" "$csvsql"
@@ -104,7 +120,7 @@ do
 	nowres=$(echo $nowout | cut -d" " -f2)
 	if [ $csvres -ne $nowres ]
 	then
-		printf "FAILED in line %d: %d != %d\n" $line $csvres $nowres
+		printf "FAILED in '%s': %d != %d\n" $csvsql $csvres $nowres
 		exit 1
 	fi
 	printf "%d = %d (%s)\n" $csvres $nowres "$csvsql"

@@ -27,14 +27,14 @@
 %type condition {nowdb_ast_t*}
 %destructor condition {nowdb_ast_destroyAndFree($$);}
 
-%type more_conditions {nowdb_ast_t*}
-%destructor more_conditions {nowdb_ast_destroyAndFree($$);}
-
 %type comparison {nowdb_ast_t*}
 %destructor comparison {nowdb_ast_destroyAndFree($$);}
 
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
+
+%type expr {nowdb_ast_t*}
+%destructor expr {nowdb_ast_destroyAndFree($$);}
 
 %extra_argument { nowdbsql_state_t *nowdbres }
 
@@ -268,31 +268,43 @@ table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
 	nowdbsql_state_pushTable(nowdbres, T, A);
 }
 
-where_clause ::= WHERE condition(C). {
+%left OR.
+%left AND.
+%right NOT.
+
+where_clause ::= WHERE expr(E). {
 	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres,C);
-	nowdbsql_state_pushWhere(nowdbres);
-}
-where_clause ::= WHERE condition(C) more_conditions(M). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(M,C);
-	nowdbsql_state_pushAst(nowdbres, M);
+	nowdbsql_state_pushAst(nowdbres,E);
 	nowdbsql_state_pushWhere(nowdbres);
 }
 
-where_clause ::= WHERE LPAR condition(C) more_conditions(M) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(M,C);
-	nowdbsql_state_pushAst(nowdbres, M);
-	nowdbsql_state_pushWhere(nowdbres);
+expr(E) ::= condition(C). {
+	E=C;
 }
 
-where_clause ::= WHERE LPAR condition(C) more_conditions(M1) RPAR more_conditions(M2). {
+expr(E) ::= expr(A) AND expr(B). {
 	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(M1,C);
-	NOWDB_SQL_ADDKID(M2,M1);
-	nowdbsql_state_pushAst(nowdbres, M2);
-	nowdbsql_state_pushWhere(nowdbres);
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(E,A);
+	NOWDB_SQL_ADDKID(E,B);
+}
+
+expr(E) ::= expr(A) OR expr(B). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(E,A);
+	NOWDB_SQL_ADDKID(E,B);
+}
+
+expr(E) ::= LPAR expr(A) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	E=A;
+} 
+
+expr(E) ::= NOT expr(A). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_ADDKID(E,A);
 }
 
 condition(C) ::= operand(O1) comparison(O) operand(O2) . {
@@ -301,152 +313,6 @@ condition(C) ::= operand(O1) comparison(O) operand(O2) . {
 	NOWDB_SQL_ADDKID(O,O2);
 	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
 	NOWDB_SQL_ADDKID(C,O);
-}
-condition(C) ::= NOT operand(O1) comparison(O) operand(O2) . {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(O,O1);
-	NOWDB_SQL_ADDKID(O,O2);
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_ADDKID(C,O);
-}
-condition(C) ::= LPAR operand(O1) comparison(O) operand(O2) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(O,O1);
-	NOWDB_SQL_ADDKID(O,O2);
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
-	NOWDB_SQL_ADDKID(C,O);
-}
-
-condition(C) ::= NOT LPAR operand(O1) comparison(O) operand(O2) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(O,O1);
-	NOWDB_SQL_ADDKID(O,O2);
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_ADDKID(C,O);
-}
- 
-more_conditions(M) ::= AND condition(C). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(M,C);
-}
-
-more_conditions(M) ::= AND condition(C) more_conditions(M2). {
-	nowdb_ast_t *ast;
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_AND, 0);
-	if (M2->ntype == NOWDB_AST_OR) {
-		NOWDB_SQL_ADDKID(ast,C);
-		NOWDB_SQL_ADDKID(M2,ast);
-		M = M2;
-		
-	} else {
-		NOWDB_SQL_ADDKID(M2,C);
-		NOWDB_SQL_ADDKID(ast,M2);
-		M = ast;
-	}
-}
-
-more_conditions(M) ::= OR condition(C). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(M,C);
-}
-
-more_conditions(M) ::= OR condition(C) more_conditions(M2). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
-	if (M2->ntype == NOWDB_AST_AND) {
-		NOWDB_SQL_ADDKID(M2,C);
-		NOWDB_SQL_ADDKID(M,M2);
-	} else {
-		NOWDB_SQL_ADDKID(M,C);
-		NOWDB_SQL_ADDKID(M,M2);
-	}
-}
-
-more_conditions(M) ::= AND LPAR condition(C) more_conditions(M2) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(M2, C);
-	NOWDB_SQL_ADDKID(M, M2);
-}
-
-more_conditions(M) ::= AND LPAR condition(C) more_conditions(M2) RPAR more_conditions (M3). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(M2, C);
-	NOWDB_SQL_ADDKID(M3, M2);
-	NOWDB_SQL_ADDKID(M, M3);
-}
-
-more_conditions(M) ::= OR LPAR condition(C) more_conditions(M2) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(M2, C);
-	NOWDB_SQL_ADDKID(M, M2);
-}
-
-more_conditions(M) ::= OR LPAR condition(C) more_conditions(M2) RPAR more_conditions (M3). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(M2, C);
-	NOWDB_SQL_ADDKID(M3, M2);
-	NOWDB_SQL_ADDKID(M, M3);
-}
-
-more_conditions(M) ::= AND NOT LPAR condition(C) more_conditions(M2) RPAR. {
-	nowdb_ast_t *ast;
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(M2,C);
-	NOWDB_SQL_ADDKID(ast,M2);
-	NOWDB_SQL_ADDKID(M,ast);
-}
-
-more_conditions(M) ::= AND NOT LPAR condition(C) more_conditions(M2) RPAR more_conditions(M3). {
-	nowdb_ast_t *not,*and;
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&not, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_CREATEAST(&and, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(M2,C);
-	NOWDB_SQL_ADDKID(not,M2);
-	NOWDB_SQL_ADDKID(and,not);
-	if (M3->ntype == NOWDB_AST_OR) {
-		NOWDB_SQL_ADDKID(M3,and);
-		M = M3;
-	} else {
-		NOWDB_SQL_ADDKID(and,M3);
-		M = and;
-	}
-}
-
-more_conditions(M) ::= OR NOT LPAR condition(C) more_conditions(M2) RPAR. {
-	nowdb_ast_t *ast;
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&ast, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_CREATEAST(&M, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(M2,C);
-	NOWDB_SQL_ADDKID(ast,M2);
-	NOWDB_SQL_ADDKID(M,ast);
-}
-
-more_conditions(M) ::= OR NOT LPAR condition(C) more_conditions(M2) RPAR more_conditions(M3). {
-	nowdb_ast_t *not,*or;
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&not, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_CREATEAST(&or, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(M2,C);
-	NOWDB_SQL_ADDKID(not,M2);
-	NOWDB_SQL_ADDKID(or,not);
-	if (M3->ntype == NOWDB_AST_AND) {
-		NOWDB_SQL_ADDKID(M3,or);
-		M = M3;
-	} else {
-		NOWDB_SQL_ADDKID(or,M3);
-		M = or;
-	}
 }
 
 comparison(C) ::= EQ. {
@@ -496,4 +362,3 @@ value(V) ::= STRING(S). {
 value(V) ::= INTEGER(I). {
 	V=I;
 }
-
