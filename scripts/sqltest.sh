@@ -94,6 +94,18 @@ cnt=$(wc -l rsc/kilo.csv | awk -F" " '{print $1}')
 
 i=0
 IFS=$'\n'
+
+# noinference parameter for csvsql
+csvchk=$(csvsql -h | tail -1 | cut -d" " -f3 | cut -d"," -f1)
+
+if [ "$csvchk" = "-I" ]
+then
+	echo "no type inference"
+	noinf="-I"
+else
+	noinf=""
+fi
+
 while [ $i -lt $mx ]
 do
 	line=$((1 + $RANDOM%$cnt))
@@ -102,7 +114,7 @@ do
 	whereclause=$(mkwhere $line)
 	csvsql="$csvsqlprfx$whereclause$csvsqlsufx"
 	nowdbsql="$nowsqlprfx$whereclause$nowsqlsufx"
-	csvout=$(csvsql -I -d";" --query="$csvsql" $csv 2>&1)
+	csvout=$(csvsql $noinf -d";" --query="$csvsql" $csv 2>&1)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in csvsql '%s':\n" "$csvsql"
