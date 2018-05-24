@@ -91,6 +91,16 @@ typedef uint64_t nowdb_rowid_t;
 extern char nowdb_nullrec[64];
 
 /* ------------------------------------------------------------------------
+ * Vertex Offsets
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_OFF_VERTEX 0
+#define NOWDB_OFF_PROP   8
+#define NOWDB_OFF_VALUE 16
+#define NOWDB_OFF_VTYPE 24
+#define NOWDB_OFF_ROLE  28
+
+/* ------------------------------------------------------------------------
  * Vertex Property
  * ---------------
  * Storetype of properties of a vertex
@@ -107,6 +117,20 @@ typedef struct {
 void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
+
+/* ------------------------------------------------------------------------
+ * Edge Offsets
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_OFF_EDGE     0
+#define NOWDB_OFF_ORIGIN   8
+#define NOWDB_OFF_DESTIN  16
+#define NOWDB_OFF_LABEL   24
+#define NOWDB_OFF_TMSTMP  32
+#define NOWDB_OFF_WEIGHT  40
+#define NOWDB_OFF_WEIGHT2 48
+#define NOWDB_OFF_WTYPE   56
+#define NOWDB_OFF_WTYPE2  60
 
 /* ------------------------------------------------------------------------
  * Edge
@@ -135,4 +159,3 @@ int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 
 #endif
-

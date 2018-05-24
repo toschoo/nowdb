@@ -7,6 +7,7 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/query/ast.h>
 #include <nowdb/query/stmt.h>
+#include <nowdb/query/cursor.h>
 #include <nowdb/sql/parser.h>
 #include <nowdb/io/dir.h>
 #include <common/progress.h>
@@ -55,6 +56,34 @@ int parsecmd(int argc, char **argv) {
 }
 
 /* -----------------------------------------------------------------------
+ * Print vertices
+ * -----------------------------------------------------------------------
+ */
+void printVertex(nowdb_vertex_t *buf, uint32_t sz) {
+	for(uint32_t i=0; i<sz; i++) {
+		fprintf(stdout, "%lu(%u).%lu: %lu (%u)\n",
+		                 buf[i].vertex, buf[i].role,
+		                 buf[i].property,
+		                 buf[i].value, buf[i].vtype);
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Print edges
+ * -----------------------------------------------------------------------
+ */
+void printEdge(nowdb_edge_t *buf, uint32_t sz) {
+	for(uint32_t i=0; i<sz; i++) {
+		fprintf(stdout, "%lu -[%lu]-> %lu #%lu @%ld: ",
+		                buf[i].origin, buf[i].edge, buf[i].destin,
+		                buf[i].label, buf[i].timestamp);
+		fprintf(stdout, "%lu (%u), %lu (%u)\n",
+		                buf[i].weight, buf[i].wtype[0],
+		                buf[i].weight2, buf[i].wtype[1]);
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Print report
  * -----------------------------------------------------------------------
  */
@@ -70,6 +99,54 @@ int printReport(nowdb_qry_result_t *res) {
 	                rep->errors,
 	                rep->runtime);
 	free(res->result); res->result = NULL;
+	return 0;
+}
+
+char buf[8192];
+
+/* -----------------------------------------------------------------------
+ * Process Cursor
+ * -----------------------------------------------------------------------
+ */
+int processCursor(nowdb_cursor_t *cur) {
+	uint32_t osz;
+	uint64_t total=0;
+	nowdb_err_t err=NOWDB_OK;
+
+	err = nowdb_cursor_open(cur);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+		goto cleanup;
+	}
+
+	for(;;) {
+		err = nowdb_cursor_fetch(cur, buf, 8192, &osz);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				err = NOWDB_OK;
+			}
+			break;
+		}
+		total += osz/cur->recsize;
+		if (cur->recsize == 32) {
+			printVertex((nowdb_vertex_t*)buf, osz/32);
+		} else if (cur->recsize == 64) {
+			printEdge((nowdb_edge_t*)buf, osz/64);
+		}
+	}
+	fprintf(stderr, "Read: %lu\n", total);
+
+cleanup:
+	nowdb_cursor_destroy(cur); free(cur);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
 	return 0;
 }
 
@@ -93,6 +170,8 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_NOTHING: break;
 	case NOWDB_QRY_RESULT_REPORT: return printReport(&res);
 	case NOWDB_QRY_RESULT_SCOPE: global_scope = res.result; break;
+	case NOWDB_QRY_RESULT_CURSOR: return processCursor(res.result);
+
 	case NOWDB_QRY_RESULT_PLAN:
 		fprintf(stderr, 
 		"I have a plan, but no plan what to do with it\n");
@@ -123,7 +202,10 @@ int queries(nowdb_path_t path, FILE *stream) {
 		if (rc == NOWDB_SQL_ERR_EOF) {
 			rc = 0; break;
 		}
-		if (rc != 0) break;
+		if (rc != 0) {
+			fprintf(stderr, "parsing error\n");
+			break;
+		}
 		if (ast == NULL) {
 			fprintf(stderr, "no error, no ast :-(\n");
 			rc = NOWDB_SQL_ERR_UNKNOWN; break;
@@ -144,17 +226,13 @@ int queries(nowdb_path_t path, FILE *stream) {
 }
 
 /* -----------------------------------------------------------------------
- *
+ * main
  * -----------------------------------------------------------------------
  */
 int main(int argc, char **argv) {
 	int rc = EXIT_SUCCESS;
 	nowdb_err_t      err;
 	nowdb_path_t path;
-	/*
-	struct timespec t1, t2;
-	uint64_t d=0;
-	*/
 
 	if (argc < 2) {
 		helptxt(argv[0]);
@@ -183,7 +261,6 @@ int main(int argc, char **argv) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	// fprintf(stdout, "Running time: %luus\n", d);
 cleanup:
 	if (global_scope != NULL) {
 		err = nowdb_scope_close(global_scope);

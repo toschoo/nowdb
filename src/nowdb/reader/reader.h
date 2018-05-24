@@ -12,11 +12,11 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/io/dir.h>
 #include <nowdb/io/file.h>
+#include <nowdb/reader/filter.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
 
-typedef char nowdb_filter_t;    /* just for the moment */
 typedef char nowdb_index_t;     /* just for the moment */
 typedef char nowdb_ordering_t;  /* just for the moment */
 

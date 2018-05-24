@@ -1,23 +1,43 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * SQL Lexer
+ * ========================================================================
+ * This parser definition file is intended for use with
+ * the flex lexer (and similar)
+ *
+ * urgent TODO:
+ * ------------
+ * - multi-line comments...
+ *   with the lexer alone, this appears to be complex.
+ *   here's how to do it:
+ *   http://westes.github.io/flex/manual/
+ *   How-can-I-match-C_002dstyle-comments_003f.html
+ * ========================================================================
+ */
+
 %{
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
 %}
-
-	/* TODO:
-	 * multi-line comments...
-	 * with the lexer alone, this appears to be complex.
-	 * here's how to do it:
-	 * http://westes.github.io/flex/manual/
-	 * How-can-I-match-C_002dstyle-comments_003f.html
-	 */
 
 %option reentrant
 
 %%
 
 ";"			return NOWDB_SQL_SEMICOLON;
-"="			return NOWDB_SQL_EQUAL;
+"="			return NOWDB_SQL_EQ;
 ","			return NOWDB_SQL_COMMA;
+"*"			return NOWDB_SQL_STAR;
+"("			return NOWDB_SQL_LPAR;
+")"			return NOWDB_SQL_RPAR;
+"<"			return NOWDB_SQL_LT;
+">"			return NOWDB_SQL_GT;
+
+"<="			return NOWDB_SQL_LE;
+">="			return NOWDB_SQL_GE;
+"!="			return NOWDB_SQL_NE;
+"<>"			return NOWDB_SQL_NE;
 
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
@@ -33,6 +53,13 @@
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
 
+(?i:SELECT)		return NOWDB_SQL_SELECT;
+(?i:FROM)		return NOWDB_SQL_FROM;
+(?i:WHERE)		return NOWDB_SQL_WHERE;
+(?i:AND)		return NOWDB_SQL_AND;
+(?i:OR)			return NOWDB_SQL_OR;
+(?i:NOT)		return NOWDB_SQL_NOT;
+
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
 
@@ -41,8 +68,9 @@
 (?i:ON)			return NOWDB_SQL_ON;
 
 (?i:IF)			return NOWDB_SQL_IF;
-(?i:NOT)		return NOWDB_SQL_NOT;
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;
+
+(?i:AS)			return NOWDB_SQL_AS;
 
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;
@@ -68,12 +96,14 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
-[a-zA-Z][a-zA-Z0-9_]*   return NOWDB_SQL_IDENTIFIER;
-'[\40-\176]*'		return NOWDB_SQL_STRING;
-[0-9]*			return NOWDB_SQL_INTEGER;
-"--".*[\r\n]		return NOWDB_SQL_COMMENT;
-[ \t\r\n]		;
-.			fprintf(stderr, "unexpected char\n");
+[a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
+'[\40-\176]*'				return NOWDB_SQL_STRING;
+(\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
+(\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
+0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
+"--".*[\r\n]				return NOWDB_SQL_COMMENT;
+[ \t\r\n]				;
+.					return NOWDB_SQL_UNEXPECTED;
 
 %%
 

@@ -82,10 +82,36 @@ static inline void clean(nowdbsql_stack_t *stack, int pos) {
 }
 
 static inline void resetStack(nowdbsql_stack_t *stack) {
-	for(int i=stack->hi; i>=stack->lo; i--) {
+	for(int i=stack->hi-1; i>=stack->lo; i--) {
 		if (stack->chunks[i] != NULL) break;
-		if (stack->hi > 0) stack->hi--;
+		if (stack->hi > stack->lo) stack->hi--;
 	}
+}
+
+static inline void incStack(nowdbsql_stack_t *stack) {
+	stack->lo++; 
+	if (stack->hi < stack->lo) stack->hi = stack->lo+1;
+}
+
+static inline void decStack(nowdbsql_stack_t *stack) {
+	stack->lo--; stack->hi = stack->lo;
+}
+
+static inline void limitStack(nowdbsql_stack_t *stack,
+                                int *nTypes, int size) {
+	for(int i=stack->hi; i>=0; i--) {
+		if (hitType(stack->chunks[i], nTypes, size)) {
+			stack->lo = i+1;
+			if (stack->hi < stack->lo) {
+				stack->hi = stack->lo+1;
+			}
+			break;
+		}
+	}
+}
+
+static inline void unlimitStack(nowdbsql_stack_t *stack) {
+	stack->lo=0;
 }
 
 static inline void cleanStack(nowdbsql_stack_t *stack) {
@@ -104,6 +130,19 @@ static inline void destroyStack(nowdbsql_stack_t *stack) {
 	if (stack->chunks != NULL) {
 		cleanStack(stack);
 		free(stack->chunks); stack->chunks = NULL;
+	}
+}
+
+static inline void showStack(nowdbsql_stack_t *stack) {
+
+	fprintf(stderr, "stack:\n");
+	for(int i=0; i<=stack->hi; i++) {
+		if (stack->chunks[i] == NULL) {
+			fprintf(stderr, "%d: NULL\n", i);
+		} else {
+			fprintf(stderr, "%d: %d\n", i,
+			     stack->chunks[i]->ntype);
+		}
 	}
 }
 
@@ -161,7 +200,9 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
 #define POP(n, k, t, s, p) \
 	*k = popType(res->stack, t, s, &p); \
 	if (*k == NULL) { \
-		nowdb_ast_destroy(n); free(n); \
+		if (n != NULL) { \
+			nowdb_ast_destroy(n); free(n); \
+		} \
 		res->errcode = NOWDB_SQL_ERR_PARSER; \
 		return; \
 	}
@@ -180,6 +221,18 @@ nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
 #define RESET() \
 	resetStack(res->stack)
 
+#define INC() \
+	incStack(res->stack);
+
+#define DEC() \
+	decStack(res->stack);
+
+#define LIMIT(o, s) \
+	limitStack(res->stack, o, s);
+
+#define REOPEN() \
+	unlimitStack(res->stack);
+
 static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) {
 	nowdb_ast_t *n;
 	n = nowdb_ast_create(nt, st);
@@ -187,7 +240,7 @@ static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) 
 		res->errcode = NOWDB_SQL_ERR_NO_MEM;
 		return;
 	}
-	if (st != 0) nowdb_ast_setValue(n, vt, v);
+	if (vt != 0) nowdb_ast_setValue(n, vt, v);
 	PUSHN(n);
 }
 
@@ -207,8 +260,24 @@ void nowdbsql_state_pushContext(nowdbsql_state_t *res,
 	PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT, NOWDB_AST_V_STRING, ctx);
 }
 
-void nowdbsql_state_pushVertex(nowdbsql_state_t *res) {
-	PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX, 0, NULL);
+void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias) {
+	if (alias == NULL) {
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX, 0, NULL);
+	} else {
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_VERTEX,
+		          NOWDB_AST_V_STRING, alias);
+	}
+}
+
+/* table or table spec ??? */
+void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name, char *alias) {
+	if (alias == NULL) 
+		PUSH(res, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT,
+		          NOWDB_AST_V_STRING, name);
+	else {
+		fprintf(stderr, "PUSH TABLE NAME WITH ALIAS!!!\n");
+		res->errcode = NOWDB_SQL_ERR_PARSER;
+	}
 }
 
 void nowdbsql_state_pushSizing(nowdbsql_state_t *res,
@@ -413,3 +482,86 @@ void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name) {
 	CREATE(&n, NOWDB_AST_USE, 0, NOWDB_AST_V_STRING, name);
 	PUSHN(n);
 }
+
+void nowdbsql_state_pushDQL(nowdbsql_state_t *res) {
+	int p;
+	int select = NOWDB_AST_SELECT;
+	int   from = NOWDB_AST_FROM;
+	int  where = NOWDB_AST_WHERE;
+	nowdb_ast_t *n, *k;
+	
+	REOPEN();
+
+	CREATE(&n, NOWDB_AST_DQL, 0, 0, NULL);
+
+	POP(n, &k, &select, 1, p);
+	ADDKID(n,k,p);
+
+	POP(n, &k, &from, 1, p);
+	ADDKID(n,k,p);
+
+	TRYPOP(&k, &where, 1, p);
+	if (k!=NULL) ADDKID(n,k,p);
+
+	RESET();
+	PUSHN(n);
+}
+
+void nowdbsql_state_pushProjection(nowdbsql_state_t *res) {
+	nowdb_ast_t *n;
+
+	CREATE(&n, NOWDB_AST_SELECT, NOWDB_AST_ALL, 0, NULL);
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushFrom(nowdbsql_state_t *res) {
+	int p;
+	int target = NOWDB_AST_TARGET;
+	nowdb_ast_t *n, *k;
+
+	CREATE(&n, NOWDB_AST_FROM, 0, 0, NULL);
+	POP(n, &k, &target, 1, p);
+	ADDKID(n,k,p);
+	TRYPOP(&k, &target, 1, p);
+	while(k!=NULL) {
+		ADDKID(n,k,p);
+		TRYPOP(&k,&target,1,p);
+	}
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void setCondition(int *cond) {
+	cond[0] = NOWDB_AST_JUST;
+	cond[1] = NOWDB_AST_AND;
+	cond[2] = NOWDB_AST_OR;
+	cond[3] = NOWDB_AST_NOT;
+}
+
+void nowdbsql_state_pushWhere(nowdbsql_state_t *res) {
+	int p;
+	int from = NOWDB_AST_FROM;
+	int cond[4];
+	nowdb_ast_t *n, *k;
+
+	setCondition(cond);
+
+	LIMIT(&from, 1);
+
+	CREATE(&n, NOWDB_AST_WHERE, 0, 0, NULL);
+
+	POP(n, &k, cond, 4, p);
+	ADDKID(n,k,p);
+
+	RESET();
+	PUSHN(n);
+	INC();
+}
+
+void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *n) {
+	PUSHN(n);
+}
+

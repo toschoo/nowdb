@@ -22,13 +22,25 @@
 #include <nowdb/types/time.h>
 #include <nowdb/store/store.h>
 
+/* ------------------------------------------------------------------------
+ * Flags for CSV loader
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_CSV_VERTEX          2
 #define NOWDB_CSV_HAS_HEADER      8
 #define NOWDB_CSV_USE_HEADER     16
 #define NOWDB_CSV_GIVE_FEEDBACK  64
 
+/* ------------------------------------------------------------------------
+ * Number of fields in edge
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_EDGE_FIELDS 9
 
+/* ------------------------------------------------------------------------
+ * Field numbers in edge
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_FIELD_EDGE      0
 #define NOWDB_FIELD_ORIGIN    1
 #define NOWDB_FIELD_DESTIN    2
@@ -39,48 +51,88 @@
 #define NOWDB_FIELD_WTYPE     7
 #define NOWDB_FIELD_WTYPE2    8
 
+/* ------------------------------------------------------------------------
+ * Number of fields in vertex
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_VERTEX_FIELDS 5
 
+/* ------------------------------------------------------------------------
+ * Field numbers in vertex
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_FIELD_VERTEX   0
 #define NOWDB_FIELD_PROPERTY 1
 #define NOWDB_FIELD_VALUE    2
 #define NOWDB_FIELD_VTYPE    3
 #define NOWDB_FIELD_ROLE     4
 
+/* ------------------------------------------------------------------------
+ * Field and row callbacks
+ * ------------------------------------------------------------------------
+ */
 typedef void (*nowdb_csv_field_t)(void*, size_t, void*);
 typedef void (*nowdb_csv_row_t)(int,void*);
 
+/* ------------------------------------------------------------------------
+ * Predeclaration of csv state
+ * ------------------------------------------------------------------------
+ */
 typedef struct nowdb_csv_st nowdb_csv_t;
 
+/* ------------------------------------------------------------------------
+ * Loader
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	                        /* model */
-	FILE            *stream;
-	FILE           *ostream;
-	nowdb_store_t    *store;
-	nowdb_bitmap32_t  flags;
-	nowdb_csv_field_t fproc;
-	nowdb_csv_row_t   rproc;
-	char              delim;
-	nowdb_csv_t        *csv;
-	nowdb_err_t         err;
-	uint64_t         loaded;
-	uint64_t         errors;
-	nowdb_time_t    runtime;
+	/* model */
+	FILE            *stream; /* the input stream  */
+	FILE           *ostream; /* the output stream */
+	nowdb_store_t    *store; /* the output store  */
+	nowdb_bitmap32_t  flags; /* flags             */
+	nowdb_csv_field_t fproc; /* field callback    */
+	nowdb_csv_row_t   rproc; /* row   callback    */
+	char              delim; /* csv delimiter     */
+	nowdb_csv_t        *csv; /* csv state         */
+	nowdb_err_t         err; /* error occurred    */
+	uint64_t         loaded; /* rows loaded       */
+	uint64_t         errors; /* rows rejected     */
+	nowdb_time_t    runtime; /* running time      */
 } nowdb_loader_t;
 
+/* ------------------------------------------------------------------------
+ * Initialise loader
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
                               nowdb_store_t   *store,
                               nowdb_bitmap32_t flags);
 
+/* ------------------------------------------------------------------------
+ * Destroy loader
+ * ------------------------------------------------------------------------
+ */
 void nowdb_loader_destroy(nowdb_loader_t *ldr);
 
+/* ------------------------------------------------------------------------
+ * Run the loader
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr);
 
+/* ------------------------------------------------------------------------
+ * Standard csv field callbacks for context and vertex
+ * ------------------------------------------------------------------------
+ */
 void nowdb_csv_field_context(void *data, size_t len, void *rsc);
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc);
 
+/* ------------------------------------------------------------------------
+ * Standard csv row callback
+ * ------------------------------------------------------------------------
+ */
 void nowdb_csv_row(int c, void *rsc);
 #endif
 
