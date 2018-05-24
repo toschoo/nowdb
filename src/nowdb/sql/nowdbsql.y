@@ -1,3 +1,28 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * SQL Parser
+ * ========================================================================
+ * This parser definition file is intended for use with
+ * the nowlemon parser generator (forked from sqlite lemon).
+ * It creates an abstract syntax tree (ast),
+ * which is used to execute sql statements and to create a cursor.
+ * urgent TODO:
+ * ------------
+ * - Get rid of the 'state', it not needed nor in any way useful
+ * - clarify the role of the semicolon: do we need it???
+ * - qualified names
+ * - aliases
+ * - joins
+ * - NULL
+ * - TRUE and FALSE
+ * - straighten out the create syntax
+ * - alter
+ * - insert and update
+ * - make load more versatile (csv, json, binary, avron)
+ * - multi-line comments
+ * ========================================================================
+ */
 %token_prefix NOWDB_SQL_
 %name nowdb_sql_parse
 
@@ -17,12 +42,40 @@
 #include <nowdb/sql/state.h>
 }
 
+/* ------------------------------------------------------------------------
+ * Tokens are always plain strings
+ * ------------------------------------------------------------------------
+ */
 %token_type {char*}
 %token_destructor {
 	/* fprintf(stderr, "freeing token '%s'\n", (char*)$$); */
 	UNUSED_VAR_SILENCER();
 	free($$);
 }
+
+/* ------------------------------------------------------------------------
+ * Tokens are always plain strings
+ * ------------------------------------------------------------------------
+ */
+%type condition {nowdb_ast_t*}
+%destructor condition {nowdb_ast_destroyAndFree($$);}
+
+/* ------------------------------------------------------------------------
+ * Everything else is an ast node
+ * ------------------------------------------------------------------------
+ */
+%type comparison {nowdb_ast_t*}
+%destructor comparison {nowdb_ast_destroyAndFree($$);}
+
+%type operand {nowdb_ast_t*}
+%destructor operand {nowdb_ast_destroyAndFree($$);}
+
+%type value {nowdb_ast_t*}
+%destructor value {nowdb_ast_destroyAndFree($$);}
+
+%type expr {nowdb_ast_t*}
+%destructor expr {nowdb_ast_destroyAndFree($$);}
+
 %extra_argument { nowdbsql_state_t *nowdbres }
 
 %parse_accept {
@@ -39,6 +92,11 @@
 	// fprintf(stderr, "near '%s': syntax error\n", (char*)yyminor);
 }
 
+/* ------------------------------------------------------------------------
+ * An SQL statement is either
+ * a DDL, DLL, DML, DQL or a miscellaneous statement
+ * ------------------------------------------------------------------------
+ */
 sql ::= ddl SEMICOLON. {
 	nowdbsql_state_pushDDL(nowdbres);
 }
@@ -51,6 +109,11 @@ sql ::= dql SEMICOLON. {
 sql ::= misc SEMICOLON. {
 	nowdbsql_state_pushMisc(nowdbres);
 }
+
+/* ------------------------------------------------------------------------
+ * DDL
+ * ------------------------------------------------------------------------
+ */
 ddl ::= CREATE target. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
@@ -99,6 +162,10 @@ ddl ::= ALTER context_only SET context_options. {
 	nowdbsql_state_pushAlter(nowdbres);
 }
 
+/* ------------------------------------------------------------------------
+ * Miscellaneous (use)
+ * ------------------------------------------------------------------------
+ */
 misc ::= USE IDENTIFIER(I). {
 	nowdbsql_state_pushUse(nowdbres, I);
 }
@@ -145,6 +212,10 @@ context_option ::= ENCRYPTION EQ STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
 }
 
+/* ------------------------------------------------------------------------
+ * This is a mess!!! Review
+ * ------------------------------------------------------------------------
+ */
 context_spec ::= with_stress with_disk without_comp without_sort.
 context_spec ::= with_stress with_disk.
 context_spec ::= with_stress.
@@ -205,6 +276,11 @@ disk_spec ::= SSD. {
 disk_spec ::= RAID. {
 	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
 }
+
+/* ------------------------------------------------------------------------
+ * DLL
+ * ------------------------------------------------------------------------
+ */
 dll ::= LOAD STRING(S) INTO dml_target. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
@@ -218,6 +294,10 @@ header_clause ::= USE HEADER. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_USE, NULL);
 }
 
+/* ------------------------------------------------------------------------
+ * DML
+ * ------------------------------------------------------------------------
+ */
 dml_target ::= IDENTIFIER(I). {
 	nowdbsql_state_pushContext(nowdbres, I);
 }
@@ -225,7 +305,10 @@ dml_target ::= VERTEX. {
 	nowdbsql_state_pushVertex(nowdbres, NULL);
 }
 
-/* MINIMAL VIABLE SQL */
+/* ------------------------------------------------------------------------
+ * DQL
+ * ------------------------------------------------------------------------
+ */
 dql ::= projection_clause from_clause. {
 	nowdbsql_state_pushDQL(nowdbres);
 }
@@ -238,56 +321,6 @@ projection_clause ::= SELECT STAR. {
 from_clause ::= FROM table_list. {
 	nowdbsql_state_pushFrom(nowdbres);
 }
-
-where_clause ::= WHERE condition. {
-	nowdbsql_state_pushWhere(nowdbres);
-}
-where_clause ::= WHERE condition more_conditions. {
-	nowdbsql_state_pushWhere(nowdbres);
-}
-
-condition ::= operand comparison operand . {
-	nowdbsql_state_pushCondition(nowdbres, 0);
-}
-condition ::= NOT operand comparison operand . {
-	nowdbsql_state_pushCondition(nowdbres, 1);
-}
-condition ::= LPAR operand comparison operand RPAR. {
-	nowdbsql_state_pushCondition(nowdbres, 0);
-}
-condition ::= NOT LPAR operand comparison operand RPAR. {
-	nowdbsql_state_pushCondition(nowdbres, 1);
-}
- 
-more_conditions ::= AND condition. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
-}
-more_conditions ::= AND condition more_conditions. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_AND, 0);
-}
-more_conditions ::= OR condition. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
-}
-more_conditions ::= OR condition more_conditions. {
-	nowdbsql_state_pushAndOr(nowdbres, NOWDB_AST_OR, 0);
-}
-
-// change how the parser is done:
-// instead of pushing everything to a linear stack,
-// => create here a condition (= NOWDB_AST_COMPARE)
-// => create a more_conditions (=AND/OR/JUST/NOT) 
-more_conditions ::= AND LPAR condition more_conditions RPAR.
-more_conditions ::= AND LPAR condition more_conditions RPAR more_conditions. {
-	/*
-	nowdb_ast_t *ast = calloc(1, sizeof(nowdb_ast_t));
-	nowdb_ast_init(ast, NOWDB_AST_AND, 0);
-	nowdb_ast_add(ast, C);
-	nowdb_ast_add(ast, MC);
-	*/
-}
-more_conditions ::= OR LPAR condition more_conditions RPAR.
-more_conditions ::= AND NOT LPAR condition more_conditions RPAR.
-more_conditions ::= OR NOT LPAR condition more_conditions RPAR.
 
 table_list ::= table_spec.
 table_list ::= table_spec COMMA table_list.
@@ -305,35 +338,114 @@ table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
 	nowdbsql_state_pushTable(nowdbres, T, A);
 }
 
-comparison ::= EQ. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_EQ);
-}
-comparison ::= LE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LE);
-}
-comparison ::= GE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GE);
-}
-comparison ::= LT. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_LT);
-}
-comparison ::= GT. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_GT);
-}
-comparison ::= NE. {
-	nowdbsql_state_pushComparison(nowdbres, NOWDB_SQL_NE);
+/* ------------------------------------------------------------------------
+ * Here is how we *should* do things...
+ * ------------------------------------------------------------------------
+ */
+%left OR.
+%left AND.
+%right NOT.
+
+where_clause ::= WHERE expr(E). {
+	NOWDB_SQL_CHECKSTATE();
+	nowdbsql_state_pushAst(nowdbres,E);
+	nowdbsql_state_pushWhere(nowdbres);
 }
 
-operand ::= field.
-operand ::= value.
-
-field ::= IDENTIFIER(I). {
-	nowdbsql_state_pushField(nowdbres, I);
-}
-value ::= STRING(S). {
-	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_STRING, S);
-}
-value ::= INTEGER(I). {
-	nowdbsql_state_pushValue(nowdbres, NOWDB_AST_V_INTEGER, I);
+expr(E) ::= condition(C). {
+	E=C;
 }
 
+expr(E) ::= expr(A) AND expr(B). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_AND, 0);
+	NOWDB_SQL_ADDKID(E,A);
+	NOWDB_SQL_ADDKID(E,B);
+}
+
+expr(E) ::= expr(A) OR expr(B). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OR, 0);
+	NOWDB_SQL_ADDKID(E,A);
+	NOWDB_SQL_ADDKID(E,B);
+}
+
+expr(E) ::= LPAR expr(A) RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	E=A;
+} 
+
+expr(E) ::= NOT expr(A). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 0);
+	NOWDB_SQL_ADDKID(E,A);
+}
+
+condition(C) ::= operand(O1) comparison(O) operand(O2) . {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,O1);
+	NOWDB_SQL_ADDKID(O,O2);
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+comparison(C) ::= EQ. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_EQ);
+}
+
+comparison(C) ::= LE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LE);
+}
+comparison(C) ::= GE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GE);
+}
+comparison(C) ::= LT. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LT);
+}
+comparison(C) ::= GT. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GT);
+}
+comparison(C) ::= NE. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_NE);
+}
+
+operand(O) ::= field(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, F);
+}
+
+operand(O) ::= value(V). {
+	NOWDB_SQL_CHECKSTATE();
+	O=V;
+}
+
+field(F) ::= IDENTIFIER(I). {
+	F=I;
+}
+value(V) ::= STRING(S). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, S);
+}
+value(V) ::= UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_UINT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, I);
+}
+value(V) ::= INTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_INT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, I);
+}
+value(V) ::= FLOAT(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_FLOAT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
+}

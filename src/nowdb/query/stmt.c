@@ -1,12 +1,26 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * Statement Interface
+ * ========================================================================
+ */
 #include <nowdb/query/stmt.h>
 #include <nowdb/query/plan.h>
 #include <nowdb/query/cursor.h>
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "invalid ast"
+ * -------------------------------------------------------------------------
+ */
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
 static char *OBJECT = "stmt";
 
+/* -------------------------------------------------------------------------
+ * Create a scope
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t createScope(nowdb_ast_t  *op,
                                nowdb_path_t  base,
                                char         *name) {
@@ -38,6 +52,10 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Drop a scope
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t dropScope(nowdb_ast_t  *op,
                              nowdb_path_t  base,
                              char         *name) {
@@ -69,6 +87,10 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Open a scope and deliver it back to caller
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t openScope(nowdb_path_t     base,
                              char            *name,
                              nowdb_scope_t **scope) {
@@ -90,6 +112,11 @@ static nowdb_err_t openScope(nowdb_path_t     base,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Create Index
+ * TODO
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t createIndex(nowdb_ast_t  *op,
                                char       *name,
                            nowdb_scope_t *scope) {
@@ -97,6 +124,11 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 	           FALSE, OBJECT, "createIndex");
 }
 
+/* -------------------------------------------------------------------------
+ * Drop Index
+ * TODO
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t dropIndex(nowdb_ast_t  *op,
                              char       *name,
                          nowdb_scope_t *scope) {
@@ -104,6 +136,17 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 	            FALSE, OBJECT, "dropIndex");
 }
 
+/* -------------------------------------------------------------------------
+ * Load a file
+ * TODO:
+ * - Should be more versatile,
+ *   currently only one format (csv) is supported;
+ *   the function should be extended to provide more formats:
+ *   + native binary
+ *   + generic binary (avro)
+ *   + json(?)
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t load(nowdb_scope_t    *scope,
                         nowdb_path_t       path,
                         nowdb_ast_t        *trg,
@@ -116,13 +159,18 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	nowdb_bitmap32_t flg=0;
 	nowdb_qry_report_t *rep;
 
+	/* ignore headers; instead, we should provide the flags:
+	 * use / ignore header */
 	if (ign) flg |= NOWDB_CSV_HAS_HEADER;
 
+	/* open stream from path */
 	stream = fopen(path, "rb");
 	if (stream == NULL) return nowdb_err_get(nowdb_err_open,
 		                            TRUE, OBJECT, path);
 
 	switch(trg->stype) {
+
+	/* create vertex loader */
 	case NOWDB_AST_VERTEX:
 		fprintf(stderr, "loading '%s' into vertex\n", path);
 
@@ -134,6 +182,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		}
 		break;
 
+	/* create context loader */
 	case NOWDB_AST_CONTEXT:
 		if (trg->value == NULL) INVALIDAST("no target name in AST");
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
@@ -153,9 +202,11 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		INVALIDAST("invalid target for load");
 	}
 
+	/* run the loader */
 	err = nowdb_loader_run(&ldr);
 	fclose(stream); 
 
+	/* create a report */
 	rep = calloc(1, sizeof(nowdb_qry_report_t));
 	if (rep == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -166,16 +217,21 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		rep->runtime = ldr.runtime;
 		res->result = rep;
 	}
-	nowdb_loader_destroy(&ldr); // <- will destroy the error!
+	nowdb_loader_destroy(&ldr);
 	return err;
 }
 
+/* -------------------------------------------------------------------------
+ * Apply create options on config
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
                                 nowdb_ctx_config_t *cfg) {
 	nowdb_ast_t *o;
 	uint64_t cfgopts = 0;
 	uint64_t utmp;
 
+	/* with no options given: use defaults */
 	if (opts == NULL) {
 		cfgopts = NOWDB_CONFIG_SIZE_BIG        |
 		          NOWDB_CONFIG_INSERT_CONSTANT | 
@@ -184,6 +240,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		return NOWDB_OK;
 	}
 
+	/* get sizing (or use default) */
 	o = nowdb_ast_option(opts, NOWDB_AST_SIZING);
 	if (o == NULL) cfgopts |= NOWDB_CONFIG_SIZE_BIG;
 	else {
@@ -192,6 +249,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		cfgopts |= utmp;
 	}
 
+	/* get stress (or use default) */
 	o = nowdb_ast_option(opts, NOWDB_AST_STRESS);
 	if (o == NULL) cfgopts |= NOWDB_CONFIG_INSERT_CONSTANT;
 	else {
@@ -200,6 +258,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		cfgopts |= utmp;
 	}
 
+	/* get disk (or use default) */
 	o = nowdb_ast_option(opts, NOWDB_AST_DISK);
 	if (o == NULL) cfgopts |= NOWDB_CONFIG_DISK_HDD;
 	else {
@@ -208,17 +267,24 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		cfgopts |= utmp;
 	}
 
+	/* get nocomp */
 	o = nowdb_ast_option(opts, NOWDB_AST_COMP);
 	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOCOMP;
 
+	/* get nosort */
 	o = nowdb_ast_option(opts, NOWDB_AST_SORT);
 	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOSORT;
 
+	/* apply the options */
 	nowdb_ctx_config(cfg, cfgopts);
 
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Apply explicitly stated options on config
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
                                  nowdb_ctx_config_t *cfg) {
 
@@ -248,6 +314,12 @@ static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Check whether the context exists or not
+ * TODO:
+ * - we should use "nosuch context" instead of "key not found".
+ * -------------------------------------------------------------------------
+ */
 static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
                                              char          *name,
                                              nowdb_bool_t  *b) {
@@ -265,6 +337,10 @@ static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
 	return err;
 }
 
+/* -------------------------------------------------------------------------
+ * Create context
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t createContext(nowdb_ast_t  *op,
                                  char       *name,
                              nowdb_scope_t *scope) {
@@ -272,8 +348,9 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
 	nowdb_ast_t *opts, *o;
 	nowdb_ctx_config_t cfg;
 
+	/* get options and, if 'ifexists' is given,
+	 * check if the context exists */
 	opts = nowdb_ast_option(op, 0);
-
 	if (opts != NULL) {
 		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
@@ -284,15 +361,22 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
 		}
 	}
 
+	/* apply implicit options */
 	err = applyCreateOptions(opts, &cfg);
 	if (err != NOWDB_OK) return err;
 
+	/* apply explicit options */
 	err = applyGenericOptions(opts, &cfg);
 	if (err != NOWDB_OK) return err;
 
+	/* create the context */
 	return nowdb_scope_createContext(scope, name, &cfg);
 }
 
+/* -------------------------------------------------------------------------
+ * Drop context
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t dropContext(nowdb_ast_t  *op,
                               char          *name,
                               nowdb_scope_t *scope) {
@@ -319,6 +403,10 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Handle use statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleUse(nowdb_ast_t        *ast,
                              nowdb_path_t       base,
                              nowdb_qry_result_t *res) {
@@ -337,6 +425,10 @@ static nowdb_err_t handleUse(nowdb_ast_t        *ast,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Handle DDL statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleDDL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                          nowdb_path_t    base,
@@ -385,6 +477,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	            FALSE, OBJECT, "handleDDL");
 }
 
+/* -------------------------------------------------------------------------
+ * Handle load statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleLoad(nowdb_ast_t *op,
                               nowdb_ast_t *trg,
                               nowdb_scope_t *scope,
@@ -395,8 +491,10 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 	nowdb_path_t p, tmp;
 	nowdb_ast_t *opts, *o;
 
+	/* get options */
 	opts = nowdb_ast_option(op, 0);
 	if (opts != NULL) {
+		/* ignore header */
 		o = nowdb_ast_option(opts, NOWDB_AST_IGNORE);
 		if (o != NULL) ign = TRUE;
 	}
@@ -405,6 +503,8 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 	tmp = op->value; s = strlen(tmp);
 	if (s < 1) INVALIDAST("incomplete path value");
 
+	/* remove quotes from value:
+	   TODO: this should be done in the sql parser */
 	p = malloc(s);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                                 "allocating path");
@@ -413,10 +513,16 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 	} else {
 		strcpy(p, tmp);
 	}
+
+	/* load and cleanup */
 	err = load(scope, p, trg, ign, res); free(p);
 	return err;
 }
 
+/* -------------------------------------------------------------------------
+ * Handle DLL statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleDLL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
@@ -437,6 +543,11 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 	return handleLoad(op, trg, scope, res);
 }
 
+/* -------------------------------------------------------------------------
+ * Handle DML statement
+ * TODO
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleDML(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
@@ -444,6 +555,10 @@ static nowdb_err_t handleDML(nowdb_ast_t *ast,
 	            FALSE, OBJECT, "handleDML");
 }
 
+/* -------------------------------------------------------------------------
+ * Handle DQL statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleDQL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
@@ -451,23 +566,33 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	nowdb_cursor_t *cur;
 	ts_algo_list_t plan;
 
+	/* result is a cursor */
 	res->resType = NOWDB_QRY_RESULT_CURSOR;
 	res->result = NULL;
 
+	/* transform ast -> plan, i.e.
+	 * create and optimise plan */
 	ts_algo_list_init(&plan);
 	err = nowdb_plan_fromAst(ast, &plan);
 	if (err != NOWDB_OK) return err;
 
+	/* create cursor */
 	err = nowdb_cursor_new(scope, &plan, &cur);
 	if (err != NOWDB_OK) {
 		nowdb_plan_destroy(&plan);
 		return err;
 	}
+
+	/* cleanup and terminate */
 	nowdb_plan_destroy(&plan);
 	res->result = cur;
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Handle Misc statement
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t handleMisc(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
                           nowdb_path_t    base,
@@ -487,6 +612,10 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 	}
 }
 
+/* -------------------------------------------------------------------------
+ * Handle generic statement
+ * -------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
                           nowdb_path_t    base,
@@ -505,4 +634,3 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
 	                  FALSE, OBJECT, "invalid ast");
 	}
 }
-

@@ -2,6 +2,7 @@
  * (c) Tobias Schoofs, 2018
  * ========================================================================
  * Filter: generic data filter
+ *         used to compare a field value with a given value
  * ========================================================================
  */
 #ifndef nowdb_filter_decl
