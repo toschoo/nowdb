@@ -166,7 +166,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		rep->runtime = ldr.runtime;
 		res->result = rep;
 	}
-	nowdb_loader_destroy(&ldr); // <- will destroy the error!
+	nowdb_loader_destroy(&ldr);
 	return err;
 }
 

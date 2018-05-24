@@ -1,15 +1,25 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * SQL Lexer
+ * ========================================================================
+ * This parser definition file is intended for use with
+ * the flex lexer (and similar)
+ *
+ * urgent TODO:
+ * ------------
+ * - multi-line comments...
+ *   with the lexer alone, this appears to be complex.
+ *   here's how to do it:
+ *   http://westes.github.io/flex/manual/
+ *   How-can-I-match-C_002dstyle-comments_003f.html
+ * ========================================================================
+ */
+
 %{
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
 %}
-
-	/* TODO:
-	 * multi-line comments...
-	 * with the lexer alone, this appears to be complex.
-	 * here's how to do it:
-	 * http://westes.github.io/flex/manual/
-	 * How-can-I-match-C_002dstyle-comments_003f.html
-	 */
 
 %option reentrant
 

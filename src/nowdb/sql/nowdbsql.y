@@ -1,3 +1,28 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * SQL Parser
+ * ========================================================================
+ * This parser definition file is intended for use with
+ * the nowlemon parser generator (forked from sqlite lemon).
+ * It creates an abstract syntax tree (ast),
+ * which is used to execute sql statements and to create a cursor.
+ * urgent TODO:
+ * ------------
+ * - Get rid of the 'state', it not needed nor in any way useful
+ * - clarify the role of the semicolon: do we need it???
+ * - qualified names
+ * - aliases
+ * - joins
+ * - NULL
+ * - TRUE and FALSE
+ * - straighten out the create syntax
+ * - alter
+ * - insert and update
+ * - make load more versatile (csv, json, binary, avron)
+ * - multi-line comments
+ * ========================================================================
+ */
 %token_prefix NOWDB_SQL_
 %name nowdb_sql_parse
 
@@ -17,6 +42,10 @@
 #include <nowdb/sql/state.h>
 }
 
+/* ------------------------------------------------------------------------
+ * Tokens are always plain strings
+ * ------------------------------------------------------------------------
+ */
 %token_type {char*}
 %token_destructor {
 	/* fprintf(stderr, "freeing token '%s'\n", (char*)$$); */
@@ -24,9 +53,17 @@
 	free($$);
 }
 
+/* ------------------------------------------------------------------------
+ * Tokens are always plain strings
+ * ------------------------------------------------------------------------
+ */
 %type condition {nowdb_ast_t*}
 %destructor condition {nowdb_ast_destroyAndFree($$);}
 
+/* ------------------------------------------------------------------------
+ * Everything else is an ast node
+ * ------------------------------------------------------------------------
+ */
 %type comparison {nowdb_ast_t*}
 %destructor comparison {nowdb_ast_destroyAndFree($$);}
 
@@ -55,6 +92,11 @@
 	// fprintf(stderr, "near '%s': syntax error\n", (char*)yyminor);
 }
 
+/* ------------------------------------------------------------------------
+ * An SQL statement is either
+ * a DDL, DLL, DML, DQL or a miscellaneous statement
+ * ------------------------------------------------------------------------
+ */
 sql ::= ddl SEMICOLON. {
 	nowdbsql_state_pushDDL(nowdbres);
 }
@@ -67,6 +109,11 @@ sql ::= dql SEMICOLON. {
 sql ::= misc SEMICOLON. {
 	nowdbsql_state_pushMisc(nowdbres);
 }
+
+/* ------------------------------------------------------------------------
+ * DDL
+ * ------------------------------------------------------------------------
+ */
 ddl ::= CREATE target. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
@@ -115,6 +162,10 @@ ddl ::= ALTER context_only SET context_options. {
 	nowdbsql_state_pushAlter(nowdbres);
 }
 
+/* ------------------------------------------------------------------------
+ * Miscellaneous (use)
+ * ------------------------------------------------------------------------
+ */
 misc ::= USE IDENTIFIER(I). {
 	nowdbsql_state_pushUse(nowdbres, I);
 }
@@ -161,6 +212,10 @@ context_option ::= ENCRYPTION EQ STRING(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
 }
 
+/* ------------------------------------------------------------------------
+ * This is a mess!!! Review
+ * ------------------------------------------------------------------------
+ */
 context_spec ::= with_stress with_disk without_comp without_sort.
 context_spec ::= with_stress with_disk.
 context_spec ::= with_stress.
@@ -221,6 +276,11 @@ disk_spec ::= SSD. {
 disk_spec ::= RAID. {
 	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
 }
+
+/* ------------------------------------------------------------------------
+ * DLL
+ * ------------------------------------------------------------------------
+ */
 dll ::= LOAD STRING(S) INTO dml_target. {
 	nowdbsql_state_pushLoad(nowdbres, S);
 }
@@ -234,6 +294,10 @@ header_clause ::= USE HEADER. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_USE, NULL);
 }
 
+/* ------------------------------------------------------------------------
+ * DML
+ * ------------------------------------------------------------------------
+ */
 dml_target ::= IDENTIFIER(I). {
 	nowdbsql_state_pushContext(nowdbres, I);
 }
@@ -241,7 +305,10 @@ dml_target ::= VERTEX. {
 	nowdbsql_state_pushVertex(nowdbres, NULL);
 }
 
-/* MINIMAL VIABLE SQL */
+/* ------------------------------------------------------------------------
+ * DQL
+ * ------------------------------------------------------------------------
+ */
 dql ::= projection_clause from_clause. {
 	nowdbsql_state_pushDQL(nowdbres);
 }
@@ -271,6 +338,10 @@ table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
 	nowdbsql_state_pushTable(nowdbres, T, A);
 }
 
+/* ------------------------------------------------------------------------
+ * Here is how we *should* do things...
+ * ------------------------------------------------------------------------
+ */
 %left OR.
 %left AND.
 %right NOT.

@@ -69,7 +69,7 @@ void printVertex(nowdb_vertex_t *buf, uint32_t sz) {
 }
 
 /* -----------------------------------------------------------------------
- * Print vertices
+ * Print edges
  * -----------------------------------------------------------------------
  */
 void printEdge(nowdb_edge_t *buf, uint32_t sz) {
@@ -226,17 +226,13 @@ int queries(nowdb_path_t path, FILE *stream) {
 }
 
 /* -----------------------------------------------------------------------
- *
+ * main
  * -----------------------------------------------------------------------
  */
 int main(int argc, char **argv) {
 	int rc = EXIT_SUCCESS;
 	nowdb_err_t      err;
 	nowdb_path_t path;
-	/*
-	struct timespec t1, t2;
-	uint64_t d=0;
-	*/
 
 	if (argc < 2) {
 		helptxt(argv[0]);
@@ -265,7 +261,6 @@ int main(int argc, char **argv) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	// fprintf(stdout, "Running time: %luus\n", d);
 cleanup:
 	if (global_scope != NULL) {
 		err = nowdb_scope_close(global_scope);
