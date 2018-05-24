@@ -1,3 +1,9 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * AST: Abstract Syntax Tree
+ * ========================================================================
+ */
 #include <nowdb/query/ast.h>
 
 #include <stdlib.h>
@@ -5,16 +11,40 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/* -----------------------------------------------------------------------
+ * Macro for allocating an ast node
+ * -----------------------------------------------------------------------
+ */
 #define ASTCALLOC(k) \
 	n->kids = calloc(k, sizeof(nowdb_ast_t*)); \
 	if (n->kids == NULL) return -1; \
 	n->nKids = k; \
 	return 0
 
+/* -----------------------------------------------------------------------
+ * Unknown AST error
+ * -----------------------------------------------------------------------
+ */
 #define UNDEFINED(k) \
 	fprintf(stderr, "unkdefined: %d\n", k); \
 	free(n); return -1;
 
+/* -----------------------------------------------------------------------
+ * Macro to recursively add a kid
+ * -----------------------------------------------------------------------
+ */
+#define ADDKID(x) \
+	if (n->kids[x] == NULL) { \
+		n->kids[x] = k; \
+	} else { \
+		nowdb_ast_add(n->kids[x], k); \
+	} \
+	return 0
+
+/* -----------------------------------------------------------------------
+ * Create a new AST node
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_create(int ntype, int stype) {
 	nowdb_ast_t *n;
 
@@ -27,6 +57,10 @@ nowdb_ast_t *nowdb_ast_create(int ntype, int stype) {
 	return n;
 }
 
+/* -----------------------------------------------------------------------
+ * Intialise an already allocated AST node
+ * -----------------------------------------------------------------------
+ */
 int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	n->ntype = ntype;
@@ -67,10 +101,10 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
-	case NOWDB_AST_TARGET:   ASTCALLOC(0);
-	case NOWDB_AST_OPTION:   ASTCALLOC(1);
-	case NOWDB_AST_PATH:     ASTCALLOC(0);
-	case NOWDB_AST_DATA:     ASTCALLOC(1);
+	case NOWDB_AST_TARGET: ASTCALLOC(0);
+	case NOWDB_AST_OPTION: ASTCALLOC(1);
+	case NOWDB_AST_PATH:   ASTCALLOC(0);
+	case NOWDB_AST_DATA:   ASTCALLOC(1);
 
 	default:
 		return -1;
@@ -78,6 +112,10 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	return 0;
 }
 
+/* -----------------------------------------------------------------------
+ * Convert the AST ntype/stype to a nice string
+ * -----------------------------------------------------------------------
+ */
 static inline char *tellType(int ntype, int stype) {
 	switch(ntype) {
 	case 0: return "empty";
@@ -171,6 +209,10 @@ static inline char *tellType(int ntype, int stype) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Destroy an AST recursively
+ * -----------------------------------------------------------------------
+ */
 static void destroy(nowdb_ast_t *n, char r) {
 	if (n == NULL) return;
 	if (n->value != NULL) {
@@ -193,20 +235,36 @@ static void destroy(nowdb_ast_t *n, char r) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Destroy an AST recursively
+ * -----------------------------------------------------------------------
+ */
 void nowdb_ast_destroy(nowdb_ast_t *n) {
 	destroy(n,1);
 }
 
+/* -----------------------------------------------------------------------
+ * Destroy an AST non-recursively
+ * -----------------------------------------------------------------------
+ */
 void nowdb_ast_destroyNR(nowdb_ast_t *n) {
 	destroy(n,0);
 }
 
+/* -----------------------------------------------------------------------
+ * Destroy an AST recursively and free it
+ * -----------------------------------------------------------------------
+ */
 void nowdb_ast_destroyAndFree(nowdb_ast_t *n) {
 	if (n == NULL) return;
 	nowdb_ast_destroy(n);
 	free(n);
 }
 
+/* -----------------------------------------------------------------------
+ * Set the value
+ * -----------------------------------------------------------------------
+ */
 int nowdb_ast_setValue(nowdb_ast_t *n,
                   int vtype, void *val) 
 {
@@ -218,14 +276,10 @@ int nowdb_ast_setValue(nowdb_ast_t *n,
 	return 0;
 }
 
-#define ADDKID(x) \
-	if (n->kids[x] == NULL) { \
-		n->kids[x] = k; \
-	} else { \
-		nowdb_ast_add(n->kids[x], k); \
-	} \
-	return 0
-
+/* -----------------------------------------------------------------------
+ * Add kid to a DDL node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad4l(nowdb_ast_t *n,
                        nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -236,6 +290,10 @@ static inline int ad4l(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a DLL node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad3ll(nowdb_ast_t *n,
                        nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -244,6 +302,10 @@ static inline int ad3ll(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a DML node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad3ml(nowdb_ast_t *n,
                        nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -253,6 +315,10 @@ static inline int ad3ml(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a DQL node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad3ql(nowdb_ast_t *n,
                         nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -268,6 +334,10 @@ static inline int ad3ql(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a miscellaneous node
+ * -----------------------------------------------------------------------
+ */
 static inline int addmisc(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -276,6 +346,10 @@ static inline int addmisc(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a create node
+ * -----------------------------------------------------------------------
+ */
 static inline int addcreate(nowdb_ast_t *n,
                             nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -285,6 +359,10 @@ static inline int addcreate(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to an alter node
+ * -----------------------------------------------------------------------
+ */
 static inline int addalter(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -294,6 +372,10 @@ static inline int addalter(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a drop node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad3rop(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -303,6 +385,10 @@ static inline int ad3rop(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a load node
+ * -----------------------------------------------------------------------
+ */
 static inline int addload(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -312,6 +398,10 @@ static inline int addload(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to an insert node
+ * -----------------------------------------------------------------------
+ */
 static inline int addins(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -321,6 +411,10 @@ static inline int addins(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to an option node
+ * -----------------------------------------------------------------------
+ */
 static inline int addopt(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -329,6 +423,10 @@ static inline int addopt(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a data node
+ * -----------------------------------------------------------------------
+ */
 static inline int ad3ata(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -337,6 +435,10 @@ static inline int ad3ata(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a select node
+ * -----------------------------------------------------------------------
+ */
 static inline int addsel(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -345,6 +447,10 @@ static inline int addsel(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a from node
+ * -----------------------------------------------------------------------
+ */
 static inline int addfrom(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -353,6 +459,10 @@ static inline int addfrom(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a where node
+ * -----------------------------------------------------------------------
+ */
 static inline int addwhere(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -364,6 +474,10 @@ static inline int addwhere(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a bool node
+ * -----------------------------------------------------------------------
+ */
 static inline int addbool(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -373,16 +487,8 @@ static inline int addbool(nowdb_ast_t *n,
 	case NOWDB_AST_NOT:
 	case NOWDB_AST_JUST:
 		if (n->kids[0] == NULL) {
-			/*
-			fprintf(stderr, "adding to 0 (%d->%d)\n",
-			                n->ntype, k->ntype);
-			*/
 			ADDKID(0);
 		} else {
-			/*
-			fprintf(stderr, "adding to 1 (%d->%d)\n",
-			                n->ntype, k->ntype);
-			*/
 			ADDKID(1);
 		}
 
@@ -390,6 +496,10 @@ static inline int addbool(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a not node
+ * -----------------------------------------------------------------------
+ */
 static inline int addnot(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -402,6 +512,10 @@ static inline int addnot(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to a compare node
+ * -----------------------------------------------------------------------
+ */
 static inline int addcompare(nowdb_ast_t *n,
                              nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -416,6 +530,10 @@ static inline int addcompare(nowdb_ast_t *n,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Add kid to any node
+ * -----------------------------------------------------------------------
+ */
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	switch(n->ntype) {
 
@@ -457,6 +575,10 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: show ast
+ * -----------------------------------------------------------------------
+ */
 static void showme(nowdb_ast_t *n, char *before) {
 	char *nxtbefore;
 	int s;
@@ -496,10 +618,18 @@ static void showme(nowdb_ast_t *n, char *before) {
 	free(nxtbefore);
 }
 
+/* -----------------------------------------------------------------------
+ * Show ast
+ * -----------------------------------------------------------------------
+ */
 void nowdb_ast_show(nowdb_ast_t *n) {
 	showme(n, "+");
 }
 
+/* -----------------------------------------------------------------------
+ * Get operation
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
 	if (ast == NULL) return NULL;
 
@@ -516,6 +646,10 @@ nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get target
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	if (ast == NULL) return NULL;
 
@@ -540,16 +674,28 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get select
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *ast) {
 	if (ast->ntype != NOWDB_AST_DQL) return NULL;
 	return ast->kids[1];
 }
 
+/* -----------------------------------------------------------------------
+ * Get from
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_from(nowdb_ast_t *ast) {
 	if (ast->ntype != NOWDB_AST_DQL) return NULL;
 	return ast->kids[0];
 }
 
+/* -----------------------------------------------------------------------
+ * Get where
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *ast) {
 	switch(ast->ntype) {
 	case NOWDB_AST_DQL: return ast->kids[2];
@@ -558,6 +704,10 @@ nowdb_ast_t *nowdb_ast_where(nowdb_ast_t *ast) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get condition
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_condition(nowdb_ast_t *ast) {
 	switch(ast->ntype) {
 	case NOWDB_AST_WHERE: 
@@ -567,6 +717,10 @@ nowdb_ast_t *nowdb_ast_condition(nowdb_ast_t *ast) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get operand
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *ast, int i) {
 	switch(ast->ntype) {
 	case NOWDB_AST_WHERE: 
@@ -584,6 +738,10 @@ nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *ast, int i) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get option
+ * -----------------------------------------------------------------------
+ */
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	if (ast == NULL) return NULL;
 
@@ -609,6 +767,10 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get value as UInt
+ * -----------------------------------------------------------------------
+ */
 int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value) {
 	char *end;
 	if (node->value == NULL) return -1;
@@ -622,6 +784,10 @@ int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value) {
 	return 0;
 }
 
+/* -----------------------------------------------------------------------
+ * Get value as Int
+ * -----------------------------------------------------------------------
+ */
 int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value) {
 	char *end;
 	if (node->value == NULL) return -1;
@@ -635,7 +801,10 @@ int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value) {
 	return 0;
 }
 
+/* -----------------------------------------------------------------------
+ * Get value as string
+ * -----------------------------------------------------------------------
+ */
 char *nowdb_ast_getString(nowdb_ast_t *node) {
 	return node->value;
 }
-

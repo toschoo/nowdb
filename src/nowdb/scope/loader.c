@@ -19,17 +19,21 @@
 
 static char *OBJECT = "ldr";
 
+/* ------------------------------------------------------------------------
+ * csv state
+ * ------------------------------------------------------------------------
+ */
 struct nowdb_csv_st {
-	char       rejected;
-	uint32_t        cur;
-	uint64_t      total;
-	uint64_t      fbcnt;
-	char         *inbuf;
-	char           *buf;
-	uint32_t        pos;
-	uint32_t    recsize;
-	char        hlp[96];
-	struct csv_parser p;
+	char       rejected; /* current row was rejected       */
+	uint32_t        cur; /* current field                  */
+	uint64_t      total; /* total number of rows processed */
+	uint64_t      fbcnt; /* counter for feedback           */
+	char         *inbuf; /* input buffer                   */
+	char           *buf; /* result buffer                  */
+	uint32_t        pos; /* position in the result buffer  */
+	uint32_t    recsize; /* size of record                 */
+	char        hlp[96]; /* three 32 byte 'registers'      */
+	struct csv_parser p; /* the csv parser                 */
 };
 
 /* ------------------------------------------------------------------------
@@ -50,6 +54,10 @@ static int is_term(unsigned char c) {
   return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * initialise the loader
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
@@ -125,6 +133,10 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy the loader
+ * ------------------------------------------------------------------------
+ */
 void nowdb_loader_destroy(nowdb_loader_t *ldr) {
 	if (ldr->csv != NULL) {
 		csv_free(&ldr->csv->p);
@@ -142,7 +154,7 @@ void nowdb_loader_destroy(nowdb_loader_t *ldr) {
 }
 
 /* ------------------------------------------------------------------------
- * Read file to fill buffer
+ * Read file to fill input buffer
  * ------------------------------------------------------------------------
  */
 nowdb_err_t fillbuf(FILE   *stream, 
@@ -171,6 +183,10 @@ nowdb_err_t fillbuf(FILE   *stream,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Insert records (into vertex or context) from output buffer
+ * ------------------------------------------------------------------------
+ */
 static inline void insertBuf(nowdb_loader_t *ldr) {
 
 	if (ldr->err != NOWDB_OK) return;
@@ -183,12 +199,20 @@ static inline void insertBuf(nowdb_loader_t *ldr) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Clean the buffer (insert remainder)
+ * ------------------------------------------------------------------------
+ */
 static inline void cleanBuf(nowdb_loader_t *ldr) {
 	if (ldr->err != NOWDB_OK) return;
 	if (ldr->csv->pos == 0) return;
 	insertBuf(ldr);
 }
 
+/* ------------------------------------------------------------------------
+ * Run the loader
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	nowdb_err_t err;
 	size_t r, sz, off=0;
@@ -235,6 +259,10 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Row callback
+ * ------------------------------------------------------------------------
+ */
 void nowdb_csv_row(int c, void *rsc) {
 	nowdb_loader_t *ldr = rsc;
 
@@ -260,6 +288,10 @@ void nowdb_csv_row(int c, void *rsc) {
 	if (ldr->err == NOWDB_OK) ldr->loaded++;
 }
 
+/* ------------------------------------------------------------------------
+ * Edge offsets
+ * ------------------------------------------------------------------------
+ */
 #define EDGE    NOWDB_OFF_EDGE
 #define ORIGIN  NOWDB_OFF_ORIGIN
 #define DESTIN  NOWDB_OFF_DESTIN
@@ -270,6 +302,10 @@ void nowdb_csv_row(int c, void *rsc) {
 #define WTYPE   NOWDB_OFF_WTYPE
 #define WTYPE2  NOWDB_OFF_WTYPE2
 
+/* ------------------------------------------------------------------------
+ * Copy data to helper
+ * ------------------------------------------------------------------------
+ */
 static inline int tohlp(nowdb_csv_t *csv, char *data,
                             size_t len, uint32_t off) {
 	if (len > 31) return -1;
@@ -278,6 +314,10 @@ static inline int tohlp(nowdb_csv_t *csv, char *data,
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * Convert data to unsigned integer
+ * ------------------------------------------------------------------------
+ */
 static inline int toUInt(nowdb_csv_t *csv, char *data,
                              size_t len, void *target) {
 	uint64_t n=0;
@@ -292,6 +332,10 @@ static inline int toUInt(nowdb_csv_t *csv, char *data,
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * Convert data to integer
+ * ------------------------------------------------------------------------
+ */
 static inline int toInt(nowdb_csv_t *csv, char *data,
                             size_t len, void *target) {
 	uint64_t n=0;
@@ -306,6 +350,10 @@ static inline int toInt(nowdb_csv_t *csv, char *data,
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * Convert data to small uinteger
+ * ------------------------------------------------------------------------
+ */
 static inline int toUInt32(nowdb_csv_t *csv, char *data,
                                size_t len, void *target) {
 	uint32_t n=0;
@@ -320,10 +368,18 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * Macro to reject rows
+ * ------------------------------------------------------------------------
+ */
 #define REJECT(n,s) \
 	ldr->csv->rejected = 1; \
 	fprintf(stderr, "%s %s\n", n, s)
 
+/* ------------------------------------------------------------------------
+ * Macro to obtain a key field (edge, origin, destin, label, etc.)
+ * ------------------------------------------------------------------------
+ */
 #define GETKEY(d, l, name, fld) \
 	if (toUInt(ldr->csv, data, l,\
 	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
@@ -331,6 +387,10 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		REJECT(name, "invalid key"); \
 	}
 
+/* ------------------------------------------------------------------------
+ * Macro to obtain a timestamp field
+ * ------------------------------------------------------------------------
+ */
 #define GETTMSTMP(d, l, name, fld) \
 	if (toInt(ldr->csv, data, l,\
 	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
@@ -338,12 +398,20 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		REJECT(name, "invalid timestamp"); \
 	}
 
+/* ------------------------------------------------------------------------
+ * Macro to obtain a weight field and store it in the helper
+ * ------------------------------------------------------------------------
+ */
 #define GETWEIGHT(d, l, name, fld) \
 	if (tohlp(ldr->csv, data, l, 4*(fld-WEIGHT)) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
 	}
 
+/* ------------------------------------------------------------------------
+ * Macro to obtain type field
+ * ------------------------------------------------------------------------
+ */
 #define GETTYPE(d, l, name, fld) \
 	if (toUInt32(ldr->csv, data, l,\
 	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
@@ -351,6 +419,10 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		REJECT(name, "invalid value"); \
 	}
 
+/* ------------------------------------------------------------------------
+ * Macro to convert a weight (from helper) according to a type
+ * ------------------------------------------------------------------------
+ */
 #define GETTYPEDWEIGHT(name, fld) \
 	if (fld == WEIGHT) { \
 		if (nowdb_edge_strtow((nowdb_edge_t*)(ldr->csv->buf+ \
@@ -372,6 +444,10 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		} \
 	}
 
+/* ------------------------------------------------------------------------
+ * Context field callback
+ * ------------------------------------------------------------------------
+ */
 void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 	nowdb_loader_t *ldr = rsc;
 
@@ -408,18 +484,30 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Vertex offsets
+ * ------------------------------------------------------------------------
+ */
 #define VERTEX  NOWDB_OFF_VERTEX
 #define PROP    NOWDB_OFF_PROP
 #define VALUE   NOWDB_OFF_VALUE
 #define VTYPE   NOWDB_OFF_VTYPE
 #define ROLE    NOWDB_OFF_ROLE
 
+/* ------------------------------------------------------------------------
+ * Macro to copy the value field into helper
+ * ------------------------------------------------------------------------
+ */
 #define GETVALUE(d, l, name, fld) \
 	if (tohlp(ldr->csv, data, l, 0) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
 	}
 
+/* ------------------------------------------------------------------------
+ * Macro to convert the value field (from helper)
+ * ------------------------------------------------------------------------
+ */
 #define GETTYPEDVALUE(name, fld) \
 	if (nowdb_vertex_strtov((nowdb_vertex_t*)(ldr->csv->buf+  \
 		                                  ldr->csv->pos), \
@@ -430,6 +518,10 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
 		REJECT(name, "invalid value"); \
 	} \
 
+/* ------------------------------------------------------------------------
+ * Vertex field callback
+ * ------------------------------------------------------------------------
+ */
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc) {
 	nowdb_loader_t *ldr = rsc;
 
@@ -452,4 +544,3 @@ void nowdb_csv_field_vertex(void *data, size_t len, void *rsc) {
 		ldr->csv->cur = 0;
 	}
 }
-
