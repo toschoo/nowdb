@@ -26,7 +26,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	nowdb_store_t *store;
 	nowdb_context_t *ctx;
 
-	if (plan->target == NOWDB_AST_VERTEX) {
+	if (plan->helper == NOWDB_AST_VERTEX) {
 		cur->recsize = 32;
 		store = &scope->vertices;
 	} else {
@@ -69,16 +69,16 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		                                 "allocating cusor");
 
 	/*
-	fprintf(stderr, "[CURSOR] Targets: %d\n", stp->target);
+	fprintf(stderr, "[CURSOR] Targets: %d\n", stp->helper);
 	*/
 
-	(*cur)->rdrs = calloc(stp->target, sizeof(nowdb_reader_t));
+	(*cur)->rdrs = calloc(stp->helper, sizeof(nowdb_reader_t));
 	if ((*cur)->rdrs == NULL) {
 		free(*cur); *cur = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                               "allocating readers");
 	}
-	(*cur)->numr = stp->target;
+	(*cur)->numr = stp->helper;
 
 	/* we should check how many readers are on the same store 
 	 * and create a list for that store!!! */

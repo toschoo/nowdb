@@ -2,8 +2,6 @@
  * (c) Tobias Schoofs, 2018
  * ========================================================================
  * Execution Plan
- * --------------
- * quite simple now, but will be the most complex thing
  * ========================================================================
  */
 #include <nowdb/query/plan.h>
@@ -13,9 +11,21 @@
 
 static char *OBJECT = "plan";
 
+/* ------------------------------------------------------------------------
+ * Macro to wrap the frequent error "invalid ast"
+ * ------------------------------------------------------------------------
+ */
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
+/* ------------------------------------------------------------------------
+ * Get field:
+ * ----------
+ * - sets the offset into the structure
+ * - the size of the field
+ * - the type of the field (if known!)
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getField(char    *name,
                                    uint32_t *off,
                                    uint32_t  *sz,
@@ -95,6 +105,18 @@ static inline nowdb_err_t getField(char    *name,
 	                                     "unknown field");
 }
 
+/* ------------------------------------------------------------------------
+ * Get Value:
+ * ----------
+ * The type of the value is inferred either from
+ * - the type of the field (then *typ is set) or
+ * - from the explicit type coming from the ast
+ * TODO:
+ * - check types
+ * - use the model to determine types
+ * - handle strings!!!
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getValue(char    *str,
                                    uint32_t  sz,
                                    int     *typ,
@@ -144,6 +166,10 @@ static inline nowdb_err_t getValue(char    *str,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Create a filter comparison node from an ast comparison node 
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	nowdb_err_t err;
 	nowdb_ast_t *op1, *op2;
@@ -178,6 +204,10 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get filter condition (boolean or comparison) from ast condition node
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
 	int op;
 	nowdb_err_t err;
@@ -207,9 +237,21 @@ static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
 	}
 }
 
-/* this is way to simple. we need to get the where *per target* and
+/* ------------------------------------------------------------------------
+ * Add where to plan
+ * -----------------
+ * this is way to simple. we need to get the where *per target* and
  * we have to consider aliases. Also, the target may be derived, so
- * we must consider fields that we do not know beforehand */
+ * we must consider fields that we do not know beforehand.
+ * Furthermore, not every where condition goes into a filter condition.
+ * A filter condition is always of the form: 
+ * field = value.
+ * However, a where condition may assume the forms:
+ * field = field (join!)
+ * value = value (constant)
+ * TRUE, FALSE
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	nowdb_err_t   err;
 	nowdb_ast_t  *cond;
@@ -223,17 +265,19 @@ static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 
 	// fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
 
+	/* get condition creates a filter */
 	err = getCondition(&b, cond);
 	if (err != NOWDB_OK) return err;
 
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                     FALSE, OBJECT, "allocating plan");
+
 	stp->ntype = NOWDB_PLAN_FILTER;
 	stp->stype = 0;
-	stp->target = 0;
+	stp->helper = 0;
 	stp->name = NULL;
-	stp->load = b;
+	stp->load = b; /* the filter is stored directly here */
 
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -261,19 +305,23 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
 
+	/* create summary node */
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                      FALSE, OBJECT, "allocating plan");
 	stp->ntype = NOWDB_PLAN_SUMMARY;
 	stp->stype = 0;
-	stp->target = 1;
+	stp->helper = 1; /* number of targets */
 	stp->name = NULL;
 	stp->load = NULL;
 
+	/* add summary node */
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "list append");
 	}
+
+	/* create reader from target */
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -281,17 +329,19 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 		nowdb_plan_destroy(plan); return err;
 	}
 	stp->ntype = NOWDB_PLAN_READER;
-	stp->stype = NOWDB_READER_FS_;
-	stp->target = trg->stype;
+	stp->stype = NOWDB_READER_FS_; /* always fullscan+ */
+	stp->helper = trg->stype;
 	stp->name = trg->value;
 	stp->load = NULL;
 
+	/* add target node */
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		err = nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "list append");
 		nowdb_plan_destroy(plan); return err;
 	}
 
+	/* create filter from where and add it */
 	err = addWhere(nowdb_ast_where(ast), plan);
 	if (err != NOWDB_OK) {
 		nowdb_plan_destroy(plan); return err;
@@ -299,6 +349,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy plan
+ * ------------------------------------------------------------------------
+ */
 void nowdb_plan_destroy(ts_algo_list_t *plan) {
 	ts_algo_list_node_t *runner, *tmp;
 
@@ -310,4 +364,3 @@ void nowdb_plan_destroy(ts_algo_list_t *plan) {
 		free(runner); runner = tmp;
 	}
 }
-
