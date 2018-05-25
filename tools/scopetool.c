@@ -158,7 +158,7 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 	nowdb_err_t err;
 	nowdb_qry_result_t res;
 
-	err = nowdb_stmt_handle(ast, global_scope, path, &res);
+	err = nowdb_stmt_handle(ast, global_scope, NULL, path, &res);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot handle ast: \n");
 		nowdb_ast_show(ast);
