@@ -135,7 +135,7 @@ ddl ::= CREATE context_target IF NOT EXISTS context_spec. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target context_options. {
+ddl ::= CREATE context_target SET context_options. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
 ddl ::= CREATE context_target IF NOT EXISTS SET context_options. {
@@ -196,13 +196,13 @@ context_only ::= CONTEXT IDENTIFIER(I). {
 context_options ::= context_option.
 context_options ::= context_option COMMA context_options.
 
-context_option ::= ALLOCSIZE EQ INTEGER(I). {
+context_option ::= ALLOCSIZE EQ UINTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ALLOCSIZE, I);
 }
-context_option ::= LARGESIZE EQ INTEGER(I). {
+context_option ::= LARGESIZE EQ UINTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_LARGESIZE, I);
 }
-context_option ::= SORTERS EQ INTEGER(I). {
+context_option ::= SORTERS EQ UINTEGER(I). {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_SORTERS, I);
 }
 context_option ::= COMPRESSION EQ STRING(I). {
