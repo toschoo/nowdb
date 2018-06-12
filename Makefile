@@ -1,5 +1,5 @@
 # =========================================================================
-# Makefile for NOWDB
+# Makefile for NoWDB
 # (c) Tobias Schoofs, 2018
 # =========================================================================
 CC = @gcc
@@ -35,7 +35,7 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -lpthread -ltsalgo -lzstd -lcsv
+libs = -lm -lpthread -ltsalgo -lbeet -lzstd -lcsv
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -54,6 +54,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
+      $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
       $(SRC)/query/ast.o      \
@@ -140,11 +141,11 @@ flags:
 
 .SUFFIXES: .c .o
 
-.c.o:
+.c.o:	$(DEP)
 	$(CMPMSG)
 	$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-.cpp.o:
+.cpp.o:	$(DEP)
 	$(CMPMSG)
 	$(CXX) $(CFLAGS) $(INC) -c -o $@ $<
 
