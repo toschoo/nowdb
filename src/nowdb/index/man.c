@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-char *OBJECT = "idxman";
+static char *OBJECT = "idxman";
 
 /* ------------------------------------------------------------------------
  * How we store index metadata
