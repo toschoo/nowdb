@@ -85,13 +85,19 @@ static nowdb_err_t openFile(nowdb_index_cat_t *cat) {
  * Helper: load line
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t loadline(char *buf, uint32_t sz, uint32_t *off,
-                            nowdb_index_buf_t **ibuf) {
+static nowdb_err_t getIBuf(char *buf, uint32_t sz, uint32_t *off,
+                           nowdb_index_buf_t **ibuf) {
 	uint32_t i = *off;
 	size_t   s;
 
-	while(i < sz && buf[i] != 0) i++;
+	/* get line */
+	while(i < sz && buf[i] != '\n') i++;
 	s = i-(*off);
+
+	/* check that the first string is terminated */
+	for(i=*off;i<s;i++) {}
+	if (i==s) return nowdb_err_get(nowdb_err_catalog,
+	          FALSE, OBJECT, "name in icat too long");
 
 	*ibuf = calloc(1,sizeof(nowdb_index_buf_t));
 	if (ibuf == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -136,7 +142,7 @@ static nowdb_err_t loadfile(FILE *file, char *path,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t loadbuf(nowdb_index_cat_t *cat) {
-	nowdb_index_buf_t *ibuf;
+	nowdb_index_buf_t *ibuf=NULL;
 	nowdb_err_t err;
 	char *tmp=NULL;
 	uint32_t off=0;
@@ -146,7 +152,7 @@ static nowdb_err_t loadbuf(nowdb_index_cat_t *cat) {
 	if (err != NOWDB_OK) return err;
 	
 	while(off < sz) {
-		err = loadline(tmp, sz, &off, &ibuf);
+		err = getIBuf(tmp, sz, &off, &ibuf);
 		if (err != NOWDB_OK) break;
 
 		if (ts_algo_tree_insert(cat->buf, ibuf) != TS_ALGO_OK) {
