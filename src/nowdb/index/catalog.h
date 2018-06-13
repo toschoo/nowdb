@@ -24,6 +24,7 @@ typedef struct {
 
 typedef struct {
 	char          *path;
+	FILE          *file;
 	ts_algo_tree_t *ctx;
 	ts_algo_tree_t *buf;
 } nowdb_index_cat_t;
