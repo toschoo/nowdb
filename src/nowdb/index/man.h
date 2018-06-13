@@ -11,6 +11,8 @@
 #include <nowdb/types/error.h>
 #include <nowdb/task/lock.h>
 #include <nowdb/scope/context.h>
+#include <nowdb/index/index.h>
+#include <nowdb/index/catalog.h>
 
 #include <tsalgo/tree.h>
 #include <beet/index.h>
@@ -23,25 +25,18 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t  lock;   /* protect index manager       */
-	ts_algo_tree_t *byname; /* map storing indices by name */
-	ts_algo_tree_t *bykey;  /* map storing indices by key  */
+	nowdb_rwlock_t     lock; /* protect index manager       */
+	nowdb_index_cat_t *icat; /* index catalog               */
+	ts_algo_tree_t  *byname; /* map storing indices by name */
+	ts_algo_tree_t   *bykey; /* map storing indices by key  */
 } nowdb_index_man_t;
-
-/* ------------------------------------------------------------------------
- * How keys are represented in an index
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	uint16_t   sz;
-	uint16_t *off;
-} nowdb_index_keys_t;
 
 /* ------------------------------------------------------------------------
  * Initialise index manager
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman);
+nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
+                                 nowdb_index_cat_t *icat);
 
 /* ------------------------------------------------------------------------
  * Destroy index manager
@@ -57,7 +52,7 @@ nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
                                      char               *name,
                                      nowdb_context_t    *ctx,
                                      nowdb_index_keys_t *keys,
-                                     beet_index_t        idx);
+                                     nowdb_index_t      *idx);
 
 /* ------------------------------------------------------------------------
  * Unregister an index
@@ -72,7 +67,7 @@ nowdb_err_t nowdb_index_man_unregister(nowdb_index_man_t *iman,
  */
 nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
                                       char              *name,
-                                      beet_index_t      *idx);
+                                      nowdb_index_t    **idx);
 
 /* ------------------------------------------------------------------------
  * Get index by keys
@@ -81,5 +76,5 @@ nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
 nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
                                       nowdb_context_t    *ctx,
                                       nowdb_index_keys_t *keys,
-                                      beet_index_t       *idx);
+                                      nowdb_index_t     **idx);
 #endif

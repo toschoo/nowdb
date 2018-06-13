@@ -54,6 +54,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
+      $(SRC)/index/index.o    \
+      $(SRC)/index/catalog.o  \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
@@ -83,6 +85,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
+      $(SRC)/index/index.h    \
+      $(SRC)/index/man.h      \
+      $(SRC)/index/catalog.h  \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
       $(SRC)/query/ast.h      \
@@ -126,6 +131,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
+	$(SMK)/imansmoke               \
 	$(SMK)/sqlsmoke
 
 tests: smoke
@@ -283,6 +289,11 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 				                 $(libs) -lnowdb
 
 $(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -449,6 +460,7 @@ clean:
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
+	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile

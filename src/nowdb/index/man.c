@@ -14,29 +14,6 @@
 
 static char *OBJECT = "idxman";
 
-/* ------------------------------------------------------------------------
- * How we store index metadata
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	char              *name;
-	nowdb_context_t    *ctx;
-	nowdb_index_keys_t *keys;
-	beet_index_t        idx;
-} nowdb_index_desc_t;
-
-static void descDestroy(nowdb_index_desc_t *desc) {
-	if (desc == NULL) return;
-	if (desc->name != NULL) {
-		free(desc->name); desc->name = NULL;
-	}
-	if (desc->keys != NULL) {
-		free(desc->keys->off);
-		free(desc->keys);
-		desc->keys = NULL;
-	}
-}
-
 #define DESC(x) \
 	((nowdb_index_desc_t*)x)
 
@@ -94,7 +71,7 @@ static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
  */
 static void destroydesc(void *ignore, void **n) {
 	if (*n != NULL) {
-		descDestroy((nowdb_index_desc_t*)(*n));
+		nowdb_index_desc_destroy((nowdb_index_desc_t*)(*n));
 		free(*n); *n = NULL;
 	}
 }
@@ -109,12 +86,13 @@ static void nodestroy(void *ignore, void **n) {}
  * Init index manager
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman) {
+nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
+                                 nowdb_index_cat_t *icat) {
 	nowdb_err_t err;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
-
+	iman->icat = icat;
 	iman->byname = NULL;
 	iman->bykey  = NULL;
 
@@ -156,6 +134,10 @@ void nowdb_index_man_destroy(nowdb_index_man_t *iman) {
 		ts_algo_tree_destroy(iman->byname);
 		free(iman->byname); iman->byname = NULL;
 	}
+	if (iman->icat != NULL) {
+		nowdb_index_cat_close(iman->icat);
+		free(iman->icat); iman->icat= NULL;
+	}
 	nowdb_rwlock_destroy(&iman->lock);
 }
 
@@ -167,7 +149,7 @@ nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
                                      char               *name,
                                      nowdb_context_t    *ctx,
                                      nowdb_index_keys_t *keys,
-                                     beet_index_t        idx) {
+                                     nowdb_index_t      *idx) {
 	nowdb_err_t err = NOWDB_OK, err2;
 	nowdb_index_desc_t *desc, *tmp;
 	size_t s;
@@ -274,7 +256,7 @@ unlock:
  */
 nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
                                       char              *name,
-                                      beet_index_t      *idx) {
+                                      nowdb_index_t    **idx) {
 	nowdb_err_t err = NOWDB_OK, err2;
 	nowdb_index_desc_t *desc, tmp;
 
@@ -312,7 +294,7 @@ unlock:
 nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
                                       nowdb_context_t    *ctx,
                                       nowdb_index_keys_t *keys,
-                                      beet_index_t       *idx) {
+                                      nowdb_index_t     **idx) {
 	nowdb_err_t err = NOWDB_OK, err2;
 	nowdb_index_desc_t *desc, tmp;
 
