@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/stat.h>
 
 #define CATPATH "rsc/iman10"
 
@@ -44,6 +45,11 @@ static void ctxdestroy(void *ignore, void **n) {
 	}
 }
 
+void removeICat(char *path) {
+	struct stat st;
+	if (stat(path, &st) == 0) remove(path);
+}
+
 nowdb_index_cat_t *makeICat(char *path,
                    ts_algo_tree_t *ctx) {
 	nowdb_err_t err;
@@ -64,6 +70,18 @@ ts_algo_tree_t *fakeCtx() {
 	                       &ctxdestroy, &ctxdestroy);
 	/* insert some contexts ... */
 	return ctx;
+}
+
+int addCtx(ts_algo_tree_t *ctx, char *name) {
+	nowdb_context_t *c;
+
+	c = malloc(sizeof(nowdb_context_t));
+	if (c == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	c->name = name;
+	return 0;
 }
 
 int initMan(nowdb_index_man_t *iman,
@@ -94,6 +112,73 @@ int testOpenClose(nowdb_index_man_t *iman,
 	return 0;
 }
 
+nowdb_index_keys_t *makekeys(uint32_t ksz) {
+	nowdb_index_keys_t *k;
+
+	k = malloc(sizeof(nowdb_index_keys_t));
+	if (k == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return NULL;
+	}
+	k->sz = ksz;
+	k->off = calloc(ksz,sizeof(uint32_t));
+	if (k->off == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		free(k); return NULL;
+	}
+	for(uint32_t i=0;i<ksz;i++) {
+		k->off[i] = i;
+	}
+	return k;
+}
+
+int testRegister0(nowdb_index_man_t *iman,
+                  char             *iname,
+                  uint32_t            ksz) {
+	nowdb_err_t err;
+	nowdb_index_keys_t *k;
+
+	k = makekeys(ksz);
+	if (k == NULL) return -1;
+
+	err = nowdb_index_man_register(iman, iname, NULL, k, NULL);
+	if (err != NOWDB_OK) {
+		free(k->off); free(k);
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
+int testGetIdx(nowdb_index_man_t *iman,
+               char             *iname,
+               uint32_t            ksz) {
+	nowdb_err_t err;
+	nowdb_index_keys_t *k;
+	nowdb_index_t    *idx;
+
+	err = nowdb_index_man_getByName(iman, iname, &idx);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+
+	k = makekeys(ksz);
+	if (k == NULL) return -1;
+
+	err = nowdb_index_man_getByKeys(iman, NULL, k, &idx);
+	if (err != NOWDB_OK) {
+		free(k->off); free(k);
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	free(k->off); free(k);
+	return 0;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_index_man_t man;
@@ -104,6 +189,9 @@ int main() {
 		fprintf(stderr, "cannot init error\n");
 		return EXIT_FAILURE;
 	}
+
+	removeICat(CATPATH);
+
 	ctx = fakeCtx();
 	if (ctx == NULL) {
 		fprintf(stderr, "cannot fake context\n");
@@ -115,6 +203,14 @@ int main() {
 	}
 	if (initMan(&man, ctx) != 0) {
 		fprintf(stderr, "initMan failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testRegister0(&man, "idx0", 1) != 0) {
+		fprintf(stderr, "testRegister0 failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetIdx(&man, "idx0", 1) != 0) {
+		fprintf(stderr, "testGetIdx failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	haveMan = 1;

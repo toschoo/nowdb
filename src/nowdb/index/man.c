@@ -120,6 +120,9 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
 		                                        "bykey.new");
 	}
 	iman->icat = icat;
+
+	/* missing: set byname and bykey from icat */
+
 	return NOWDB_OK;
 }
 
@@ -211,6 +214,7 @@ nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
 		ts_algo_tree_delete(iman->byname, desc);
 		goto unlock;
 	}
+	err = nowdb_index_cat_add(iman->icat, desc);
 unlock:
 	err2 = nowdb_unlock_write(&iman->lock);
 	if (err2 != NOWDB_OK) {
@@ -245,6 +249,8 @@ nowdb_err_t nowdb_index_man_unregister(nowdb_index_man_t *iman,
 	}
 	ts_algo_tree_delete(iman->bykey, desc);
 	ts_algo_tree_delete(iman->byname, &tmp);
+
+	err = nowdb_index_cat_remove(iman->icat, name);
 unlock:
 	err2 = nowdb_unlock_write(&iman->lock);
 	if (err2 != NOWDB_OK) {

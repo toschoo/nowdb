@@ -42,6 +42,7 @@ static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
  */
 static void bufdestroy(void *ignore, void **n) {
 	if (*n != NULL) {
+		fprintf(stderr, "deleting ibuf\n");
 		free(BUF(*n)->buf);
 		free(*n); *n = NULL;
 	}
@@ -95,7 +96,7 @@ static nowdb_err_t getIBuf(char *buf, uint32_t sz, uint32_t *off,
 	s = i-(*off);
 
 	/* check that the first string is terminated */
-	for(i=*off;i<s;i++) {}
+	for(i=*off;i<s && buf[i] != 0;i++) {}
 	if (i==s) return nowdb_err_get(nowdb_err_catalog,
 	          FALSE, OBJECT, "name in icat too long");
 
@@ -180,6 +181,7 @@ static nowdb_err_t writeICat(nowdb_index_cat_t *icat) {
 		if (ftruncate(fileno(icat->file), 0) != 0)
 			return nowdb_err_get(nowdb_err_trunc,
 			           TRUE, OBJECT, icat->path);
+		return NOWDB_OK;
 	}
 	buf = ts_algo_tree_toList(icat->buf);
 	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -252,9 +254,14 @@ nowdb_err_t nowdb_index_cat_open(char              *path,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Close catalog
+ * ------------------------------------------------------------------------
+ */
 void nowdb_index_cat_close(nowdb_index_cat_t *cat) {
 	if (cat == NULL) return;
 	if (cat->buf != NULL) {
+		fprintf(stderr, "destroying cat->buf\n");
 		ts_algo_tree_destroy(cat->buf);
 		free(cat->buf); cat->buf = NULL;
 	}
@@ -266,9 +273,88 @@ void nowdb_index_cat_close(nowdb_index_cat_t *cat) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Add item to catalog
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_index_cat_add(nowdb_index_cat_t  *cat,
-                                nowdb_index_desc_t *desc);
+                                nowdb_index_desc_t *desc) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_index_buf_t *ibuf;
+	char *buf;
+	uint32_t s,s1,s2, off=0;
 
+	if (cat == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                    FALSE, OBJECT, "index catalog null");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                 FALSE, OBJECT, "index descriptor null");
+
+	s1 = strlen(desc->name);
+
+	if (desc->ctx != NULL) {
+		s2 = strlen(desc->ctx->name);
+	} else {
+		s2 = 0;
+	}
+
+	s = s1 + s2 + 2 + desc->keys->sz * 4 + 4;
+
+	buf = malloc(s);
+	if (buf == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "allocating buf");
+		return err;
+	}
+	memcpy(buf, desc->name, s1+1); off = s1+1;
+	if (s2 != 0) {
+		memcpy(buf+off, desc->ctx->name, s2+1); off += s2+1;
+	} else {
+		buf[off] = 0; off++;
+	}
+	memcpy(buf+off, &desc->keys->sz, 4); off+=4;
+	for(int i=0;i<desc->keys->sz;i++) {
+		memcpy(buf+off, desc->keys->off+i, 4);
+		off+=4;
+	}
+
+	ibuf = malloc(sizeof(nowdb_index_buf_t));
+	if (ibuf == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "allocating ibuf");
+		free(buf); return err;
+	}
+
+	ibuf->sz = s;
+	ibuf->buf = buf;
+
+	fprintf(stderr, "Size and Off: %u / %u\n", s, off);
+
+	if (ts_algo_tree_insert(cat->buf, ibuf) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                     "tree.insert");
+		free(buf); free(ibuf);
+		return err;
+	}
+
+	err = writeICat(cat);
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove item from catalog
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_index_cat_remove(nowdb_index_cat_t *cat,
-                                   char            *name);
+                                   char            *name) {
+	nowdb_index_buf_t tmp;
 
+	tmp.buf = name;
+	if (ts_algo_tree_find(cat->buf, &tmp) != NULL) {
+		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
+		                                       "index.remove");
+	}
+
+	ts_algo_tree_delete(cat->buf, &tmp);
+
+	return writeICat(cat);
+}
