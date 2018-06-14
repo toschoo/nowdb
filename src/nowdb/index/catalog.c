@@ -55,7 +55,7 @@ static nowdb_err_t createFile(nowdb_index_cat_t *cat) {
 	struct stat  st;
 	FILE *f;
 
-	if (stat(cat->path, &st) != 0) return NOWDB_OK;
+	if (stat(cat->path, &st) == 0) return NOWDB_OK;
 
 	f = fopen(cat->path, "wb");
 	if (f == NULL) return nowdb_err_get(nowdb_err_open,
@@ -141,7 +141,7 @@ static nowdb_err_t loadfile(FILE *file, char *path,
  * Helper: load buf from file
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t loadbuf(nowdb_index_cat_t *cat) {
+static nowdb_err_t loadICat(nowdb_index_cat_t *cat) {
 	nowdb_index_buf_t *ibuf=NULL;
 	nowdb_err_t err;
 	char *tmp=NULL;
@@ -164,6 +164,39 @@ static nowdb_err_t loadbuf(nowdb_index_cat_t *cat) {
 	}
 	free(tmp);
 	if (err != NOWDB_OK) return err;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: write catalog to file
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t writeICat(nowdb_index_cat_t *icat) {
+	ts_algo_list_t *buf;
+	ts_algo_list_node_t *runner;
+	nowdb_index_buf_t *ibuf;
+
+	if (icat->ctx->count == 0) {
+		if (ftruncate(fileno(icat->file), 0) != 0)
+			return nowdb_err_get(nowdb_err_trunc,
+			           TRUE, OBJECT, icat->path);
+	}
+	buf = ts_algo_tree_toList(icat->buf);
+	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                           TRUE, OBJECT, "tree.toList");
+
+	rewind(icat->file);
+	for(runner=buf->head;runner!=NULL;runner=runner->nxt) {
+		ibuf = runner->cont;
+		if (fwrite(ibuf->buf, 1, ibuf->sz, icat->file) != ibuf->sz) {
+			ts_algo_list_destroy(buf); free(buf);
+			return nowdb_err_get(nowdb_err_write,
+			           TRUE, OBJECT, icat->path);
+		}
+	}
+	ts_algo_list_destroy(buf); free(buf);
+	if (fflush(icat->file) != 0) return nowdb_err_get(nowdb_err_flush,
+			                         TRUE, OBJECT, icat->path);
 	return NOWDB_OK;
 }
 
@@ -211,7 +244,7 @@ nowdb_err_t nowdb_index_cat_open(char              *path,
 		return nowdb_err_get(nowdb_err_no_mem,
 		             FALSE, OBJECT, "buf.new");
 	}
-	err = loadbuf(*cat);
+	err = loadICat(*cat);
 	if (err != NOWDB_OK) {
 		nowdb_index_cat_close(*cat); free(*cat);
 		return err;

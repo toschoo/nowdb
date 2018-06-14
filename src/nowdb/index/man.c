@@ -92,7 +92,9 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
-	iman->icat = icat;
+	if (icat == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                    FALSE, OBJECT, "index catalog NULL");
+	iman->icat = NULL;
 	iman->byname = NULL;
 	iman->bykey  = NULL;
 
@@ -117,6 +119,7 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                        "bykey.new");
 	}
+	iman->icat = icat;
 	return NOWDB_OK;
 }
 

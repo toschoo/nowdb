@@ -17,7 +17,7 @@ FLGMSG = @printf "CFLAGS: $(CFLAGS)\nLDFLAGS: $(LDFLAGS)\n"
 
 INSMSG = @printf ". setenv.sh"
 
-CFLAGS = -O3 -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
+CFLAGS = -O3 -g -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
 LDFLAGS = -L./lib
 
 INC = -I./include -I./test -I./src -I./
@@ -447,6 +447,7 @@ clean:
 	rm -rf $(RSC)/testscope
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
+	rm -rf $(RSC)/iman??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
