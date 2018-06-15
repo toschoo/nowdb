@@ -56,7 +56,7 @@ void nowdb_index_desc_destroy(nowdb_index_desc_t *desc);
  * Create index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_create(char *path,
+nowdb_err_t nowdb_index_create(char *path, uint16_t size,
                                nowdb_index_desc_t *desc);
 
 /* ------------------------------------------------------------------------

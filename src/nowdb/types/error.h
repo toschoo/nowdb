@@ -262,6 +262,7 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_loader          54
 #define nowdb_err_trunc           55
 #define nowdb_err_flush           56
+#define nowdb_err_beet            57
 #define nowdb_err_unknown       9999
 
 #endif

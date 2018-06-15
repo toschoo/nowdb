@@ -283,6 +283,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_loader: return "loader failed";
 	case nowdb_err_trunc: return "truncate operation failed";
 	case nowdb_err_flush: return "flush operation failed";
+	case nowdb_err_beet: return "beet library error";
 	default: return "unknown";
 	}
 }

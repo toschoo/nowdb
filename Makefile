@@ -35,7 +35,7 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -lpthread -ltsalgo -lbeet -lzstd -lcsv
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -56,6 +56,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/index/index.o    \
       $(SRC)/index/catalog.o  \
+      $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
