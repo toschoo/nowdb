@@ -133,6 +133,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
 	$(SMK)/imansmoke               \
+	$(SMK)/indexsmoke              \
 	$(SMK)/sqlsmoke
 
 tests: smoke
@@ -299,6 +300,11 @@ $(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/indexsmoke: 	$(LIB) $(DEP) $(SMK)/indexsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
@@ -449,6 +455,7 @@ clean:
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
 	rm -rf $(RSC)/iman??
+	rm -rf $(RSC)/idx??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -463,6 +470,7 @@ clean:
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/imansmoke
+	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile

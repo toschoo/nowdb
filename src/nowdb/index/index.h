@@ -69,13 +69,20 @@ nowdb_err_t nowdb_index_drop(char *path);
  * Open index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_open(char *path, nowdb_index_t **idx);
+nowdb_err_t nowdb_index_open(char *path, void *handle,
+                             nowdb_index_desc_t *desc);
 
 /* ------------------------------------------------------------------------
  * Close index
  * ------------------------------------------------------------------------
  */
-void nowdb_index_close(nowdb_index_t *idx);
+nowdb_err_t nowdb_index_close(nowdb_index_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Destroy index
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_destroy(nowdb_index_t *idx);
 
 /* ------------------------------------------------------------------------
  * Announce usage of this index

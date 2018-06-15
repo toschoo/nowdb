@@ -6,6 +6,7 @@
  */
 
 #include <nowdb/index/index.h>
+#include <nowdb/io/dir.h>
 
 #include <beet/index.h>
 
@@ -24,13 +25,13 @@ static char *OBJECT = "idx";
 static inline nowdb_err_t makeBeetError(beet_err_t ber) {
 	nowdb_err_t err, err2=NOWDB_OK;
 
+	if (ber == BEET_OK) return NOWDB_OK;
 	if (ber < BEET_OSERR_ERRNO) {
 		err2 = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
 		                          (char*)beet_oserrdesc());
 	}
 	err = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
 	                         (char*)beet_errdesc(ber));
-
 	if (err == NOWDB_OK) return err2; else err->cause = err2;
 	return err;
 }
@@ -84,21 +85,29 @@ static void setEmbCompare(beet_config_t *cfg) {
  * ------------------------------------------------------------------------
  */
 static void setHostCompare(nowdb_index_desc_t *desc, beet_config_t *cfg) {
-	cfg->compare = NULL;
-	cfg->rscinit = NULL;
-	cfg->rscdest = NULL;
+	if (desc->ctx == NULL) {
+		cfg->compare = "nowdb_index_vertex_compare";
+	} else {
+		cfg->compare = "nowdb_index_edge_compare";
+	}
+	cfg->rscinit = "nowdb_index_keysinit";
+	cfg->rscdest = "nowdb_index_keysdestroy";
 }
 
 /* ------------------------------------------------------------------------
  * Helper: compute index sizing for embedded
  * ------------------------------------------------------------------------
  */
+
 #define HOSTDSZ sizeof(nowdb_pageid_t)
 #define EMBKSZ sizeof(nowdb_pageid_t)
-#define EMBDSZ 128
+#define EMBDSZ 16
+#define INTDSZ sizeof(beet_pageid_t)
+
 static void computeEmbSize(nowdb_index_desc_t *desc,
                            uint16_t            size,
                            beet_config_t      *cfg) {
+	uint32_t targetsz = 0;
 
 	cfg->indexType = BEET_INDEX_PLAIN;
 	cfg->subPath = NULL;
@@ -109,9 +118,7 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 	switch(size) {
 		case NOWDB_CONFIG_SIZE_TINY:
 
-			/* lsize 972, nsize 968 */
-			cfg->leafNodeSize = 5;
-			cfg->intNodeSize = 10;
+			targetsz = 512;
 
 			cfg->leafCacheSize = 1000;
 			cfg->intCacheSize = 1000;
@@ -121,9 +128,7 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 		case NOWDB_CONFIG_SIZE_SMALL: 
 		case NOWDB_CONFIG_SIZE_MEDIUM:
 
-			/* lsize 4044, nsize 4032 */
-			cfg->leafNodeSize = 21;
-			cfg->intNodeSize = 42;
+			targetsz = 1024;
 
 			cfg->leafCacheSize = 10000;
 			cfg->intCacheSize = 10000;
@@ -131,10 +136,17 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 
 		case NOWDB_CONFIG_SIZE_BIG: 
+
+			targetsz = 4096;
+
+			cfg->leafCacheSize = 10000;
+			cfg->intCacheSize = 10000;
+
+			break;
+
 		case NOWDB_CONFIG_SIZE_LARGE: 
-			/* lsize 8076, nsize 8072 */
-			cfg->leafNodeSize = 42;
-			cfg->intNodeSize = 84;
+
+			targetsz = 8192;
 
 			cfg->leafCacheSize = 10000;
 			cfg->intCacheSize = 10000;
@@ -142,9 +154,8 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 
 		case NOWDB_CONFIG_SIZE_HUGE: 
-			/* lsize 16332, nsize 16328 */
-			cfg->leafNodeSize = 85;
-			cfg->intNodeSize = 170;
+
+			targetsz = 16384;
 
 			cfg->leafCacheSize = 10000;
 			cfg->intCacheSize = 10000;
@@ -152,8 +163,11 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 	}
 
+	cfg->leafNodeSize = (targetsz-12)/(EMBKSZ+EMBDSZ);
+	cfg->intNodeSize = (targetsz-8)/(EMBKSZ+INTDSZ);
+
 	cfg->leafPageSize = cfg->leafNodeSize * (EMBKSZ + EMBDSZ) + 12;
-	cfg->intPageSize = cfg->intNodeSize * (EMBKSZ + EMBDSZ) + 8;
+	cfg->intPageSize = cfg->intNodeSize * (EMBKSZ + INTDSZ) + 8;
 }
 
 /* ------------------------------------------------------------------------
@@ -211,10 +225,10 @@ static void computeHostSize(nowdb_index_desc_t *desc,
 	}
 
 	cfg->leafNodeSize = (targetsz-12)/(cfg->keySize+HOSTDSZ);
-	cfg->intNodeSize = (targetsz-8)/(cfg->keySize+HOSTDSZ);
+	cfg->intNodeSize = (targetsz-8)/(cfg->keySize+INTDSZ);
 
 	cfg->leafPageSize = (cfg->keySize+HOSTDSZ)*cfg->leafNodeSize+12;
-	cfg->intPageSize = (cfg->keySize+HOSTDSZ)*cfg->intNodeSize+8;
+	cfg->intPageSize = (cfg->keySize+INTDSZ)*cfg->intNodeSize+8;
 }
 
 /* ------------------------------------------------------------------------
@@ -231,22 +245,16 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 	char *ep, *hp;
 
 	/* paths */
-	ep = malloc(strlen(path)     +
-	            strlen(HOSTPATH) + 
-	            strlen(EMBPATH)  + 3);
-	if (ep == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                  "allocating path");
-	}
-	sprintf(ep, "%s/%s/%s", path, HOSTPATH, EMBPATH);
+	hp = nowdb_path_append(path, HOSTPATH);
+	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                FALSE, OBJECT, "allocating host path");
 
-	hp = malloc(strlen(path)     +
-	            strlen(HOSTPATH) + 2);
-	if (hp == NULL) {
+	ep = nowdb_path_append(hp, EMBPATH);
+	if (ep == NULL) {
+		free(hp);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                  "allocating path");
+	                                     "allocating emb. path");
 	}
-	sprintf(hp, "%s/%s", path, HOSTPATH);
 
 	/* create host */
 	beet_config_init(&cfg);
@@ -279,19 +287,101 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
  * Drop index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_drop(char *path);
+nowdb_err_t nowdb_index_drop(char *path) {
+	beet_err_t  ber;
+	char *ep, *hp;
+
+	/* paths */
+	hp = nowdb_path_append(path, HOSTPATH);
+	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                FALSE, OBJECT, "allocating host path");
+
+	ep = nowdb_path_append(hp, EMBPATH);
+	if (ep == NULL) {
+		free(hp);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                     "allocating emb. path");
+	}
+	ber = beet_index_drop(ep);
+	if (ber != BEET_OK) {
+		fprintf(stderr, "dropping %s\n", ep);
+		free(ep); free(hp);
+		return makeBeetError(ber);
+	}
+	ber = beet_index_drop(hp);
+	if (ber != BEET_OK) {
+		free(ep); free(hp);
+		return makeBeetError(ber);
+	}
+	free(ep); free(hp);
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Open index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_open(char *path, nowdb_index_t **idx);
+nowdb_err_t nowdb_index_open(char *path, void *handle,
+                             nowdb_index_desc_t *desc) {
+	nowdb_err_t        err;
+	beet_open_config_t cfg;
+	beet_err_t         ber;
+	char *hp;
+
+	beet_open_config_ignore(&cfg);
+	cfg.rsc = desc->keys;
+
+	hp = nowdb_path_append(path, HOSTPATH);
+	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                FALSE, OBJECT, "allocating host path");
+
+	desc->idx = calloc(1, sizeof(nowdb_index_t));
+	if (desc->idx == NULL) {
+		free(hp);
+		return nowdb_err_get(nowdb_err_no_mem,
+		      FALSE, OBJECT, "allocating idx");
+	}
+
+	err = nowdb_rwlock_init(&desc->idx->lock);
+	if (err != NOWDB_OK) {
+		free(desc->idx); desc->idx = NULL; free(hp);
+		return err;
+	}
+
+	ber = beet_index_open(hp, handle, &cfg, &desc->idx->idx);
+	if (ber != BEET_OK) {
+		free(desc->idx); desc->idx = NULL; free(hp);
+		return makeBeetError(ber);
+	}
+	free(hp);
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Close index
  * ------------------------------------------------------------------------
  */
-void nowdb_index_close(nowdb_index_t *idx);
+nowdb_err_t nowdb_index_close(nowdb_index_t *idx) {
+	nowdb_err_t err;
+
+	IDXNULL();
+
+	err = nowdb_lock_write(&idx->lock);
+	if (err != NOWDB_OK) return err;
+
+	beet_index_close(idx->idx);
+
+	return nowdb_unlock_write(&idx->lock);
+}
+
+/* ------------------------------------------------------------------------
+ * destroy index
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_destroy(nowdb_index_t *idx) {
+	if (idx == NULL) return;
+	nowdb_rwlock_destroy(&idx->lock);
+}
 
 /* ------------------------------------------------------------------------
  * Announce usage of this index
