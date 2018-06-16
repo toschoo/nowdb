@@ -55,7 +55,6 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/index/index.o    \
-      $(SRC)/index/catalog.o  \
       $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
@@ -88,7 +87,6 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/loader.h   \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
-      $(SRC)/index/catalog.h  \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
       $(SRC)/query/ast.h      \
@@ -456,6 +454,8 @@ clean:
 	rm -rf $(RSC)/scope??
 	rm -rf $(RSC)/iman??
 	rm -rf $(RSC)/idx??
+	rm -rf $(RSC)/ctx??
+	rm -rf $(RSC)/vertex??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke

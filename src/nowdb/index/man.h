@@ -12,7 +12,6 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/scope/context.h>
 #include <nowdb/index/index.h>
-#include <nowdb/index/catalog.h>
 
 #include <tsalgo/tree.h>
 #include <beet/index.h>
@@ -26,7 +25,12 @@
  */
 typedef struct {
 	nowdb_rwlock_t     lock; /* protect index manager       */
-	nowdb_index_cat_t *icat; /* index catalog               */
+	FILE              *file; /* where we store metadata     */
+	char              *path; /* path to that file           */
+	char           *ctxpath; /* path to the contexts        */
+	char            *vxpath; /* path to vertex              */
+	void            *handle; /* handle to compare lib       */
+	ts_algo_tree_t *context; /* context for name resolution */
 	ts_algo_tree_t  *byname; /* map storing indices by name */
 	ts_algo_tree_t   *bykey; /* map storing indices by key  */
 } nowdb_index_man_t;
@@ -36,7 +40,11 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
-                                 nowdb_index_cat_t *icat);
+                                 ts_algo_tree_t *context,
+                                              char *path,
+                                           char *ctxpath,
+                                            char *vxpath,
+                                            void *handle);
 
 /* ------------------------------------------------------------------------
  * Destroy index manager
