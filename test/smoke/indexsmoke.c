@@ -16,6 +16,7 @@
 #include <limits.h>
 #include <sys/stat.h>
 
+#define BASEPATH "rsc"
 #define IDXPATH "rsc/idx10"
 #define IDXNAME "idx10"
 #define CTXNAME "CTX_TEST"
@@ -57,7 +58,7 @@ int createIndex(char *path, uint16_t size,
                 nowdb_index_desc_t  *desc) {
 	nowdb_err_t    err;
 
-	if (mkpath(path) != 0) return -1;
+	// if (mkpath(path) != 0) return -1;
 	err = nowdb_index_create(path, size, desc);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -126,7 +127,7 @@ int testCreateSizes(char *path) {
 		}
 		free(desc.keys->off); free(desc.keys);
 
-		if (getConfig(path, &cfg) != 0) return -1;
+		if (getConfig(IDXPATH, &cfg) != 0) return -1;
 
 		if (cfg.leafPageSize != (cfg.keySize + cfg.dataSize) * 
 		                         cfg.leafNodeSize + 12) {
@@ -147,7 +148,7 @@ int testCreateSizes(char *path) {
 			return -1;
 		}
 		beet_config_destroy(&cfg);
-		if (dropIndex(path) != 0) return -1;
+		if (dropIndex(IDXPATH) != 0) return -1;
 	}
 	return 0;
 }
@@ -203,7 +204,7 @@ int main() {
 	desc.keys = makekeys(1);
 	desc.idx  = NULL;
 
-	if (createIndex(IDXPATH, NOWDB_CONFIG_SIZE_SMALL, &desc) != 0) {
+	if (createIndex(BASEPATH, NOWDB_CONFIG_SIZE_SMALL, &desc) != 0) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -211,15 +212,15 @@ int main() {
 		fprintf(stderr, "dropIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testCreateSizes(IDXPATH) != 0) {
+	if (testCreateSizes(BASEPATH) != 0) {
 		fprintf(stderr, "testCreateSizes failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(IDXPATH, NOWDB_CONFIG_SIZE_SMALL, &desc) != 0) {
+	if (createIndex(BASEPATH, NOWDB_CONFIG_SIZE_SMALL, &desc) != 0) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (openIndex(IDXPATH, handle, &desc) != 0) {
+	if (openIndex(BASEPATH, handle, &desc) != 0) {
 		fprintf(stderr, "openIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

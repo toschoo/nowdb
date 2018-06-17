@@ -53,6 +53,16 @@ void nowdb_index_desc_destroy(nowdb_index_desc_t *desc) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: create dir if it does not exist
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t mkIdxDir(char *path) {
+	struct stat st;
+	if (stat(path, &st) == 0) return NOWDB_OK;
+	return nowdb_dir_create(path);
+}
+
+/* ------------------------------------------------------------------------
  * Helper: compute key size from desc
  * ------------------------------------------------------------------------
  */
@@ -240,18 +250,30 @@ static void computeHostSize(nowdb_index_desc_t *desc,
  */
 nowdb_err_t nowdb_index_create(char *path, uint16_t size,
                                nowdb_index_desc_t  *desc) {
+	nowdb_err_t   err;
 	beet_err_t    ber;
 	beet_config_t cfg;
-	char *ep, *hp;
+	char *ep, *hp, *ip;
+
+	// the custom checks...
 
 	/* paths */
-	hp = nowdb_path_append(path, HOSTPATH);
+	ip = nowdb_path_append(path, desc->name);
+	if (ip == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	               FALSE, OBJECT, "allocating index path");
+
+	err = mkIdxDir(ip);
+	if (err != NOWDB_OK) {
+		free(ip); return err;
+	}
+
+	hp = nowdb_path_append(ip, HOSTPATH); free(ip);
 	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "allocating host path");
 
 	ep = nowdb_path_append(hp, EMBPATH);
 	if (ep == NULL) {
-		free(hp);
+		free(hp); 
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                     "allocating emb. path");
 	}
@@ -326,12 +348,16 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
 	nowdb_err_t        err;
 	beet_open_config_t cfg;
 	beet_err_t         ber;
-	char *hp;
+	char *hp, *ip;
 
 	beet_open_config_ignore(&cfg);
 	cfg.rsc = desc->keys;
 
-	hp = nowdb_path_append(path, HOSTPATH);
+	ip = nowdb_path_append(path, desc->name);
+	if (ip == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	               FALSE, OBJECT, "allocating index path");
+
+	hp = nowdb_path_append(ip, HOSTPATH); free(ip);
 	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "allocating host path");
 

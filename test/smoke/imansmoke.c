@@ -112,6 +112,25 @@ int makevxdir() {
 	return 0;
 }
 
+int createIndex(char *path, uint16_t size,
+                nowdb_index_desc_t  *desc) {
+	nowdb_err_t    err;
+	char *p;
+
+	p = nowdb_path_append(path, "index");
+	if (p == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	err = nowdb_index_create(p, size, desc); free(p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
 ts_algo_tree_t *fakeCtx() {
 	ts_algo_tree_t *ctx;
 	ctx = ts_algo_tree_new(&ctxcompare, NULL, &noupdate,
@@ -267,23 +286,25 @@ void destroyKeys(nowdb_index_keys_t **k) {
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_index_man_t man;
-	ts_algo_tree_t *ctx=NULL;
 	void *handle = NULL;
 	int haveMan = 0;
 	nowdb_index_keys_t *k1=NULL, *c1=NULL;
 	nowdb_index_keys_t *k2=NULL, *c2=NULL;
+	ts_algo_tree_t *ctx=NULL;
+	nowdb_index_desc_t desc;
 
 	handle = beet_lib_init(NULL);
 	if (handle == NULL) {
 		fprintf(stderr, "cannot init lib\n");
 		return EXIT_FAILURE;
 	}
+	fprintf(stderr, "have handle: %p\n", handle);
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "cannot init error\n");
 		return EXIT_FAILURE;
 	}
 
-	removeICat(IDXPATH);
+	// removeICat(IDXPATH);
 
 	ctx = fakeCtx();
 	if (ctx == NULL) {
@@ -309,6 +330,17 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
+	desc.name = "idx0";
+	desc.keys = k1;
+	desc.ctx = NULL;
+	desc.idx = NULL;
+
+	if (createIndex(VXPATH, NOWDB_CONFIG_SIZE_TINY, &desc) != 0) {
+		fprintf(stderr, "create Index failed for idx0\n");
+		destroyKeys(&k1);
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+
 	if (testRegister(&man, "idx0", k1) != 0) {
 		fprintf(stderr, "testRegister failed for k1\n");
 		destroyKeys(&k1);
@@ -329,6 +361,16 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
+	desc.name = "idx1";
+	desc.keys = k2;
+	desc.ctx = NULL;
+	desc.idx = NULL;
+
+	if (createIndex(VXPATH, NOWDB_CONFIG_SIZE_TINY, &desc) != 0) {
+		fprintf(stderr, "create Index failed for idx1\n");
+		destroyKeys(&k2);
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (testRegister(&man, "idx1", k2) != 0) {
 		fprintf(stderr, "testRegister failed for k2\n");
 		destroyKeys(&k2);
@@ -338,12 +380,15 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for k2\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	
 	nowdb_index_man_destroy(&man); haveMan = 0;
+
 	if (initMan(&man, handle, ctx) != 0) {
 		fprintf(stderr, "initMan failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	haveMan = 1;
+	
 	if (testGetIdx(&man, "idx0", c1) != 0) {
 		fprintf(stderr, "testGetIdx failed for k1 (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;

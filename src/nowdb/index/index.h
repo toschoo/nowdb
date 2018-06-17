@@ -87,7 +87,7 @@ void nowdb_index_destroy(nowdb_index_t *idx);
 /* ------------------------------------------------------------------------
  * Announce usage of this index
  * The index is locked for reading.
- * The only process that would lock for writing is drop.
+ * The only procedure that would lock for writing is drop.
  * This way, we make sure that no index is dropped while it is used.
  * ------------------------------------------------------------------------
  */

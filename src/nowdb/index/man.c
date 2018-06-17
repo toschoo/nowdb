@@ -208,9 +208,12 @@ static nowdb_err_t getVertexPath(nowdb_index_man_t *man, char *idxname,
 	tmp = nowdb_path_append(man->vxpath, "index");
 	if (tmp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	              FALSE, OBJECT, "allocating vertex path");
+	/*
 	*path = nowdb_path_append(tmp, idxname); free(tmp);
 	if (*path == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "allocating vertex path");
+	*/
+	*path = tmp;
 	return NOWDB_OK;
 }
 
@@ -230,11 +233,10 @@ static nowdb_err_t openIndex(nowdb_index_man_t  *man,
 	}
 	if (err != NOWDB_OK) return err;
 
-	/* the index must exist! 
+	/* the index must exist! */
+	fprintf(stderr, "opening index %s with handle %p\n", path, man->handle);
 	err = nowdb_index_open(path, man->handle, desc); free(path);
 	if (err != NOWDB_OK) return err;
-	*/
-	free(path); /* remove !!! */
 
 	return NOWDB_OK;
 }
