@@ -10,6 +10,14 @@
 static char *OBJECT = "scope";
 
 /* ------------------------------------------------------------------------
+ * Macro: scope NULL
+ * ------------------------------------------------------------------------
+ */
+#define SCOPENULL() \
+	if (scope == NULL) return nowdb_err_get(nowdb_err_invalid, \
+	                          FALSE, OBJECT, "scope is NULL");
+
+/* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare
  * ------------------------------------------------------------------------
  */
@@ -373,12 +381,33 @@ static inline nowdb_err_t findContext(nowdb_scope_t  *scope,
 }
 
 /* -----------------------------------------------------------------------
- * Helper: make context path
+ * Helper: make generic context path
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t mkctxpath(nowdb_scope_t *scope, char **path) {
-
 	*path = nowdb_path_append(scope->path, "context");
+	if (*path == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                          "allocating context path");
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: make context path for specific context
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t mkthisctxpath(nowdb_scope_t *scope,
+                                           char *name,
+                                          char **path) {
+	char *tmp;
+
+	tmp = nowdb_path_append(scope->path, "context");
+	if (tmp == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                          "allocating context path");
+	}
+	*path = nowdb_path_append(tmp, name); free(tmp);
 	if (*path == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating context path");
@@ -396,6 +425,20 @@ static nowdb_err_t mkvtxpath(nowdb_scope_t *scope, char **path) {
 	if (*path == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                           "allocating vertex path");
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: append 'index' to anything
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t mkidxpath(char *p, char **path) {
+
+	*path = nowdb_path_append(p, "index");
+	if (*path == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                            "allocating index path");
 	}
 	return NOWDB_OK;
 }
@@ -896,6 +939,10 @@ nowdb_err_t nowdb_scope_dropContext(nowdb_scope_t *scope,
 
 	NOWDB_IGNORE(nowdb_store_close(&ctx->store));
 
+	/* TODO:
+	 * drop all indexes
+	 */
+
 	err = nowdb_store_drop(&ctx->store);
 	if (err != NOWDB_OK) goto unlock;
 
@@ -940,9 +987,98 @@ unlock:
  * Create index within that scope
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t *scope,
-                                    char          *name);
-                                    /* .... */
+nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
+                                    char               *name,
+                                    char            *context,
+                                    nowdb_index_keys_t *keys,
+                                    uint16_t          sizing) {
+	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_context_t *ctx=NULL;
+	nowdb_index_desc_t *desc=NULL;
+	nowdb_index_keys_t *k;
+	nowdb_index_t *idx;
+	uint16_t sz;
+	char *path = NULL;
+	char *tmp;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+	if (keys == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "keys is NULL");
+
+	sz = sizing==0?NOWDB_CONFIG_SIZE_BIG:sizing;
+
+	if (context != NULL) {
+		err = nowdb_scope_getContext(scope, context, &ctx);
+		if (err != NOWDB_OK) return err;
+
+		err = mkthisctxpath(scope, ctx->name, &tmp);
+		if (err != NOWDB_OK) return err;
+		
+	} else {
+		err = mkvtxpath(scope, &tmp);
+		if (err != NOWDB_OK) return err;
+	}
+
+	err = mkidxpath(tmp, &path); free(tmp);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_index_keys_copy(keys, &k);
+	if (err != NOWDB_OK) {
+		free(path); return err;
+	}
+
+	err = nowdb_index_desc_create(name, ctx, k, NULL, &desc);
+	if (err != NOWDB_OK) {
+		nowdb_index_keys_destroy(k);
+		free(path); return err;
+	}
+
+	err = nowdb_index_man_register(scope->iman, desc);
+	if (err != NOWDB_OK) {
+		nowdb_index_desc_destroy(desc); free(desc);
+		free(path); return err;
+	}
+
+	/* create index without publishing it yet
+	 * we lock the iman */
+	err = nowdb_lock_write(&scope->iman->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_index_create(path, sz, desc); free(path);
+
+	idx = desc->idx;
+	desc->idx = NULL;
+
+	/* unlock iman */
+	err2 = nowdb_unlock_write(&scope->iman->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+
+	/* unregister in case of error */
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
+		return err;
+	}
+
+	/* TODO: write missing data */
+
+
+	/* publish the index */
+	err = nowdb_lock_write(&scope->iman->lock);
+	if (err != NOWDB_OK) return err;
+
+	desc->idx = idx;
+
+	err2 = nowdb_unlock_write(&scope->iman->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* -----------------------------------------------------------------------
  * Drop index within that scope

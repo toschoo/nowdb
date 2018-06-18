@@ -205,6 +205,58 @@ int testCreateDropContext(nowdb_scope_t *scope) {
 	return 1;
 }
 
+int createIndex(nowdb_scope_t *scope,
+                char        *idxname,
+                char        *ctxname) {
+	nowdb_err_t err;
+	nowdb_index_keys_t *keys;
+
+	if (ctxname != NULL) {
+
+		fprintf(stderr, "creating index %s.%s\n", ctxname, idxname);
+
+		err = nowdb_index_keys_create(&keys, 3,
+		                        NOWDB_OFF_EDGE,
+		                      NOWDB_OFF_ORIGIN,
+		                      NOWDB_OFF_DESTIN);
+	} else {
+
+		fprintf(stderr, "creating index VERTEX.%s\n", idxname);
+
+		err = nowdb_index_keys_create(&keys, 2,
+		                      NOWDB_OFF_VERTEX,
+		                       NOWDB_OFF_PROP);
+	}
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return 0;
+	}
+	err = nowdb_scope_createIndex(scope, idxname, ctxname, keys,
+	                                    NOWDB_CONFIG_SIZE_TINY);
+	if (err != NOWDB_OK) {
+		nowdb_index_keys_destroy(keys);
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return 0;
+	}
+	nowdb_index_keys_destroy(keys);
+	return 1;
+}
+
+int dropIndex(nowdb_scope_t *scope,
+              char        *idxname,
+              char        *ctxname) {
+	return 1;
+}
+
+int testCreateDropIndex(nowdb_scope_t *scope) {
+	if (!createIndex(scope, "IDX_TEST0", "CTX_FIVE")) return 0;
+	if (!dropIndex(scope, "IDX_TEST0", "CTX_FIVE")) return 0;
+	return 1;
+	
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_scope_t *scope = NULL;
@@ -307,6 +359,10 @@ int main() {
 		fprintf(stderr, "there should be 4 contexts, ");
 		fprintf(stderr, "but there are %d\n",
 		                   scope->contexts.count);
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createIndex(scope, "IDX_ONE", "CTX_FIVE")) {
+		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

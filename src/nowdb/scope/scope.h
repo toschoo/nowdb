@@ -117,9 +117,11 @@ nowdb_err_t nowdb_scope_getContext(nowdb_scope_t   *scope,
  * Create index within that scope
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t *scope,
-                                    char          *name);
-                                    /* .... */
+nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
+                                    char               *name,
+                                    char            *context,
+                                    nowdb_index_keys_t *keys,
+                                    uint16_t         sizing);
 
 /* -----------------------------------------------------------------------
  * Drop index within that scope

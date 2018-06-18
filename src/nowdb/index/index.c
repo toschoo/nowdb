@@ -91,6 +91,27 @@ nowdb_err_t nowdb_index_keys_create(nowdb_index_keys_t **keys,
 }
 
 /* -----------------------------------------------------------------------
+ * Copy index keys
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
+                                  nowdb_index_keys_t **to) {
+
+	*to = calloc(1,sizeof(nowdb_index_keys_t));
+	if (*to == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                     FALSE, OBJECT, "allocating keys");
+	(*to)->sz = from->sz;
+	(*to)->off = calloc(from->sz, sizeof(uint16_t));
+	if ((*to)->off == NULL) {
+		free(*to); *to = NULL;
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                        "allocating offsets");
+	}
+	memcpy((*to)->off, from->off, from->sz*sizeof(uint16_t));
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Destroy index keys
  * -----------------------------------------------------------------------
  */
