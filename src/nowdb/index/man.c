@@ -14,8 +14,10 @@
 
 static char *OBJECT = "idxman";
 
-static char *vertex = "vertex";
-
+/* ------------------------------------------------------------------------
+ * Macro: cast to descriptor
+ * ------------------------------------------------------------------------
+ */
 #define DESC(x) \
 	((nowdb_index_desc_t*)x)
 
@@ -73,6 +75,10 @@ static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
  */
 static void destroydesc(void *ignore, void **n) {
 	if (*n != NULL) {
+		if (DESC(*n)->idx != NULL) {
+			nowdb_index_close(DESC(*n)->idx);
+			free(DESC(*n)->idx); DESC(*n)->idx = NULL;
+		}
 		nowdb_index_desc_destroy((nowdb_index_desc_t*)(*n));
 		free(*n); *n = NULL;
 	}
@@ -130,10 +136,7 @@ static nowdb_err_t getOneLine(char     *buf,
 	size_t   s;
 
 	while(i < sz && buf[i] != '\n') i++;
-	// if (i == sz) i--;
 	s = i-(*off);
-
-	fprintf(stderr, "get one line: %zu / %u\n", s, i);
 
 	*obuf=buf+(*off);
 
@@ -177,23 +180,17 @@ static nowdb_err_t registerIndex(nowdb_index_man_t  *iman,
  * Helper: make context path
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t getIdxPath(nowdb_index_man_t *man, char *idxname,
+static nowdb_err_t getCtxPath(nowdb_index_man_t *man, char *idxname,
                                                       char *ctxname,
                                                       char **path) {
-	char *tmp1, *tmp2;
+	char *tmp;
 
-	tmp1 = nowdb_path_append(man->ctxpath, ctxname);
-	if (tmp1 == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	tmp = nowdb_path_append(man->ctxpath, ctxname);
+	if (tmp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	              FALSE, OBJECT, "allocating context path");
-	tmp2 = nowdb_path_append(tmp1, "index"); free(tmp1);
-	if (tmp2 == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	              FALSE, OBJECT, "allocating context path");
-	tmp1 = nowdb_path_append(tmp2, "index"); free(tmp2);
-	if (tmp1 == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	              FALSE, OBJECT, "allocating context path");
-	*path = nowdb_path_append(tmp1, idxname); free(tmp1);
+	*path = nowdb_path_append(tmp, "index"); free(tmp);
 	if (*path == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	               FALSE, OBJECT, "allocating context path");
+	                FALSE, OBJECT, "allocating context path");
 	return NOWDB_OK;
 }
 
@@ -203,17 +200,9 @@ static nowdb_err_t getIdxPath(nowdb_index_man_t *man, char *idxname,
  */
 static nowdb_err_t getVertexPath(nowdb_index_man_t *man, char *idxname,
                                                          char **path) {
-	char *tmp;
-
-	tmp = nowdb_path_append(man->vxpath, "index");
-	if (tmp == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	              FALSE, OBJECT, "allocating vertex path");
-	/*
-	*path = nowdb_path_append(tmp, idxname); free(tmp);
+	*path = nowdb_path_append(man->vxpath, "index");
 	if (*path == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "allocating vertex path");
-	*/
-	*path = tmp;
 	return NOWDB_OK;
 }
 
@@ -229,12 +218,10 @@ static nowdb_err_t openIndex(nowdb_index_man_t  *man,
 	if (desc->ctx == NULL) {
 		err = getVertexPath(man, desc->name, &path);
 	} else {
-		err = getIdxPath(man, desc->name, desc->ctx->name, &path);
+		err = getCtxPath(man, desc->name, desc->ctx->name, &path);
 	}
 	if (err != NOWDB_OK) return err;
 
-	/* the index must exist! */
-	fprintf(stderr, "opening index %s with handle %p\n", path, man->handle);
 	err = nowdb_index_open(path, man->handle, desc); free(path);
 	if (err != NOWDB_OK) return err;
 
@@ -246,18 +233,19 @@ static nowdb_err_t openIndex(nowdb_index_man_t  *man,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t line2desc(nowdb_index_man_t   *man,
-                             char *buf, uint32_t  sz,
+                             char *buf, uint16_t  sz,
                              nowdb_index_desc_t **desc) {
 	uint32_t i,k;
 	uint16_t s;
-	char *inm, *cnm;
+	char *inm, *cnm=NULL;
+	nowdb_context_t tmp;
 	nowdb_index_keys_t *keys;
 
 	/* get name */
 	for(i=0;i<sz && buf[i] != 0;i++) {
-		fprintf(stderr, "%c ", buf[i]);
+		/* fprintf(stderr, "%c ", buf[i]); */
 	}
-	fprintf(stderr, "\n");
+	/* fprintf(stderr, "\n"); */
 	
 	if (i>=sz-4 || i == 0) {
 		return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
@@ -271,49 +259,48 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 	i++; k=i;
 	memcpy(inm, buf, i);
 
-	fprintf(stderr, "loading index '%s'\n", inm);
-
 	/* get context name */
 	for(;i<sz && buf[i] != 0; i++) {}
-	if (i>=sz-4 || i == k) {
+	if (i>=sz-4) {
 		free(inm);
 		return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 	                                "no context in index catalog");
 	}
-
-	cnm = malloc(i+1);
-	if (cnm == NULL) {
-		free(inm);
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                          "allocating context name");
+	if (i-k>0) {
+		cnm = malloc(i-k+2);
+		if (cnm == NULL) {
+			free(inm);
+			return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+			                          "allocating context name");
+		}
+		memcpy(cnm, buf+k, i-k+1);
 	}
-	memcpy(cnm, buf+k, i-k+1);
-
-	fprintf(stderr, "from context '%s' (%d)\n", cnm, i-k+1);
 
 	i++;
 
-	// get keys
+	/* get keys */
 	keys = calloc(1,sizeof(nowdb_index_keys_t));
 	if (keys == NULL) {
-		free(inm); free(cnm);
+		free(inm);
+		if (cnm != NULL) free(cnm);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                    "allocating index keys");
 	}
 	memcpy(&s, buf+i, sizeof(uint16_t)); i+=sizeof(uint16_t);
 
-	fprintf(stderr, "have %hu keys\n", s);
-
 	if (s > 32) {
-		free(inm); free(cnm); free(keys);
+		free(inm); free(keys);
+		if (cnm != NULL) free(cnm);
 		return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 	                                  "no keys in index catalog");
 	}
-
 	keys->sz  = s;
+
+	/* get offsets */
 	keys->off = calloc(s, sizeof(uint16_t));
 	if (keys->off == NULL) {
-		free(inm); free(cnm); free(keys);
+		free(inm); free(keys);
+		if (cnm != NULL) free(cnm);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                             "allocating index key offsets");
 	}
@@ -322,13 +309,15 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 		i+=sizeof(uint16_t);
 	}
 	if (k<s) {
-		free(inm); free(cnm); free(keys->off); free(keys);
+		free(inm); free(keys->off); free(keys);
+		if (cnm != NULL) free(cnm);
 		return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 	                              "index key offsets incomplete");
 	}
 	*desc = calloc(1, sizeof(nowdb_index_desc_t));
 	if (*desc == NULL) {
-		free(inm); free(cnm); free(keys->off); free(keys);
+		free(inm); free(keys->off); free(keys);
+		if (cnm != NULL) free(cnm);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                             "allocating index key offsets");
 	}
@@ -339,16 +328,17 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 	(*desc)->ctx  = NULL;
 
 	/* when we do this, the scope must be locked! */
-	if (strcmp(cnm, vertex) != 0) {
-		(*desc)->ctx = ts_algo_tree_find(man->context, inm);
+	if (cnm != NULL) {
+		tmp.name = cnm;
+		(*desc)->ctx = ts_algo_tree_find(man->context, &tmp);
 		if ((*desc)->ctx == NULL) {
 			nowdb_index_desc_destroy(*desc);
 			free(*desc); free(cnm);
 			return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 			                  "unknown context in index catalog");
 		}
+		free(cnm);
 	}
-	free(cnm);
 	return NOWDB_OK;
 }
 
@@ -364,7 +354,6 @@ static nowdb_err_t loadfile(FILE *file, char *path,
 
 	if (stat(path, &st) != 0) return nowdb_err_get(nowdb_err_stat,
 	                                          TRUE, OBJECT, path);
-	fprintf(stderr, "file %s: %zu\n", path, st.st_size);
 	*sz = (uint32_t)st.st_size;
 	*buf = malloc(*sz);
 	if (*buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -394,16 +383,12 @@ static nowdb_err_t loadCat(nowdb_index_man_t *man) {
 
 	err = loadfile(man->file, man->path, &tmp, &sz);
 	if (err != NOWDB_OK) return err;
-
-	fprintf(stderr, "loaded file: %u / %u\n", off, sz);
 	
 	while(off < sz) {
 		err = getOneLine(tmp, sz, &off, &line);
 		if (err != NOWDB_OK) break;
 
-		fprintf(stderr, "read line %s (%u/%u)\n", line, off, sz);
-
-		err = line2desc(man, line, sz-x, &desc);
+		err = line2desc(man, line, (uint16_t)(sz-x), &desc);
 		if (err != NOWDB_OK) break;
 
 		err = openIndex(man, desc);
@@ -431,8 +416,7 @@ static nowdb_err_t loadCat(nowdb_index_man_t *man) {
 static nowdb_err_t writeDesc(nowdb_index_man_t  *man,
                              nowdb_index_desc_t *desc) {
 	size_t s;
-
-	fprintf(stderr, "writing %s\n", desc->name);
+	char x=0;
 
 	s = strlen(desc->name)+1;
 	if (fwrite(desc->name, 1, s, man->file) != s) {
@@ -440,8 +424,7 @@ static nowdb_err_t writeDesc(nowdb_index_man_t  *man,
 			    TRUE, OBJECT, man->path);
 	}
 	if (desc->ctx == NULL) {
-		s = strlen(vertex)+1;
-		if (fwrite(vertex, 1, s, man->file) != s) {
+		if (fwrite(&x, 1, 1, man->file) != 1) {
 			return nowdb_err_get(nowdb_err_write,
 			            TRUE, OBJECT, man->path);
 		}
@@ -521,16 +504,24 @@ static nowdb_err_t writeCat(nowdb_index_man_t *man) {
  */
 nowdb_err_t nowdb_index_man_init(nowdb_index_man_t   *iman,
                                  ts_algo_tree_t   *context,
+                                              void *handle,
                                                 char *path,
                                              char *ctxpath,
-                                              char *vxpath,
-                                              void *handle) {
+                                              char *vxpath) {
 	nowdb_err_t err;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
+	if (handle == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                             FALSE, OBJECT, "handle NULL");
 	if (context == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                             FALSE, OBJECT, "context NULL");
+	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                             FALSE, OBJECT, "path NULL");
+	if (ctxpath == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                             FALSE, OBJECT, "ctxpath NULL");
+	if (vxpath == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                             FALSE, OBJECT, "vxpath NULL");
 	iman->path = NULL;
 	iman->file = NULL;
 	iman->ctxpath = NULL;
@@ -626,38 +617,18 @@ void nowdb_index_man_destroy(nowdb_index_man_t *iman) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
-                                     char               *name,
-                                     nowdb_context_t    *ctx,
-                                     nowdb_index_keys_t *keys,
-                                     nowdb_index_t      *idx) {
+                                     nowdb_index_desc_t *desc) {
 	nowdb_err_t err = NOWDB_OK, err2;
-	nowdb_index_desc_t *desc;
 	size_t s;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
-	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                             FALSE, OBJECT, "name NULL");
-	if (keys == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                             FALSE, OBJECT, "keys NULL");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                  FALSE, OBJECT, "index descriptor NULL");
 
-	s = strnlen(name, 4097);
+	s = strnlen(desc->name, 4097);
 	if (s > 4096) return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                 "index name too long (max: 4096)");
-
-	desc = calloc(1, sizeof(nowdb_index_desc_t));
-	if (desc == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                      FALSE, OBJECT, "allocating desc");
-	desc->name = strdup(name);
-	if (desc->name == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-	                                   "allocating index name");
-		free(desc); return err;
-	}
-	desc->ctx = ctx;
-	desc->keys = keys;
-	desc->idx = idx;
-
 	/* lock ! */
 	err = nowdb_lock_write(&iman->lock);
 	if (err != NOWDB_OK) return err;
@@ -745,7 +716,7 @@ nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
 	}
 
 	*idx = desc->idx;
-	if (*idx != NULL) err = nowdb_lock_read(&(*idx)->lock);
+	if (*idx != NULL) err = nowdb_index_use(*idx);
 
 unlock:
 	err2 = nowdb_unlock_read(&iman->lock);
@@ -787,7 +758,7 @@ nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
 	}
 
 	*idx = desc->idx;
-	if (*idx != NULL) err = nowdb_lock_read(&(*idx)->lock);
+	if (*idx != NULL) err = nowdb_index_use(*idx);
 
 unlock:
 	err2 = nowdb_unlock_read(&iman->lock);

@@ -41,10 +41,10 @@ typedef struct {
  */
 nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
                                  ts_algo_tree_t *context,
+                                            void *handle, 
                                               char *path,
                                            char *ctxpath,
-                                            char *vxpath,
-                                            void *handle);
+                                            char *vxpath);
 
 /* ------------------------------------------------------------------------
  * Destroy index manager
@@ -54,13 +54,14 @@ void nowdb_index_man_destroy(nowdb_index_man_t *iman);
 
 /* ------------------------------------------------------------------------
  * Register an index
+ * -----------------
+ * NOTE: the descriptor must have been created using
+ *       nowdb_index_desc_create.
+ *       Once register succeeded, it must not be destroyed or freed!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
-                                     char               *name,
-                                     nowdb_context_t    *ctx,
-                                     nowdb_index_keys_t *keys,
-                                     nowdb_index_t      *idx);
+                                     nowdb_index_desc_t *desc);
 
 /* ------------------------------------------------------------------------
  * Unregister an index

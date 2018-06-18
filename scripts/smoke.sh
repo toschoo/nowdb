@@ -98,4 +98,18 @@ then
 	exit 1
 fi
 
+test/smoke/indexsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: indexsmoke failed"
+	exit 1
+fi
+
+test/smoke/imansmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: imansmoke failed"
+	exit 1
+fi
+
 echo "PASSED"

@@ -27,6 +27,20 @@ typedef struct {
 } nowdb_index_keys_t;
 
 /* ------------------------------------------------------------------------
+ * Create Index Keys
+ * Note: probably not too useful
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_keys_create(nowdb_index_keys_t **keys,
+                                            uint16_t sz, ...);
+
+/* ------------------------------------------------------------------------
+ * Destroy Index Keys
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_keys_destroy(nowdb_index_keys_t *keys);
+
+/* ------------------------------------------------------------------------
  * Index
  * ------------------------------------------------------------------------
  */
@@ -45,6 +59,16 @@ typedef struct {
 	nowdb_index_keys_t *keys;
 	nowdb_index_t      *idx;
 } nowdb_index_desc_t;
+
+/* -----------------------------------------------------------------------
+ * Make safe index descriptor
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_desc_create(char                *name,
+                                    nowdb_context_t     *ctx,
+                                    nowdb_index_keys_t  *keys,
+                                    nowdb_index_t       *idx,
+                                    nowdb_index_desc_t **desc); 
 
 /* -----------------------------------------------------------------------
  * Destroy index descriptor
@@ -86,6 +110,7 @@ void nowdb_index_destroy(nowdb_index_t *idx);
 
 /* ------------------------------------------------------------------------
  * Announce usage of this index
+ * ----------------------------
  * The index is locked for reading.
  * The only procedure that would lock for writing is drop.
  * This way, we make sure that no index is dropped while it is used.

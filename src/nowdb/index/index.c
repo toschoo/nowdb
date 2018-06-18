@@ -12,16 +12,36 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 static char *OBJECT = "idx";
 
 #define HOSTPATH "host"
 #define EMBPATH "emb"
 
+/* ------------------------------------------------------------------------
+ * host: data is the root of embbedded, i.e. a beet page
+ * emb : key is a nowdb page
+ *       data is a 128 bitmap
+ * ------------------------------------------------------------------------
+ */
+#define HOSTDSZ sizeof(beet_pageid_t)
+#define EMBKSZ sizeof(nowdb_pageid_t)
+#define EMBDSZ 16
+#define INTDSZ sizeof(beet_pageid_t)
+
+/* -----------------------------------------------------------------------
+ * Macro: check index NULL
+ * -----------------------------------------------------------------------
+ */
 #define IDXNULL() \
 	if (idx == NULL) return nowdb_err_get(nowdb_err_invalid, \
 	                            FALSE, OBJECT, "index NULL");
 
+/* -----------------------------------------------------------------------
+ * Helper: make beet errors
+ * -----------------------------------------------------------------------
+ */
 static inline nowdb_err_t makeBeetError(beet_err_t ber) {
 	nowdb_err_t err, err2=NOWDB_OK;
 
@@ -34,6 +54,73 @@ static inline nowdb_err_t makeBeetError(beet_err_t ber) {
 	                         (char*)beet_errdesc(ber));
 	if (err == NOWDB_OK) return err2; else err->cause = err2;
 	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create index keys
+ * -----------------
+ * This is probably not very useful.
+ * Usually, we will create keys in a loop,
+ * not by passing all offsets at once.
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_keys_create(nowdb_index_keys_t **keys,
+                                             uint16_t sz, ...) {
+	va_list args;
+
+	*keys = NULL;
+	if (sz == 0) return NOWDB_OK;
+
+	*keys = calloc(1,sizeof(nowdb_index_keys_t));
+	if (*keys == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                       FALSE, OBJECT, "allocating keys");
+
+	(*keys)->sz = sz;
+	(*keys)->off = calloc(sz, sizeof(uint16_t));
+	if ((*keys)->off == NULL) {
+		free(*keys); *keys = NULL;
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                       "allocating offsets");
+	}
+	va_start(args, sz);
+	for(int i=0;i<sz;i++) {
+		(*keys)->off[i] = (uint16_t)va_arg(args, int);
+	}
+	va_end(args);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Destroy index keys
+ * -----------------------------------------------------------------------
+ */
+void nowdb_index_keys_destroy(nowdb_index_keys_t *keys) {
+	if (keys == NULL) return;
+	if (keys->off != NULL) free(keys->off);
+	free(keys);
+}
+
+/* -----------------------------------------------------------------------
+ * Make safe index descriptor
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_desc_create(char                *name,
+                                    nowdb_context_t     *ctx,
+                                    nowdb_index_keys_t  *keys,
+                                    nowdb_index_t       *idx,
+                                    nowdb_index_desc_t **desc) {
+
+	*desc = calloc(1, sizeof(nowdb_index_desc_t));
+	if (*desc == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	           FALSE, OBJECT, "allocating index descriptor");
+
+	(*desc)->name = strdup(name);
+	if ((*desc)->name == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                         FALSE, OBJECT, "allocating index name");
+	(*desc)->ctx = ctx;
+	(*desc)->keys = keys;
+	(*desc)->idx = idx;
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -108,12 +195,6 @@ static void setHostCompare(nowdb_index_desc_t *desc, beet_config_t *cfg) {
  * Helper: compute index sizing for embedded
  * ------------------------------------------------------------------------
  */
-
-#define HOSTDSZ sizeof(nowdb_pageid_t)
-#define EMBKSZ sizeof(nowdb_pageid_t)
-#define EMBDSZ 16
-#define INTDSZ sizeof(beet_pageid_t)
-
 static void computeEmbSize(nowdb_index_desc_t *desc,
                            uint16_t            size,
                            beet_config_t      *cfg) {
@@ -255,7 +336,14 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 	beet_config_t cfg;
 	char *ep, *hp, *ip;
 
-	// the custom checks...
+	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "path is NULL");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "desc is NULL");
+	if (desc->name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "desc name is NULL");
+	if (desc->keys == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "desc keys is NULL");
 
 	/* paths */
 	ip = nowdb_path_append(path, desc->name);
@@ -267,13 +355,16 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 		free(ip); return err;
 	}
 
-	hp = nowdb_path_append(ip, HOSTPATH); free(ip);
-	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                FALSE, OBJECT, "allocating host path");
+	hp = nowdb_path_append(ip, HOSTPATH);
+	if (hp == NULL) {
+		free(ip);
+		return nowdb_err_get(nowdb_err_no_mem,
+	        FALSE, OBJECT, "allocating host path");
+	}
 
-	ep = nowdb_path_append(hp, EMBPATH);
+	ep = nowdb_path_append(ip, EMBPATH); free(ip);
 	if (ep == NULL) {
-		free(hp); 
+		free(hp);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                     "allocating emb. path");
 	}
@@ -313,12 +404,14 @@ nowdb_err_t nowdb_index_drop(char *path) {
 	beet_err_t  ber;
 	char *ep, *hp;
 
-	/* paths */
+	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "path is NULL");
+
 	hp = nowdb_path_append(path, HOSTPATH);
 	if (hp == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "allocating host path");
 
-	ep = nowdb_path_append(hp, EMBPATH);
+	ep = nowdb_path_append(path, EMBPATH);
 	if (ep == NULL) {
 		free(hp);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -326,7 +419,6 @@ nowdb_err_t nowdb_index_drop(char *path) {
 	}
 	ber = beet_index_drop(ep);
 	if (ber != BEET_OK) {
-		fprintf(stderr, "dropping %s\n", ep);
 		free(ep); free(hp);
 		return makeBeetError(ber);
 	}
@@ -349,6 +441,17 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
 	beet_open_config_t cfg;
 	beet_err_t         ber;
 	char *hp, *ip;
+
+	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "path is NULL");
+	if (handle == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "handle is NULL");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "desc is NULL");
+	if (desc->name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "desc name is NULL");
+	if (desc->keys == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "desc keys is NULL");
 
 	beet_open_config_ignore(&cfg);
 	cfg.rsc = desc->keys;
@@ -388,16 +491,9 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_close(nowdb_index_t *idx) {
-	nowdb_err_t err;
-
 	IDXNULL();
-
-	err = nowdb_lock_write(&idx->lock);
-	if (err != NOWDB_OK) return err;
-
 	beet_index_close(idx->idx);
-
-	return nowdb_unlock_write(&idx->lock);
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -426,4 +522,3 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 	IDXNULL();
 	return nowdb_unlock_read(&idx->lock);
 }
-
