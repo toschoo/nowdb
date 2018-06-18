@@ -85,6 +85,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 
 	/* set defaults */
 	scope->path = NULL;
+	scope->iman = NULL;
 	scope->ver  = ver;
 	scope->state = NOWDB_SCOPE_CLOSED;
 
@@ -161,6 +162,10 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
  */
 void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope == NULL) return;
+	if (scope->iman != NULL) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+	}
 	if (scope->path != NULL) {
 		free(scope->path); scope->path = NULL;
 	}
@@ -367,6 +372,82 @@ static inline nowdb_err_t findContext(nowdb_scope_t  *scope,
 	return err;
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: make context path
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t mkctxpath(nowdb_scope_t *scope, char **path) {
+
+	*path = nowdb_path_append(scope->path, "context");
+	if (*path == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                          "allocating context path");
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: make vertex path
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t mkvtxpath(nowdb_scope_t *scope, char **path) {
+
+	*path = nowdb_path_append(scope->path, "vertex");
+	if (*path == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                           "allocating vertex path");
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: initialise index manager
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t initIndexMan(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	char *imanpath;
+	char *ctxpath;
+	char *vtxpath;
+
+	scope->iman = calloc(1,sizeof(nowdb_index_man_t));
+	if (scope->iman == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                     FALSE, OBJECT, "allocating index manager");
+
+	imanpath = nowdb_path_append(scope->path, "icat");
+	if (imanpath == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                     "allocating index catalog path");
+	}
+
+	err = mkctxpath(scope, &ctxpath);
+	if (err != NOWDB_OK) {
+		free(scope->iman); scope->iman = NULL;
+		free(imanpath);
+		return err;
+	}
+	err = mkvtxpath(scope, &vtxpath);
+	if (err != NOWDB_OK) {
+		free(scope->iman); scope->iman = NULL;
+		free(imanpath);free(ctxpath);
+		return err;
+	}
+	err = nowdb_index_man_init(scope->iman,
+	                          &scope->contexts,
+	                           nowdb_lib(),
+	                           imanpath,
+	                           ctxpath,
+	                           vtxpath);
+
+	free(imanpath); free(ctxpath); free(vtxpath);
+
+	if (err != NOWDB_OK) {
+		free(scope->iman); scope->iman = NULL;
+		return err;
+	}
+	return NOWDB_OK;
+}
+
 /* ------------------------------------------------------------------------
  * Helper: read one line from the catalog
  * ------------------------------------------------------------------------
@@ -554,16 +635,6 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	err = nowdb_dir_create(p); free(p);
 	if (err != NOWDB_OK) goto unlock;
 
-	/* create index dir */
-	p = nowdb_path_append(scope->path, "index");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                 "allocating path");
-		goto unlock;
-	}
-	err = nowdb_dir_create(p); free(p);
-	if (err != NOWDB_OK) goto unlock;
-
 	/* create vertex store */
 	err = nowdb_store_create(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
@@ -581,11 +652,31 @@ unlock:
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: remove directory (if it exists)
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t removeFile(nowdb_scope_t *scope, char *file) {
+	nowdb_err_t err;
+	char *p;
+	struct stat st;
+
+	p = nowdb_path_append(scope->path, file);
+	if (p == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "allocating path");
+	}
+	if (stat(p, &st) != 0) {
+		free(p); return NOWDB_OK;
+	}
+	err = nowdb_path_remove(p); free(p);
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Drop a scope physically from disk
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
-	nowdb_path_t p;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
@@ -606,13 +697,7 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove context dir */
-	p = nowdb_path_append(scope->path, "context");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                 "allocating path");
-		goto unlock;
-	}
-	err = nowdb_path_remove(p); free(p);
+	err = removeFile(scope, "context");
 	if (err != NOWDB_OK) goto unlock;
 
 	/* drop vertex store */
@@ -620,30 +705,18 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove model dir */
-	p = nowdb_path_append(scope->path, "model");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                 "allocating path");
-		goto unlock;
-	}
-	err = nowdb_path_remove(p); free(p);
+	err = removeFile(scope, "model");
 	if (err != NOWDB_OK) goto unlock;
 
-
-	/* remove index dir */
-	p = nowdb_path_append(scope->path, "index");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                 "allocating path");
-		goto unlock;
-	}
-	err = nowdb_path_remove(p); free(p);
+	/* remove icat */
+	err = removeFile(scope, "icat");
 	if (err != NOWDB_OK) goto unlock;
 
-	/* remove catalog and base */
+	/* remove catalog */
 	err = nowdb_path_remove(scope->catalog);
 	if (err != NOWDB_OK) goto unlock;
 
+	/* remove base */
 	err = nowdb_path_remove(scope->path);
 	if (err != NOWDB_OK) goto unlock;
 
@@ -691,6 +764,11 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		goto unlock;
 	}
+	err = initIndexMan(scope);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		goto unlock;
+	}
 	scope->state = NOWDB_SCOPE_OPEN;
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
@@ -720,6 +798,9 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 
 	err = storeCatalog(scope);
 	if (err != NOWDB_OK) goto unlock;
+
+	nowdb_index_man_destroy(scope->iman);
+	free(scope->iman); scope->iman = NULL;
 
 	err = nowdb_store_close(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;

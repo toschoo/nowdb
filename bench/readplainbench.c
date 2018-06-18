@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
 	}
 	if (parsecmd(argc, argv) != 0) return EXIT_FAILURE;
 
-	nowdb_err_init();
+	nowdb_init();
 	err = iterate(it, path);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
 		nowdb_err_destroy();
 		return EXIT_FAILURE;
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	return EXIT_SUCCESS;
 }
 

@@ -42,6 +42,11 @@ typedef char nowdb_bool_t;
 #define TRUE 1
 #define FALSE 0
 
+nowdb_bool_t nowdb_init();
+void nowdb_close();
+
+void *nowdb_lib();
+
 typedef uint8_t  nowdb_bitmap8_t;
 typedef uint16_t nowdb_bitmap16_t;
 typedef uint32_t nowdb_bitmap32_t;

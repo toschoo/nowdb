@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
 		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
-	if (!nowdb_err_init()) {
+	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
@@ -271,6 +271,6 @@ cleanup:
 		}
 		nowdb_scope_destroy(global_scope); free(global_scope);
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	return rc;
 }

@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
 	}
 	fprintf(stderr, "count: %lu\n", global_count);
 
-	if (!nowdb_err_init()) {
+	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
@@ -315,6 +315,6 @@ cleanup:
 		}
 		nowdb_scope_destroy(scope); free(scope);
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	return rc;
 }

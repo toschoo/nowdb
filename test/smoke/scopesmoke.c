@@ -209,7 +209,7 @@ int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_scope_t *scope = NULL;
 
-	if (!nowdb_err_init()) {
+	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init environment\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -321,7 +321,7 @@ cleanup:
 		NOWDB_IGNORE(nowdb_scope_close(scope));
 		nowdb_scope_destroy(scope); free(scope);
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	if (rc == EXIT_SUCCESS) {
 		fprintf(stderr, "PASSED\n");
 	} else {

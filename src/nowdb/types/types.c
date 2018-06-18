@@ -5,6 +5,9 @@
  * ========================================================================
  */
 #include <nowdb/types/types.h>
+#include <nowdb/types/errman.h>
+
+#include <beet/config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +21,24 @@ char nowdb_nullrec[64] = {0,0,0,0,0,0,0,0,
                           0,0,0,0,0,0,0,0,
                           0,0,0,0,0,0,0,0,
                           0,0,0,0,0,0,0,0};
+
+void *nowdb_global_handle = NULL;
+
+nowdb_bool_t nowdb_init() {
+	if (!nowdb_errman_init()) return FALSE;
+	nowdb_global_handle = beet_lib_init(NULL);
+	if (nowdb_global_handle == NULL) return FALSE;
+	return TRUE;
+}
+
+void *nowdb_lib() {
+	return nowdb_global_handle;
+}
+
+void nowdb_close() {
+	if (nowdb_global_handle != NULL) beet_lib_close(nowdb_global_handle);
+	nowdb_errman_destroy();
+}
 
 static inline void setWeight(nowdb_edge_t *e, nowdb_type_t typ,
                                        void *value, char what) 
