@@ -135,14 +135,17 @@ nowdb_err_t nowdb_scope_dropIndex(nowdb_scope_t *scope,
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_getIndexByName(nowdb_scope_t   *scope,
-                                       char            *name);
+                                       char            *name,
+                                       nowdb_index_t   **idx);
 
 /* -----------------------------------------------------------------------
  * Get index within that scope by definition
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope);
-                                 /* ... */
+nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
+                                 char          *context,
+                                 nowdb_index_keys_t  *k,
+                                 nowdb_index_t    **idx);
 
 /* ------------------------------------------------------------------------
  * Insert one record

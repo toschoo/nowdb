@@ -1235,15 +1235,93 @@ unlock:
  * Get index within that scope by name
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_getIndexByName(nowdb_scope_t *scope,
-                                       char          *name);
+nowdb_err_t nowdb_scope_getIndexByName(nowdb_scope_t   *scope,
+                                       char            *name,
+                                       nowdb_index_t   **idx) {
+	nowdb_err_t err2, err=NOWDB_OK;
+	nowdb_index_desc_t   *desc;
+
+	SCOPENULL();
+
+	if (idx == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "idx is NULL");
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (scope->state == NOWDB_SCOPE_CLOSED) {
+		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                 "scope is not open");
+		goto unlock;
+	}
+
+	err = nowdb_index_man_getByName(scope->iman, name, &desc);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (desc->idx == NULL) {
+		err = nowdb_err_get(nowdb_err_nosuch_index, FALSE, OBJECT,
+		              "index pre-registered but not yet created");
+		goto unlock;
+	}
+	*idx = desc->idx;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* -----------------------------------------------------------------------
  * Get index within that scope by definition
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope);
-                                 /* ... */
+nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
+                                 char          *context,
+                                 nowdb_index_keys_t  *k,
+                                 nowdb_index_t    **idx) {
+	nowdb_err_t err2, err=NOWDB_OK;
+	nowdb_context_t  *ctx=NULL;
+	nowdb_index_desc_t   *desc;
+
+	SCOPENULL();
+
+	if (idx == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "idx is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (scope->state == NOWDB_SCOPE_CLOSED) {
+		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                 "scope is not open");
+		goto unlock;
+	}
+	if (context != NULL) {
+		err = findContext(scope, context, &ctx);
+		if (err != NOWDB_OK) goto unlock;
+	}
+
+	err = nowdb_index_man_getByKeys(scope->iman, ctx, k, &desc);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (desc->idx == NULL) {
+		err = nowdb_err_get(nowdb_err_nosuch_index, FALSE, OBJECT,
+		              "index pre-registered but not yet created");
+		goto unlock;
+	}
+	*idx = desc->idx;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Insert one record
