@@ -54,18 +54,20 @@
 }
 
 /* ------------------------------------------------------------------------
- * Tokens are always plain strings
+ * Everything else is an ast node
  * ------------------------------------------------------------------------
  */
 %type condition {nowdb_ast_t*}
 %destructor condition {nowdb_ast_destroyAndFree($$);}
 
-/* ------------------------------------------------------------------------
- * Everything else is an ast node
- * ------------------------------------------------------------------------
- */
+%type context_option {nowdb_ast_t*}
+%destructor context_option {nowdb_ast_destroyAndFree($$);}
+
 %type comparison {nowdb_ast_t*}
 %destructor comparison {nowdb_ast_destroyAndFree($$);}
+
+%type context_options {nowdb_ast_t*}
+%destructor context_options {nowdb_ast_destroyAndFree($$);}
 
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
@@ -75,6 +77,12 @@
 
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
+
+%type sizing {nowdb_ast_t*}
+%destructor sizing {nowdb_ast_destroyAndFree($$);}
+
+%type target {nowdb_ast_t*}
+%destructor target {nowdb_ast_destroyAndFree($$);}
 
 %extra_argument { nowdbsql_state_t *nowdbres }
 
@@ -114,31 +122,25 @@ sql ::= misc SEMICOLON. {
  * DDL
  * ------------------------------------------------------------------------
  */
-ddl ::= CREATE target. {
+ddl ::= CREATE target (T). {
+	NOWDB_SQL_CHECKSTATE();
+	nowdbsql_state_pushAst(nowdbres, T);
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE target IF NOT EXISTS. {
+ddl ::= CREATE target(T) IF NOT EXISTS. {
+	NOWDB_SQL_CHECKSTATE();
+	nowdbsql_state_pushAst(nowdbres, T);
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target. {
+ddl ::= CREATE target SET context_options. {
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target IF NOT EXISTS. {
+ddl ::= CREATE target IF NOT EXISTS SET context_options. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
-ddl ::= CREATE context_target context_spec. {
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE context_target IF NOT EXISTS context_spec. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE context_target SET context_options. {
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE context_target IF NOT EXISTS SET context_options. {
+ddl ::= CREATE target IF NOT EXISTS SET context_spec. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushCreate(nowdbres);
 }
@@ -150,15 +152,8 @@ ddl ::= DROP target IF EXISTS. {
 	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
 	nowdbsql_state_pushDrop(nowdbres);
 }
-ddl ::= DROP context_target. {
-	nowdbsql_state_pushDrop(nowdbres);
-}
-ddl ::= DROP context_target IF EXISTS. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushDrop(nowdbres);
-}
 
-ddl ::= ALTER context_only SET context_options. {
+ddl ::= ALTER target SET context_options. {
 	nowdbsql_state_pushAlter(nowdbres);
 }
 
@@ -170,6 +165,10 @@ misc ::= USE IDENTIFIER(I). {
 	nowdbsql_state_pushUse(nowdbres, I);
 }
 
+/* ------------------------------------------------------------------------
+ * DDL Target
+ * ------------------------------------------------------------------------
+ */
 target ::= SCOPE IDENTIFIER(I). {
 	nowdbsql_state_pushScope(nowdbres, I);
 }
@@ -180,36 +179,48 @@ target ::= INDEX IDENTIFIER(I). {
 }
 
 /* qualified identifier ! */
-context_target ::= CONTEXT IDENTIFIER(I). {
-	nowdbsql_state_pushContext(nowdbres, I);
+target(C) ::= CONTEXT IDENTIFIER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
 }
 
 /* qualified identifier ! */
-context_target ::= sizing CONTEXT IDENTIFIER(I). {
-	nowdbsql_state_pushContext(nowdbres, I);
+context_options(O) ::= context_option(C). {
+	NOWDB_SQL_CHECKSTATE();
+	O = C;
 }
 
-context_only ::= CONTEXT IDENTIFIER(I). {
-	nowdbsql_state_pushContext(nowdbres, I);
+context_options(O) ::= context_option(O1) COMMA context_options(O2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O1,O2);
+	O = O1;
 }
 
-context_options ::= context_option.
-context_options ::= context_option COMMA context_options.
-
-context_option ::= ALLOCSIZE EQ UINTEGER(I). {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ALLOCSIZE, I);
+context_option(O) ::= ALLOCSIZE EQ UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ALLOCSZ);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option ::= LARGESIZE EQ UINTEGER(I). {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_LARGESIZE, I);
+context_option(O) ::= LARGESIZE EQ UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_LARGESZ);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option ::= SORTERS EQ UINTEGER(I). {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_SORTERS, I);
+context_option(O) ::= SORTERS EQ UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_SORTERS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option ::= COMPRESSION EQ STRING(I). {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_COMPRESSION, I);
+context_option(O) ::= COMPRESSION EQ STRING(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_COMP);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option ::= ENCRYPTION EQ STRING(I). {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_ENCRYPTION, I);
+context_option(O) ::= ENCRYPTION EQ STRING(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ENCP);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
 
 /* ------------------------------------------------------------------------
@@ -230,24 +241,38 @@ context_spec ::= with_disk without_comp without_sort.
 context_spec ::= with_disk without_comp.
 context_spec ::= with_disk without_sort.
 
-sizing ::= TINY. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_TINY);
+/*
+sizing(S) ::= TINY. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_TINY);
 }
-sizing ::= SMALL. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_SMALL);
+sizing(S) ::= SMALL. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_SMALL);
 }
-sizing ::= MEDIUM. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_MEDIUM);
+sizing(S) ::= MEDIUM. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_MEDIUM);
 }
-sizing ::= BIG. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_BIG);
+sizing(S) ::= BIG. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_BIG);
 }
-sizing ::= LARGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_LARGE);
+sizing(S) ::= LARGE. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_LARGE);
 }
-sizing ::= HUGE. {
-	nowdbsql_state_pushSizing(nowdbres, NOWDB_CONFIG_SIZE_HUGE);
+sizing(S) ::= HUGE. {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
+	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_HUGE);
 }
+*/
 
 with_stress ::= WITH MODERATE STRESS. {
 	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_MODERATE);

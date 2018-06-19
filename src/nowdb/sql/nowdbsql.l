@@ -76,12 +76,14 @@
 (?i:SSD)		return NOWDB_SQL_SSD;
 (?i:RAID)		return NOWDB_SQL_RAID;
 
+	/*
 (?i:TINY)		return NOWDB_SQL_TINY;
 (?i:SMALL)		return NOWDB_SQL_SMALL;
 (?i:MEDIUM)		return NOWDB_SQL_MEDIUM;
 (?i:BIG)		return NOWDB_SQL_BIG;
 (?i:LARGE)		return NOWDB_SQL_LARGE;
 (?i:HUGE)		return NOWDB_SQL_HUGE;
+	*/
 
 (?i:STRESS)		return NOWDB_SQL_STRESS;
 (?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
