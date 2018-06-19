@@ -159,6 +159,7 @@ void nowdb_dir_content_destroy(ts_algo_list_t *list) {
 nowdb_err_t nowdb_dir_content(nowdb_path_t path,
                            nowdb_dir_type_t   t,
                            ts_algo_list_t *list) {
+	nowdb_err_t err;
 	DIR *d;
 	struct dirent *e;
 	nowdb_dir_ent_t *ent;
@@ -176,14 +177,15 @@ nowdb_err_t nowdb_dir_content(nowdb_path_t path,
 		if (strcmp(e->d_name, "..") == 0) continue;
 
 		p = nowdb_path_append(path, e->d_name);
-		if (p == 0) {
+		if (p == NULL) {
 			closedir(d);
 			return nowdb_err_get(nowdb_err_no_mem,
 			                 FALSE, OBJECT, NULL);
 		}
 		if (stat(p, &st) != 0) { 
-			return nowdb_err_get(nowdb_err_stat,
+			err = nowdb_err_get(nowdb_err_stat,
 			                   TRUE, OBJECT, p);
+			free(p); return err;
 		}
 		x = S_ISREG(st.st_mode);
 		if (x) y = FALSE; else y = S_ISDIR(st.st_mode);
@@ -191,7 +193,8 @@ nowdb_err_t nowdb_dir_content(nowdb_path_t path,
 		    ((t & NOWDB_DIR_TYPE_DIR)  && y)) {
 			ent = malloc(sizeof(nowdb_dir_ent_t));
 			if (ent == NULL) {
-				closedir(d); nowdb_dir_content_destroy(list);
+				free(p); closedir(d);
+				nowdb_dir_content_destroy(list);
 				return nowdb_err_get(nowdb_err_no_mem,
 				                 FALSE, OBJECT, NULL);
 			}
@@ -289,4 +292,37 @@ nowdb_err_t nowdb_readFile(nowdb_path_t file,
 	                                     TRUE, OBJECT, file);
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * Remove dir and all its content
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_path_rRemove(nowdb_path_t path) {
+	ts_algo_list_t dir;
+	ts_algo_list_node_t *runner;
+	nowdb_dir_ent_t *e;
+	nowdb_err_t err =NOWDB_OK;
+
+	ts_algo_list_init(&dir);
+	err = nowdb_dir_content(path, NOWDB_DIR_TYPE_ANY, &dir);
+	if (err != NOWDB_OK) {
+		nowdb_dir_content_destroy(&dir);
+		return err;
+	}
+	for (runner=dir.head; runner!=NULL; runner=runner->nxt) {
+		e = runner->cont;
+		if (e->t == NOWDB_DIR_TYPE_DIR) {
+			err = nowdb_path_rRemove(e->path);
+		} else {
+			err = nowdb_path_remove(e->path);
+		}
+		if (err != NOWDB_OK) {
+			nowdb_dir_content_destroy(&dir);
+			return err;
+		}
+	}
+	nowdb_dir_content_destroy(&dir);
+	return nowdb_path_remove(path);
+}
+
 

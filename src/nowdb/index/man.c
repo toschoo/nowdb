@@ -91,6 +91,15 @@ static void destroydesc(void *ignore, void **n) {
 static void nodestroy(void *ignore, void **n) {}
 
 /* ------------------------------------------------------------------------
+ * Tree callbacks for index desc: filter context
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t ofctx(void *ignore, const void *ctx, const void *node) {
+	if (DESC(node)->ctx == ctx) return TRUE;
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: create file if not exists
  * ------------------------------------------------------------------------
  */
@@ -634,9 +643,7 @@ nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
 	if (err != NOWDB_OK) return err;
 
 	err = registerIndex(iman, desc);
-	if (err != NOWDB_OK) {
-		free(desc); goto unlock;
-	}
+	if (err != NOWDB_OK) goto unlock;
 
 	err = writeCat(iman);
 
@@ -690,33 +697,32 @@ unlock:
  * get index by name
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
-                                      char              *name,
-                                      nowdb_index_t    **idx) {
+nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t   *iman,
+                                      char                *name,
+                                      nowdb_index_desc_t **desc) {
 	nowdb_err_t err = NOWDB_OK, err2;
-	nowdb_index_desc_t *desc, tmp;
+	nowdb_index_desc_t tmp;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
 	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                             FALSE, OBJECT, "name NULL");
-	if (idx == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                 FALSE, OBJECT, "index pointer is NULL");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	              FALSE, OBJECT, "index descriptor is NULL");
 
 	err = nowdb_lock_read(&iman->lock);
 	if (err != NOWDB_OK) return err;
 
 	tmp.name = name;
 
-	desc = ts_algo_tree_find(iman->byname, &tmp);
-	if (desc == NULL) {
+	*desc = ts_algo_tree_find(iman->byname, &tmp);
+	if (*desc == NULL) {
 		err = nowdb_err_get(nowdb_err_key_not_found,
 		                     FALSE, OBJECT, "name");
 		goto unlock;
 	}
 
-	*idx = desc->idx;
-	if (*idx != NULL) err = nowdb_index_use(*idx);
+	if ((*desc)->idx != NULL) err = nowdb_index_use((*desc)->idx);
 
 unlock:
 	err2 = nowdb_unlock_read(&iman->lock);
@@ -733,16 +739,16 @@ unlock:
 nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
                                       nowdb_context_t    *ctx,
                                       nowdb_index_keys_t *keys,
-                                      nowdb_index_t     **idx) {
+                                      nowdb_index_desc_t **desc) {
 	nowdb_err_t err = NOWDB_OK, err2;
-	nowdb_index_desc_t *desc, tmp;
+	nowdb_index_desc_t tmp;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "index manager NULL");
 	if (keys == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                             FALSE, OBJECT, "keys NULL");
-	if (idx == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                 FALSE, OBJECT, "index pointer is NULL");
+	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
+	              FALSE, OBJECT, "index descriptor is NULL");
 
 	err = nowdb_lock_read(&iman->lock);
 	if (err != NOWDB_OK) return err;
@@ -750,15 +756,14 @@ nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
 	tmp.ctx = ctx;
 	tmp.keys = keys;
 
-	desc = ts_algo_tree_find(iman->bykey, &tmp);
-	if (desc == NULL) {
+	*desc = ts_algo_tree_find(iman->bykey, &tmp);
+	if (*desc == NULL) {
 		err = nowdb_err_get(nowdb_err_key_not_found,
 		                     FALSE, OBJECT, "keys");
 		goto unlock;
 	}
 
-	*idx = desc->idx;
-	if (*idx != NULL) err = nowdb_index_use(*idx);
+	if ((*desc)->idx != NULL) err = nowdb_index_use((*desc)->idx);
 
 unlock:
 	err2 = nowdb_unlock_read(&iman->lock);
@@ -767,3 +772,72 @@ unlock:
 	}
 	return err;
 }
+
+/* ------------------------------------------------------------------------
+ * Get all
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_man_getAll(nowdb_index_man_t *iman,
+                                   ts_algo_list_t   **list) {
+	nowdb_err_t err = NOWDB_OK, err2;
+
+	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                    FALSE, OBJECT, "index manager NULL");
+	if (list == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                FALSE, OBJECT, "list parameter is NULL");
+
+	err = nowdb_lock_read(&iman->lock);
+	if (err != NOWDB_OK) return err;
+
+	*list = NULL;
+	if (iman->byname->count == 0) goto unlock;
+
+	*list = ts_algo_tree_toList(iman->byname);
+	if (*list == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                      "tree.toList");
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_read(&iman->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Get all by context
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_man_getAllOf(nowdb_index_man_t *iman,
+                                     nowdb_context_t    *ctx,
+                                     ts_algo_list_t    *list) {
+	nowdb_err_t err = NOWDB_OK, err2;
+
+	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                    FALSE, OBJECT, "index manager NULL");
+	if (list == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                FALSE, OBJECT, "list parameter is NULL");
+
+	err = nowdb_lock_read(&iman->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (iman->byname->count == 0) goto unlock;
+
+	if (ts_algo_tree_filter(iman->byname, list,
+	                               ctx, &ofctx) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                      "tree.filter");
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_read(&iman->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+

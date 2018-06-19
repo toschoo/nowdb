@@ -171,6 +171,16 @@ static nowdb_err_t mkIdxDir(char *path) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: remove path
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t removePath(char *path) {
+	struct stat st;
+	if (stat(path, &st) != 0) return NOWDB_OK;
+	return nowdb_path_remove(path);
+}
+
+/* ------------------------------------------------------------------------
  * Helper: compute key size from desc
  * ------------------------------------------------------------------------
  */
@@ -422,6 +432,7 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_drop(char *path) {
+	nowdb_err_t err;
 	beet_err_t  ber;
 	char *ep, *hp;
 
@@ -447,6 +458,21 @@ nowdb_err_t nowdb_index_drop(char *path) {
 	if (ber != BEET_OK) {
 		free(ep); free(hp);
 		return makeBeetError(ber);
+	}
+	err = removePath(ep);
+	if (err != NOWDB_OK) {
+		free(ep); free(hp);
+		return err;
+	}
+	err = removePath(hp);
+	if (err != NOWDB_OK) {
+		free(ep); free(hp);
+		return err;
+	}
+	err = removePath(path);
+	if (err != NOWDB_OK) {
+		free(ep); free(hp);
+		return err;
 	}
 	free(ep); free(hp);
 	return NOWDB_OK;

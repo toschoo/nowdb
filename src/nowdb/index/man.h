@@ -74,16 +74,31 @@ nowdb_err_t nowdb_index_man_unregister(nowdb_index_man_t *iman,
  * Get index by name
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t *iman,
-                                      char              *name,
-                                      nowdb_index_t    **idx);
+nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t   *iman,
+                                      char                *name,
+                                      nowdb_index_desc_t **desc);
 
 /* ------------------------------------------------------------------------
  * Get index by keys
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t  *iman,
-                                      nowdb_context_t    *ctx,
-                                      nowdb_index_keys_t *keys,
-                                      nowdb_index_t     **idx);
+nowdb_err_t nowdb_index_man_getByKeys(nowdb_index_man_t   *iman,
+                                      nowdb_context_t     *ctx,
+                                      nowdb_index_keys_t  *keys,
+                                      nowdb_index_desc_t **desc);
+
+/* ------------------------------------------------------------------------
+ * Get all
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_man_getAll(nowdb_index_man_t *iman,
+                                   ts_algo_list_t   **list);
+
+/* ------------------------------------------------------------------------
+ * Get all by context
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_man_getAllOf(nowdb_index_man_t *iman,
+                                     nowdb_context_t    *ctx,
+                                     ts_algo_list_t    *list);
 #endif

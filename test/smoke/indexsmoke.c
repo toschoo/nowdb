@@ -230,7 +230,6 @@ int main() {
 	}
 	nowdb_index_destroy(desc.idx); free(desc.idx);
 
-
 cleanup:
 	if (haveIdx) {
 		nowdb_index_destroy(desc.idx);

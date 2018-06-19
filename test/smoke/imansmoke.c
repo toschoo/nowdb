@@ -355,28 +355,28 @@ int testGetIdx(nowdb_index_man_t *iman,
                nowdb_context_t    *ctx,
                nowdb_index_keys_t   *k) {
 	nowdb_err_t err;
-	nowdb_index_t    *idx;
+	nowdb_index_desc_t *desc;
 
-	err = nowdb_index_man_getByName(iman, iname, &idx);
+	err = nowdb_index_man_getByName(iman, iname, &desc);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return -1;
 	}
-	if (idx != NULL) err = nowdb_index_enduse(idx);
+	if (desc->idx != NULL) err = nowdb_index_enduse(desc->idx);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return -1;
 	}
 
-	err = nowdb_index_man_getByKeys(iman, ctx, k, &idx);
+	err = nowdb_index_man_getByKeys(iman, ctx, k, &desc);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return -1;
 	}
-	if (idx != NULL) err = nowdb_index_enduse(idx);
+	if (desc->idx != NULL) err = nowdb_index_enduse(desc->idx);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
