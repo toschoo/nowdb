@@ -74,7 +74,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_DQL: ASTCALLOC(5); 
 	case NOWDB_AST_MISC: ASTCALLOC(1); 
 
-	case NOWDB_AST_CREATE: ASTCALLOC(2);
+	case NOWDB_AST_CREATE: ASTCALLOC(4);
 	case NOWDB_AST_ALTER: ASTCALLOC(2);
 	case NOWDB_AST_DROP:  ASTCALLOC(2);
 
@@ -96,7 +96,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_COMPARE: ASTCALLOC(2);
 
-	case NOWDB_AST_FIELD: ASTCALLOC(0);
+	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
@@ -105,6 +105,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
 	case NOWDB_AST_PATH:   ASTCALLOC(0);
 	case NOWDB_AST_DATA:   ASTCALLOC(1);
+	case NOWDB_AST_ON:   ASTCALLOC(0);
 
 	default:
 		return -1;
@@ -167,6 +168,13 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_CONTEXT: return "context";
 		case NOWDB_AST_INDEX: return "index";
 		default: return "unknown target";
+		}
+
+	case NOWDB_AST_ON:
+		switch(stype) {
+		case NOWDB_AST_VERTEX: return "on vertex";
+		case NOWDB_AST_CONTEXT: return "on context";
+		default: return "on unknown target";
 		}
 
 	case NOWDB_AST_OPTION: 
@@ -355,6 +363,8 @@ static inline int addcreate(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_TARGET: ADDKID(0);
 	case NOWDB_AST_OPTION: ADDKID(1);
+	case NOWDB_AST_ON: ADDKID(2);
+	case NOWDB_AST_FIELD: ADDKID(3);
 	default: return -1;
 	}
 }
@@ -531,6 +541,18 @@ static inline int addcompare(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
+ * Add kid to field
+ * -----------------------------------------------------------------------
+ */
+static inline int addfield(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Add kid to any node
  * -----------------------------------------------------------------------
  */
@@ -566,10 +588,13 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_COMPARE: return addcompare(n,k);
 
 	case NOWDB_AST_TARGET:   return -1;
+	case NOWDB_AST_ON:       return -1;
 	case NOWDB_AST_OPTION:   return addopt(n,k);
 	case NOWDB_AST_SIZING:   return -1;
 	case NOWDB_AST_PATH:     return -1;
 	case NOWDB_AST_DATA: return ad3ata(n,k);
+
+	case NOWDB_AST_FIELD: return addfield(n,k);
 
 	default: return -1;
 	}

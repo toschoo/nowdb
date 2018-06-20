@@ -132,6 +132,7 @@
  * - context
  * - vertex
  * - index
+ * - on is for indices: create index xyz on ...
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_TARGET   10100
@@ -139,6 +140,7 @@
 #define NOWDB_AST_CONTEXT  10102
 #define NOWDB_AST_VERTEX   10103
 #define NOWDB_AST_INDEX    10104
+#define NOWDB_AST_ON       10105
 
 /* -----------------------------------------------------------------------
  * Options
@@ -168,7 +170,7 @@
  * Data
  * - key-value list (e.g. insert into ... (a=b, c=d, ...)
  * - value list (e.g. insert into ... (a, b, c, ...)
- * - field
+ * - field (also field list, e.g. create index xyz on ctx (a,b,c)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_DATA     10300

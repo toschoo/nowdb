@@ -65,6 +65,7 @@
 
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
+(?i:ON)			return NOWDB_SQL_ON;
 
 (?i:IF)			return NOWDB_SQL_IF;
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;

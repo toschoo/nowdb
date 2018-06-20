@@ -179,7 +179,7 @@ lemon/nowlemon:	lemon/lemon.o
 lemon:		/usr/local/bin/nowlemon
 
 # sql parser stuff
-$(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c
+$(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c $(DEP)
 			$(CMPMSG)
 			$(CC) $(CFLAGS) -DNDEBUG $(INC) -c -o $@ $<
 

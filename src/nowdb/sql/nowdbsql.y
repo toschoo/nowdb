@@ -117,6 +117,9 @@
 %type dml_target {nowdb_ast_t*}
 %destructor dml_target {nowdb_ast_destroyAndFree($$);}
 
+%type index_target {nowdb_ast_t*}
+%destructor index_target {nowdb_ast_destroyAndFree($$);}
+
 %type header_clause {nowdb_ast_t*}
 %destructor header_clause {nowdb_ast_destroyAndFree($$);}
 
@@ -238,10 +241,19 @@ create_clause(C) ::= CREATE SCOPE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_SCOPE,I,NULL);
 }
 
-create_clause(C) ::= CREATE INDEX IDENTIFIER(I) ON IDENTIFIER LPAR field_list RPAR. {
+create_clause(C) ::= CREATE INDEX IDENTIFIER(I) ON index_target(T) LPAR field_list(F) RPAR. {
 	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_INDEX,I,NULL);
-	// set 'on'
-	// set field list
+	NOWDB_SQL_ADDKID(C, T);
+	NOWDB_SQL_ADDKID(C, F);
+}
+
+index_target(T) ::= IDENTIFIER(I). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_CONTEXT);
+	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+}
+
+index_target(T) ::= VERTEX. {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_VERTEX);
 }
 
 /* ------------------------------------------------------------------------
