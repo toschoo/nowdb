@@ -16,6 +16,7 @@
 #define nowdb_sql_state_decl
 
 #include <nowdb/query/ast.h>
+#include <nowdb/scope/context.h>
 
 /* ------------------------------------------------------------------------
  * Error indicators
@@ -57,6 +58,8 @@ typedef struct {
 	nowdbsql_stack_t *stack;
 } nowdbsql_state_t;
 
+void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
+
 /* ------------------------------------------------------------------------
  * Macro to check whether an error has occurred during parsing
  * ------------------------------------------------------------------------
@@ -87,6 +90,64 @@ typedef struct {
 		return; \
 	}
 
+#define NOWDB_SQL_ADD_OPTION(C,o,t,v) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *x; \
+	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_OPTION, o); \
+	nowdb_ast_setValue(x, t, v); \
+	NOWDB_SQL_ADDKID(C, x);
+
+#define NOWDB_SQL_MAKE_CREATE(C,x,I,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_CREATE, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_ADDKID(C, t);
+
+#define NOWDB_SQL_MAKE_DROP(C,x,I,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_DROP, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_ADDKID(C, t);
+
+#define NOWDB_SQL_MAKE_LOAD(S,T,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *l; \
+	NOWDB_SQL_CREATEAST(&l, NOWDB_AST_LOAD, 0); \
+	nowdb_ast_setValue(l, NOWDB_AST_V_STRING, S); \
+	NOWDB_SQL_ADDKID(l, T); \
+	if (O != NULL) { \
+		NOWDB_SQL_ADDKID(l, O); \
+	} \
+	nowdbsql_state_pushAst(nowdbres, l);
+
+#define NOWDB_SQL_MAKE_DMLTARGET(T,x,I) \
+	NOWDB_SQL_CHECKSTATE(); \
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, x); \
+	if (I != NULL) { \
+		nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I); \
+	}
+
+#define NOWDB_SQL_MAKE_DQL(P,F,W,G,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *d; \
+	NOWDB_SQL_CREATEAST(&d, NOWDB_AST_DQL, 0); \
+	NOWDB_SQL_ADDKID(d, P); \
+	NOWDB_SQL_ADDKID(d, F); \
+	if (W != NULL) { \
+		NOWDB_SQL_ADDKID(d, W); \
+	} \
+	if (G != NULL) { \
+		NOWDB_SQL_ADDKID(d, G); \
+	} \
+	if (O != NULL) { \
+		NOWDB_SQL_ADDKID(d, O); \
+	} \
+	nowdbsql_state_pushAst(nowdbres, d);
+
 /* ------------------------------------------------------------------------
  * Get a description of the errorcode
  * ------------------------------------------------------------------------
@@ -105,25 +166,7 @@ void nowdbsql_state_destroy(nowdbsql_state_t *res);
 
 nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res);
 
-void nowdbsql_state_pushScope(nowdbsql_state_t *res, char *scope);
-void nowdbsql_state_pushIndex(nowdbsql_state_t *res, char *index);
-void nowdbsql_state_pushContext(nowdbsql_state_t *res, char *ctx);
-void nowdbsql_state_pushVertex(nowdbsql_state_t *res, char *alias);
-void nowdbsql_state_pushTable(nowdbsql_state_t *res, char *name,
-                                                   char *alias);
-
-void nowdbsql_state_pushOption(nowdbsql_state_t *res,
-                              int option, char *value);
-void nowdbsql_state_pushSizing(nowdbsql_state_t *res, int sizing);
-void nowdbsql_state_pushStress(nowdbsql_state_t *res, int sizing);
-void nowdbsql_state_pushDisk(nowdbsql_state_t *res, int sizing);
-void nowdbsql_state_pushNocomp(nowdbsql_state_t *res);
-void nowdbsql_state_pushNosort(nowdbsql_state_t *res);
-
 void nowdbsql_state_pushDDL(nowdbsql_state_t *res);
-void nowdbsql_state_pushCreate(nowdbsql_state_t *res);
-void nowdbsql_state_pushDrop(nowdbsql_state_t *res);
-void nowdbsql_state_pushAlter(nowdbsql_state_t *res);
 
 void nowdbsql_state_pushDLL(nowdbsql_state_t *res);
 void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
@@ -132,10 +175,5 @@ void nowdbsql_state_pushMisc(nowdbsql_state_t *res);
 void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name);
 
 void nowdbsql_state_pushDQL(nowdbsql_state_t *res);
-void nowdbsql_state_pushProjection(nowdbsql_state_t *res);
-void nowdbsql_state_pushFrom(nowdbsql_state_t *res);
-void nowdbsql_state_pushWhere(nowdbsql_state_t *res);
-
-void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
 
 #endif

@@ -84,6 +84,42 @@
 %type target {nowdb_ast_t*}
 %destructor target {nowdb_ast_destroyAndFree($$);}
 
+%type create_clause {nowdb_ast_t*}
+%destructor create_clause {nowdb_ast_destroyAndFree($$);}
+
+%type drop_clause {nowdb_ast_t*}
+%destructor drop_clause {nowdb_ast_destroyAndFree($$);}
+
+%type projection_clause {nowdb_ast_t*}
+%destructor projection_clause {nowdb_ast_destroyAndFree($$);}
+
+%type from_clause {nowdb_ast_t*}
+%destructor from_clause {nowdb_ast_destroyAndFree($$);}
+
+%type where_clause {nowdb_ast_t*}
+%destructor where_clause {nowdb_ast_destroyAndFree($$);}
+
+%type stress_spec {nowdb_ast_t*}
+%destructor stress_spec {nowdb_ast_destroyAndFree($$);}
+
+%type disk_spec {nowdb_ast_t*}
+%destructor disk_spec {nowdb_ast_destroyAndFree($$);}
+
+%type field_list {nowdb_ast_t*}
+%destructor field_list {nowdb_ast_destroyAndFree($$);}
+
+%type table_list {nowdb_ast_t*}
+%destructor table_list {nowdb_ast_destroyAndFree($$);}
+
+%type table_spec {nowdb_ast_t*}
+%destructor table_spec {nowdb_ast_destroyAndFree($$);}
+
+%type dml_target {nowdb_ast_t*}
+%destructor dml_target {nowdb_ast_destroyAndFree($$);}
+
+%type header_clause {nowdb_ast_t*}
+%destructor header_clause {nowdb_ast_destroyAndFree($$);}
+
 %extra_argument { nowdbsql_state_t *nowdbres }
 
 %parse_accept {
@@ -108,12 +144,13 @@
 sql ::= ddl SEMICOLON. {
 	nowdbsql_state_pushDDL(nowdbres);
 }
+
 sql ::= dll SEMICOLON. {
 	nowdbsql_state_pushDLL(nowdbres);
 }
-sql ::= dql SEMICOLON. {
-	nowdbsql_state_pushDQL(nowdbres);
-}
+
+sql ::= dql SEMICOLON. 
+
 sql ::= misc SEMICOLON. {
 	nowdbsql_state_pushMisc(nowdbres);
 }
@@ -122,39 +159,47 @@ sql ::= misc SEMICOLON. {
  * DDL
  * ------------------------------------------------------------------------
  */
-ddl ::= CREATE target (T). {
+ddl ::= create_clause(C). {
 	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres, T);
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE target(T) IF NOT EXISTS. {
-	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres, T);
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE target SET context_options. {
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE target IF NOT EXISTS SET context_options. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushCreate(nowdbres);
-}
-ddl ::= CREATE target IF NOT EXISTS SET context_spec. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushCreate(nowdbres);
+	nowdbsql_state_pushAst(nowdbres, C);
 }
 
-ddl ::= DROP target. {
-	nowdbsql_state_pushDrop(nowdbres);
-}
-ddl ::= DROP target IF EXISTS. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_EXISTS, NULL);
-	nowdbsql_state_pushDrop(nowdbres);
+ddl ::= create_clause(C) IF NOT EXISTS. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADD_OPTION(C, NOWDB_AST_IFEXISTS, 0, NULL);
+	nowdbsql_state_pushAst(nowdbres, C);
 }
 
-ddl ::= ALTER target SET context_options. {
-	nowdbsql_state_pushAlter(nowdbres);
+ddl ::= drop_clause(C). {
+	NOWDB_SQL_CHECKSTATE();
+	nowdbsql_state_pushAst(nowdbres,C);
+}
+ddl ::= drop_clause(C) IF EXISTS. {
+	NOWDB_SQL_ADD_OPTION(C, NOWDB_AST_IFEXISTS, 0, NULL);
+	nowdbsql_state_pushAst(nowdbres, C);
+}
+
+/* ------------------------------------------------------------------------
+ * DLL
+ * ------------------------------------------------------------------------
+ */
+dll ::= LOAD STRING(S) INTO dml_target(T). {
+	NOWDB_SQL_MAKE_LOAD(S,T,NULL)
+}
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
+	NOWDB_SQL_MAKE_LOAD(S,T,H)
+}
+
+/* ------------------------------------------------------------------------
+ * DQL
+ * ------------------------------------------------------------------------
+ */
+dql ::= projection_clause(P) from_clause(F). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,NULL,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -166,26 +211,59 @@ misc ::= USE IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * DDL Target
+ *  Create Clause
  * ------------------------------------------------------------------------
  */
-target ::= SCOPE IDENTIFIER(I). {
-	nowdbsql_state_pushScope(nowdbres, I);
+create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
 }
 
-/* qualified identifier ! */
-target ::= INDEX IDENTIFIER(I). {
-	nowdbsql_state_pushIndex(nowdbres, I);
+create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I) SET context_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+	NOWDB_SQL_ADDKID(C, O)
 }
 
-/* qualified identifier ! */
-target(C) ::= CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
-	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
+create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+	NOWDB_SQL_ADDKID(C, S)
 }
 
-/* qualified identifier ! */
+create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I) SET context_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+	NOWDB_SQL_ADDKID(O, S)
+	NOWDB_SQL_ADDKID(C, O)
+}
+
+create_clause(C) ::= CREATE SCOPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_SCOPE,I,NULL);
+}
+
+create_clause(C) ::= CREATE INDEX IDENTIFIER(I) ON IDENTIFIER LPAR field_list RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_INDEX,I,NULL);
+	// set 'on'
+	// set field list
+}
+
+/* ------------------------------------------------------------------------
+ *  Drop Clause
+ * ------------------------------------------------------------------------
+ */
+drop_clause(C) ::= DROP CONTEXT IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_CONTEXT,I,NULL);
+}
+
+drop_clause(C) ::= DROP SCOPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_SCOPE,I,NULL);
+}
+
+drop_clause(C) ::= DROP INDEX IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_INDEX,I,NULL);
+}
+
+/* ------------------------------------------------------------------------
+ * Context Options
+ * ------------------------------------------------------------------------
+ */
 context_options(O) ::= context_option(C). {
 	NOWDB_SQL_CHECKSTATE();
 	O = C;
@@ -223,25 +301,21 @@ context_option(O) ::= ENCRYPTION EQ STRING(I). {
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
 
-/* ------------------------------------------------------------------------
- * This is a mess!!! Review
- * ------------------------------------------------------------------------
- */
-context_spec ::= with_stress with_disk without_comp without_sort.
-context_spec ::= with_stress with_disk.
-context_spec ::= with_stress.
-context_spec ::= with_disk.
-context_spec ::= without_comp.
-context_spec ::= without_sort.
-context_spec ::= without_comp without_sort.
-context_spec ::= with_stress without_comp without_sort.
-context_spec ::= with_stress without_sort.
-context_spec ::= with_stress without_comp.
-context_spec ::= with_disk without_comp without_sort.
-context_spec ::= with_disk without_comp.
-context_spec ::= with_disk without_sort.
+context_option(O) ::= STRESS EQ stress_spec(S). {
+	NOWDB_SQL_CHECKSTATE();
+	O=S;
+}
 
-/*
+context_option(O) ::= SIZE EQ sizing(S). {
+	NOWDB_SQL_CHECKSTATE();
+	O=S;
+}
+
+context_option(O) ::= DISK EQ disk_spec(S). {
+	NOWDB_SQL_CHECKSTATE();
+	O=S;
+}
+
 sizing(S) ::= TINY. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
@@ -272,109 +346,127 @@ sizing(S) ::= HUGE. {
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
 	                   (void*)(uint64_t)NOWDB_SQL_HUGE);
 }
+
+stress_spec(O) ::= MODERATE. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_STRESS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_CONFIG_INSERT_MODERATE);
+}
+
+stress_spec(O) ::= CONSTANT. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_STRESS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_CONFIG_INSERT_CONSTANT);
+}
+
+stress_spec(O) ::= INSANE. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_STRESS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_CONFIG_INSERT_INSANE);
+}
+
+disk_spec(O) ::= HDD. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_DISK);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_HDD);
+}
+disk_spec(O) ::= SSD. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_DISK);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_SSD);
+}
+disk_spec(O) ::= RAID. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_DISK);
+	nowdb_ast_setValue(O, NOWDB_AST_V_INTEGER,
+	                   (void*)(uint64_t)NOWDB_SQL_RAID);
+}
+
+/*
+switch_spec(O) ::= ON. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ON);
+}
+switch_spec(O) ::= OFF. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_OFF);
+}
 */
 
-with_stress ::= WITH MODERATE STRESS. {
-	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_MODERATE);
-}
-with_stress ::= WITH CONSTANT STRESS. {
-	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_CONSTANT);
-}
-with_stress ::= WITH INSANE STRESS. {
-	nowdbsql_state_pushStress(nowdbres, NOWDB_CONFIG_INSERT_INSANE);
-}
-
-with_disk ::= ON disk_spec.
-
-without_comp ::= WITHOUT COMPRESSION. {
-	nowdbsql_state_pushNocomp(nowdbres);
-}
-without_sort ::= WITHOUT SORTING. {
-	nowdbsql_state_pushNosort(nowdbres);
-}
-disk_spec ::= HDD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_HDD);
-}
-disk_spec ::= SSD. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_SSD);
-}
-disk_spec ::= RAID. {
-	nowdbsql_state_pushDisk(nowdbres, NOWDB_CONFIG_DISK_RAID);
-}
-
 /* ------------------------------------------------------------------------
- * DLL
+ * Header Clause
  * ------------------------------------------------------------------------
  */
-dll ::= LOAD STRING(S) INTO dml_target. {
-	nowdbsql_state_pushLoad(nowdbres, S);
+header_clause(O) ::= IGNORE HEADER. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_IGNORE);
 }
-dll ::= LOAD STRING(S) INTO dml_target header_clause. {
-	nowdbsql_state_pushLoad(nowdbres, S);
-}
-header_clause ::= IGNORE HEADER. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_IGNORE, NULL);
-}
-header_clause ::= USE HEADER. {
-	nowdbsql_state_pushOption(nowdbres, NOWDB_SQL_USE, NULL);
+header_clause(O) ::= USE HEADER. {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_USE);
 }
 
 /* ------------------------------------------------------------------------
- * DML
+ * DML target
  * ------------------------------------------------------------------------
  */
-dml_target ::= IDENTIFIER(I). {
-	nowdbsql_state_pushContext(nowdbres, I);
+dml_target(T) ::= IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DMLTARGET(T, NOWDB_AST_CONTEXT, I)
 }
-dml_target ::= VERTEX. {
-	nowdbsql_state_pushVertex(nowdbres, NULL);
+dml_target(T) ::= VERTEX. {
+	NOWDB_SQL_MAKE_DMLTARGET(T, NOWDB_AST_VERTEX, NULL)
 }
 
 /* ------------------------------------------------------------------------
- * DQL
+ * projection clause
  * ------------------------------------------------------------------------
  */
-dql ::= projection_clause from_clause. {
-	nowdbsql_state_pushDQL(nowdbres);
-}
-dql ::= projection_clause from_clause where_clause.
-
-projection_clause ::= SELECT STAR. {
-	nowdbsql_state_pushProjection(nowdbres);
-}
-
-from_clause ::= FROM table_list. {
-	nowdbsql_state_pushFrom(nowdbres);
-}
-
-table_list ::= table_spec.
-table_list ::= table_spec COMMA table_list.
-
-table_spec ::= VERTEX. {
-	nowdbsql_state_pushVertex(nowdbres, NULL);
-}
-table_spec ::= VERTEX AS IDENTIFIER(A). {
-	nowdbsql_state_pushVertex(nowdbres, A);
-}
-table_spec ::= IDENTIFIER(I). {
-	nowdbsql_state_pushTable(nowdbres, I, NULL);
-}
-table_spec ::= IDENTIFIER(T) AS IDENTIFIER(A). {
-	nowdbsql_state_pushTable(nowdbres, T, A);
+projection_clause(P) ::= SELECT STAR. {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
 }
 
 /* ------------------------------------------------------------------------
- * Here is how we *should* do things...
+ * from clause 
+ * ------------------------------------------------------------------------
+ */
+from_clause(F) ::= FROM table_list(T). {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FROM, 0);
+	NOWDB_SQL_ADDKID(F, T);
+}
+
+/* ------------------------------------------------------------------------
+ * Table list and table spec
+ * ------------------------------------------------------------------------
+ */
+table_list(T) ::= table_spec(S). {
+	T=S;
+}
+
+table_list(T) ::= table_spec(S) COMMA table_list(L). {
+	NOWDB_SQL_ADDKID(S,L);
+	T=S;
+}
+
+table_spec(T) ::= VERTEX. {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_VERTEX);
+}
+
+table_spec(T) ::= IDENTIFIER(I). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
+	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+}
+
+/* with alias: alias should be a node in itself */
+table_spec ::= VERTEX AS IDENTIFIER.
+table_spec ::= IDENTIFIER AS IDENTIFIER. 
+
+/* ------------------------------------------------------------------------
+ * where clause and expr
  * ------------------------------------------------------------------------
  */
 %left OR.
 %left AND.
 %right NOT.
 
-where_clause ::= WHERE expr(E). {
+where_clause(W) ::= WHERE expr(E). {
 	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres,E);
-	nowdbsql_state_pushWhere(nowdbres);
+	NOWDB_SQL_CREATEAST(&W, NOWDB_AST_WHERE, 0);
+	NOWDB_SQL_ADDKID(W, E);
 }
 
 expr(E) ::= condition(C). {
@@ -449,6 +541,18 @@ operand(O) ::= field(F). {
 operand(O) ::= value(V). {
 	NOWDB_SQL_CHECKSTATE();
 	O=V;
+}
+
+field_list(L) ::= field(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&L, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(L, NOWDB_AST_V_STRING, F);
+}
+ 
+field_list(L) ::= field(F) COMMA field_list(FL). {
+	NOWDB_SQL_CREATEAST(&L, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(L, NOWDB_AST_V_STRING, F);
+	NOWDB_SQL_ADDKID(L,FL);
 }
 
 field(F) ::= IDENTIFIER(I). {
