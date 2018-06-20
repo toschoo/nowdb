@@ -189,7 +189,7 @@ static uint32_t computeKeySize(nowdb_index_desc_t *desc) {
 
 	for(int i=0;i<desc->keys->sz;i++) {
 		if ((desc->ctx == NULL &&
-		     desc->keys->off[i] == NOWDB_OFF_VTYPE) ||
+		     desc->keys->off[i] >= NOWDB_OFF_VTYPE) ||
 		    (desc->ctx != NULL &&
 		     desc->keys->off[i] >= NOWDB_OFF_WTYPE))
 			s+=4;

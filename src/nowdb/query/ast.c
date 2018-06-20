@@ -700,6 +700,39 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 }
 
 /* -----------------------------------------------------------------------
+ * Get 'on'
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_on(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL: return nowdb_ast_on(
+	                           nowdb_ast_operation(ast));
+
+	case NOWDB_AST_CREATE: return ast->kids[2];
+
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get field
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL: return nowdb_ast_field(
+	                           nowdb_ast_operation(ast));
+
+	case NOWDB_AST_CREATE: return ast->kids[3];
+	case NOWDB_AST_FIELD: return ast->kids[0];
+
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Get select
  * -----------------------------------------------------------------------
  */

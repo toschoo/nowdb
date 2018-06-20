@@ -446,6 +446,7 @@ clean:
 	rm -f $(RSC)/*.csv
 	rm -f $(RSC)/*.csv.zip
 	rm -f $(RSC)/*.sql
+	rm -rf $(RSC)/test
 	rm -rf $(RSC)/teststore
 	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??

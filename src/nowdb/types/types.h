@@ -123,6 +123,8 @@ void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
+int nowdb_vertex_offByName(char *field);
+
 /* ------------------------------------------------------------------------
  * Edge Offsets
  * ------------------------------------------------------------------------
@@ -162,5 +164,7 @@ void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 
 int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+
+int nowdb_edge_offByName(char *field);
 
 #endif

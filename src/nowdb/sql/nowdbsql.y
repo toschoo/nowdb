@@ -247,6 +247,13 @@ create_clause(C) ::= CREATE INDEX IDENTIFIER(I) ON index_target(T) LPAR field_li
 	NOWDB_SQL_ADDKID(C, F);
 }
 
+create_clause(C) ::= CREATE sizing(S) INDEX IDENTIFIER(I) ON index_target(T) LPAR field_list(F) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_INDEX,I,NULL);
+	NOWDB_SQL_ADDKID(C, S);
+	NOWDB_SQL_ADDKID(C, T);
+	NOWDB_SQL_ADDKID(C, F);
+}
+
 index_target(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
@@ -331,32 +338,32 @@ context_option(O) ::= DISK EQ disk_spec(S). {
 sizing(S) ::= TINY. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_TINY);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_TINY);
 }
 sizing(S) ::= SMALL. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_SMALL);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_SMALL);
 }
 sizing(S) ::= MEDIUM. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_MEDIUM);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_MEDIUM);
 }
 sizing(S) ::= BIG. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_BIG);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_BIG);
 }
 sizing(S) ::= LARGE. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_LARGE);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_LARGE);
 }
 sizing(S) ::= HUGE. {
 	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_OPTION, NOWDB_AST_SIZING);
 	nowdb_ast_setValue(S, NOWDB_AST_V_INTEGER,
-	                   (void*)(uint64_t)NOWDB_SQL_HUGE);
+	                   (void*)(uint64_t)NOWDB_CONFIG_SIZE_HUGE);
 }
 
 stress_spec(O) ::= MODERATE. {

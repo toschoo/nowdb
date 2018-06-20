@@ -308,6 +308,12 @@ nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
+ * Get the on part from the current AST node (create index)
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_on(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
  * Get an option from the current AST node
  * -----------------------------------------------------------------------
  */
@@ -318,6 +324,12 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get field list from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get 'from' from the current AST node (DQL only)
