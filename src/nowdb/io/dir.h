@@ -90,6 +90,12 @@ nowdb_err_t nowdb_dir_create(nowdb_path_t path);
 nowdb_err_t nowdb_path_remove(nowdb_path_t path);
 
 /* ------------------------------------------------------------------------
+ * Remove dir and all its content
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_path_rRemove(nowdb_path_t path);
+
+/* ------------------------------------------------------------------------
  * Move file 'src' to 'trg'
  * ------------------------------------------------------------------------
  */

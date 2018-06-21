@@ -1177,6 +1177,7 @@ unlock:
 nowdb_err_t nowdb_store_create(nowdb_store_t *store) {
 	nowdb_err_t err  = NOWDB_OK;
 	nowdb_err_t err2 = NOWDB_OK;
+	char *p;
 
 	if (store == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -1193,6 +1194,16 @@ nowdb_err_t nowdb_store_create(nowdb_store_t *store) {
 	}
 
 	err = nowdb_dir_create(store->path);
+	if (err != NOWDB_OK) goto unlock;
+
+	p = nowdb_path_append(store->path, "index");
+	if (p == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                  "allocating path");
+		goto unlock;
+	}
+
+	err = nowdb_dir_create(p); free(p);
 	if (err != NOWDB_OK) goto unlock;
 
 	err = createSpares(store);
@@ -1239,7 +1250,8 @@ nowdb_err_t nowdb_store_drop(nowdb_store_t *store) {
 	if (err != NOWDB_OK) return err;
 
 	ts_algo_list_init(&dir);
-	err = nowdb_dir_content(store->path, NOWDB_DIR_TYPE_FILE, &dir);
+	err = nowdb_dir_content(store->path, NOWDB_DIR_TYPE_FILE |
+	                                     NOWDB_DIR_TYPE_DIR, &dir);
 	if (err != NOWDB_OK) goto unlock;
 
 	for (runner=dir.head; runner!=NULL; runner=runner->nxt) {

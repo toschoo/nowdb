@@ -158,7 +158,7 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 	nowdb_err_t err;
 	nowdb_qry_result_t res;
 
-	err = nowdb_stmt_handle(ast, global_scope, path, &res);
+	err = nowdb_stmt_handle(ast, global_scope, NULL, path, &res);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot handle ast: \n");
 		nowdb_ast_show(ast);
@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
 		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
-	if (!nowdb_err_init()) {
+	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
@@ -271,6 +271,6 @@ cleanup:
 		}
 		nowdb_scope_destroy(global_scope); free(global_scope);
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	return rc;
 }

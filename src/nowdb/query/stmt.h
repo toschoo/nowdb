@@ -15,6 +15,8 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/query/ast.h>
 
+#include <tsalgo/list.h>
+
 /* -----------------------------------------------------------------------
  * Result Types of Statement Execution
  * ------------
@@ -47,12 +49,14 @@ typedef struct {
  * The function receives
  * - an ast (which is either a ddl, dll, dml, dql or misc)
  * - a scope (which may be NULL)
+ * - a list of additional resources (e.g. open scopes)
  * - a base directory
  * - a pointer to the result
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
+                          ts_algo_list_t  *rsc,
                           nowdb_path_t    base,
                       nowdb_qry_result_t *res);
 

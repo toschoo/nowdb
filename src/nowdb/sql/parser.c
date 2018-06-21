@@ -181,7 +181,7 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		*ast = NULL; return NOWDB_SQL_ERR_EOF;
 	}
 	/* get the result */
-	*ast = nowdbsql_state_ast(&p->st);
+	*ast = nowdbsql_state_getAst(&p->st);
 	/* get ready for the next round */
 	reinitSOFT(p);
 	return 0;

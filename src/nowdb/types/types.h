@@ -42,6 +42,11 @@ typedef char nowdb_bool_t;
 #define TRUE 1
 #define FALSE 0
 
+nowdb_bool_t nowdb_init();
+void nowdb_close();
+
+void *nowdb_lib();
+
 typedef uint8_t  nowdb_bitmap8_t;
 typedef uint16_t nowdb_bitmap16_t;
 typedef uint32_t nowdb_bitmap32_t;
@@ -118,6 +123,8 @@ void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
+int nowdb_vertex_offByName(char *field);
+
 /* ------------------------------------------------------------------------
  * Edge Offsets
  * ------------------------------------------------------------------------
@@ -157,5 +164,7 @@ void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 
 int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+
+int nowdb_edge_offByName(char *field);
 
 #endif

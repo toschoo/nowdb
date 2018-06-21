@@ -41,7 +41,10 @@
 
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
+	/*
 (?i:ALTER)		return NOWDB_SQL_ALTER;
+	*/
+
 (?i:LOAD)		return NOWDB_SQL_LOAD;
 (?i:USE)		return NOWDB_SQL_USE;
 
@@ -62,9 +65,6 @@
 
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
-
-(?i:WITH)		return NOWDB_SQL_WITH;
-(?i:WITHOUT)		return NOWDB_SQL_WITHOUT;
 (?i:ON)			return NOWDB_SQL_ON;
 
 (?i:IF)			return NOWDB_SQL_IF;
@@ -72,6 +72,7 @@
 
 (?i:AS)			return NOWDB_SQL_AS;
 
+(?i:DISK)		return NOWDB_SQL_DISK;
 (?i:HDD)		return NOWDB_SQL_HDD;
 (?i:SSD)		return NOWDB_SQL_SSD;
 (?i:RAID)		return NOWDB_SQL_RAID;
@@ -84,11 +85,13 @@
 (?i:HUGE)		return NOWDB_SQL_HUGE;
 
 (?i:STRESS)		return NOWDB_SQL_STRESS;
+(?i:MODERATE)		return NOWDB_SQL_MODERATE;
 (?i:CONSTANT)		return NOWDB_SQL_CONSTANT;
 (?i:INSANE)		return NOWDB_SQL_INSANE;
 
 (?i:ALLOCSIZE)		return NOWDB_SQL_ALLOCSIZE;
 (?i:LARGESIZE)		return NOWDB_SQL_LARGESIZE;
+(?i:SIZING)		return NOWDB_SQL_SIZE;
 (?i:SORTERS)		return NOWDB_SQL_SORTERS;
 (?i:COMPRESSION)	return NOWDB_SQL_COMPRESSION;
 (?i:ENCRYPTION)		return NOWDB_SQL_ENCRYPTION;

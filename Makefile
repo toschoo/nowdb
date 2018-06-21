@@ -1,5 +1,5 @@
 # =========================================================================
-# Makefile for NOWDB
+# Makefile for NoWDB
 # (c) Tobias Schoofs, 2018
 # =========================================================================
 CC = @gcc
@@ -17,7 +17,7 @@ FLGMSG = @printf "CFLAGS: $(CFLAGS)\nLDFLAGS: $(LDFLAGS)\n"
 
 INSMSG = @printf ". setenv.sh"
 
-CFLAGS = -O3 -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
+CFLAGS = -O3 -g -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
 LDFLAGS = -L./lib
 
 INC = -I./include -I./test -I./src -I./
@@ -35,7 +35,7 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -lpthread -ltsalgo -lzstd -lcsv
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -54,6 +54,9 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
+      $(SRC)/index/index.o    \
+      $(SRC)/index/compare.o  \
+      $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
       $(SRC)/query/ast.o      \
@@ -82,6 +85,8 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
+      $(SRC)/index/index.h    \
+      $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
       $(SRC)/query/ast.h      \
@@ -125,6 +130,8 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
+	$(SMK)/imansmoke               \
+	$(SMK)/indexsmoke              \
 	$(SMK)/sqlsmoke
 
 tests: smoke
@@ -140,11 +147,11 @@ flags:
 
 .SUFFIXES: .c .o
 
-.c.o:
+.c.o:	$(DEP)
 	$(CMPMSG)
 	$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
-.cpp.o:
+.cpp.o:	$(DEP)
 	$(CMPMSG)
 	$(CXX) $(CFLAGS) $(INC) -c -o $@ $<
 
@@ -172,7 +179,7 @@ lemon/nowlemon:	lemon/lemon.o
 lemon:		/usr/local/bin/nowlemon
 
 # sql parser stuff
-$(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c
+$(SQL)/nowdbsql.o:	$(SQL)/nowdbsql.c $(DEP)
 			$(CMPMSG)
 			$(CC) $(CFLAGS) -DNDEBUG $(INC) -c -o $@ $<
 
@@ -282,6 +289,16 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 				                 $(libs) -lnowdb
 
 $(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/indexsmoke: 	$(LIB) $(DEP) $(SMK)/indexsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -429,12 +446,17 @@ clean:
 	rm -f $(RSC)/*.csv
 	rm -f $(RSC)/*.csv.zip
 	rm -f $(RSC)/*.sql
+	rm -rf $(RSC)/test
 	rm -rf $(RSC)/teststore
 	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
 	rm -rf $(RSC)/testscope
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
+	rm -rf $(RSC)/iman??
+	rm -rf $(RSC)/idx??
+	rm -rf $(RSC)/ctx??
+	rm -rf $(RSC)/vertex??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -448,6 +470,8 @@ clean:
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
+	rm -f $(SMK)/imansmoke
+	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile

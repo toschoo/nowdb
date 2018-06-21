@@ -16,6 +16,7 @@
 #include <nowdb/store/store.h>
 #include <nowdb/scope/context.h>
 #include <nowdb/scope/loader.h>
+#include <nowdb/index/man.h>
 
 #include <tsalgo/tree.h>
 
@@ -31,7 +32,7 @@ typedef struct {
 	nowdb_version_t ver;     /* db version      */
 	nowdb_store_t vertices;  /* vertices        */
 	ts_algo_tree_t contexts; /* contexts        */
-	                         /* index manager   */
+	nowdb_index_man_t *iman; /* index manager   */
 	                         /* model           */
 	                         /* strings         */
 } nowdb_scope_t;
@@ -116,9 +117,11 @@ nowdb_err_t nowdb_scope_getContext(nowdb_scope_t   *scope,
  * Create index within that scope
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t *scope,
-                                    char          *name);
-                                    /* .... */
+nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
+                                    char               *name,
+                                    char            *context,
+                                    nowdb_index_keys_t *keys,
+                                    uint16_t         sizing);
 
 /* -----------------------------------------------------------------------
  * Drop index within that scope
@@ -132,14 +135,17 @@ nowdb_err_t nowdb_scope_dropIndex(nowdb_scope_t *scope,
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_getIndexByName(nowdb_scope_t   *scope,
-                                       char            *name);
+                                       char            *name,
+                                       nowdb_index_t   **idx);
 
 /* -----------------------------------------------------------------------
  * Get index within that scope by definition
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope);
-                                 /* ... */
+nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
+                                 char          *context,
+                                 nowdb_index_keys_t  *k,
+                                 nowdb_index_t    **idx);
 
 /* ------------------------------------------------------------------------
  * Insert one record
