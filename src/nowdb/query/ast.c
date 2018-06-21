@@ -809,9 +809,11 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 		                   nowdb_ast_operation(ast), option);
 	case NOWDB_AST_CREATE:
 	case NOWDB_AST_ALTER:
-	case NOWDB_AST_DROP: return ast->kids[1];
+	case NOWDB_AST_DROP: 
+		return nowdb_ast_option(ast->kids[1], option);
 
-	case NOWDB_AST_LOAD: return ast->kids[1];
+	case NOWDB_AST_LOAD: 
+		return nowdb_ast_option(ast->kids[1], option);
 
 	case NOWDB_AST_OPTION:
 		if (option == 0) return ast;

@@ -107,6 +107,34 @@ static nowdb_err_t openScope(nowdb_path_t     path,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Check whether index exists or not
+ * TODO:
+ * - we should use "nosuch index" instead of "key not found".
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t checkIndexExists(nowdb_scope_t *scope,
+                                           char          *name,
+                                           nowdb_bool_t  *b) {
+	nowdb_err_t    err;
+	nowdb_index_t *idx=NULL;
+
+	err = nowdb_scope_getIndexByName(scope, name, &idx);
+	if (err == NOWDB_OK) {
+		*b = TRUE;
+		if (idx != NULL) return nowdb_index_enduse(idx);
+	}
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		nowdb_err_release(err);
+		*b = FALSE; return NOWDB_OK;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Allocate keys
+ * -------------------------------------------------------------------------
+ */
 nowdb_index_keys_t *mkKeys(int sz) {
 	nowdb_index_keys_t *k;
 	k = calloc(1,sizeof(nowdb_index_keys_t));
@@ -119,6 +147,10 @@ nowdb_index_keys_t *mkKeys(int sz) {
 	return k;
 }
 
+/* -------------------------------------------------------------------------
+ * Generic getKeys (from create index statement)
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t getKeys(nowdb_ast_t *fld, char what,
                        int cnt, nowdb_index_keys_t **k) {
 	nowdb_err_t err;
@@ -151,11 +183,19 @@ static nowdb_err_t getKeys(nowdb_ast_t *fld, char what,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * getKeys for edge
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t getEdgeKeys(nowdb_ast_t *fld, int cnt,
                                   nowdb_index_keys_t **k) {
 	return getKeys(fld, 1, cnt, k);
 }
 
+/* -------------------------------------------------------------------------
+ * getKeys for vertex
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t getVertexKeys(nowdb_ast_t *fld, int cnt,
                                     nowdb_index_keys_t **k) {
 	return getKeys(fld, 0, cnt, k);
@@ -173,6 +213,7 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 	nowdb_ast_t *on;
 	nowdb_ast_t *flds;
 	nowdb_index_keys_t *k;
+	nowdb_bool_t x;
 	uint64_t utmp;
 	uint16_t sz = NOWDB_CONFIG_SIZE_BIG;
 
@@ -181,10 +222,18 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 		INVALIDAST("no 'on' clause in AST");
 	}
 
+	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+	if (o != NULL) {
+		err = checkIndexExists(scope, name, &x);
+		if (err != NOWDB_OK) return err;
+		if (x) return NOWDB_OK;
+	}
+
 	o = nowdb_ast_option(op, NOWDB_AST_SIZING);
 	if (o != NULL) {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid large size");
+		if (nowdb_ast_getUInt(o, &utmp) != 0) {
+			INVALIDAST("invalid ast: invalid size");
+		}
 		sz = (uint16_t)utmp;
 	}
 
@@ -208,14 +257,23 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 
 /* -------------------------------------------------------------------------
  * Drop Index
- * TODO
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t dropIndex(nowdb_ast_t  *op,
                              char       *name,
-                         nowdb_scope_t *scope) {
-	return nowdb_err_get(nowdb_err_not_supp,
-	            FALSE, OBJECT, "dropIndex");
+                         nowdb_scope_t *scope) 
+{
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+	nowdb_bool_t  x;
+
+	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+	if (o != NULL) {
+		err = checkIndexExists(scope, name, &x);
+		if (err != NOWDB_OK) return err;
+		if (!x) return NOWDB_OK;
+	}
+	return nowdb_scope_dropIndex(scope, name);
 }
 
 /* -------------------------------------------------------------------------

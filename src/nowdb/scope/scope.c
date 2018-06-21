@@ -608,8 +608,6 @@ static nowdb_err_t dropIndex(nowdb_scope_t     *scope,
 	if (err != NOWDB_OK) {
 		free(path); return err;
 	}
-
-	fprintf(stderr, "dropping %s\n", path);
 	err = nowdb_index_drop(path); free(path);
 	return err;
 }
