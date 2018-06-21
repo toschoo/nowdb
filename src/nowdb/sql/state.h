@@ -5,11 +5,9 @@
  * ========================================================================
  * The parser state maintains a stack containing partial parsing results
  * that are pushed onto the stack during parsing. The partial results are
- * ast nodes that completed at the end of the parsing process.
+ * ast nodes that were completed at the end of the parsing process.
  * This may ease the parsing process in some situations,
- * but in fact we need it only in very few situations.
- * The parser (nowdbsql.y) should be improved, so that the stack is
- * in fact not necessary anymore.
+ * but in fact we currently use it only to store the final result.
  * ========================================================================
  */
 #ifndef nowdb_sql_state_decl
@@ -58,8 +56,6 @@ typedef struct {
 	nowdbsql_stack_t *stack;
 } nowdbsql_state_t;
 
-void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
-
 /* ------------------------------------------------------------------------
  * Macro to check whether an error has occurred during parsing
  * ------------------------------------------------------------------------
@@ -90,47 +86,51 @@ void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
 		return; \
 	}
 
-#define NOWDB_SQL_ADD_OPTION(C,o,t,v) \
+/* ------------------------------------------------------------------------
+ * Create A DDL statement and push it to the stack
+ * Parameters:
+ * - C: an ast representing the DDL operation (CREATE, DROP, ALTER)
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_DDL(C) \
 	NOWDB_SQL_CHECKSTATE(); \
-	nowdb_ast_t *x; \
-	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_OPTION, o); \
-	nowdb_ast_setValue(x, t, v); \
-	NOWDB_SQL_ADDKID(C, x);
+	nowdb_ast_t *d; \
+	NOWDB_SQL_CREATEAST(&d, NOWDB_AST_DDL, 0); \
+	NOWDB_SQL_ADDKID(d, C); \
+	nowdbsql_state_pushAst(nowdbres, d);
 
-#define NOWDB_SQL_MAKE_CREATE(C,x,I,O) \
-	NOWDB_SQL_CHECKSTATE(); \
-	nowdb_ast_t *t; \
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_CREATE, 0); \
-	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
-	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
-	NOWDB_SQL_ADDKID(C, t);
-
-#define NOWDB_SQL_MAKE_DROP(C,x,I,O) \
-	NOWDB_SQL_CHECKSTATE(); \
-	nowdb_ast_t *t; \
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_DROP, 0); \
-	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
-	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
-	NOWDB_SQL_ADDKID(C, t);
-
+/* ------------------------------------------------------------------------
+ * Create a DLL statement representing 'LOAD'
+ * Parameters:
+ * - S: string defining from where to load (path)
+ * - T: ast representing the target
+ * - O: ast representing options
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_SQL_MAKE_LOAD(S,T,O) \
 	NOWDB_SQL_CHECKSTATE(); \
 	nowdb_ast_t *l; \
+	nowdb_ast_t *d; \
 	NOWDB_SQL_CREATEAST(&l, NOWDB_AST_LOAD, 0); \
 	nowdb_ast_setValue(l, NOWDB_AST_V_STRING, S); \
 	NOWDB_SQL_ADDKID(l, T); \
 	if (O != NULL) { \
 		NOWDB_SQL_ADDKID(l, O); \
 	} \
-	nowdbsql_state_pushAst(nowdbres, l);
+	NOWDB_SQL_CREATEAST(&d, NOWDB_AST_DLL, 0); \
+	NOWDB_SQL_ADDKID(d, l); \
+	nowdbsql_state_pushAst(nowdbres, d);
 
-#define NOWDB_SQL_MAKE_DMLTARGET(T,x,I) \
-	NOWDB_SQL_CHECKSTATE(); \
-	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, x); \
-	if (I != NULL) { \
-		nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I); \
-	}
-
+/* ------------------------------------------------------------------------
+ * Create A DQL statement and push it to the stack
+ * Parameters:
+ * - P: ast representing projection (a.k.a SELECT)
+ * - F: ast representing FROM
+ * - W: ast representing WHERE
+ * - G: ast representing GROUP BY
+ * - O: ast representing ORDER BY
+ * ------------------------------------------------------------------------
+ */
 #define NOWDB_SQL_MAKE_DQL(P,F,W,G,O) \
 	NOWDB_SQL_CHECKSTATE(); \
 	nowdb_ast_t *d; \
@@ -149,6 +149,93 @@ void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
 	nowdbsql_state_pushAst(nowdbres, d);
 
 /* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'USE'
+ * Parameters:
+ * - S: string defining what to use
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_USE(S) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *u; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&u, NOWDB_AST_USE, 0); \
+	nowdb_ast_setValue(u, NOWDB_AST_V_STRING, S); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, u); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Create and add an option to an ast 
+ * Parameters:
+ * - C: the ast to add to
+ * - o: the option subcode
+ * - t: the value type
+ * - v: the value
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_ADD_OPTION(C,o,t,v) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *x; \
+	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_OPTION, o); \
+	nowdb_ast_setValue(x, t, v); \
+	NOWDB_SQL_ADDKID(C, x);
+
+/* ------------------------------------------------------------------------
+ * Make a 'CREATE' statement
+ * Parameters:
+ * - C: the ast representing the CREATE
+ * - x: the target subcode
+ * - t: the target identifier
+ * - v: an option to be added
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_CREATE(C,x,I,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_CREATE, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_ADDKID(C, t); \
+	if (O != NULL) { \
+		NOWDB_SQL_ADDKID(C,O); \
+	}
+
+/* ------------------------------------------------------------------------
+ * Make a 'DROP' statement
+ * Parameters:
+ * - C: the ast representing the DROP
+ * - x: the target subcode
+ * - t: the target identifier
+ * - v: an option to be added
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_DROP(C,x,I,O) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_DROP, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, x); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_ADDKID(C, t); \
+	if (O != NULL) { \
+		NOWDB_SQL_ADDKID(C,O); \
+	}
+
+/* ------------------------------------------------------------------------
+ * Make a DML target statement
+ * Parameters:
+ * - S: ast representing the target
+ * - x: target subcode (context, vertex)
+ * - I: target name (if it is a context)
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_DMLTARGET(T,x,I) \
+	NOWDB_SQL_CHECKSTATE(); \
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, x); \
+	if (I != NULL) { \
+		nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I); \
+	}
+
+/* ------------------------------------------------------------------------
  * Get a description of the errorcode
  * ------------------------------------------------------------------------
  */
@@ -160,20 +247,34 @@ const char *nowdbsql_err_desc(int err);
  */
 void nowdbsql_errmsg(nowdbsql_state_t *res, char *msg, char *token);
 
+/* ------------------------------------------------------------------------
+ * initialise state
+ * ------------------------------------------------------------------------
+ */
 int nowdbsql_state_init(nowdbsql_state_t *res);
+
+/* ------------------------------------------------------------------------
+ * reinitialise state
+ * ------------------------------------------------------------------------
+ */
 void nowdbsql_state_reinit(nowdbsql_state_t *res);
+
+/* ------------------------------------------------------------------------
+ * destroy state
+ * ------------------------------------------------------------------------
+ */
 void nowdbsql_state_destroy(nowdbsql_state_t *res);
 
-nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res);
+/* ------------------------------------------------------------------------
+ * get result
+ * ------------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdbsql_state_getAst(nowdbsql_state_t *res);
 
-void nowdbsql_state_pushDDL(nowdbsql_state_t *res);
-
-void nowdbsql_state_pushDLL(nowdbsql_state_t *res);
-void nowdbsql_state_pushLoad(nowdbsql_state_t *res, char *path);
-
-void nowdbsql_state_pushMisc(nowdbsql_state_t *res);
-void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name);
-
-void nowdbsql_state_pushDQL(nowdbsql_state_t *res);
+/* ------------------------------------------------------------------------
+ * push to stack
+ * ------------------------------------------------------------------------
+ */
+void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *ast);
 
 #endif

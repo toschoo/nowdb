@@ -1,3 +1,9 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * Parser State
+ * ========================================================================
+ */
 #include <nowdb/sql/state.h>
 #include <nowdb/sql/nowdbsql.h>
 
@@ -6,6 +12,10 @@
 #include <string.h>
 #include <stdint.h>
 
+/* ------------------------------------------------------------------------
+ * Error description
+ * ------------------------------------------------------------------------
+ */
 const char *nowdbsql_err_desc(int err) {
 	switch(err) {
 	case 0: return "OK";
@@ -24,6 +34,10 @@ const char *nowdbsql_err_desc(int err) {
 #define MAX_TOKEN_SIZE \
 	(NOWDB_SQL_ERR_SIZE-16)/2
 
+/* ------------------------------------------------------------------------
+ * Create an error message and store it in errmsg
+ * ------------------------------------------------------------------------
+ */
 void nowdbsql_errmsg(nowdbsql_state_t *res, char *msg, char *token) {
 	if (res->errmsg != NULL) free(res->errmsg);
 	res->errmsg = malloc(NOWDB_SQL_ERR_SIZE);
@@ -43,14 +57,22 @@ void nowdbsql_errmsg(nowdbsql_state_t *res, char *msg, char *token) {
 	}
 }
 
-#define STACKSIZE 256
+#define STACKSIZE 8
 
+/* ------------------------------------------------------------------------
+ * The stack
+ * ------------------------------------------------------------------------
+ */
 struct nowdbsql_stack_st {
-	int hi;
-	int lo;
-	nowdb_ast_t **chunks;
+	int hi; /* current pointer */
+	int lo; /* stack base      */
+	nowdb_ast_t **chunks; /* the stack elements */
 };
 
+/* ------------------------------------------------------------------------
+ * push to the stack
+ * ------------------------------------------------------------------------
+ */
 static inline int push(nowdbsql_stack_t *stk,
                        nowdb_ast_t      *ast) {
 	if (stk->hi >= STACKSIZE) return -1;
@@ -60,27 +82,18 @@ static inline int push(nowdbsql_stack_t *stk,
 	return 0;
 }
 
-static inline int hitType(nowdb_ast_t *ast, int *nTypes, int size) {
-	for(int i=size-1; i>=0; i--) {
-		if (ast != NULL && ast->ntype == nTypes[i]) return 1;
-	}
-	return 0;
-}
-
-static inline nowdb_ast_t *popType(nowdbsql_stack_t *stk,
-                         int *nTypes, int size, int *pos) {
-	for(int i=stk->hi; i>=stk->lo; i--) {
-		if (hitType(stk->chunks[i], nTypes, size)) {
-			*pos = i; return (stk->chunks[i]);
-		}
-	}
-	return NULL;
-}
-
+/* ------------------------------------------------------------------------
+ * Clean current position (without freeing memory)
+ * ------------------------------------------------------------------------
+ */
 static inline void clean(nowdbsql_stack_t *stack, int pos) {
 	stack->chunks[pos] = NULL;
 }
 
+/* ------------------------------------------------------------------------
+ * Clean everything (without freeing memory)
+ * ------------------------------------------------------------------------
+ */
 static inline void resetStack(nowdbsql_stack_t *stack) {
 	for(int i=stack->hi-1; i>=stack->lo; i--) {
 		if (stack->chunks[i] != NULL) break;
@@ -88,32 +101,10 @@ static inline void resetStack(nowdbsql_stack_t *stack) {
 	}
 }
 
-static inline void incStack(nowdbsql_stack_t *stack) {
-	stack->lo++; 
-	if (stack->hi < stack->lo) stack->hi = stack->lo+1;
-}
-
-static inline void decStack(nowdbsql_stack_t *stack) {
-	stack->lo--; stack->hi = stack->lo;
-}
-
-static inline void limitStack(nowdbsql_stack_t *stack,
-                                int *nTypes, int size) {
-	for(int i=stack->hi; i>=0; i--) {
-		if (hitType(stack->chunks[i], nTypes, size)) {
-			stack->lo = i+1;
-			if (stack->hi < stack->lo) {
-				stack->hi = stack->lo+1;
-			}
-			break;
-		}
-	}
-}
-
-static inline void unlimitStack(nowdbsql_stack_t *stack) {
-	stack->lo=0;
-}
-
+/* ------------------------------------------------------------------------
+ * Clean everything (releasing memory)
+ * ------------------------------------------------------------------------
+ */
 static inline void cleanStack(nowdbsql_stack_t *stack) {
 	stack->lo = 0;
 	stack->hi = 0;
@@ -126,6 +117,10 @@ static inline void cleanStack(nowdbsql_stack_t *stack) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy the stack
+ * ------------------------------------------------------------------------
+ */
 static inline void destroyStack(nowdbsql_stack_t *stack) {
 	if (stack->chunks != NULL) {
 		cleanStack(stack);
@@ -133,8 +128,11 @@ static inline void destroyStack(nowdbsql_stack_t *stack) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Show what's on the stack
+ * ------------------------------------------------------------------------
+ */
 static inline void showStack(nowdbsql_stack_t *stack) {
-
 	fprintf(stderr, "stack:\n");
 	for(int i=0; i<=stack->hi; i++) {
 		if (stack->chunks[i] == NULL) {
@@ -146,6 +144,10 @@ static inline void showStack(nowdbsql_stack_t *stack) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Make state ready for reuse
+ * ------------------------------------------------------------------------
+ */
 void nowdbsql_state_reinit(nowdbsql_state_t *res) {
 	if (res->stack != NULL) cleanStack(res->stack);
 	res->errcode = 0;
@@ -154,6 +156,10 @@ void nowdbsql_state_reinit(nowdbsql_state_t *res) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Initialise parser state
+ * ------------------------------------------------------------------------
+ */
 int nowdbsql_state_init(nowdbsql_state_t *res) {
 	memset(res, 0, sizeof(nowdbsql_state_t));
 	res->stack = calloc(1,sizeof(nowdbsql_stack_t));
@@ -165,6 +171,10 @@ int nowdbsql_state_init(nowdbsql_state_t *res) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy parser state
+ * ------------------------------------------------------------------------
+ */
 void nowdbsql_state_destroy(nowdbsql_state_t *res) {
 	if (res->stack != NULL) {
 		destroyStack(res->stack);
@@ -176,124 +186,22 @@ void nowdbsql_state_destroy(nowdbsql_state_t *res) {
 	}
 }
 
-nowdb_ast_t *nowdbsql_state_ast(nowdbsql_state_t *res) {
+/* ------------------------------------------------------------------------
+ * Get first position from stack
+ * ------------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdbsql_state_getAst(nowdbsql_state_t *res) {
 	nowdb_ast_t *n = res->stack->chunks[0];
 	clean(res->stack, 0);
 	return n;
 }
 
-#define PUSHN(n) \
+/* ------------------------------------------------------------------------
+ * Push to stack
+ * ------------------------------------------------------------------------
+ */
+void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *n) {
 	if (push(res->stack, n) != 0) { \
 		res->errcode = NOWDB_SQL_ERR_STACK; \
 	}
-
-#define CREATE(n, nt, st, vt, v) \
-	*n = nowdb_ast_create(nt, st); \
-	if (*n == NULL) { \
-		res->errcode = NOWDB_SQL_ERR_NO_MEM; \
-		return; \
-	} \
-	if (vt != 0) { \
-		nowdb_ast_setValue(*n, vt, v); \
-	}
-
-#define POP(n, k, t, s, p) \
-	*k = popType(res->stack, t, s, &p); \
-	if (*k == NULL) { \
-		if (n != NULL) { \
-			nowdb_ast_destroy(n); free(n); \
-		} \
-		res->errcode = NOWDB_SQL_ERR_PARSER; \
-		return; \
-	}
-
-#define TRYPOP(k, t, s, p) \
-	*k = popType(res->stack, t, s, &p); \
-
-#define ADDKID(n, k, p) \
-	if (nowdb_ast_add(n,k) != 0) { \
-		nowdb_ast_destroy(n); free(n); \
-		res->errcode = NOWDB_SQL_ERR_PARSER; \
-		return; \
-	} \
-	clean(res->stack, p)
-
-#define RESET() \
-	resetStack(res->stack)
-
-#define INC() \
-	incStack(res->stack);
-
-#define DEC() \
-	decStack(res->stack);
-
-#define LIMIT(o, s) \
-	limitStack(res->stack, o, s);
-
-#define REOPEN() \
-	unlimitStack(res->stack);
-
-static inline void PUSH(nowdbsql_state_t *res, int nt, int st, int vt, void *v) {
-	nowdb_ast_t *n;
-	n = nowdb_ast_create(nt, st);
-	if (n == NULL) {
-		res->errcode = NOWDB_SQL_ERR_NO_MEM;
-		return;
-	}
-	if (vt != 0) nowdb_ast_setValue(n, vt, v);
-	PUSHN(n);
 }
-
-void setDDl(int *ddl) {
-	ddl[0] = NOWDB_AST_CREATE;
-	ddl[1] = NOWDB_AST_ALTER;
-	ddl[2] = NOWDB_AST_DROP;
-}
-
-void nowdbsql_state_pushDDL(nowdbsql_state_t *res) {
-	int p;
-	int ddl[3];
-	nowdb_ast_t *n,*k;
-
-	CREATE(&n, NOWDB_AST_DDL, 0, 0, NULL);
-	setDDl(ddl);
-	POP(n, &k, ddl, 3, p);
-	ADDKID(n,k,p);
-	RESET();
-	PUSHN(n);
-}
-
-void nowdbsql_state_pushDLL(nowdbsql_state_t *res) {
-	int p;
-	int dll = NOWDB_AST_LOAD;
-	nowdb_ast_t *n,*k;
-
-	CREATE(&n, NOWDB_AST_DLL, 0, 0, NULL);
-	POP(n, &k, &dll, 1, p);
-	ADDKID(n,k,p);
-	RESET();
-	PUSHN(n);
-}
-
-void nowdbsql_state_pushMisc(nowdbsql_state_t *res) {
-	int p;
-	int misc = NOWDB_AST_USE;
-	nowdb_ast_t *n,*k;
-
-	CREATE(&n, NOWDB_AST_MISC, 0, 0, NULL);
-	POP(n, &k, &misc, 1, p);
-	ADDKID(n,k,p);
-	RESET();
-	PUSHN(n);
-}
-
-void nowdbsql_state_pushUse(nowdbsql_state_t *res, char *name) {
-	nowdb_ast_t *n;
-	CREATE(&n, NOWDB_AST_USE, 0, NOWDB_AST_V_STRING, name);
-	PUSHN(n);
-}
-
-void nowdbsql_state_pushAst(nowdbsql_state_t *res, nowdb_ast_t *n) {
-	PUSHN(n);
-}
-

@@ -144,42 +144,33 @@
  * a DDL, DLL, DML, DQL or a miscellaneous statement
  * ------------------------------------------------------------------------
  */
-sql ::= ddl SEMICOLON. {
-	nowdbsql_state_pushDDL(nowdbres);
-}
+sql ::= ddl SEMICOLON. 
 
-sql ::= dll SEMICOLON. {
-	nowdbsql_state_pushDLL(nowdbres);
-}
+sql ::= dll SEMICOLON.
 
 sql ::= dql SEMICOLON. 
 
-sql ::= misc SEMICOLON. {
-	nowdbsql_state_pushMisc(nowdbres);
-}
+sql ::= misc SEMICOLON. 
 
 /* ------------------------------------------------------------------------
  * DDL
  * ------------------------------------------------------------------------
  */
 ddl ::= create_clause(C). {
-	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres, C);
+	NOWDB_SQL_MAKE_DDL(C);
 }
-
 ddl ::= create_clause(C) IF NOT EXISTS. {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADD_OPTION(C, NOWDB_AST_IFEXISTS, 0, NULL);
-	nowdbsql_state_pushAst(nowdbres, C);
+	NOWDB_SQL_MAKE_DDL(C);
 }
-
 ddl ::= drop_clause(C). {
-	NOWDB_SQL_CHECKSTATE();
-	nowdbsql_state_pushAst(nowdbres,C);
+	NOWDB_SQL_MAKE_DDL(C);
 }
 ddl ::= drop_clause(C) IF EXISTS. {
+	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADD_OPTION(C, NOWDB_AST_IFEXISTS, 0, NULL);
-	nowdbsql_state_pushAst(nowdbres, C);
+	NOWDB_SQL_MAKE_DDL(C);
 }
 
 /* ------------------------------------------------------------------------
@@ -210,7 +201,7 @@ dql ::= projection_clause(P) from_clause(F) where_clause(W). {
  * ------------------------------------------------------------------------
  */
 misc ::= USE IDENTIFIER(I). {
-	nowdbsql_state_pushUse(nowdbres, I);
+	NOWDB_SQL_MAKE_USE(I);
 }
 
 /* ------------------------------------------------------------------------
