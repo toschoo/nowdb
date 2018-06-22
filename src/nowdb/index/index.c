@@ -111,6 +111,35 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Keysize vertex
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
+	uint32_t sz = 0;
+
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_VTYPE) sz += 8; else sz +=4;
+		
+	}
+	return sz;
+}
+
+/* ------------------------------------------------------------------------
+ * Keysize edge
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k) {
+	uint32_t sz = 0;
+
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_WTYPE) sz += 8; else sz +=4;
+		
+	}
+	return sz;
+}
+
+
 /* -----------------------------------------------------------------------
  * Destroy index keys
  * -----------------------------------------------------------------------
