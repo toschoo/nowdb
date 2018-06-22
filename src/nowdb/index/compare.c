@@ -27,37 +27,42 @@
 	    (*(nowdb_value_t*)((char*)right+o))) return BEET_CMP_GREATER;
 
 /* this should be with rounding */
-#define TMSTMPCMP(left,right) \
-	if ((*(nowdb_time_t*)((char*)left+NOWDB_OFF_TMSTMP)) < \
-	    (*(nowdb_time_t*)((char*)right+NOWDB_OFF_TMSTMP))) \
+#define TMSTMPCMP(left,right,o) \
+	if ((*(nowdb_time_t*)((char*)left+o)) < \
+	    (*(nowdb_time_t*)((char*)right+o))) \
 		return BEET_CMP_LESS; \
-	if ((*(nowdb_time_t*)((char*)left+NOWDB_OFF_TMSTMP)) > \
-	    (*(nowdb_time_t*)((char*)right+NOWDB_OFF_TMSTMP))) \
+	if ((*(nowdb_time_t*)((char*)left+o)) > \
+	    (*(nowdb_time_t*)((char*)right+o))) \
 		return BEET_CMP_GREATER;
 
-#define ROLECMP(left,right) \
-	if ((*(nowdb_roleid_t*)((char*)left+NOWDB_OFF_TMSTMP)) < \
-	    (*(nowdb_roleid_t*)((char*)right+NOWDB_OFF_TMSTMP))) \
+#define ROLECMP(left,right,o) \
+	if ((*(nowdb_roleid_t*)((char*)left+o)) < \
+	    (*(nowdb_roleid_t*)((char*)right+o))) \
 		return BEET_CMP_LESS; \
-	if ((*(nowdb_roleid_t*)((char*)left+NOWDB_OFF_TMSTMP)) > \
-	    (*(nowdb_roleid_t*)((char*)right+NOWDB_OFF_TMSTMP))) \
+	if ((*(nowdb_roleid_t*)((char*)left+o)) > \
+	    (*(nowdb_roleid_t*)((char*)right+o))) \
 		return BEET_CMP_GREATER;
 
-#define EDGECMP(left, right, keys) \
+#define EDGECMP(left, right, k) \
 	if (KEYS(keys)->off[i] <= NOWDB_OFF_LABEL) \
-		KEYCMP(left, right, KEYS(keys)->off[i]) \
+		KEYCMP(left, right, k) \
 	else if (KEYS(keys)->off[i] == NOWDB_OFF_TMSTMP) \
-		TMSTMPCMP(left, right) \
+		TMSTMPCMP(left, right, k) \
 	else if (KEYS(keys)->off[i] <= NOWDB_OFF_WEIGHT2) \
-		WEIGHTCMP(left, right, KEYS(keys)->off[i])
+		WEIGHTCMP(left, right, k) \
+	k+=8;
 
-#define VERTEXCMP(left, right, keys) \
-	if (KEYS(keys)->off[i] <= NOWDB_OFF_PROP) \
-		KEYCMP(left, right, KEYS(keys)->off[i]) \
-	else if (KEYS(keys)->off[i] == NOWDB_OFF_VALUE) \
-		WEIGHTCMP(left, right, KEYS(keys)->off[i]) \
-	else if (KEYS(keys)->off[i] == NOWDB_OFF_ROLE) \
-		ROLECMP(left,right); 
+#define VERTEXCMP(left, right, k) \
+	if (KEYS(keys)->off[i] <= NOWDB_OFF_PROP) { \
+		KEYCMP(left, right, k) \
+		k += 8; \
+	} else if (KEYS(keys)->off[i] == NOWDB_OFF_VALUE) { \
+		WEIGHTCMP(left, right, k) \
+		k += 8; \
+	} else if (KEYS(keys)->off[i] == NOWDB_OFF_ROLE) { \
+		ROLECMP(left,right,k); \
+		k += 4; \
+	}
 
 char nowdb_index_pageid_compare(const void *left,
                                 const void *right,
@@ -78,8 +83,9 @@ void nowdb_index_keysdestroy(void **keys) {}
 char nowdb_index_edge_compare(const void *left,
                               const void *right,
                               void       *keys) {
+	int k=0;
 	for(int i=0;i<KEYS(keys)->sz;i++) {
-		EDGECMP(left, right, keys);
+		EDGECMP(left, right, k);
 	}
 	return BEET_CMP_EQUAL;
 }
@@ -87,8 +93,29 @@ char nowdb_index_edge_compare(const void *left,
 char nowdb_index_vertex_compare(const void *left,
                                 const void *right,
                                 void       *keys) {
+	int k=0;
 	for(int i=0;i<KEYS(keys)->sz;i++) {
-		VERTEXCMP(left, right, keys);
+		VERTEXCMP(left, right, k);
 	}
 	return BEET_CMP_EQUAL;
+}
+
+void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
+                              const char      *edge,
+                              char            *keys) {
+	int off=0, sz;
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_WTYPE) sz=8; else sz=4;
+		memcpy(keys+off, edge+k->off[i], sz); off+=sz;
+	}
+}
+
+void nowdb_index_grabVertexKeys(nowdb_index_keys_t *k,
+                                const char    *vertex,
+                                char            *keys) {
+	int off=0, sz;
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_VTYPE) sz=8; else sz=4;
+		memcpy(keys+off, vertex+k->off[i], sz); off+=sz;
+	}
 }

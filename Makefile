@@ -50,6 +50,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
+      $(SRC)/store/indexer.o  \
       $(SRC)/store/storewrk.o \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
@@ -81,6 +82,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
+      $(SRC)/store/indexer.h  \
       $(SRC)/store/storewrk.h \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \

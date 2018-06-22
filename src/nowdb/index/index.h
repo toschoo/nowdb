@@ -42,6 +42,22 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
                                   nowdb_index_keys_t **to);
 
 /* ------------------------------------------------------------------------
+ * Grab keys from vertex
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_grabVertexKeys(nowdb_index_keys_t *k,
+                                const char    *vertex,
+                                      char      *keys);
+
+/* ------------------------------------------------------------------------
+ * Grab keys from edge
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
+                              const char      *edge,
+                                    char      *keys);
+
+/* ------------------------------------------------------------------------
  * Destroy Index Keys
  * ------------------------------------------------------------------------
  */
@@ -130,5 +146,17 @@ nowdb_err_t nowdb_index_use(nowdb_index_t *idx);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Get index 'compare' method
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Get index resource
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getResource(nowdb_index_t *idx);
 
 #endif

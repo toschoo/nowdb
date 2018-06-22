@@ -569,3 +569,22 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 	IDXNULL();
 	return nowdb_unlock_read(&idx->lock);
 }
+
+/* ------------------------------------------------------------------------
+ * Get index 'compare' method
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx) {
+	if (idx == NULL) return NULL;
+	return beet_index_getCompare(idx->idx);
+}
+
+/* ------------------------------------------------------------------------
+ * Get index resource
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getResource(nowdb_index_t *idx) {
+	if (idx == NULL) return NULL;
+	return beet_index_getResource(idx->idx);
+}
+
