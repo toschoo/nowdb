@@ -134,6 +134,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/scopesmoke              \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
+	$(SMK)/indexersmoke            \
 	$(SMK)/sqlsmoke
 
 tests: smoke
@@ -301,6 +302,11 @@ $(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/indexsmoke: 	$(LIB) $(DEP) $(SMK)/indexsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/indexersmoke: 	$(LIB) $(DEP) $(SMK)/indexersmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -474,6 +480,7 @@ clean:
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
+	rm -f $(SMK)/indexersmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile

@@ -1133,6 +1133,7 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 	 * as a first approach */
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
+
 	if (scope->state == NOWDB_SCOPE_CLOSED) {
 		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                "scope is not open");
@@ -1170,7 +1171,15 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 		free(path); goto unlock;
 	}
 
-	err = nowdb_index_create(path, sz, desc); free(path);
+	err = nowdb_index_create(path, sz, desc); 
+	if (err != NOWDB_OK) {
+		free(path);
+		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
+		nowdb_index_desc_destroy(desc); free(desc);
+		goto unlock;
+	}
+
+	err = nowdb_index_open(path, nowdb_lib(), desc); free(path);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
 		nowdb_index_desc_destroy(desc); free(desc);

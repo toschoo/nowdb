@@ -91,8 +91,13 @@ ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
 nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
                                nowdb_index_t   *idx,
                                uint32_t         isz) {
+	nowdb_err_t err;
 	xhelper_t   *x;
 	xer->idx = idx;
+
+	err = nowdb_index_use(xer->idx);
+	if (err != NOWDB_OK) return err;
+
 	xer->tree = ts_algo_tree_new(&xercompare, NULL,
 	                             &xerupdate,
 	                             &xerdestroy,
@@ -129,6 +134,9 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
  */
 void nowdb_indexer_destroy(nowdb_indexer_t *xer) {
 	if (xer == NULL) return;
+	if (xer->idx != NULL) {
+		NOWDB_IGNORE(nowdb_index_enduse(xer->idx));
+	}
 	if (xer->tree != NULL) {
 		if (xer->tree->rsc != NULL) free(xer->tree->rsc);
 		ts_algo_tree_destroy(xer->tree);

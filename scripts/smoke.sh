@@ -7,6 +7,7 @@ fi
 
 echo "RUNNING TEST BATTERY 'SMOKE'" > log/test.log
 
+echo "running errsmoke" >> log/test.log
 test/smoke/errsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -14,6 +15,7 @@ then
 	exit 1
 fi
 
+echo "running timesmoke" >> log/test.log
 test/smoke/timesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -21,6 +23,7 @@ then
 	exit 1
 fi
 
+echo "running pathsmoke" >> log/test.log
 test/smoke/pathsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -28,6 +31,7 @@ then
 	exit 1
 fi
 
+echo "running tasksmoke" >> log/test.log
 test/smoke/tasksmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -35,6 +39,7 @@ then
 	exit 1
 fi
 
+echo "running queuesmoke" >> log/test.log
 test/smoke/queuesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -42,6 +47,7 @@ then
 	exit 1
 fi
 
+echo "running workersmoke" >> log/test.log
 test/smoke/workersmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -49,6 +55,7 @@ then
 	exit 1
 fi
 
+echo "running filesmoke" >> log/test.log
 test/smoke/filesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -56,6 +63,7 @@ then
 	exit 1
 fi
 
+echo "running filtersmoke" >> log/test.log
 test/smoke/filtersmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -63,6 +71,7 @@ then
 	exit 1
 fi
 
+echo "running storesmoke" >> log/test.log
 test/smoke/storesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -70,6 +79,7 @@ then
 	exit 1
 fi
 
+echo "running insertstoresmoke" >> log/test.log
 test/smoke/insertstoresmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -77,6 +87,7 @@ then
 	exit 1
 fi
 
+echo "running insertandsortstoresmoke" >> log/test.log
 test/smoke/insertandsortstoresmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -84,6 +95,7 @@ then
 	exit 1
 fi
 
+echo "running scopesmoke" >> log/test.log
 test/smoke/scopesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -91,6 +103,7 @@ then
 	exit 1
 fi
 
+echo "running readersmoke" >> log/test.log
 test/smoke/readersmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -98,6 +111,7 @@ then
 	exit 1
 fi
 
+echo "running indexsmoke" >> log/test.log
 test/smoke/indexsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
@@ -105,6 +119,7 @@ then
 	exit 1
 fi
 
+echo "running imansmoke" >> log/test.log
 test/smoke/imansmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then

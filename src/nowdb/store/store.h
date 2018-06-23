@@ -39,6 +39,8 @@ typedef struct {
 	nowdb_comp_t       comp; /* compression                 */
 	nowdb_compctx_t    *ctx; /* compression context         */
 	nowdb_comprsc_t compare; /* comparison                  */
+	void              *iman; /* index manager               */
+	void           *context; /* context for indexing        */
 	uint32_t        tasknum; /* number of sorter tasks      */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
@@ -94,6 +96,14 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
  */
 nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
                                       uint32_t    tasknum);
+
+/* ------------------------------------------------------------------------
+ * Configure indexing
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configIndexing(nowdb_store_t *store,
+                                       void           *iman,
+                                       void       *context);
 
 /* ------------------------------------------------------------------------
  * Destroy store
