@@ -600,6 +600,28 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 }
 
 /* ------------------------------------------------------------------------
+ * Insert into index 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
+                               char            *keys,
+                               nowdb_pageid_t    pge,
+                               nowdb_bitmap64_t *map) {
+	beet_err_t  ber;
+	beet_pair_t pair;
+
+	IDXNULL();
+
+	pair.key = &pge;
+	pair.data = map;
+
+	ber = beet_index_insert(idx->idx, keys, &pair);
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get index 'compare' method
  * ------------------------------------------------------------------------
  */
@@ -612,7 +634,7 @@ beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx) {
  * Get index resource
  * ------------------------------------------------------------------------
  */
-beet_compare_t nowdb_index_getResource(nowdb_index_t *idx) {
+void *nowdb_index_getResource(nowdb_index_t *idx) {
 	if (idx == NULL) return NULL;
 	return beet_index_getResource(idx->idx);
 }

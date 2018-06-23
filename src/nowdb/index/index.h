@@ -162,6 +162,15 @@ nowdb_err_t nowdb_index_use(nowdb_index_t *idx);
 nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx);
 
 /* ------------------------------------------------------------------------
+ * Insert into index 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
+                               char             *keys,
+                               nowdb_pageid_t    pge,
+                               nowdb_bitmap64_t *map);
+
+/* ------------------------------------------------------------------------
  * Get index 'compare' method
  * ------------------------------------------------------------------------
  */
@@ -171,6 +180,6 @@ beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx);
  * Get index resource
  * ------------------------------------------------------------------------
  */
-beet_compare_t nowdb_index_getResource(nowdb_index_t *idx);
+void *nowdb_index_getResource(nowdb_index_t *idx);
 
 #endif

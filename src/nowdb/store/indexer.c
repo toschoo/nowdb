@@ -25,8 +25,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	char      *keys;
-	uint64_t map[2];
+	char         *keys;
+	uint64_t    map[2];
 } xnode_t;
 
 #define XHLP(x) ((xhelper_t*)x)
@@ -141,7 +141,6 @@ void nowdb_indexer_destroy(nowdb_indexer_t *xer) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
-                                nowdb_pageid_t   pge,
                                 uint32_t         isz,
                                 char            *rec) {
 	xnode_t *n;
@@ -149,7 +148,7 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 	n = malloc(sizeof(xnode_t));
 	if (n == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                                "allocating xnode");
-	n->keys = malloc(XHLP(xer->tree->rsc)->keysz);
+	n->keys = malloc(XHLPT(xer->tree)->keysz);
 	if (n->keys == NULL) {
 		free(n);
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -158,13 +157,13 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 	memset(n->map, 0, 16);
 
 	if (isz == 64) { // this is bad!
-		nowdb_index_grabEdgeKeys(XHLP(xer->tree->rsc)->rsc,
-		                                     rec, n->keys);
+		nowdb_index_grabEdgeKeys(XHLPT(xer->tree)->rsc,
+		                                  rec, n->keys);
 	} else {
-		nowdb_index_grabVertexKeys(XHLP(xer->tree->rsc)->rsc,
-		                                       rec, n->keys);
+		nowdb_index_grabVertexKeys(XHLPT(xer->tree)->rsc,
+		                                    rec, n->keys);
 	}
-	xerupdate(xer->tree->rsc, n, NULL);
+	xerupdate(xer->tree, n, NULL);
 	if (ts_algo_tree_insert(xer->tree, n) != TS_ALGO_OK) {
 		xerdestroy(NULL, (void**)&n);
 		return nowdb_err_get(nowdb_err_no_mem,
@@ -188,6 +187,7 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 	uint32_t m = bsz/isz;
 	ts_algo_list_t *recs;
 	ts_algo_list_node_t *runner;
+	xnode_t *node;
 
 	/* initialise offset */
 	for(int i=0; i<n; i++) {
@@ -196,7 +196,7 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 	/* insert all records into trees */
 	for(; o<m; o++) {
 		for(int i=0; i<n; i++) {
-			err = doxer(xers+i, pge, isz, buf+isz*o);
+			err = doxer(xers+i, isz, buf+isz*o);
 			if (err != NOWDB_OK) return err;
 		}
 	}
@@ -206,7 +206,9 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 		if (recs == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		                          FALSE, OBJECT, "tree.toList");
 		for(runner=recs->head; runner!=NULL; runner=runner->nxt) {
-			err = NOWDB_OK; // nowdb_index_insert(xers[i].idx, runner->cont);
+			node = runner->cont;
+			err = nowdb_index_insert(xers[i].idx, node->keys,
+			                                 pge, node->map);
 			if (err != NOWDB_OK) {
 				ts_algo_list_destroy(recs);
 				return err;
