@@ -468,8 +468,9 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 		if (store->iman != NULL) destroyIndexer(xer, n);
 		return err;
 	}
-	pge = mkpageid(file, 0);
 	for(uint32_t i=0; i<size; i+=file->bufsize) {
+
+		pge = mkpageid(file, 0);
 
 		/* write to file... */
 		err = nowdb_file_writeBuf(file, buf+i, file->bufsize);
@@ -480,7 +481,6 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 		}
 
 		/* write to index... */
-		pge += i;
 		if (store->iman != NULL) {
 			fprintf(stderr, "indexing page %lu\n", pge);
 			err = nowdb_indexer_index(xer, n, pge,
