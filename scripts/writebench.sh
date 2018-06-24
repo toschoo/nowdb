@@ -36,7 +36,9 @@ then
 	exit 1
 fi
 
-bin/writecontextbench /opt/dbs/$scope -count $cnt -report 10000 > $target
+bin/writecontextbench /opt/dbs/$scope -count $cnt \
+	                              -report 10000 \
+				      -context ctx_bench > $target
 if [ $? -ne 0 ]
 then
 	echo "ERROR in writestorebench!"
