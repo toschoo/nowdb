@@ -19,6 +19,8 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
 	nowdb_edge_t e;
 
+	fprintf(stderr, "inserting %u random edges\n", count);
+
 	for(uint32_t i=0; i<count; i++) {
 
 		memset(&e,0,64);
@@ -60,6 +62,7 @@ nowdb_bool_t waitForSort(nowdb_store_t *store) {
 	int i;
 	int len;
 
+	fprintf(stderr, "waiting...\n");
 	for(i=0;i<max;i++) {
 		err = nowdb_lock_read(&store->lock);
 		if (err != NOWDB_OK) {
@@ -393,6 +396,10 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!insertEdges(&ctx->store, ONE)) {
+		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertEdges(&ctx->store, 2*ONE)) {
 		fprintf(stderr, "cannot insert into CTX_ONE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

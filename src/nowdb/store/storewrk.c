@@ -407,7 +407,6 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 		ts_algo_list_destroy(&idxes);
 		return NOWDB_OK;
 	}
-	fprintf(stderr, "got %d indices\n", idxes.len);
 
 	*xer = calloc(idxes.len, sizeof(nowdb_indexer_t));
 	if (*xer == NULL) {
@@ -418,7 +417,6 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 	*n = 0;
 	for(runner=idxes.head; runner!=NULL; runner=runner->nxt) {
 		nowdb_index_desc_t *desc= runner->cont;
-		fprintf(stderr, "initialising indexer for %s\n", desc->name);
 		err = nowdb_indexer_init((*xer)+(*n), 
 		                         desc->idx,
 		                         store->recsize);
@@ -427,7 +425,6 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 	}
 	ts_algo_list_destroy(&idxes);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "ERROR: \n"); nowdb_err_print(err);
 		destroyIndexer(*xer, *n); free(*xer); *xer = NULL;
 		return err;
 	}
@@ -456,8 +453,6 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 	nowdb_pageid_t pge;
 	uint32_t n=0;
 
-	fprintf(stderr, "putting content\n");
-
 	if (store->iman != NULL) {
 		err = getIndexer(store, &xer, &n);
 		if (err != NOWDB_OK) return err;
@@ -479,7 +474,6 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 		pge = mkpageid(file, 0);
 
 		/* write to file... */
-		fprintf(stderr, "writing page %lu to %u\n", pge, file->id);
 		err = nowdb_file_writeBuf(file, buf+i, file->bufsize);
 		if (err != NOWDB_OK) {
 			if (store->iman != NULL) destroyIndexer(xer, n);
@@ -489,7 +483,6 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 
 		/* write to index... */
 		if (store->iman != NULL) {
-			fprintf(stderr, "indexing page %lu\n", pge);
 			err = nowdb_indexer_index(xer, n, pge,
 			                          store->recsize, 
 			                          file->bufsize,
@@ -517,15 +510,16 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	nowdb_file_t *reader=NULL;
 	char *buf=NULL;
 
-	fprintf(stderr, "%s.%u SORTING\n", wrk->name, id);
+	/*
+	fprintf(stderr, "[%lu] %s.%u SORTING\n",
+	         pthread_self(), wrk->name, id);
+	*/
 
 	/* get waiting file 
 	 * we have to free it in case of error! */
 	err = nowdb_store_getWaiting(store, &src);
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
-
-	fprintf(stderr, "got waiting: %u\n", src->id);
 
 	/* get content from source */
 	buf = malloc(src->size);
@@ -559,8 +553,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		                    store->compare, NULL);
 	}
 
-	fprintf(stderr, "sorted: %u\n", src->id);
-
 	/* prepare compression */
 	if (store->comp == NOWDB_COMP_ZSTD) {
 		err = getZSTDResources(store, buf, src->size);
@@ -578,8 +570,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(src); free(src);
 		free(buf); return err;
 	}
-
-	fprintf(stderr, "got reader: %u\n", reader->id);
 
 	/* set file sorted */
 	if (store->compare != NULL) {
@@ -634,7 +624,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
 
-	// fprintf(stderr, "%s.%u DONE\n", wrk->name, id);
 	return NOWDB_OK;
 }
 

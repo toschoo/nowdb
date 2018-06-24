@@ -36,7 +36,6 @@ typedef struct {
 
 /* ------------------------------------------------------------------------
  * Compare converter
- * Careful: the index compares keys and needs a key resource!
  * ------------------------------------------------------------------------
  */
 ts_algo_cmp_t xercompare(void *x, void *left, void *right) {
@@ -72,13 +71,12 @@ ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
 		XNODE(o)->map[0] = 1;
 	} else if (*XHLPT(x)->off == 64) {
 		XNODE(o)->map[1] = 1;
-	} else {
+	} else if (*XHLPT(x)->off < 64) {
 		k <<= *XHLPT(x)->off;
-		if (*XHLPT(x)->off < 64) {
-			XNODE(o)->map[0] |= k;
-		} else {
-			XNODE(o)->map[1] |= k;
-		}
+		XNODE(o)->map[0] |= k;
+	} else {
+		k <<= (*XHLPT(x)->off-64);
+		XNODE(o)->map[1] |= k;
 	}
 	xerdestroy(x, &n);
 	return TS_ALGO_OK;
@@ -95,13 +93,8 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 	xhelper_t   *x;
 	xer->idx = idx;
 
-	fprintf(stderr, "initialising indexer...\n");
-	/*
 	err = nowdb_index_use(xer->idx);
 	if (err != NOWDB_OK) return err;
-	*/
-
-	fprintf(stderr, "using index...\n");
 
 	xer->tree = ts_algo_tree_new(&xercompare, NULL,
 	                             &xerupdate,
@@ -117,14 +110,9 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 		   FALSE, OBJECT, "allocating helper");
 	}
 
-	fprintf(stderr, "tree ready...\n");
-
 	x->compare = nowdb_index_getCompare(idx);
 	x->rsc = nowdb_index_getResource(idx);
 	xer->tree->rsc = x;
-
-	fprintf(stderr, "indexer compare : %p\n", x->compare);
-	fprintf(stderr, "indexer resource: %p\n", x->rsc);
 
 	x->keysz = isz==64?nowdb_index_keySizeEdge(x->rsc):
 		           nowdb_index_keySizeVertex(x->rsc);
@@ -144,11 +132,9 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
  */
 void nowdb_indexer_destroy(nowdb_indexer_t *xer) {
 	if (xer == NULL) return;
-	/*
 	if (xer->idx != NULL) {
 		NOWDB_IGNORE(nowdb_index_enduse(xer->idx));
 	}
-	*/
 	if (xer->tree != NULL) {
 		if (xer->tree->rsc != NULL) free(xer->tree->rsc);
 		ts_algo_tree_destroy(xer->tree);

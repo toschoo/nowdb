@@ -127,4 +127,12 @@ then
 	exit 1
 fi
 
+echo "running indexersmoke" >> log/test.log
+test/smoke/indexersmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: indexersmoke failed"
+	exit 1
+fi
+
 echo "PASSED"
