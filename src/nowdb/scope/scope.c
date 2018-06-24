@@ -914,6 +914,7 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		goto unlock;
 	}
+
 	err = initIndexMan(scope);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));

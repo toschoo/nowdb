@@ -109,6 +109,7 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
+	bin/waitscope     \
 	bin/writecsv      \
 	bin/scopetool
 
@@ -414,6 +415,12 @@ $(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
 			                 $(libs) -lnowdb
 
+$(BIN)/waitscope:	$(LIB) $(DEP) $(TOOLS)/waitscope.o $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitscope.o \
+			                 $(COM)/cmd.o \
+			                 $(libs) -lnowdb
+
 $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              $(COM)/bench.o      \
 			              $(COM)/cmd.o
@@ -492,6 +499,7 @@ clean:
 	rm -f $(BIN)/parserbench
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
+	rm -f $(BIN)/waitscope
 	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/scopetool
 	rm -f $(BIN)/qstress
