@@ -529,6 +529,8 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
 	if (desc->keys == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                           FALSE, OBJECT, "desc keys is NULL");
 
+	fprintf(stderr, "opening index '%s/%s'\n", path, desc->name);
+
 	beet_open_config_ignore(&cfg);
 	cfg.rsc = desc->keys;
 
@@ -558,6 +560,7 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
 		free(desc->idx); desc->idx = NULL; free(hp);
 		return makeBeetError(ber);
 	}
+	fprintf(stderr, "beet is: %p.%p.%p\n", desc, desc->idx, desc->idx->idx);
 	free(hp);
 	return NOWDB_OK;
 }
@@ -627,6 +630,8 @@ nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
  */
 beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx) {
 	if (idx == NULL) return NULL;
+	fprintf(stderr, "index: %p\n", idx);
+	fprintf(stderr, "beet : %p\n", idx->idx);
 	return beet_index_getCompare(idx->idx);
 }
 

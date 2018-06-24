@@ -12,6 +12,83 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#define ONE    16384
+#define DELAY  10000000
+
+nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
+	nowdb_err_t err;
+	nowdb_edge_t e;
+
+	for(uint32_t i=0; i<count; i++) {
+
+		memset(&e,0,64);
+
+		do e.origin = rand()%100; while(e.origin == 0);
+		do e.destin = rand()%100; while(e.destin == 0);
+		do e.edge   = rand()%10; while(e.edge == 0);
+		do e.label  = rand()%10; while(e.label == 0);
+		err = nowdb_time_now(&e.timestamp);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "insert error\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+		e.weight = (uint64_t)i;
+		e.weight2  = 0;
+		e.wtype[0] = NOWDB_TYP_UINT;
+		e.wtype[1] = NOWDB_TYP_NOTHING;
+
+		err = nowdb_store_insert(store, &e);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "insert error\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+	}
+	/*
+	fprintf(stderr, "inserted %u (last: %lu)\n",
+	                           count, e.weight);
+	*/
+	return TRUE;
+}
+
+nowdb_bool_t waitForSort(nowdb_store_t *store) {
+	nowdb_err_t err;
+	int max = 1000;
+	int i;
+	int len;
+
+	for(i=0;i<max;i++) {
+		err = nowdb_lock_read(&store->lock);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+		len = store->waiting.len;
+		err = nowdb_unlock_read(&store->lock);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+		if (len == 0) break;
+		err = nowdb_task_sleep(DELAY);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+	}
+	if (i > max) {
+		fprintf(stderr, "waited for too long\n");
+		return FALSE;
+	}
+	return TRUE;
+}
+
 nowdb_scope_t *mkScope(nowdb_path_t path) {
 	nowdb_err_t err;
 	nowdb_scope_t *scope;
@@ -85,8 +162,8 @@ int createContext(nowdb_scope_t *scope, char *name) {
 	nowdb_err_t err;
 	nowdb_ctx_config_t cfg;
 
-	cfg.allocsize = 1;
-	cfg.largesize = 1;
+	cfg.allocsize = NOWDB_MEGA;
+	cfg.largesize = NOWDB_MEGA;
 	cfg.sorters   = 1;
 	cfg.sort      = 1;
 	cfg.comp      = NOWDB_COMP_ZSTD;
@@ -244,9 +321,24 @@ int testGetIdx(nowdb_scope_t  *scope,
 	return 1;
 }
 
+nowdb_context_t *getContext(nowdb_scope_t *scope,
+                            char        *ctxname) {
+	nowdb_err_t      err;
+	nowdb_context_t *ctx;
+
+	err = nowdb_scope_getContext(scope, "CTX_ONE", &ctx);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return NULL;
+	}
+	return ctx;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_scope_t *scope = NULL;
+	nowdb_context_t *ctx;
 
 	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init environment\n");
@@ -291,14 +383,21 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for IDX_ONE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	/*
-	if (!testGetIdx(scope, "IDX_TWO", "CTX_ONE", 2)) {
-		fprintf(stderr, "testGetIdx failed for IDX_TWO\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	*/
 	if (!testGetIdx(scope, "IDX_VIER", NULL, 2)) {
 		fprintf(stderr, "createIndex failed for IDX_VIER\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	ctx = getContext(scope, "CTX_ONE");
+	if (ctx == NULL) {
+		fprintf(stderr, "cannot get context CTX_ONE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertEdges(&ctx->store, ONE)) {
+		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!waitForSort(&ctx->store)) {
+		fprintf(stderr, "CTX_ONE does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

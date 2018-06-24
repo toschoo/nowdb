@@ -167,8 +167,8 @@ int createContext(nowdb_scope_t *scope, char *name) {
 	nowdb_err_t err;
 	nowdb_ctx_config_t cfg;
 
-	cfg.allocsize = 1;
-	cfg.largesize = 1;
+	cfg.allocsize = NOWDB_MEGA;
+	cfg.largesize = NOWDB_MEGA;
 	cfg.sorters   = 1;
 	cfg.sort      = 1;
 	cfg.comp      = NOWDB_COMP_ZSTD;

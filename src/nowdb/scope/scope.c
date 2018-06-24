@@ -461,6 +461,12 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
+	err = nowdb_store_configIndexing(&(*ctx)->store, scope->iman, *ctx);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&(*ctx)->store);
+		free((*ctx)->name); free(*ctx); *ctx = NULL;
+		return err;
+	}
 	err = nowdb_store_configWorkers(&(*ctx)->store, cfg->sorters);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);

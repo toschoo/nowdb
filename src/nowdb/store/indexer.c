@@ -40,9 +40,9 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 ts_algo_cmp_t xercompare(void *x, void *left, void *right) {
-	char cmp = XHLP(x)->compare(XNODE(left)->keys,
-	                            XNODE(right)->keys,
-	                            XHLPT(x)->rsc);
+	char cmp = XHLPT(x)->compare(XNODE(left)->keys,
+	                             XNODE(right)->keys,
+	                             XHLPT(x)->rsc);
 	if (cmp == BEET_CMP_LESS) return ts_algo_cmp_less;
 	if (cmp == BEET_CMP_GREATER) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
@@ -95,8 +95,13 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 	xhelper_t   *x;
 	xer->idx = idx;
 
+	fprintf(stderr, "initialising indexer...\n");
+	/*
 	err = nowdb_index_use(xer->idx);
 	if (err != NOWDB_OK) return err;
+	*/
+
+	fprintf(stderr, "using index...\n");
 
 	xer->tree = ts_algo_tree_new(&xercompare, NULL,
 	                             &xerupdate,
@@ -112,9 +117,14 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 		   FALSE, OBJECT, "allocating helper");
 	}
 
+	fprintf(stderr, "tree ready...\n");
+
 	x->compare = nowdb_index_getCompare(idx);
 	x->rsc = nowdb_index_getResource(idx);
 	xer->tree->rsc = x;
+
+	fprintf(stderr, "indexer compare : %p\n", x->compare);
+	fprintf(stderr, "indexer resource: %p\n", x->rsc);
 
 	x->keysz = isz==64?nowdb_index_keySizeEdge(x->rsc):
 		           nowdb_index_keySizeVertex(x->rsc);
@@ -134,9 +144,11 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
  */
 void nowdb_indexer_destroy(nowdb_indexer_t *xer) {
 	if (xer == NULL) return;
+	/*
 	if (xer->idx != NULL) {
 		NOWDB_IGNORE(nowdb_index_enduse(xer->idx));
 	}
+	*/
 	if (xer->tree != NULL) {
 		if (xer->tree->rsc != NULL) free(xer->tree->rsc);
 		ts_algo_tree_destroy(xer->tree);
