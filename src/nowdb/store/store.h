@@ -23,6 +23,10 @@
 
 #include <zstd.h>
 
+/* ------------------------------------------------------------------------
+ * Store
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
@@ -45,7 +49,15 @@ typedef struct {
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
+	char              state; /* open or closed              */
 } nowdb_store_t;
+
+/* ------------------------------------------------------------------------
+ * Store state
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_STORE_CLOSED 0
+#define NOWDB_STORE_OPEN   1
 
 /* ------------------------------------------------------------------------
  * Default compare for edges and vertices

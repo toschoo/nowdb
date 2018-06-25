@@ -323,6 +323,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->filesize = filesize;
 	store->largesize = largesize;
 	store->starting = FALSE;
+	store->state = NOWDB_STORE_CLOSED;
 	store->path = NULL;
 	store->catalog = NULL;
 	store->writer = NULL;
@@ -1156,6 +1157,9 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	if (err != NOWDB_OK) {
 		destroyAllFiles(store); goto unlock;
 	}
+
+	store->state = NOWDB_STORE_OPEN;
+
 unlock:
 	store->starting = FALSE;
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1173,7 +1177,19 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	nowdb_err_t err  = NOWDB_OK;
 	nowdb_err_t err2 = NOWDB_OK;
 
-	/* stop workers
+	/* check if store is open */
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+	
+	if (store->state != NOWDB_STORE_OPEN) {
+		return nowdb_unlock_write(&store->lock);
+	}
+
+	/* close store is NOT THREADSAFE */
+	err = nowdb_unlock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* stop workers: IS NOT THREADSAFE!!!
 	 * DONT LOCK the store when stopping workers! */
 	err = stopWorkers(store);
 	if (err != NOWDB_OK) return err;
@@ -1187,6 +1203,8 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 
 	destroyAllFiles(store);
 	err = initAllFiles(store);
+
+	store->state = NOWDB_STORE_CLOSED;
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);

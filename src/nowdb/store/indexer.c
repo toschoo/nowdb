@@ -216,12 +216,12 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 			err = nowdb_index_insert(xers[i].idx, node->keys,
 			                                 pge, node->map);
 			if (err != NOWDB_OK) {
-				ts_algo_list_destroy(recs);
+				ts_algo_list_destroy(recs); free(recs);
 				return err;
 			}
 			ts_algo_tree_delete(xers[i].tree, runner->cont);
 		}
-		ts_algo_list_destroy(recs);
+		ts_algo_list_destroy(recs); free(recs);
 	}
 	return NOWDB_OK;
 }

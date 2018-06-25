@@ -483,6 +483,39 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: open all contexts
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t openAllContexts(nowdb_scope_t *scope) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t *list;
+	ts_algo_list_node_t *runner;
+	nowdb_context_t *ctx;
+
+	if (scope->contexts.count == 0) return NOWDB_OK;
+
+	list = ts_algo_tree_toList(&scope->contexts);
+	if (list == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                          FALSE, OBJECT, "tree.toList");
+
+	for(runner=list->head; runner != NULL; runner=runner->nxt) {
+		ctx = runner->cont;
+
+		/* fprintf(stderr, "opening %s\n", ctx->name); */
+
+		err = nowdb_context_err(ctx,
+		      nowdb_store_configIndexing(&ctx->store,
+		                           scope->iman, ctx));
+		if (err != NOWDB_OK) break;
+
+		err = nowdb_context_err(ctx, nowdb_store_open(&ctx->store));
+		if (err != NOWDB_OK) break;
+	}
+	ts_algo_list_destroy(list); free(list);
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Helper: find a context
  * -----------------------------------------------------------------------
  */
@@ -537,12 +570,8 @@ static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
 	}
 	if (i > 255) return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
 	                                                "no context name");
-	/* fprintf(stderr, "opening %s\n", buf+*off); */
 
 	err = initContext(scope, buf+*off, &cfg, ver, &ctx);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_context_err(ctx, nowdb_store_open(&ctx->store));
 	if (err != NOWDB_OK) return err;
 
 	*off += i + 1;
@@ -916,6 +945,12 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	}
 
 	err = initIndexMan(scope);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		goto unlock;
+	}
+
+	err = openAllContexts(scope);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		goto unlock;

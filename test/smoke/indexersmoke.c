@@ -407,6 +407,27 @@ int main() {
 		fprintf(stderr, "CTX_ONE does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (!closeScope(scope)) {
+		fprintf(stderr, "cannot close scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!openScope(scope)) {
+		fprintf(stderr, "cannot close scope\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	ctx = getContext(scope, "CTX_ONE");
+	if (ctx == NULL) {
+		fprintf(stderr, "cannot get context CTX_ONE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertEdges(&ctx->store, 3*ONE)) {
+		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!waitForSort(&ctx->store)) {
+		fprintf(stderr, "CTX_ONE does not get sorted\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 
 cleanup:
 	if (scope != NULL) {
