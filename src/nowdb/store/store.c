@@ -431,7 +431,7 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
 	store->comp = comp;
 	if (comp == NOWDB_COMP_FLAT) return NOWDB_OK;
 	
-	err = nowdb_compctx_new(&store->ctx, 4, 128);
+	err = nowdb_compctx_new(&store->ctx, 32, 128);
 	if (err != NOWDB_OK) return err;
 
 	return NOWDB_OK;
@@ -1857,6 +1857,7 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
+	file->used = FALSE;
 	err = makeSpare(store, file);
 
 	err2 = nowdb_unlock_write(&store->lock);

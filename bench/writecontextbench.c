@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	fprintf(stdout, "Running time: %luus\n", d);
-	nowdb_task_sleep(1000000000);
+	nowdb_task_sleep(5000000000l);
 cleanup:
 	if (scope != NULL) {
 		err = nowdb_scope_close(scope);

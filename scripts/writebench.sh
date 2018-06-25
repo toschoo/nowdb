@@ -20,7 +20,7 @@ echo "count : $cnt"
 
 sql="create scope $scope if not exists"
 sql="$sql; use $scope"
-sql="$sql; create big context ctx_bench if not exists"
+sql="$sql; create big context ctx_bench set stress=constant if not exists"
 sql="$sql; create big index idx_bench1 on ctx_bench (origin, edge) if not exists"
 sql="$sql; create big index idx_bench2 on ctx_bench (destin, edge) if not exists"
 
@@ -31,7 +31,7 @@ then
 	exit 1
 fi
 
-valgrind bin/writecontextbench /opt/dbs/$scope -count $cnt \
+bin/writecontextbench /opt/dbs/$scope -count $cnt \
 	                              -report 10000 \
 				      -context ctx_bench > $target
 if [ $? -ne 0 ]
