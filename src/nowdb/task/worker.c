@@ -156,10 +156,10 @@ static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
 		if (wrk->running == expected) {
 			return nowdb_unlock(&wrk->lock);
 		}
-		/*
+		
 		fprintf(stderr, "%s waiting for %u, having %u\n",
 		        wrk->name, expected, wrk->running);
-		*/
+		
 		err = nowdb_unlock(&wrk->lock);
 		if (err != NOWDB_OK) return err;
 

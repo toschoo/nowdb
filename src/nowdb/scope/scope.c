@@ -1217,14 +1217,12 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 	if (err != NOWDB_OK) {
 		free(path);
 		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
-		nowdb_index_desc_destroy(desc); free(desc);
 		goto unlock;
 	}
 
 	err = nowdb_index_open(path, nowdb_lib(), desc); free(path);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
-		nowdb_index_desc_destroy(desc); free(desc);
 		goto unlock;
 	}
 
