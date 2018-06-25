@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
 		fprintf(stdout, "\b\b\b\b\b\b\b\b");
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
-		for(int i=1;i<len;i++) {
+		for(int i=1;i<len;i+=2) {
 			err = nowdb_store_sortNow(&ctx->store.sortwrk);
 			if (err != NOWDB_OK) {
 				fprintf(stderr,

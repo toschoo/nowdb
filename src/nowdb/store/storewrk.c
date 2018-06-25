@@ -32,8 +32,8 @@
  * Sorter Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SORTPERIOD    500000000l
-#define SORTTIMEOUT 60000000000l
+#define SORTPERIOD     500000000l
+#define SORTTIMEOUT 300000000000l
 
 /* ------------------------------------------------------------------------
  * Syncjob predeclaration
@@ -520,6 +520,11 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	err = nowdb_store_getWaiting(store, &src);
 	if (err != NOWDB_OK) return err;
 	if (src == NULL) return NOWDB_OK;
+
+	/*
+	fprintf(stderr, "[%lu] %s.%u WAITING\n",
+	         pthread_self(), wrk->name, id);
+	*/
 
 	/* get content from source */
 	buf = malloc(src->size);

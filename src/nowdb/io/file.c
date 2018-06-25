@@ -11,6 +11,8 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#include <pthread.h> // debug!!!
+
 static char *OBJECT = "file";
 
 /* ------------------------------------------------------------------------
@@ -401,6 +403,10 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 	size_t sz;
 
 	if (file->cdict != NULL) {
+		/*
+		fprintf(stderr, "[%lu] pointers: %p, %p, %p, %p\n", pthread_self(),
+				file->cctx, file->tmp, buf, file->cdict);
+		*/
 		sz = ZSTD_compress_usingCDict(file->cctx,
 		                              file->tmp, file->bufsize,
 		                              buf, size,

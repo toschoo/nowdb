@@ -78,7 +78,7 @@ nowdb_err_t nowdb_compctx_init(nowdb_compctx_t *ctx,
 	if (csize > 32) return nowdb_err_get(nowdb_err_invalid,
 	                                        FALSE, "store",
 	         "compression context size too big (max: 32)");
-	if (csize > 128) return nowdb_err_get(nowdb_err_invalid,
+	if (dsize > 128) return nowdb_err_get(nowdb_err_invalid,
 	                                         FALSE, "store",
 	       "decompression context size too big (max: 128)");
 	

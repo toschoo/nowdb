@@ -77,7 +77,6 @@ static void *wrkentry(void *p) {
 		                           wrk->period,   /* wait for   */
 		                           (void**)&msg); /* one period */
 		if (err != NOWDB_OK) {
-
 			/* on timeout: perform the job without message */
 			if (err->errcode == nowdb_err_timeout) {
 				nowdb_err_release(err);
@@ -157,8 +156,10 @@ static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
 			return nowdb_unlock(&wrk->lock);
 		}
 		
+		/*
 		fprintf(stderr, "%s waiting for %u, having %u\n",
 		        wrk->name, expected, wrk->running);
+		*/
 		
 		err = nowdb_unlock(&wrk->lock);
 		if (err != NOWDB_OK) return err;

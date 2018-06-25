@@ -935,6 +935,7 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		                                   scope->catalog);
 		goto unlock;
 	}
+	
 	err = nowdb_store_open(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
 
