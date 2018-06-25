@@ -7,19 +7,14 @@ fi
 
 if [ $# -lt 2 ]
 then
-	target=raw.txt
-else
-	target=$2
-fi
-
-if [ $# -lt 3 ]
-then
 	cnt=1000000
 else
-	cnt=$3
+	cnt=$2
 fi
 
-echo "path  : $path"
+target=raw.txt
+
+echo "path  : /opt/dbs/$scope"
 echo "target: $target"
 echo "count : $cnt"
 

@@ -25,7 +25,12 @@ avg=$(($s/$n))
 tail -n+5 $sf | head -n-5 | tr "\n" "+" > sum.$file.tmp
 echo 0 >> sum.$file.tmp
 s2=$(cat sum.$file.tmp | bc)
-avg2=$(($s2/($n-10)))
+if [ $n -gt 10 ]
+then
+	avg2=$(($s2/($n-10)))
+else
+	avg2=$avg
+fi
 
 rm sum.$file.tmp
 
