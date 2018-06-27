@@ -32,7 +32,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->start = NULL;
 	reader->end = NULL;
 	reader->filter = NULL;
-	reader->index = NULL;
+	reader->iter  = NULL;
+	reader->state = NULL;
 	reader->order= NULL;
 	reader->current = NULL;
 
@@ -57,7 +58,25 @@ static inline nowdb_err_t newReader(nowdb_reader_t **reader) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: allocate and initialise a new reader
+ * Helper: make beet error
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t makeBeetError(beet_err_t ber) {
+	nowdb_err_t err, err2=NOWDB_OK;
+
+	if (ber == BEET_OK) return NOWDB_OK;
+	if (ber < BEET_OSERR_ERRNO) {
+		err2 = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
+		                          (char*)beet_oserrdesc());
+	}
+	err = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
+	                         (char*)beet_errdesc(ber));
+	if (err == NOWDB_OK) return err2; else err->cause = err2;
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: rewind fullscan reader
  * ------------------------------------------------------------------------
  */
 nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
@@ -80,6 +99,24 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: rewind search reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
+	beet_err_t  ber;
+
+	reader->closeit = FALSE;
+	reader->page = NULL; 
+	reader->off = 0; 
+
+	ber = beet_iter_reset(reader->iter);
+	if (ber != BEET_OK) {
+		return makeBeetError(ber);
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Destroy
  * ------------------------------------------------------------------------
  */
@@ -91,6 +128,18 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		return;
 
 	case NOWDB_READER_SEARCH:
+		reader->files =NULL;
+		if (reader->iter != NULL) {
+			beet_iter_destroy(reader->iter);
+			reader->iter = NULL;
+		}
+		if (reader->state != NULL) {
+			beet_state_release(reader->state);
+			beet_state_destroy(reader->state);
+			reader->state = NULL;
+		}
+		return;
+
 	case NOWDB_READER_RANGE:
 	case NOWDB_READER_BUF:
 		fprintf(stderr, "not implemented\n");
@@ -187,6 +236,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 	case NOWDB_READER_FULLSCAN:
 		return rewindFullscan(reader);
 	case NOWDB_READER_SEARCH:
+		return rewindSearch(reader);
 	case NOWDB_READER_RANGE:
 	case NOWDB_READER_BUF:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -270,7 +320,53 @@ nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter);
+                                char            *key,
+                                nowdb_filter_t  *filter) {
+	nowdb_err_t err;
+	beet_err_t  ber;
+
+	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
+	        FALSE, OBJECT, "pointer to reader object is NULL");
+	if (files == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "files object is NULL");
+	if (files->head == NULL) return nowdb_err_get(nowdb_err_eof,
+	                                       FALSE, OBJECT, NULL);
+	if (files->head->cont == NULL) return nowdb_err_get(
+	     nowdb_err_invalid, FALSE, OBJECT, "empty list");
+	err = newReader(reader);
+	if (err != NOWDB_OK) return err;
+
+	(*reader)->type = NOWDB_READER_SEARCH;
+	(*reader)->filter = filter;
+	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->files = files;
+
+	ber = beet_iter_alloc(index->idx, &(*reader)->iter);
+	if (ber != BEET_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return makeBeetError(ber);
+	}
+
+	ber = beet_state_alloc(index->idx, &(*reader)->state);
+	if (ber != BEET_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return makeBeetError(ber);
+	}
+
+	ber = beet_index_getIter(index->idx, (*reader)->state, key,
+	                                     (*reader)->iter);
+	if (ber != BEET_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return makeBeetError(ber);
+	}
+
+	err = rewindSearch(*reader);
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return err;
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Index Range scan

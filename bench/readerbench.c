@@ -22,7 +22,7 @@ void helptxt(char *progname) {
 	fprintf(stderr, "the scope must exist!\n");
 	fprintf(stderr, "all options are in the format -opt value\n");
 	fprintf(stderr, "-count n: number of edges to read\n");
-	fprintf(stderr, "-conext c: existing contet within that scope\n");
+	fprintf(stderr, "-context c: existing context within that scope\n");
 	fprintf(stderr, "-query t: query type; possible values:\n");
 	fprintf(stderr, "          'fullscan' : performs a simple fullscan\n");
 	fprintf(stderr, "          'fullscan+': performs a fullscan +\n");
@@ -34,6 +34,8 @@ void helptxt(char *progname) {
 	fprintf(stderr, "          'range+'   : performs a range scan +\n");
 	fprintf(stderr, "                       a scan over pending files\n");
 	fprintf(stderr, "-iter   n: number of iterations (default: 1)\n");
+	fprintf(stderr, "-index  i: name of the index (default: none)\n");
+	fprintf(stderr, "-keys   k: comma-separated list of keys (default: none)\n");
 }
 
 /* ------------------------------------------------------------------------
@@ -43,13 +45,17 @@ void helptxt(char *progname) {
  *               when we have read more
  * global_iter: repeat n times
  * global_qry_type: fullscan, index search, etc.
- * global_context: that the context from which we will read
+ * global_context: the context from which we will read
+ * global_index  : the index which we will search
+ * global_keys   : the keys for which we will search
  * ------------------------------------------------------------------------
  */
 uint32_t global_count = 1000000;
 uint32_t global_iter = 1;
 char *global_qry_type = NULL;
 char *global_context  = NULL;
+char *global_index    = NULL;
+char *global_keys     = NULL;
 
 #define FULLSCAN     10
 #define FULLSCANPLUS 11
@@ -89,7 +95,51 @@ int parsecmd(int argc, char **argv) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
 	}
+	global_index = ts_algo_args_findString(
+	  argc, argv, 2, "index", NULL, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+	global_keys = ts_algo_args_findString(
+	  argc, argv, 2, "keys", NULL, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
 	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * keys
+ * very simple right now!
+ * ------------------------------------------------------------------------
+ */
+char *getKeys(char *keys) {
+	char *str;
+	char *res;
+	char *dl = ",";
+	char *k;
+	int i = 0;
+	uint64_t tmp;
+
+	str = strdup(keys);
+	if (str == NULL) return NULL;
+
+	k = malloc(5*8);
+	if (k == NULL) {
+		free(str); return NULL;
+	}
+
+	res = strtok(str,dl);
+	while (res != NULL) {
+		tmp = (uint64_t)atol(res);
+		// fprintf(stderr, "'%lu'\n", tmp);
+		memcpy(k+i, &tmp, 8); i+=8;
+		res = strtok(NULL, dl);
+	}
+	free(str);
+	return k;
 }
 
 /* ------------------------------------------------------------------------
@@ -106,23 +156,27 @@ typedef struct {
  * do the benchmarks
  * ------------------------------------------------------------------------
  */
-nowdb_bool_t performRead(nowdb_context_t *ctx, int qt, result_t *res) {
+nowdb_bool_t performRead(nowdb_scope_t  *scope,
+                         nowdb_context_t  *ctx,
+                         int qt, result_t *res) {
 	struct timespec t1, t2, t3;
 
-	nowdb_err_t err;
+	nowdb_err_t err = NOWDB_OK;
 	nowdb_reader_t *reader;
 	ts_algo_list_t files;
+	nowdb_index_t  *idx;
+	char *keys;
 	uint64_t s = 0;
 
 	timestamp(&t1);
 
 	ts_algo_list_init(&files);
 
-	if (qt == FULLSCAN) {
+	if (qt == FULLSCAN || qt == SEARCH) {
 		err = nowdb_store_getReaders(&ctx->store, &files,
 		                                 NOWDB_TIME_DAWN,
 		                                 NOWDB_TIME_DUSK);
-	} else if (qt == FULLSCANPLUS) {
+	} else if (qt == FULLSCANPLUS || qt == SEARCHPLUS) {
 		err = nowdb_store_getFiles(&ctx->store, &files,
 		                               NOWDB_TIME_DAWN,
 		                               NOWDB_TIME_DUSK);
@@ -136,7 +190,40 @@ nowdb_bool_t performRead(nowdb_context_t *ctx, int qt, result_t *res) {
 		nowdb_err_print(err); nowdb_err_release(err);
 		return FALSE;
 	}
-	err = nowdb_reader_fullscan(&reader, &files, NULL);
+	if (qt == FULLSCAN || qt == FULLSCANPLUS) {
+
+		err = nowdb_reader_fullscan(&reader, &files, NULL);
+
+	} else if (qt == SEARCH || qt == SEARCHPLUS) {
+		if (global_index == NULL) {
+			ts_algo_list_destroy(&files);
+			fprintf(stderr, "I need an index\n");
+			return FALSE;
+		}
+		if (global_keys == NULL) {
+			ts_algo_list_destroy(&files);
+			fprintf(stderr, "I need keys\n");
+			return FALSE;
+		}
+		keys = getKeys(global_keys);
+		if (keys == NULL) {
+			ts_algo_list_destroy(&files);
+			fprintf(stderr, "cannot parse keys\n");
+			return FALSE;
+		}
+
+		err = nowdb_scope_getIndexByName(scope, global_index, &idx);
+		if (err != NOWDB_OK) {
+			ts_algo_list_destroy(&files);
+			fprintf(stderr, "cannot find index %s\n", global_index);
+			nowdb_err_print(err); nowdb_err_release(err);
+			free(keys);
+			return FALSE;
+		}
+
+		err = nowdb_reader_search(&reader, &files, idx, keys, NULL);
+		free(keys);
+	}
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create reader :-(\n");
 		nowdb_err_print(err); nowdb_err_release(err);
@@ -221,16 +308,22 @@ int main(int argc, char **argv) {
 
 	if (strcmp(global_qry_type, "fullscan") == 0 ||
 	    strcmp(global_qry_type, "FULLSCAN") == 0 ||
-	    strcmp(global_qry_type, "f")        == 0) qt = FULLSCAN;
+	    strcmp(global_qry_type, "f")        == 0 ||
+	    strcmp(global_qry_type, "F")        == 0) qt = FULLSCAN;
 	else if (strcmp(global_qry_type, "fullscan+") == 0 || 
 	         strcmp(global_qry_type, "FULLSCAN+") == 0 ||
-	         strcmp(global_qry_type, "f+")        == 0)  qt = FULLSCANPLUS;
+	         strcmp(global_qry_type, "F+")        == 0 ||
+	         strcmp(global_qry_type, "f+")        == 0 ) qt = FULLSCANPLUS;
+	else if (strcmp(global_qry_type, "search") == 0 || 
+	         strcmp(global_qry_type, "SEARCH") == 0 || 
+	         strcmp(global_qry_type, "s")      == 0 || 
+	         strcmp(global_qry_type, "S")      == 0) qt = SEARCH;
 	else {
 		fprintf(stderr, "unknown query type\n");
 		return EXIT_FAILURE;
 	}
 
-	if (!nowdb_err_init()) {
+	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
@@ -266,7 +359,7 @@ int main(int argc, char **argv) {
 	}
 	init_progress(&p, stdout, global_iter);
 	for(int i=0; i<global_iter; i++) {
-		if (!performRead(ctx, qt, &res)) {
+		if (!performRead(scope, ctx, qt, &res)) {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		overall[i]  = res.overall;
@@ -314,7 +407,7 @@ cleanup:
 		NOWDB_IGNORE(nowdb_scope_close(scope));
 		nowdb_scope_destroy(scope); free(scope);
 	}
-	nowdb_err_destroy();
+	nowdb_close();
 	return rc;
 }
 
