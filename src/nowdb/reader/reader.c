@@ -36,6 +36,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->state = NULL;
 	reader->order= NULL;
 	reader->current = NULL;
+	reader->file = NULL;
+	reader->cont = NULL;
 
 	return NOWDB_OK;
 }
@@ -87,6 +89,7 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 	                                           FALSE, OBJECT, NULL);
 	reader->closeit = FALSE;
 	reader->page = NULL; 
+	reader->cont = NULL; 
 	reader->off = 0; 
 
 	if (((nowdb_file_t*)reader->current->cont)->state ==
@@ -102,11 +105,20 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
  * Helper: rewind search reader
  * ------------------------------------------------------------------------
  */
-nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
+static inline nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
 	beet_err_t  ber;
+	nowdb_err_t err;
+
+	if (reader->file != NULL) {
+		if (reader->closeit) {
+			err = nowdb_file_close(reader->file);
+			if (err != NOWDB_OK) return err;
+		}
+	}
 
 	reader->closeit = FALSE;
 	reader->page = NULL; 
+	reader->file = NULL;
 	reader->off = 0; 
 
 	ber = beet_iter_reset(reader->iter);
@@ -128,7 +140,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		return;
 
 	case NOWDB_READER_SEARCH:
-		reader->files =NULL;
+		reader->files = NULL;
 		if (reader->iter != NULL) {
 			beet_iter_destroy(reader->iter);
 			reader->iter = NULL;
@@ -137,6 +149,10 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			beet_state_release(reader->state);
 			beet_state_destroy(reader->state);
 			reader->state = NULL;
+		}
+		if (reader->file != NULL) {
+			NOWDB_IGNORE(nowdb_file_close(reader->file));
+			reader->file = NULL;
 		}
 		return;
 
@@ -194,6 +210,75 @@ static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get fileid and pos from pageid
+ * ------------------------------------------------------------------------
+ */
+static inline void getFilePos(nowdb_pageid_t  pge,
+                              nowdb_fileid_t *fid,
+                              uint32_t       *pos) {
+	nowdb_pageid_t tmp;
+	*fid = (uint32_t)(pge >> 32);
+	tmp = pge << 32;
+	*pos = (uint32_t)(tmp >> 32);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find file in list (not optimal)
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_file_t *findfile(ts_algo_list_t *list,
+                                     nowdb_fileid_t   fid) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t        *file;
+
+	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
+		file = runner->cont;
+		if (file->id == fid) return file;
+	}
+	return NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: switch page
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
+	nowdb_err_t err;
+	nowdb_fileid_t fid;
+	uint32_t pos;
+
+	getFilePos(pge, &fid, &pos);
+
+	// fprintf(stderr, "file: %u/%u (%lu)\n", fid, pos, pge);
+
+	if (reader->file != NULL) {
+		if (reader->file->id != fid) {
+			err = nowdb_file_close(reader->file);
+			if (err != NOWDB_OK) return err;
+			reader->file = NULL;
+		}
+	}
+	if (reader->file == NULL) {
+		reader->file = findfile(reader->files, fid);
+		if (reader->file == NULL) {
+			fprintf(stderr, "file not found\n");
+			return nowdb_err_get(nowdb_err_key_not_found,
+			                         FALSE, OBJECT, NULL);
+		}
+		err = nowdb_file_open(reader->file);
+		if (err != NOWDB_OK) return err;
+	}
+	err = nowdb_file_position(reader->file, pos);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_file_move(reader->file);
+	if (err != NOWDB_OK) return err;
+
+	reader->page = reader->file->bptr;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: move for fullscan
  * ------------------------------------------------------------------------
  */
@@ -201,6 +286,41 @@ static inline nowdb_err_t moveFullscan(nowdb_reader_t *reader) {
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
 	                                           FALSE, OBJECT, NULL);
 	return nextpage(reader);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: move for search
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
+	nowdb_err_t     err;
+	beet_err_t      ber;
+	nowdb_pageid_t *pge;
+
+	for(;;) {
+		ber = beet_iter_move(reader->iter, (void**)&pge,
+		                          (void**)&reader->cont);
+		if (ber == BEET_ERR_EOF) {
+			return nowdb_err_get(nowdb_err_eof,
+			               FALSE, OBJECT, NULL);
+		}
+		if (ber != BEET_OK) return makeBeetError(ber);
+
+		/*
+		fprintf(stderr, "content: %lu|%lu (%lu)\n",
+		                           reader->cont[0],
+		                           reader->cont[1],
+		                                     *pge);
+		*/
+
+		err = getpage(reader, *pge);
+		if (err == NOWDB_OK) break;
+		if (err->errcode == nowdb_err_key_not_found) {
+			nowdb_err_release(err); continue;
+		}
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -215,6 +335,8 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 		return moveFullscan(reader);
 
 	case NOWDB_READER_SEARCH:
+		return moveSearch(reader);
+
 	case NOWDB_READER_RANGE:
 	case NOWDB_READER_BUF:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,

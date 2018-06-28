@@ -41,6 +41,7 @@ typedef struct {
 	uint32_t             recsize; /* set according to first file   */
 	ts_algo_list_t        *files; /* list of relevant files        */
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
+	nowdb_file_t           *file; /* current file (search)         */
 	ts_algo_tree_t       readers; /* files for index-based readers */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
@@ -51,6 +52,7 @@ typedef struct {
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
 	uint32_t                 off; /* offset into win               */
+	nowdb_bitmap64_t       *cont; /* content of current page       */
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */

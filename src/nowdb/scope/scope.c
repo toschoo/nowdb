@@ -752,8 +752,6 @@ static inline nowdb_err_t closeAllContexts(nowdb_scope_t *scope) {
 	for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
 		ctx = runner->cont;
 
-		/* fprintf(stderr, "closing %s\n", ctx->name); */
-
 		err = nowdb_context_err(ctx, nowdb_store_close(&ctx->store));
 		if (err != NOWDB_OK) {
 			ts_algo_list_destroy(tmp); free(tmp);

@@ -166,6 +166,24 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 }
 
 /* ------------------------------------------------------------------------
+ * Check whether this position is "in"
+ * ------------------------------------------------------------------------
+ */
+static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
+	uint64_t k = 1;
+	if (r->cont == NULL) return 1;
+	if (pos < 64) {
+		k <<= pos;
+		if (r->cont[0] & k) return 1;
+	} else  {
+		k <<= (pos-64);
+		if (r->cont[1] &k) return 1;
+	}
+	return 0;
+	
+}
+
+/* ------------------------------------------------------------------------
  * Single reader fetch (no iterator!)
  * ------------------------------------------------------------------------
  */
@@ -197,6 +215,10 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* apply filter */
 		if (filter != NULL &&
 		    !nowdb_filter_eval(filter, src+cur->off)) {
+			cur->off += recsz; continue;
+		}
+		/* check content */
+		if (!checkpos(cur->rdrs[0], cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
 

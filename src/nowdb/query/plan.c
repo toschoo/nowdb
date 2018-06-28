@@ -252,38 +252,24 @@ static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
  * TRUE, FALSE
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
+static inline nowdb_err_t getFilter(nowdb_ast_t     *ast,
+                                    nowdb_filter_t **filter) {
 	nowdb_err_t   err;
 	nowdb_ast_t  *cond;
-	nowdb_plan_t *stp;
-	nowdb_filter_t *b=NULL;
 
 	if (ast == NULL) return NOWDB_OK;
 
 	cond = nowdb_ast_operand(ast,1);
 	if (cond == NULL) INVALIDAST("no first operand in where");
 
-	// fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
+	/*
+	fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
+	*/
 
 	/* get condition creates a filter */
-	err = getCondition(&b, cond);
+	err = getCondition(filter, cond);
 	if (err != NOWDB_OK) return err;
 
-	stp = malloc(sizeof(nowdb_plan_t));
-	if (stp == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                     FALSE, OBJECT, "allocating plan");
-
-	stp->ntype = NOWDB_PLAN_FILTER;
-	stp->stype = 0;
-	stp->helper = 0;
-	stp->name = NULL;
-	stp->load = b; /* the filter is stored directly here */
-
-	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "list.append");
-		free(stp); return err;
-	}
 	return NOWDB_OK;
 }
 
@@ -295,6 +281,7 @@ static inline nowdb_err_t addWhere(nowdb_ast_t *ast, ts_algo_list_t *plan) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
+	nowdb_filter_t *filter = NULL;
 	nowdb_err_t   err;
 	nowdb_ast_t  *trg, *from;
 	nowdb_plan_t *stp;
@@ -321,11 +308,24 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 	                FALSE, OBJECT, "list append");
 	}
 
+	/* create filter from where */
+	err = getFilter(nowdb_ast_where(ast), &filter);
+	if (err != NOWDB_OK) {
+		nowdb_plan_destroy(plan); return err;
+	}
+
+	/*
+	 * use filter to decide on index
+	 */
+
 	/* create reader from target */
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) {
 		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                         "allocating plan");
+		if (filter != NULL) {
+			nowdb_filter_destroy(filter); free(filter);
+		}
 		nowdb_plan_destroy(plan); return err;
 	}
 	stp->ntype = NOWDB_PLAN_READER;
@@ -341,10 +341,31 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan) {
 		nowdb_plan_destroy(plan); return err;
 	}
 
-	/* create filter from where and add it */
-	err = addWhere(nowdb_ast_where(ast), plan);
-	if (err != NOWDB_OK) {
-		nowdb_plan_destroy(plan); return err;
+	if (filter != NULL) {
+		stp = malloc(sizeof(nowdb_plan_t));
+		if (stp == NULL) {
+			err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+			                                 "allocating plan");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			nowdb_plan_destroy(plan); return err;
+		}
+
+		stp->ntype = NOWDB_PLAN_FILTER;
+		stp->stype = 0;
+		stp->helper = 0;
+		stp->name = NULL;
+		stp->load = filter; /* the filter is stored directly here */
+
+		if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
+			err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                             "list.append");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			free(stp); return err;
+		}
 	}
 	return NOWDB_OK;
 }

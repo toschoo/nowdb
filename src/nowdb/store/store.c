@@ -1202,6 +1202,7 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	if (err != NOWDB_OK) goto unlock;
 
 	destroyAllFiles(store);
+
 	err = initAllFiles(store);
 
 	store->state = NOWDB_STORE_CLOSED;
