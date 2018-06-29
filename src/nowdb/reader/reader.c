@@ -271,7 +271,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	err = nowdb_file_position(reader->file, pos);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_file_move(reader->file);
+	err = nowdb_file_loadBlock(reader->file);
 	if (err != NOWDB_OK) return err;
 
 	reader->page = reader->file->bptr;

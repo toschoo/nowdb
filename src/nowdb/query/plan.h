@@ -14,6 +14,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/reader/reader.h>
 #include <nowdb/query/ast.h>
+#include <nowdb/scope/scope.h>
 
 #include <tsalgo/list.h>
 
@@ -78,16 +79,25 @@ typedef struct {
 	void     *load; /* pointer to some structure */
 } nowdb_plan_t;
 
+typedef struct {
+	nowdb_index_t *idx;
+	char          *keys;
+} nowdb_plan_idx_t;
+
 /* ------------------------------------------------------------------------
  * Create plan from ast
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plan_fromAst(nowdb_ast_t *ast, ts_algo_list_t *plan);
+nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
+                               nowdb_ast_t    *ast,
+                               ts_algo_list_t *plan);
 
 /* ------------------------------------------------------------------------
  * Destroy plan
+ * if content is set, the content of the plan is destroyed
+ * (only if it is not successfully passed on to cursor)
  * ------------------------------------------------------------------------
  */
-void nowdb_plan_destroy(ts_algo_list_t *plan);
+void nowdb_plan_destroy(ts_algo_list_t *plan, char content);
 
 #endif

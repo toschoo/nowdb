@@ -195,6 +195,13 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t  *store,
                                    nowdb_time_t     end);
 
 /* ------------------------------------------------------------------------
+ * Get all pending (pending only)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getAllWaiting(nowdb_store_t  *store,
+                                      ts_algo_list_t *files);
+
+/* ------------------------------------------------------------------------
  * Destroy files and list
  * ------------------------------------------------------------------------
  */

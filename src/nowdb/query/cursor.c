@@ -27,6 +27,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	nowdb_err_t      err;
 	nowdb_store_t *store;
 	nowdb_context_t *ctx;
+	nowdb_plan_idx_t *pidx;
 
 	/* target is vertex */
 	if (plan->helper == NOWDB_AST_VERTEX) {
@@ -42,12 +43,25 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	}
 
 	/* we still need to get the period from the filter */
-	err = nowdb_store_getFiles(store, &cur->stf.files, NOWDB_TIME_DAWN,
-	                                                   NOWDB_TIME_DUSK);
+	err = nowdb_store_getFiles(store, &cur->stf.files,
+		                          NOWDB_TIME_DAWN,
+	                                  NOWDB_TIME_DUSK);
 	if (err != NOWDB_OK) return err;
+
+	/* create an index search reader */
+	if (plan->stype == NOWDB_READER_SEARCH_) {
+		pidx = plan->load;
+		err = nowdb_reader_search(cur->rdrs+idx,
+		                         &cur->stf.files,
+		                          pidx->idx,
+		                          pidx->keys,NULL);
+		free(pidx->keys); free(pidx);
 	
 	/* create a fullscan reader */
-	err = nowdb_reader_fullscan(cur->rdrs+idx, &cur->stf.files, NULL);
+	} else {
+		err = nowdb_reader_fullscan(cur->rdrs+idx,
+		                    &cur->stf.files, NULL);
+	}
 	if (err != NOWDB_OK) {
 		nowdb_store_destroyFiles(store, &cur->stf.files);
 		return err;
@@ -212,13 +226,14 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off = NOWDB_IDX_PAGE; continue;
 		}
 
+		/* check content */
+		if (!checkpos(cur->rdrs[0], cur->off/recsz)) {
+			cur->off += recsz; continue;
+		}
+
 		/* apply filter */
 		if (filter != NULL &&
 		    !nowdb_filter_eval(filter, src+cur->off)) {
-			cur->off += recsz; continue;
-		}
-		/* check content */
-		if (!checkpos(cur->rdrs[0], cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
 

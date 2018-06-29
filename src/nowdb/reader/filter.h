@@ -83,5 +83,11 @@ void nowdb_filter_destroy(nowdb_filter_t *filter);
  */
 nowdb_bool_t nowdb_filter_eval(nowdb_filter_t *filter, void *data);
 
+/* ------------------------------------------------------------------------
+ * Copy filter
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_filter_copy(nowdb_filter_t *src, nowdb_filter_t *trg);
+
 #endif
 

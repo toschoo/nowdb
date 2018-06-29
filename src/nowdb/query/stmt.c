@@ -744,18 +744,18 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	/* transform ast -> plan, i.e.
 	 * create and optimise plan */
 	ts_algo_list_init(&plan);
-	err = nowdb_plan_fromAst(ast, &plan);
+	err = nowdb_plan_fromAst(scope, ast, &plan);
 	if (err != NOWDB_OK) return err;
 
 	/* create cursor */
 	err = nowdb_cursor_new(scope, &plan, &cur);
 	if (err != NOWDB_OK) {
-		nowdb_plan_destroy(&plan);
+		nowdb_plan_destroy(&plan, TRUE);
 		return err;
 	}
 
 	/* cleanup and terminate */
-	nowdb_plan_destroy(&plan);
+	nowdb_plan_destroy(&plan, FALSE);
 	res->result = cur;
 	return NOWDB_OK;
 }

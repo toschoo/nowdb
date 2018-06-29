@@ -1459,6 +1459,40 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get all pending files
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getAllWaiting(nowdb_store_t *store,
+                                        ts_algo_list_t *list) {
+	nowdb_file_t *file;
+	nowdb_err_t    err;
+
+	if (store->waiting.len > 0) {
+		err = copyFileList(&store->waiting, list, TRUE,
+		                               NOWDB_TIME_DAWN,
+		                               NOWDB_TIME_DUSK);
+		if (err != NOWDB_OK) return err;
+	}
+
+	/* writer */
+	err = copyFile(store->writer, &file);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_file_makeReader(file);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) return err;
+
+	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                     "list append");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: get all files for period start - end
  * ------------------------------------------------------------------------
  */
@@ -1466,7 +1500,6 @@ static inline nowdb_err_t getFiles(nowdb_store_t *store,
                                    ts_algo_list_t *list,
                                    nowdb_time_t   start,
                                    nowdb_time_t     end) {
-	nowdb_file_t *file;
 	nowdb_err_t    err;
 	
 	/* readers */
@@ -1477,24 +1510,10 @@ static inline nowdb_err_t getFiles(nowdb_store_t *store,
 	err = setDecomp(store, list);
 	if (err != NOWDB_OK) return err;
 
-	/* pending */
-	if (store->waiting.len > 0) {
-		err = copyFileList(&store->waiting, list, TRUE, start, end);
-		if (err != NOWDB_OK) return err;
-	}
-	/* writer */
-	err = copyFile(store->writer, &file);
-	if (err != NOWDB_OK) return err;
-	err = nowdb_file_makeReader(file);
-	if (err != NOWDB_OK) return err;
-	err = nowdb_file_open(file);
+	/* pending and writer */
+	err = getAllWaiting(store, list);
 	if (err != NOWDB_OK) return err;
 
-	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "list append");
-		return err;
-	}
 	return NOWDB_OK;
 }
 
@@ -1557,6 +1576,29 @@ unlock:
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Get all pending (pending only)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getAllWaiting(nowdb_store_t  *store,
+                                      ts_algo_list_t *list) {
+	nowdb_err_t  err=NOWDB_OK;
+	nowdb_err_t err2=NOWDB_OK;
+
+	STORENULL();
+	LISTNULL();
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = getAllWaiting(store, list);
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Find file in spares
