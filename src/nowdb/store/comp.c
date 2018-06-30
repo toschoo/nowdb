@@ -447,13 +447,13 @@ nowdb_err_t nowdb_compctx_releaseDCtx(nowdb_compctx_t *ctx,
 	for(int i=0; i<ctx->dsize; i++) {
 		if (i < 64) {
 			if (dctx == ctx->dctx[i]) {
-				ctx->dmap1 ^= k1;
+				if (ctx->dmap1 & k1) ctx->dmap1 ^= k1;
 				found = 1; break;
 			}
 			k1 <<= 1;
 		} else {
 			if (dctx == ctx->dctx[i]) {
-				ctx->dmap2 ^= k2;
+				if (ctx->dmap2 & k2) ctx->dmap2 ^= k2;
 				found = 1; break;
 			}
 			k2 <<= 1;
