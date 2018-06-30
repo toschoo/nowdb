@@ -30,6 +30,7 @@ TST = test
 COM = common
 BENCH= bench
 SMK = test/smoke
+STRESS = test/stress
 BIN = bin
 LOG = log
 TOOLS = tools
@@ -138,7 +139,9 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/indexersmoke            \
 	$(SMK)/sqlsmoke
 
-tests: smoke
+stress:	$(STRESS)/deepscope
+
+tests: smoke stress
 
 debug:	CFLAGS += -g
 debug:	default
@@ -430,11 +433,11 @@ $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              	       $(COM)/cmd.o        \
 			                       $(libs) -lnowdb
 
-$(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
+$(STRESS)/deepscope:	$(LIB) $(DEP) $(STRESS)/deepscope.o \
 			              $(COM)/bench.o      \
 			              $(COM)/cmd.o
 			$(LNKMSG)
-			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool.o \
+			$(CC) $(LDFLAGS) -o $@ $(STRESS)/deepscope.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
@@ -489,6 +492,7 @@ clean:
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
 	rm -f $(SMK)/sqlsmoke
+	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile
