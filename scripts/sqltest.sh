@@ -1,3 +1,21 @@
+# ========================================================================
+# Test script for sql (scopetool)
+# -------------------
+# Prerequisits:
+# - csvkit should be installed
+#
+# The script
+# - creates rsc/kilo.csv with 1000 edges using writecsv
+# - copies this file to rsc/context.csv and adds a header to it
+# - it then generates random wheres containing
+#   edge, origin, destin and timestamp
+#   - with and & ors (randomly)
+#   - random parentheses around the expressions
+# - it executes the resulting query with 
+#   - scopetool
+#   - csvsql
+# - and compares the results
+# ========================================================================
 if [ $# -lt 1 ]
 then
 	mx=100
