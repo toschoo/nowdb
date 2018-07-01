@@ -323,6 +323,15 @@ $(SMK)/sqlsmoke:	$(LIB) $(DEP) $(SMK)/sqlsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $(SMK)/sqlsmoke \
 			         $(SMK)/sqlsmoke.o $(libs) -lnowdb
+# STRESSTESTS
+$(STRESS)/deepscope:	$(LIB) $(DEP) $(STRESS)/deepscope.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(STRESS)/deepscope.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                 $(libs) -lnowdb
 		
 # BENCHMARKS
 $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
@@ -433,11 +442,11 @@ $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              	       $(COM)/cmd.o        \
 			                       $(libs) -lnowdb
 
-$(STRESS)/deepscope:	$(LIB) $(DEP) $(STRESS)/deepscope.o \
+$(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              $(COM)/bench.o      \
 			              $(COM)/cmd.o
 			$(LNKMSG)
-			$(CC) $(LDFLAGS) -o $@ $(STRESS)/deepscope.o \
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb

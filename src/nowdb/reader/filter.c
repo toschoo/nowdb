@@ -24,6 +24,7 @@ nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
 	(*filter)->ntype = NOWDB_FILTER_COMPARE;
 	(*filter)->op = op;
 	(*filter)->val = val;
+	(*filter)->own = 0;
 	(*filter)->left = NULL;
 	(*filter)->right = NULL;
 
@@ -32,6 +33,14 @@ nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
 	(*filter)->typ = typ;
 
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Filter owns the value
+ * ------------------------------------------------------------------------
+ */
+void nowdb_filter_own(nowdb_filter_t *filter) {
+	filter->own = 1;
 }
 
 /* ------------------------------------------------------------------------
@@ -47,6 +56,7 @@ nowdb_err_t nowdb_filter_newBool(nowdb_filter_t **filter, int op) {
 	(*filter)->ntype = NOWDB_FILTER_BOOL;
 	(*filter)->op = op;
 	(*filter)->val = NULL;
+	(*filter)->own = 0;
 	(*filter)->left = NULL;
 	(*filter)->right = NULL;
 
@@ -66,6 +76,10 @@ void nowdb_filter_destroy(nowdb_filter_t *filter) {
 	if (filter->right != NULL) {
 		nowdb_filter_destroy(filter->right);
 		free(filter->right); filter->right= NULL;
+	}
+	if (filter->val != NULL) {
+		if (filter->own) free(filter->val);
+		filter->val = NULL;
 	}
 }
 

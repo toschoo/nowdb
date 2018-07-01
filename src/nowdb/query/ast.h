@@ -226,7 +226,6 @@ typedef struct nowdb_ast_st {
 	int                  stype; /* subtype                         */
 	int                  vtype; /* value type                      */
 	void                *value; /* value stored by the node        */
-	void                 *conv; /* temporary store for conversions */
 	int                  nKids; /* number of kids                  */
 	struct nowdb_ast_st **kids; /* array of pointers to the kids   */
 } nowdb_ast_t;

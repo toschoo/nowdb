@@ -229,9 +229,6 @@ static void destroy(nowdb_ast_t *n, char r) {
 		}
 		n->value = NULL;
 	}
-	if (n->conv != NULL) {
-		free(n->conv); n->conv = NULL;
-	}
 	for(int i=0;r && i<n->nKids;i++) {
 		if (n->kids[i] != NULL) {
 			nowdb_ast_destroy(n->kids[i]);

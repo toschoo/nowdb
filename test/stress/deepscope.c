@@ -206,7 +206,9 @@ int handleAst(nowdb_scope_t *scope, nowdb_ast_t *ast) {
 		return -1;
 	}
 	switch(res.resType) {
-	case NOWDB_QRY_RESULT_CURSOR: return processCursor(res.result);
+	case NOWDB_QRY_RESULT_CURSOR: 
+		return processCursor(res.result);
+		
 	case NOWDB_QRY_RESULT_NOTHING:
 	case NOWDB_QRY_RESULT_REPORT:
 	case NOWDB_QRY_RESULT_SCOPE:
@@ -463,6 +465,8 @@ int main(int argc, char **argv) {
 		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
+	fprintf(stderr, "starting with %u threads and %u iterations each\n",
+	        global_threads, global_iter);
 	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;

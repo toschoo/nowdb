@@ -174,6 +174,7 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	nowdb_err_t err;
 	nowdb_ast_t *op1, *op2;
 	uint32_t off, sz;
+	void *conv;
 	int typ;
 
 	op1 = nowdb_ast_operand(ast, 1);
@@ -189,17 +190,18 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	if (op1->ntype == NOWDB_AST_FIELD) {
 		err = getField(op1->value, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op2->value, sz, &typ, op2->stype, &ast->conv);
+		err = getValue(op2->value, sz, &typ, op2->stype, &conv);
 	} else {
 		err = getField(op2->value, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op1->value, sz, &typ, op1->stype, &ast->conv);
+		err = getValue(op1->value, sz, &typ, op1->stype, &conv);
 	}
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_filter_newCompare(comp, ast->stype,
-	                      off, sz, typ, ast->conv);
+	                           off, sz, typ, conv);
 	if (err != NOWDB_OK) return err;
+	nowdb_filter_own(*comp);
 	
 	return NOWDB_OK;
 }

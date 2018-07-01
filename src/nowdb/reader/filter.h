@@ -53,6 +53,7 @@ typedef struct nowdb_filter_st {
 	uint32_t    size; /* size of the field                      */
 	nowdb_type_t typ; /* type of the field                      */
 	void        *val; /* value to compare with                  */
+	char         own; /* value is to be destroyed               */
 	struct nowdb_filter_st *left;  /* left kid                  */
 	struct nowdb_filter_st *right; /* right kid                 */
 } nowdb_filter_t;
@@ -64,6 +65,12 @@ typedef struct nowdb_filter_st {
 nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
                                         uint32_t off, uint32_t size,
                                         nowdb_type_t typ, void *val);
+
+/* ------------------------------------------------------------------------
+ * Filter owns the value
+ * ------------------------------------------------------------------------
+ */
+void nowdb_filter_own(nowdb_filter_t *filter);
 
 /* ------------------------------------------------------------------------
  * Create a boolean node
