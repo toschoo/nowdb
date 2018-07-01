@@ -160,7 +160,6 @@ int processCursor(nowdb_cursor_t *cur) {
 		}
 		goto cleanup;
 	}
-
 	for(;;) {
 		err = nowdb_cursor_fetch(cur, buf, 8192, &osz);
 		if (err != NOWDB_OK) {

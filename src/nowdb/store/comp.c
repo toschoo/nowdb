@@ -371,6 +371,7 @@ nowdb_err_t nowdb_compctx_getDCtx(nowdb_compctx_t *ctx,
 			if ((ctx->dmap1 & k1) == 0) {
 				*dctx = ctx->dctx[i];
 				ctx->dmap1 |= k1;
+				// fprintf(stderr, "using dctx %d\n", i);
 				break;
 			}
 			k1 <<= 1;
@@ -378,6 +379,7 @@ nowdb_err_t nowdb_compctx_getDCtx(nowdb_compctx_t *ctx,
 			if ((ctx->dmap2 & k2) == 0) {
 				*dctx = ctx->dctx[i];
 				ctx->dmap2 |= k2;
+				// fprintf(stderr, "using dctx %d\n", i);
 				break;
 			}
 			k2 <<= 1;
@@ -448,12 +450,14 @@ nowdb_err_t nowdb_compctx_releaseDCtx(nowdb_compctx_t *ctx,
 		if (i < 64) {
 			if (dctx == ctx->dctx[i]) {
 				if (ctx->dmap1 & k1) ctx->dmap1 ^= k1;
+				// fprintf(stderr, "releasing dctx %d\n", i);
 				found = 1; break;
 			}
 			k1 <<= 1;
 		} else {
 			if (dctx == ctx->dctx[i]) {
 				if (ctx->dmap2 & k2) ctx->dmap2 ^= k2;
+				// fprintf(stderr, "releasing dctx %d\n", i);
 				found = 1; break;
 			}
 			k2 <<= 1;

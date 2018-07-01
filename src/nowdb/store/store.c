@@ -1920,15 +1920,19 @@ static inline void releaseDecomp(nowdb_store_t  *store,
 	ts_algo_list_node_t *runner;
 	nowdb_file_t        *file;
 
+	if (files->head == NULL) return;
+	file = files->head->cont;
+	if (file->dctx != NULL) {
+		err = nowdb_compctx_releaseDCtx(store->ctx,
+			                        file->dctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+		}
+	}
 	for(runner=files->head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
 		if (file->dctx != NULL) {
-			err = nowdb_compctx_releaseDCtx(store->ctx,
-			                                file->dctx);
-			if (err != NOWDB_OK) {
-				nowdb_err_print(err);
-				nowdb_err_release(err);
-			}
 			file->dctx = NULL;
 			file->ddict = NULL;
 		}
