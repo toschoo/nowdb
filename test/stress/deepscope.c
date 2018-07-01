@@ -220,6 +220,7 @@ int handleAst(nowdb_scope_t *scope, nowdb_ast_t *ast) {
 }
 
 void *task(void *p) {
+	struct timespec t1, t2;
 	nowdb_err_t err;
 	int x;
 	int rc = 0;
@@ -260,12 +261,16 @@ void *task(void *p) {
 	}
 
 	/* do the job */
+	timestamp(&t1);
 	for(int i=0; i<global_iter; i++) {
 		if (handleAst(params.scope, params.ast) != 0) {
 			fprintf(stderr, "handle ast failed: %d\n", x);
 			rc = -1; break;
 		}
 	}
+	timestamp(&t2);
+	fprintf(stderr, "[%lu] avg: %ldus\n",
+	        pthread_self(), minus(&t2, &t1)/(global_iter*1000));
 
 	/* protect params */
 	err = nowdb_lock(&params.lock);
