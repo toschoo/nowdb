@@ -105,6 +105,8 @@ static void edgedestroy(void *ignore, void **n) {
 	free(*n); *n = NULL;
 }
 
+static void nodestroy(void *ignore, void **n) {}
+
 static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
 	return TS_ALGO_OK;
 }
@@ -140,8 +142,8 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 
 	model->vrtxByName = ts_algo_tree_new(&vrtxnamecompare, NULL,
 	                                     &noupdate,
-	                                     &vrtxdestroy,
-	                                     &vrtxdestroy);
+	                                     &nodestroy,
+	                                     &nodestroy);
 	if (model->vrtxByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
@@ -158,8 +160,8 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 
 	model->propByName = ts_algo_tree_new(&propnamecompare, NULL,
 	                                     &noupdate,
-	                                     &propdestroy,
-	                                     &propdestroy);
+	                                     &nodestroy,
+	                                     &nodestroy);
 	if (model->propByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
@@ -176,8 +178,8 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 
 	model->edgeByName = ts_algo_tree_new(&edgenamecompare, NULL,
 	                                     &noupdate,
-	                                     &edgedestroy,
-	                                     &edgedestroy);
+	                                     &nodestroy,
+	                                     &nodestroy);
 	if (model->edgeByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
@@ -192,23 +194,29 @@ void nowdb_model_destroy(nowdb_model_t *model) {
 	if (model->path != NULL) {
 		free(model->path); model->path = NULL;
 	}
-	if (model->vrtxById != NULL) {
-		free(model->vrtxById); model->vrtxById = NULL;
-	}
 	if (model->vrtxByName != NULL) {
+		ts_algo_tree_destroy(model->vrtxByName);
 		free(model->vrtxByName); model->vrtxByName = NULL;
 	}
-	if (model->propById != NULL) {
-		free(model->propById); model->propById = NULL;
+	if (model->vrtxById != NULL) {
+		ts_algo_tree_destroy(model->vrtxById);
+		free(model->vrtxById); model->vrtxById = NULL;
 	}
 	if (model->propByName != NULL) {
+		ts_algo_tree_destroy(model->propByName);
 		free(model->propByName); model->propByName = NULL;
 	}
-	if (model->edgeById != NULL) {
-		free(model->edgeById); model->edgeById = NULL;
+	if (model->propById != NULL) {
+		ts_algo_tree_destroy(model->propById);
+		free(model->propById); model->propById = NULL;
 	}
 	if (model->edgeByName != NULL) {
+		ts_algo_tree_destroy(model->edgeByName);
 		free(model->edgeByName); model->edgeByName = NULL;
+	}
+	if (model->edgeById != NULL) {
+		ts_algo_tree_destroy(model->edgeById);
+		free(model->edgeById); model->edgeById = NULL;
 	}
 }
 
@@ -228,9 +236,9 @@ static inline nowdb_err_t add(nowdb_model_t  *model,
 	                         FALSE, OBJECT, "object is NULL");
 
 	err = nowdb_lock_write(&model->lock);
-	if (err == NULL) return err;
+	if (err != NOWDB_OK) return err;
 
-	tmp = ts_algo_tree_find(byName, thing);
+	tmp = ts_algo_tree_find(byId, thing);
 	if (tmp != NULL) {
 		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
 		                                               "id");
@@ -296,7 +304,7 @@ nowdb_err_t nowdb_model_removeVertex(nowdb_model_t *model,
 	MODELNULL();
 
 	err = nowdb_lock_write(&model->lock);
-	if (err == NULL) return err;
+	if (err != NOWDB_OK) return err;
 
 	tmp.roleid = role;
 	vrtx = ts_algo_tree_find(model->vrtxById, &tmp);
@@ -306,8 +314,8 @@ nowdb_err_t nowdb_model_removeVertex(nowdb_model_t *model,
 		goto unlock;
 	}
 
-	ts_algo_tree_delete(model->vrtxById, vrtx);
 	ts_algo_tree_delete(model->vrtxByName, vrtx);
+	ts_algo_tree_delete(model->vrtxById, vrtx);
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -331,7 +339,7 @@ nowdb_err_t nowdb_model_removeProp(nowdb_model_t *model,
 	MODELNULL();
 
 	err = nowdb_lock_write(&model->lock);
-	if (err == NULL) return err;
+	if (err != NOWDB_OK) return err;
 
 	tmp.roleid = role;
 	tmp.propid = propid;
@@ -343,8 +351,8 @@ nowdb_err_t nowdb_model_removeProp(nowdb_model_t *model,
 		goto unlock;
 	}
 
-	ts_algo_tree_delete(model->propById, p);
 	ts_algo_tree_delete(model->propByName, p);
+	ts_algo_tree_delete(model->propById, p);
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -365,7 +373,7 @@ nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
 	MODELNULL();
 
 	err = nowdb_lock_write(&model->lock);
-	if (err == NULL) return err;
+	if (err != NOWDB_OK) return err;
 
 	tmp.edgeid = edge;
 	e = ts_algo_tree_find(model->edgeById, &tmp);
@@ -375,8 +383,8 @@ nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
 		goto unlock;
 	}
 
-	ts_algo_tree_delete(model->edgeById, e);
 	ts_algo_tree_delete(model->edgeByName, e);
+	ts_algo_tree_delete(model->edgeById, e);
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -399,7 +407,7 @@ static inline nowdb_err_t find(nowdb_model_t *model,
 	                                 FALSE, OBJECT, "object");
 
 	err = nowdb_lock_read(&model->lock);
-	if (err == NULL) return err;
+	if (err != NOWDB_OK) return err;
 
 	*found = ts_algo_tree_find(tree, wanted);
 

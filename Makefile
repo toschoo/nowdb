@@ -140,6 +140,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
+	$(SMK)/modelsmoke              \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -314,6 +315,11 @@ $(SMK)/indexsmoke: 	$(LIB) $(DEP) $(SMK)/indexsmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/indexersmoke: 	$(LIB) $(DEP) $(SMK)/indexersmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -503,6 +509,7 @@ clean:
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
+	rm -f $(SMK)/modelsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
