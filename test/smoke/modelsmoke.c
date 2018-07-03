@@ -264,7 +264,45 @@ int addProp(nowdb_model_t  *model,
 	}
 	return 0;
 }
-	
+
+int testGetProp(nowdb_model_t  *model,
+                nowdb_key_t    propid,
+                nowdb_roleid_t roleid,
+                char            *name) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	err = nowdb_model_getPropById(model, roleid, propid, &p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (p == NULL) {
+		fprintf(stderr, "no prop\n");
+		return -1;
+	}
+	if (strcmp(p->name, name) != 0) {
+		fprintf(stderr, "wrong prop: %s\n", p->name);
+		return -1;
+	}
+	p = NULL;
+	err = nowdb_model_getPropByName(model, roleid, name, &p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (p == NULL) {
+		fprintf(stderr, "no prop by this name\n");
+		return -1;
+	}
+	if (p->propid != propid) {
+		fprintf(stderr, "wrong prop: %lu\n", p->propid);
+		return -1;
+	}
+	return 0;
+}
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -368,9 +406,52 @@ int main() {
 		fprintf(stderr, "get edge 123 failed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-
+	if (addEdge(model, 123, "two2five") == 0) {
+		fprintf(stderr, "add edge 123 passed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdge(model, 125, "two2three") == 0) {
+		fprintf(stderr, "add edge 125 passed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (addProp(model, 12, 2, "P12") != 0) {
 		fprintf(stderr, "add prop 12 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 12, 2, "P12") != 0) {
+		fprintf(stderr, "get prop P12 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addProp(model, 22, 2, "P22") != 0) {
+		fprintf(stderr, "add prop 22 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 22, 2, "P22") != 0) {
+		fprintf(stderr, "get prop P22 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addProp(model, 32, 2, "P32") != 0) {
+		fprintf(stderr, "add prop 32 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 32, 2, "P32") != 0) {
+		fprintf(stderr, "get prop P32 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addProp(model, 22, 1, "P22") != 0) {
+		fprintf(stderr, "add prop 22 on 1 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 22, 1, "P22") != 0) {
+		fprintf(stderr, "get prop P22 on 1 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addProp(model, 22, 1, "P22") == 0) {
+		fprintf(stderr, "add prop 22 on 1 passed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 22, 1, "P22") != 0) {
+		fprintf(stderr, "get prop P22 on 1 failed (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
@@ -403,6 +484,22 @@ int main() {
 	}
 	if (testGetEdge(model, 123, "two2three") != 0) {
 		fprintf(stderr, "get edge 123 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 12, 2, "P12") != 0) {
+		fprintf(stderr, "get prop P12 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 22, 2, "P22") != 0) {
+		fprintf(stderr, "get prop P22 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 32, 2, "P32") != 0) {
+		fprintf(stderr, "get prop P32 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 22, 1, "P22") != 0) {
+		fprintf(stderr, "get prop P22 on 1 failed (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

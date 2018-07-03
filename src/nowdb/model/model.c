@@ -51,6 +51,8 @@ static ts_algo_cmp_t propidcompare(void *ignore, void *one, void *two) {
 }
 
 static ts_algo_cmp_t propnamecompare(void *ignore, void *one, void *two) {
+	if (PROP(one)->roleid < PROP(two)->roleid) return ts_algo_cmp_less;
+	if (PROP(one)->roleid > PROP(two)->roleid) return ts_algo_cmp_greater;
 	int x = strcmp(PROP(one)->name, PROP(two)->name);
 	if (x < 0) return ts_algo_cmp_less;
 	if (x > 0) return ts_algo_cmp_greater;
