@@ -179,6 +179,38 @@ static nowdb_err_t initIndexMan(nowdb_scope_t *scope) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: create and open model
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t openModel(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_path_t p;
+
+	if (scope->model != NULL) return NOWDB_OK;
+
+	p = nowdb_path_append(scope->path, "model");
+	if (p == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                            "allocating model path");
+	}
+	if (!nowdb_path_exists(p, NOWDB_DIR_TYPE_DIR)) {
+		fprintf(stderr, "%s does not exist\n", p);
+	}
+	scope->model = calloc(1,sizeof(nowdb_model_t));
+	if (scope->model == NULL) {
+		free(p);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                 "allocating model");
+	}
+	err = nowdb_model_init(scope->model, p); free(p);
+	if (err != NOWDB_OK) {
+		free(scope->model); scope->model = NULL;
+		return err;
+	}
+	return nowdb_model_load(scope->model);
+}
+
+/* -----------------------------------------------------------------------
  * Allocate and initialise a new scope
  * -----------------------------------------------------------------------
  */
@@ -219,6 +251,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	/* set defaults */
 	scope->path = NULL;
 	scope->iman = NULL;
+	scope->model = NULL;
 	scope->ver  = ver;
 	scope->state = NOWDB_SCOPE_CLOSED;
 
@@ -286,7 +319,6 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		return err;
 	}
 	free(p); 
-
 	return NOWDB_OK;
 }
 
@@ -305,6 +337,10 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	}
 	if (scope->catalog != NULL) {
 		free(scope->catalog); scope->catalog = NULL;
+	}
+	if (scope->model != NULL) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 	}
 	nowdb_rwlock_destroy(&scope->lock);
 	nowdb_store_destroy(&scope->vertices);
@@ -825,6 +861,24 @@ unlock:
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: remove model
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t removeModel(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_path_t  p;
+
+	p = nowdb_path_append(scope->path, "model");
+	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                      FALSE, OBJECT, "allocate path");
+
+	err = nowdb_path_rRemove(p); free(p);
+	if (err != NOWDB_OK) return err; 
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Helper: remove directory (if it exists)
  * -----------------------------------------------------------------------
  */
@@ -881,8 +935,8 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	err = nowdb_store_drop(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
 
-	/* remove model dir */
-	err = removeFile(scope, "model");
+	/* remove model */
+	err = removeModel(scope);
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove icat */
@@ -955,6 +1009,13 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
+	err = openModel(scope);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		goto unlock;
+	}
+
 	scope->state = NOWDB_SCOPE_OPEN;
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
@@ -993,6 +1054,10 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 	if (scope->iman != NULL) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
+	}
+	if (scope->model != NULL) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 	}
 
 	scope->state = NOWDB_SCOPE_CLOSED;

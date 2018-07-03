@@ -189,6 +189,7 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 		if (p == NULL) NOMEM("create model path");
 
 		if (stat(p, &st) != 0) {
+			fprintf(stderr, "creating %s\n", p);
 			tmp = fopen(p, "wb");
 			if (tmp == NULL) {
 				err = nowdb_err_get(nowdb_err_open,

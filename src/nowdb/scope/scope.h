@@ -17,6 +17,7 @@
 #include <nowdb/scope/context.h>
 #include <nowdb/scope/loader.h>
 #include <nowdb/index/man.h>
+#include <nowdb/model/model.h>
 
 #include <tsalgo/tree.h>
 
@@ -33,7 +34,7 @@ typedef struct {
 	nowdb_store_t vertices;  /* vertices        */
 	ts_algo_tree_t contexts; /* contexts        */
 	nowdb_index_man_t *iman; /* index manager   */
-	                         /* model           */
+	nowdb_model_t    *model; /* model           */
 	                         /* strings         */
 } nowdb_scope_t;
 
