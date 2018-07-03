@@ -46,7 +46,6 @@ nowdb_err_t nowdb_model_removeVertex(nowdb_model_t *model,
                                      nowdb_roleid_t role); 
 
 nowdb_err_t nowdb_model_addProperty(nowdb_model_t      *model,
-                                    nowdb_roleid_t     roleid,
                                     nowdb_model_prop_t *prop);
 
 nowdb_err_t nowdb_model_removeProperty(nowdb_model_t  *model,

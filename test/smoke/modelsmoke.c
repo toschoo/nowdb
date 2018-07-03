@@ -6,6 +6,7 @@
  */
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
+#include <nowdb/io/dir.h>
 #include <nowdb/model/types.h>
 #include <nowdb/model/model.h>
 
@@ -16,6 +17,25 @@
 #include <sys/stat.h>
 
 #define MPATH "rsc/model10"
+
+int preparePath() {
+	nowdb_err_t err;
+	struct stat  st;
+
+	if (stat(MPATH, &st) == 0) {
+		err = nowdb_path_rRemove(MPATH);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return -1;
+		}
+	}
+	if (mkdir(MPATH, NOWDB_DIR_MODE) != 0) {
+		perror("cannot create path");
+		return -1;
+	}
+	return 0;
+}
 
 nowdb_model_t *mkModel(char *path) {
 	nowdb_err_t err;
@@ -31,6 +51,26 @@ nowdb_model_t *mkModel(char *path) {
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);	
+		return NULL;
+	}
+	return model;
+}
+
+nowdb_model_t *openModel(char *path) {
+	nowdb_err_t err;
+	nowdb_model_t *model;
+
+	fprintf(stderr, "opening model\n");
+
+	model = mkModel(path);
+	if (model == NULL) return NULL;
+
+	err = nowdb_model_load(model);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		nowdb_model_destroy(model);
+		free(model);
 		return NULL;
 	}
 	return model;
@@ -60,7 +100,8 @@ int addVertex(nowdb_model_t *model,
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);	
-		free(v); return -1;
+		free(v->name); free(v);
+		return -1;
 	}
 	return 0;
 }
@@ -118,12 +159,123 @@ int testGetVertex(nowdb_model_t *model,
 	return 0;
 }
 
+int addEdge(nowdb_model_t *model,
+            nowdb_key_t   edgeid,
+            char          *name) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e;
+
+	fprintf(stderr, "adding edge %lu - %s\n", edgeid, name);
+
+	e = calloc(1,sizeof(nowdb_edge_t));
+	if (e == NULL) {
+		perror("out-of-mem");
+		return -1;
+	}
+	e->edgeid = edgeid;
+	e->origin = 1;
+	e->destin = 2;
+	e->edge = NOWDB_MODEL_TEXT;
+	e->label= NOWDB_MODEL_NUM;
+	e->weight = NOWDB_TYP_UINT;
+	e->weight2 = NOWDB_TYP_NOTHING;
+	e->name = strdup(name);
+	if (e->name == NULL) {
+		perror("out-of-mem");
+		return -1;
+	}
+	err = nowdb_model_addEdge(model, e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		free(e->name); free(e);
+		return -1;
+	}
+	return 0;
+}
+
+int testGetEdge(nowdb_model_t *model,
+                nowdb_key_t     edge,
+                char           *name) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e;
+
+	err = nowdb_model_getEdgeById(model, edge, &e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (e == NULL) {
+		fprintf(stderr, "no edge\n");
+		return -1;
+	}
+	if (strcmp(e->name, name) != 0) {
+		fprintf(stderr, "wrong edge: %s\n", e->name);
+		return -1;
+	}
+	e = NULL;
+	err = nowdb_model_getEdgeByName(model, name, &e);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (e == NULL) {
+		fprintf(stderr, "no edge by this name\n");
+		return -1;
+	}
+	if (e->edgeid != edge) {
+		fprintf(stderr, "wrong edge: %lu\n", e->edgeid);
+		return -1;
+	}
+	return 0;
+}
+
+int addProp(nowdb_model_t  *model,
+            nowdb_key_t    propid,
+            nowdb_roleid_t roleid,
+            char           *name) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	fprintf(stderr, "adding property %lu - %s\n", propid, name);
+
+	p = calloc(1,sizeof(nowdb_model_prop_t));
+	if (p == NULL) {
+		perror("out-of-mem");
+		return -1;
+	}
+	p->propid = propid;
+	p->roleid = roleid;
+	p->prop = NOWDB_MODEL_TEXT;
+	p->value  = NOWDB_TYP_UINT;
+	p->name = strdup(name);
+	if (p->name == NULL) {
+		perror("out-of-mem");
+		return -1;
+	}
+	err = nowdb_model_addProperty(model, p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		free(p->name); free(p);
+		return -1;
+	}
+	return 0;
+}
+	
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_model_t *model = NULL;
 
 	if (!nowdb_init()) {
 		fprintf(stderr, "FAILED: cannot init\n");
+		return EXIT_FAILURE;
+	}
+	if (preparePath() != 0) {
+		fprintf(stderr, "FAILED: prepare path\n");
 		return EXIT_FAILURE;
 	}
 
@@ -190,6 +342,67 @@ int main() {
 	}
 	if (testGetVertex(model, 3, "V3") != 0) {
 		fprintf(stderr, "get vertex 3, V3 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdge(model, 112, "one2two") != 0) {
+		fprintf(stderr, "add edge 112 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 112, "one2two") != 0) {
+		fprintf(stderr, "get edge 112 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdge(model, 113, "one2three") != 0) {
+		fprintf(stderr, "add edge 113 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 113, "one2three") != 0) {
+		fprintf(stderr, "get edge 113 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdge(model, 123, "two2three") != 0) {
+		fprintf(stderr, "add edge 123 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 123, "two2three") != 0) {
+		fprintf(stderr, "get edge 123 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+
+	if (addProp(model, 12, 2, "P12") != 0) {
+		fprintf(stderr, "add prop 12 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+
+	/* destroy and open again */
+	nowdb_model_destroy(model); free(model);
+	model = openModel(MPATH);
+	if (model == NULL) {
+		fprintf(stderr, "cannot open model\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 1, "V1") != 0) {
+		fprintf(stderr, "get vertex 1, V1 failed (3)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 2, "V2") != 0) {
+		fprintf(stderr, "get vertex 2, V2 failed (3)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 3, "V3") != 0) {
+		fprintf(stderr, "get vertex 3, V3 failed (3)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 112, "one2two") != 0) {
+		fprintf(stderr, "get edge 112 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 113, "one2three") != 0) {
+		fprintf(stderr, "get edge 113 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 123, "two2three") != 0) {
+		fprintf(stderr, "get edge 123 failed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
