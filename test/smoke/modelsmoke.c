@@ -194,6 +194,21 @@ int addEdge(nowdb_model_t *model,
 	return 0;
 }
 
+int removeEdge(nowdb_model_t *model,
+               nowdb_key_t   edgeid) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "removing edge %lu\n", edgeid);
+
+	err = nowdb_model_removeEdge(model, edgeid);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
 int testGetEdge(nowdb_model_t *model,
                 nowdb_key_t     edge,
                 char           *name) {
@@ -260,6 +275,22 @@ int addProp(nowdb_model_t  *model,
 		nowdb_err_print(err);
 		nowdb_err_release(err);	
 		free(p->name); free(p);
+		return -1;
+	}
+	return 0;
+}
+
+int removeProp(nowdb_model_t  *model,
+               nowdb_key_t    propid,
+               nowdb_roleid_t roleid) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "removing property %u.%lu\n", roleid, propid);
+
+	err = nowdb_model_removeProperty(model, roleid, propid);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
 		return -1;
 	}
 	return 0;
@@ -382,6 +413,22 @@ int main() {
 		fprintf(stderr, "get vertex 3, V3 failed (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (addVertex(model, 5, "V5") != 0) {
+		fprintf(stderr, "add vertex 5, V5 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 5, "V5") != 0) {
+		fprintf(stderr, "get vertex 5, V5 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeVertex(model, 5) != 0) {
+		fprintf(stderr, "remove vertex 5 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 5, "V5") == 0) {
+		fprintf(stderr, "get removed vertex 5, V5 passed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	if (addEdge(model, 112, "one2two") != 0) {
 		fprintf(stderr, "add edge 112 failed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -412,6 +459,22 @@ int main() {
 	}
 	if (addEdge(model, 125, "two2three") == 0) {
 		fprintf(stderr, "add edge 125 passed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdge(model, 127, "two2seven") != 0) {
+		fprintf(stderr, "add edge 127 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 127, "two2seven") != 0) {
+		fprintf(stderr, "get edge 127 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeEdge(model, 127) != 0) {
+		fprintf(stderr, "remove edge 127 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 127, "two2seven") == 0) {
+		fprintf(stderr, "get removed edge 127 passed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (addProp(model, 12, 2, "P12") != 0) {
@@ -452,6 +515,22 @@ int main() {
 	}
 	if (testGetProp(model, 22, 1, "P22") != 0) {
 		fprintf(stderr, "get prop P22 on 1 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addProp(model, 43, 3, "P43") != 0) {
+		fprintf(stderr, "add prop 43 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 43, 3, "P43") != 0) {
+		fprintf(stderr, "get prop P43 on 3 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeProp(model, 43, 3) != 0) {
+		fprintf(stderr, "remove prop 43 failed (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 43, 3, "P43") == 0) {
+		fprintf(stderr, "get removed prop P43 passed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
@@ -500,6 +579,18 @@ int main() {
 	}
 	if (testGetProp(model, 22, 1, "P22") != 0) {
 		fprintf(stderr, "get prop P22 on 1 failed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetProp(model, 43, 3, "P43") == 0) {
+		fprintf(stderr, "get removed prop P43 passed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdge(model, 127, "two2seven") == 0) {
+		fprintf(stderr, "get removed edge 127 passed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetVertex(model, 5, "V5") == 0) {
+		fprintf(stderr, "get removed vertex 5, V5 passed (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
