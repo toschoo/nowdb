@@ -145,6 +145,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
 	$(SMK)/modelsmoke              \
+	$(SMK)/textsmoke               \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -328,6 +329,11 @@ $(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
@@ -498,6 +504,7 @@ clean:
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
+	rm -rf $(RSC)/text??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -515,6 +522,7 @@ clean:
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
 	rm -f $(SMK)/modelsmoke
+	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme

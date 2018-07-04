@@ -12,9 +12,9 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/task/lock.h>
-#include <nowdb/mem/lru.h>
 
 #include <beet/index.h>
+#include <tsalgo/lru.h>
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -25,26 +25,28 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t  lock;   /* read/write lock         */
-	char           *path;   /* path to text manager    */
-	nowdb_lru_t     *lru;   /* lru cache               */
-	beet_index_t tinystr;   /* maps string < 8 to id   */
-	beet_index_t tinynum;   /* maps id to string < 8   */
-	beet_index_t smallstr;  /* maps string < 32 to id  */
-	beet_index_t smallnum;  /* maps id to string < 32  */
+	nowdb_rwlock_t    lock; /* read/write lock         */
+	char             *path; /* path to text manager    */
+	ts_algo_lru_t *str2num; /* lru cache               */
+	ts_algo_lru_t *num2str; /* lru cache               */
+	beet_index_t     szidx; /* maps id to str size     */
+	beet_index_t   tinystr; /* maps string < 8 to id   */
+	beet_index_t   tinynum; /* maps id to string < 8   */
+	beet_index_t  smallstr; /* maps string < 32 to id  */
+	beet_index_t  smallnum; /* maps id to string < 32  */
 	beet_index_t mediumstr; /* maps string < 128 to id */
 	beet_index_t mediumnum; /* maps id to string < 128 */
-	beet_index_t bigstr;    /* maps string < 256 to id */
-	beet_index_t bignum;    /* maps id to string < 256 */
-	uint32_t     next32;    /* next key32 to be used   */
-	uint64_t     next64;    /* next key64 to be used   */
+	beet_index_t    bigstr; /* maps string < 256 to id */
+	beet_index_t    bignum; /* maps id to string < 256 */
+	uint32_t        next32; /* next key32 to be used   */
+	uint64_t        next64; /* next key64 to be used   */
 } nowdb_text_t;
 
 /* ------------------------------------------------------------------------
  * Init text manager
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_text_init(nowdb_text_t *txt);
+nowdb_err_t nowdb_text_init(nowdb_text_t *txt, char *path);
 
 /* ------------------------------------------------------------------------
  * Destroy text manager
@@ -108,22 +110,4 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
                                nowdb_key_t   key,
                                char        **str);
-
-/* ------------------------------------------------------------------------
- * Reserve n key32s
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_text_reserve32(nowdb_text_t *txt,
-                                 uint32_t      n,
-                                 uint32_t     *lo,
-                                 uint32_t     *hi);
-
-/* ------------------------------------------------------------------------
- * Reserve n key64s
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_text_reserve64(nowdb_text_t *txt,
-                                 uint32_t      n,
-                                 nowdb_key_t  *lo,
-                                 nowdb_key_t  *hi);
 #endif
