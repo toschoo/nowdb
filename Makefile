@@ -49,6 +49,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/queue.o     \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
+      $(SRC)/mem/lru.o        \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
@@ -62,6 +63,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
       $(SRC)/model/model.o    \
+      $(SRC)/text/text.o      \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/plan.o     \
@@ -82,6 +84,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/queue.h     \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
+      $(SRC)/mem/lru.h        \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
@@ -95,6 +98,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/reader/filter.h  \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
+      $(SRC)/text/text.h      \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \

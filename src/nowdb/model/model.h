@@ -141,7 +141,7 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
-                                      nowdb_key_t    edgeid,
+                                      nowdb_roleid_t roleid,
                                       ts_algo_list_t *props);
 
 /* ------------------------------------------------------------------------

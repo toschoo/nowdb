@@ -1093,3 +1093,34 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
 		                                 FALSE, OBJECT, "name");
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * Filter
+ * ------------------------------------------------------------------------
+ */
+ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
+                                           const void *node) {
+	if (PROP(pattern)->roleid == PROP(node)->roleid) return TRUE;
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------
+ * Get all properties of vertex (roleid)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
+                                      nowdb_roleid_t roleid,
+                                      ts_algo_list_t *props) {
+	nowdb_model_prop_t tmp;
+
+	MODELNULL();
+	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "list is NULL");
+	tmp.roleid = roleid;
+
+	if (ts_algo_tree_filter(model->propById, props, &tmp,
+	                        propsByRoleid) != TS_ALGO_OK) {
+		NOMEM("tree.filter");
+	}
+	return NOWDB_OK;
+}
