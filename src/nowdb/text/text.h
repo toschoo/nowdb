@@ -3,7 +3,8 @@
  * ========================================================================
  * Text
  * ========================================================================
- *
+ * TODO:
+ * - switch to nowdb_lru (we need locking!)
  * ========================================================================
  */
 #ifndef nowdb_text_decl
@@ -12,9 +13,9 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/task/lock.h>
+#include <nowdb/mem/lru.h>
 
 #include <beet/index.h>
-#include <tsalgo/lru.h>
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -27,8 +28,8 @@
 typedef struct {
 	nowdb_rwlock_t    lock; /* read/write lock         */
 	char             *path; /* path to text manager    */
-	ts_algo_lru_t *str2num; /* lru cache               */
-	ts_algo_lru_t *num2str; /* lru cache               */
+	nowdb_lru_t   *str2num; /* lru cache               */
+	nowdb_lru_t   *num2str; /* lru cache               */
 	beet_index_t     szidx; /* maps id to str size     */
 	beet_index_t   tinystr; /* maps string < 8 to id   */
 	beet_index_t   tinynum; /* maps id to string < 8   */

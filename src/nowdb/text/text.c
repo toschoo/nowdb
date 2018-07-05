@@ -17,6 +17,7 @@
 
 #define KEY32 1073741824
 #define KEY64 4294967296
+#define NULLKEY 0
 
 #define CACHEMAX 250000
 
@@ -30,18 +31,22 @@
 #define BIGSTR    7
 #define BIGNUM    8
 
+#define TINY 8
+#define SMALL 32
+#define MEDIUM 128
+#define BIG 256
+
 static char *OBJECT = "TEXT";
 
 #define TEXTNULL() \
 	if (txt == NULL) return nowdb_err_get(nowdb_err_invalid, \
 	                        FALSE, OBJECT, "text is NULL");
+
+#define KEYNULL() \
+	if (key == NULL) return nowdb_err_get(nowdb_err_invalid, \
+	                          FALSE, OBJECT, "key is NULL");
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
-
-#define OPENIDX(x, p, h, s) \
-	beet_open_config_ignore(&ocfg); \
-	ber = beet_index_open(p, h, &ocfg, &x); \
-	if (ber != BEET_OK) err = makeBeetErr(ber, s);
 
 typedef struct {
 	nowdb_key_t key;
@@ -55,14 +60,14 @@ typedef struct {
  * LRU Callbacks: compare
  * ------------------------------------------------------------------------
  */
-ts_algo_cmp_t strcompare(void *ignore, void *one, void *two) {
+static ts_algo_cmp_t strcompare(void *ignore, void *one, void *two) {
 	int x = strcmp(NODE(one)->str, NODE(two)->str);
 	if (x < 0) return ts_algo_cmp_less;
 	if (x > 0) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
 }
 
-ts_algo_cmp_t numcompare(void *ignore, void *one, void *two) {
+static ts_algo_cmp_t numcompare(void *ignore, void *one, void *two) {
 	if (NODE(one)->key < NODE(two)->key) return ts_algo_cmp_less;
 	if (NODE(one)->key > NODE(two)->key) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
@@ -72,21 +77,13 @@ ts_algo_cmp_t numcompare(void *ignore, void *one, void *two) {
  * LRU Callbacks: delete
  * ------------------------------------------------------------------------
  */
-void lrudelete(void *ignore, void **n) {
+static void lrudelete(void *ignore, void **n) {
 	if (n == NULL) return;
 	if (*n == NULL) return;
 	if (NODE(*n)->str != NULL) {
 		free(NODE(*n)->str);
 	}
 	free(*n); *n=NULL;
-}
-
-/* ------------------------------------------------------------------------
- * LRU Callbacks: update
- * ------------------------------------------------------------------------
- */
-ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
-	return TS_ALGO_OK;
 }
 
 #define KEY(x) \
@@ -291,6 +288,9 @@ nowdb_err_t nowdb_text_init(nowdb_text_t *txt, char *path) {
 	txt->bigstr = NULL;
 	txt->bignum = NULL;
 
+	txt->next32 = KEY32;
+	txt->next64 = KEY64;
+
 	err = nowdb_rwlock_init(&txt->lock);
 	if (err != NOWDB_OK) return err;
 
@@ -301,22 +301,33 @@ nowdb_err_t nowdb_text_init(nowdb_text_t *txt, char *path) {
 		return err;
 	}
 
-	txt->str2num = ts_algo_lru_new(CACHEMAX, &strcompare, &noupdate,
-	                                         &lrudelete, &lrudelete);
+	txt->str2num = calloc(1,sizeof(nowdb_lru_t));
 	if (txt->str2num == NULL) {
 		nowdb_text_destroy(txt);
 		NOMEM("creating cache");
 		return err;
 	}
+	err = nowdb_lru_init(txt->str2num, CACHEMAX,
+	                    &strcompare, &lrudelete);
+	if (err != NOWDB_OK) {
+		free(txt->str2num); txt->str2num = NULL;
+		nowdb_text_destroy(txt);
+		return err;
+	}
 
-	txt->num2str = ts_algo_lru_new(CACHEMAX, &numcompare, &noupdate,
-	                                         &lrudelete, &lrudelete);
+	txt->num2str = calloc(1,sizeof(nowdb_lru_t));
 	if (txt->num2str == NULL) {
 		nowdb_text_destroy(txt);
 		NOMEM("creating cache");
 		return err;
 	}
-
+	err = nowdb_lru_init(txt->num2str, CACHEMAX,
+	                     &numcompare, lrudelete);
+	if (err != NOWDB_OK) {
+		free(txt->num2str); txt->num2str = NULL;
+		nowdb_text_destroy(txt);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -375,11 +386,11 @@ void nowdb_text_destroy(nowdb_text_t *txt) {
 		free(txt->path); txt->path = NULL;
 	}
 	if (txt->num2str != NULL) {
-		ts_algo_lru_destroy(txt->num2str);
+		nowdb_lru_destroy(txt->num2str);
 		free(txt->num2str); txt->num2str = NULL;
 	}
 	if (txt->str2num != NULL) {
-		ts_algo_lru_destroy(txt->str2num);
+		nowdb_lru_destroy(txt->str2num);
 		free(txt->str2num); txt->str2num = NULL;
 	}
 	closeAll(txt);
@@ -463,6 +474,31 @@ nowdb_err_t nowdb_text_drop(nowdb_text_t *txt) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get last id
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t getLastKey(nowdb_text_t *txt) {
+	beet_err_t  ber;
+	beet_iter_t iter;
+	nowdb_key_t *key=NULL;
+
+	ber = beet_iter_alloc(txt->szidx, &iter);
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	ber = beet_index_range(txt->szidx, NULL, BEET_DIR_DESC, iter);
+	if (ber != BEET_OK) {
+		beet_iter_destroy(iter);
+		return makeBeetError(ber);
+	}
+	ber = beet_iter_move(iter, (void**)&key, NULL);
+	if (ber == BEET_OK) txt->next64 = (*key)+1;
+	if (ber == BEET_ERR_EOF) txt->next64 = KEY64;
+	beet_iter_destroy(iter);
+	if (ber != BEET_OK && ber != BEET_ERR_EOF) return makeBeetError(ber);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Open existing text manager
  * ------------------------------------------------------------------------
  */
@@ -501,8 +537,7 @@ nowdb_err_t nowdb_text_open(nowdb_text_t *txt) {
 		default: break;
 		}
 	}
-	/* set next32 and next64 */
-	return NOWDB_OK;
+	return getLastKey(txt);
 }
 
 /* ------------------------------------------------------------------------
@@ -511,7 +546,181 @@ nowdb_err_t nowdb_text_open(nowdb_text_t *txt) {
  */
 nowdb_err_t nowdb_text_close(nowdb_text_t *txt) {
 	closeAll(txt);
-	/* write next32 and next64 back */
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: insert
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t insert(nowdb_text_t *txt,
+                                 char         *str,
+                                 size_t         sz,
+                                 nowdb_key_t   key) {
+	beet_err_t ber;
+	beet_index_t idxstr=NULL, idxkey=NULL;
+	char nstr[256];
+	uint32_t dsz=0;
+
+	if (sz < TINY) {
+		idxstr = txt->tinystr;
+		idxkey = txt->tinynum;
+		dsz = TINY;
+	} else if (sz < SMALL) {
+		idxstr = txt->smallstr;
+		idxkey = txt->smallnum;
+		dsz = SMALL;
+	} else if (sz < MEDIUM) {
+		idxstr = txt->mediumstr;
+		idxkey = txt->mediumnum;
+		dsz = MEDIUM;
+	} else if (sz < BIG) {
+		idxstr = txt->bigstr;
+		idxkey = txt->bignum;
+		dsz = BIG;
+	}
+
+	memset(nstr, 0, 256);
+	strcpy(nstr, str);
+
+	ber = beet_index_insert(txt->szidx, &key, &dsz);
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	ber = beet_index_insert(idxstr, nstr, &key); 
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	ber = beet_index_insert(idxkey, &key, nstr); 
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: getString
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getString(nowdb_text_t *txt,
+                                    nowdb_key_t   key,
+                                    char        **str,
+                                    char        cache) {
+	lrunode_t tmp, *res=NULL;
+	beet_index_t    idx=NULL;
+	beet_err_t      ber;
+	nowdb_err_t     err;
+	uint32_t        sz;
+
+	*str = NULL;
+	tmp.key = key;
+
+	err = nowdb_lru_get(txt->num2str, &tmp, (void**)&res);
+	if (err != NOWDB_OK) return err;
+	if (res != NULL) {
+		*str = strdup(res->str);
+		if (*str == NULL) {
+			NOMEM("allocating string");
+			return err;
+		}
+		return NOWDB_OK;
+	}
+
+	ber = beet_index_copy(txt->szidx, &key, &sz);
+	if (ber == BEET_ERR_KEYNOF) return NOWDB_OK;
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	switch(sz) {
+	case TINY: 
+		idx = txt->tinynum;
+		*str = malloc(TINY);
+		break;
+	case SMALL: 
+		idx = txt->smallnum; 
+		*str = malloc(SMALL);
+		break;
+	case MEDIUM: 
+		idx = txt->mediumnum; 
+		*str = malloc(MEDIUM);
+		break;
+	case BIG: 
+		idx = txt->bignum; 
+		*str = malloc(BIG);
+		break;
+	default:
+		return nowdb_err_get(nowdb_err_panic,
+		    FALSE, OBJECT, "impossible case");
+	}
+	if (*str == NULL) {
+		NOMEM("allocating string");
+		return err;
+	}
+
+	ber = beet_index_copy(idx, &key, *str);
+	if (ber != BEET_OK) {
+		free(*str); *str = NULL;
+		return makeBeetError(ber);
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: getKey
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getKey(nowdb_text_t *txt,
+                                 char         *str,
+                                 size_t         sz,
+                                 nowdb_key_t  *key,
+                                 char         *x,
+                                 char        cache) {
+	lrunode_t tmp, *res=NULL;
+	beet_index_t    idx=NULL;
+	beet_err_t      ber;
+	nowdb_err_t     err;
+
+	tmp.str = str;
+
+	err = nowdb_lru_get(txt->str2num, &tmp, (void**)&res);
+	if (err != NOWDB_OK) return err;
+	if (res != NULL) {
+		*key = res->key;
+		*x = 1;
+		return NOWDB_OK;
+	}
+
+	if (sz < TINY) {
+		idx = txt->tinystr;
+	} else if (sz < SMALL) {
+		idx = txt->smallstr;
+	} else if (sz < MEDIUM) {
+		idx = txt->mediumstr;
+	} else if (sz < BIG) {
+		idx = txt->bigstr;
+	}
+
+	*key = 0; *x = 0;
+	ber = beet_index_copy(idx, str, key);
+	if (ber == BEET_ERR_KEYNOF) return NOWDB_OK;
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	if (cache) {
+		res = malloc(sizeof(lrunode_t));
+		if (res == NULL) {
+			NOMEM("allocating lrunode"); return err;
+		}
+		res->str = strdup(str);
+		if (res->str == NULL) {
+			NOMEM("allocating string");
+			free(res); return err;
+		}
+		res->key = *key;
+		err = nowdb_lru_add(txt->str2num, res);
+		if (err != NOWDB_OK) {
+			free(res->str); free(res);
+			return err;
+		}
+	}
+
+	*x = 1;
+	
 	return NOWDB_OK;
 }
 
@@ -521,7 +730,45 @@ nowdb_err_t nowdb_text_close(nowdb_text_t *txt) {
  */
 nowdb_err_t nowdb_text_insert(nowdb_text_t *txt,
                               char         *str,
-                              nowdb_key_t  *key);
+                              nowdb_key_t  *key) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	char x = 0;
+	size_t s;
+
+	TEXTNULL();
+	KEYNULL();
+
+	if (str == NULL) {
+		*key = NULLKEY; return NOWDB_OK;
+	}
+
+	s = strnlen(str, 256);
+	if (s > 255) return nowdb_err_get(nowdb_err_invalid,
+	                    FALSE, OBJECT, "string too big");
+	if (s == 0) {
+		*key = NULLKEY; return NOWDB_OK;
+	}
+
+	err = nowdb_lock_write(&txt->lock);
+	if (err != NOWDB_OK) return err;
+	
+	err = getKey(txt, str, s, key, &x, FALSE);
+	if (err != NOWDB_OK) goto unlock;
+	if (x) goto unlock;
+
+	*key = txt->next64;
+	txt->next64++;
+
+	err = insert(txt, str, s, *key);
+unlock:
+	err2 = nowdb_unlock_write(&txt->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Insert text and get a unique identifier back;
@@ -538,7 +785,43 @@ nowdb_err_t nowdb_text_insertLow(nowdb_text_t *txt,
  */
 nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
                               char         *str,
-                              nowdb_key_t  *key);
+                              nowdb_key_t  *key)
+{
+	nowdb_err_t err2, err=NOWDB_OK;
+	char x;
+	size_t s;
+
+	TEXTNULL();
+	KEYNULL();
+
+	if (str == NULL) {
+		*key = NULLKEY;
+		return NOWDB_OK;
+	}
+
+	s = strnlen(str, 4096);
+	if (s > 4095) return nowdb_err_get(nowdb_err_invalid,
+	                     FALSE, OBJECT, "string too big");
+	if (s == 0) {
+		*key = NULLKEY;
+		return NOWDB_OK;
+	}
+
+	err = nowdb_lock_read(&txt->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = getKey(txt, str, s, key, &x, TRUE);
+	if (err != NOWDB_OK) goto unlock;
+	if (!x) err = nowdb_err_get(nowdb_err_key_not_found,
+	                                FALSE, OBJECT, NULL);
+unlock:
+	err2 = nowdb_unlock_read(&txt->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Get text for this key
@@ -546,7 +829,34 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
  */
 nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
                                nowdb_key_t   key,
-                               char        **str);
+                               char        **str) {
+	nowdb_err_t err2, err=NOWDB_OK;
+
+	TEXTNULL();
+
+	if (str == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                        FALSE, OBJECT, "string is NULL");
+
+	if (key == NULLKEY) {
+		*str = NULL;
+		return NOWDB_OK;
+	}
+
+	err = nowdb_lock_read(&txt->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = getString(txt, key, str, TRUE);
+	if (err != NOWDB_OK) goto unlock;
+	if (*str == NULL) err = nowdb_err_get(nowdb_err_key_not_found,
+	                                         FALSE, OBJECT, NULL);
+unlock:
+	err2 = nowdb_unlock_read(&txt->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Reserve n key32s

@@ -20,8 +20,8 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t lock;
-	ts_algo_lru_t *lru;
+	nowdb_rwlock_t *lock;
+	ts_algo_lru_t  *lru;
 } nowdb_lru_t;
 
 /* ------------------------------------------------------------------------
@@ -31,6 +31,7 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_lru_init(nowdb_lru_t      *lru,
+                           uint32_t          max,
                            ts_algo_comprsc_t compare,
                            ts_algo_delete_t  destroy);
 
@@ -45,6 +46,7 @@ void nowdb_lru_destroy(nowdb_lru_t *lru);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_lru_get(nowdb_lru_t *lru,
+                          void       *what,
                           void      **cont);
 
 /* ------------------------------------------------------------------------
