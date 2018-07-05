@@ -48,7 +48,7 @@
  */
 %token_type {char*}
 %token_destructor {
-	/* fprintf(stderr, "freeing token '%s'\n", (char*)$$); */
+	// fprintf(stderr, "freeing token '%s'\n", (char*)$$);
 	UNUSED_VAR_SILENCER();
 	free($$);
 }
@@ -122,6 +122,20 @@
 
 %type header_clause {nowdb_ast_t*}
 %destructor header_clause {nowdb_ast_destroyAndFree($$);}
+
+%type field_decl {nowdb_ast_t*}
+%destructor field_decl {nowdb_ast_destroyAndFree($$);}
+
+%type field_decl_list {nowdb_ast_t*}
+%destructor field_decl_list {nowdb_ast_destroyAndFree($$);}
+
+%type edge_field_decl {nowdb_ast_t*}
+%destructor edge_field_decl {nowdb_ast_destroyAndFree($$);}
+
+%type edge_field_decl_list {nowdb_ast_t*}
+%destructor edge_field_decl_list {nowdb_ast_destroyAndFree($$);}
+
+%type type {int}
 
 %extra_argument { nowdbsql_state_t *nowdbres }
 
@@ -245,6 +259,20 @@ create_clause(C) ::= CREATE sizing(S) INDEX IDENTIFIER(I) ON index_target(T) LPA
 	NOWDB_SQL_ADDKID(C, F);
 }
 
+create_clause(C) ::= CREATE TYPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
+}
+
+create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
 index_target(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
@@ -253,6 +281,68 @@ index_target(T) ::= IDENTIFIER(I). {
 index_target(T) ::= VERTEX. {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_VERTEX);
 }
+
+field_decl(F) ::= IDENTIFIER(I) type(T). {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+}
+
+field_decl_list(L) ::= field_decl(F). {
+	L=F;
+}
+
+field_decl_list(L) ::= field_decl(F) COMMA field_decl_list(L2). {
+	NOWDB_SQL_ADDKID(F,L2);
+	L=F;
+}
+
+edge_field_decl(E) ::= ORIGIN IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_ORIGIN,I);
+}
+
+edge_field_decl(E) ::= DESTINATION IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_DESTIN,I);
+}
+
+edge_field_decl(E) ::= LABEL type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	         (void*)(uint64_t)NOWDB_OFF_LABEL);
+}
+edge_field_decl(E) ::= WEIGHT type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	        (void*)(uint64_t)NOWDB_OFF_WEIGHT);
+}
+
+edge_field_decl_list(L) ::= edge_field_decl(E). {
+	L=E;
+}
+
+edge_field_decl_list(L) ::= edge_field_decl(E) COMMA edge_field_decl_list(L2). {
+	NOWDB_SQL_ADDKID(E,L2);
+	L=E;
+}
+
+type(T) ::= TEXT. {
+	T=NOWDB_AST_TEXT;
+}
+type(T) ::= TIME. {
+	T=NOWDB_AST_TIME;
+}
+type(T) ::= DATE. {
+	T=NOWDB_AST_TIME;
+}
+type(T) ::= FLOAT. {
+	T=NOWDB_AST_FLOAT;
+}
+type(T) ::= INT. {
+	T=NOWDB_AST_INT;
+}
+type(T) ::= UINT. {
+	T=NOWDB_AST_UINT;
+}
+type ::= LONGTEXT.
 
 /* ------------------------------------------------------------------------
  *  Drop Clause

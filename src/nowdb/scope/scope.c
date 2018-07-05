@@ -17,6 +17,9 @@ static char *OBJECT = "scope";
 	if (scope == NULL) return nowdb_err_get(nowdb_err_invalid, \
 	                          FALSE, OBJECT, "scope is NULL");
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
 /* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare
  * ------------------------------------------------------------------------
@@ -252,6 +255,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->path = NULL;
 	scope->iman = NULL;
 	scope->model = NULL;
+	scope->text = NULL;
 	scope->ver  = ver;
 	scope->state = NOWDB_SCOPE_CLOSED;
 
@@ -318,7 +322,25 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		ts_algo_tree_destroy(&scope->contexts);
 		return err;
 	}
-	free(p); 
+	free(p);
+	p = nowdb_path_append(path, "text");
+	if (p == NULL) {
+		nowdb_scope_destroy(scope);
+		NOMEM("allocating path");
+		return err;
+	}
+	scope->text = calloc(1, sizeof(nowdb_text_t));
+	if (scope->text == NULL) {
+		free(p);
+		nowdb_scope_destroy(scope);
+		NOMEM("allocating text");
+		return err;
+	}
+	err = nowdb_text_init(scope->text, p); free(p);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -341,6 +363,10 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope->model != NULL) {
 		nowdb_model_destroy(scope->model);
 		free(scope->model); scope->model = NULL;
+	}
+	if (scope->text != NULL) {
+		nowdb_text_destroy(scope->text);
+		free(scope->text); scope->text = NULL;
 	}
 	nowdb_rwlock_destroy(&scope->lock);
 	nowdb_store_destroy(&scope->vertices);
@@ -852,6 +878,13 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	err = storeCatalog(scope);
 	if (err != NOWDB_OK) goto unlock;
 
+	/* text */
+	err = nowdb_dir_create(scope->text->path);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_text_create(scope->text);
+	if (err != NOWDB_OK) goto unlock;
+
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
@@ -939,6 +972,10 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	err = removeModel(scope);
 	if (err != NOWDB_OK) goto unlock;
 
+	/* drop text */
+	err = nowdb_text_drop(scope->text);
+	if (err != NOWDB_OK) goto unlock;
+
 	/* remove icat */
 	err = removeFile(scope, "icat");
 	if (err != NOWDB_OK) goto unlock;
@@ -1016,6 +1053,15 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
+	err = nowdb_text_open(scope->text);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
+
 	scope->state = NOWDB_SCOPE_OPEN;
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
@@ -1059,6 +1105,8 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 		nowdb_model_destroy(scope->model);
 		free(scope->model); scope->model = NULL;
 	}
+	err = nowdb_text_close(scope->text);
+	if (err != NOWDB_OK) goto unlock;
 
 	scope->state = NOWDB_SCOPE_CLOSED;
 unlock:

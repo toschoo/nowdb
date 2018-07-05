@@ -56,6 +56,23 @@
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
 
+(?i:TYPE)		return NOWDB_SQL_TYPE;
+(?i:TEXT)		return NOWDB_SQL_TEXT;
+(?i:DATE)		return NOWDB_SQL_DATE;
+(?i:DATETIME)		return NOWDB_SQL_TIME;
+(?i:FLOAT)		return NOWDB_SQL_FLOAT;
+(?i:INT)		return NOWDB_SQL_INT;
+(?i:INTEGER)		return NOWDB_SQL_INT;
+(?i:UINT)		return NOWDB_SQL_UINT;
+(?i:UINTEGER)		return NOWDB_SQL_UINT;
+
+(?i:EDGE)		return NOWDB_SQL_EDGE;
+(?i:ORIGIN)		return NOWDB_SQL_ORIGIN;
+(?i:DESTINATION)	return NOWDB_SQL_DESTINATION;
+(?i:DEST)		return NOWDB_SQL_DESTINATION;
+(?i:LABEL)		return NOWDB_SQL_LABEL;
+(?i:WEIGHT)		return NOWDB_SQL_WEIGHT;
+
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:FROM)		return NOWDB_SQL_FROM;
 (?i:WHERE)		return NOWDB_SQL_WHERE;

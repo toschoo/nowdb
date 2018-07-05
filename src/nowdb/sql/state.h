@@ -221,6 +221,22 @@ typedef struct {
 	}
 
 /* ------------------------------------------------------------------------
+ * Make a and edge declaration for origin or destin
+ * Parameters:
+ * - C: the ast representing the edge
+ * - x: the offset subcode
+ * - I: the name of the user-defined type
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_EDGE_TYPE(E, x, I) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *o; \
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, NOWDB_AST_TYPE); \
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_CREATEAST(&o, NOWDB_AST_OFF, x); \
+	NOWDB_SQL_ADDKID(E,o);
+
+/* ------------------------------------------------------------------------
  * Make a DML target statement
  * Parameters:
  * - S: ast representing the target

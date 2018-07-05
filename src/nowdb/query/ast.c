@@ -98,6 +98,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
+	case NOWDB_AST_DECL: ASTCALLOC(3);
+	case NOWDB_AST_OFF: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
@@ -159,6 +161,24 @@ static inline char *tellType(int ntype, int stype) {
 		default: return "unknown type of value";
 		}
 
+	case NOWDB_AST_DECL: 
+		switch(stype) {
+		case NOWDB_AST_TEXT: return "text field"; 
+		case NOWDB_AST_FLOAT: return "float field"; 
+		case NOWDB_AST_UINT: return "uint field"; 
+		case NOWDB_AST_INT: return "int field"; 
+		case NOWDB_AST_DATE: return "date field"; 
+		case NOWDB_AST_TIME: return "time field"; 
+		case NOWDB_AST_TYPE: return "user defined"; 
+		default: return "unknown field type";
+		}
+
+	case NOWDB_AST_OFF: 
+		switch(stype) {
+		case NOWDB_OFF_ORIGIN: return "origin";
+		case NOWDB_OFF_DESTIN: return "destination";
+		}
+
 	case NOWDB_AST_USE: return "use";
 
 	case NOWDB_AST_TARGET:
@@ -167,6 +187,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_VERTEX: return "vertex";
 		case NOWDB_AST_CONTEXT: return "context";
 		case NOWDB_AST_INDEX: return "index";
+		case NOWDB_AST_TYPE: return "type";
+		case NOWDB_AST_EDGE: return "edge";
 		default: return "unknown target";
 		}
 
@@ -362,6 +384,7 @@ static inline int addcreate(nowdb_ast_t *n,
 	case NOWDB_AST_OPTION: ADDKID(1);
 	case NOWDB_AST_ON: ADDKID(2);
 	case NOWDB_AST_FIELD: ADDKID(3);
+	case NOWDB_AST_DECL: ADDKID(3);
 	default: return -1;
 	}
 }
@@ -541,10 +564,36 @@ static inline int addcompare(nowdb_ast_t *n,
  * Add kid to field
  * -----------------------------------------------------------------------
  */
+static inline int ad3ecl(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_OFF: ADDKID(1);
+	case NOWDB_AST_DECL: ADDKID(2);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to field
+ * -----------------------------------------------------------------------
+ */
 static inline int addfield(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to type
+ * -----------------------------------------------------------------------
+ */
+static inline int addtype(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TYPE: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -592,6 +641,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_DATA: return ad3ata(n,k);
 
 	case NOWDB_AST_FIELD: return addfield(n,k);
+	case NOWDB_AST_DECL: return ad3ecl(n,k);
 
 	default: return -1;
 	}

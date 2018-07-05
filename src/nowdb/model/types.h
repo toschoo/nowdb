@@ -65,4 +65,3 @@ typedef struct {
 } nowdb_model_edge_t;
 
 #endif
-

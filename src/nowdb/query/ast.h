@@ -133,6 +133,8 @@
  * - vertex
  * - index
  * - on is for indices: create index xyz on ...
+ * - type (vertex definition)
+ * - edge (context definition)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_TARGET   10100
@@ -141,6 +143,8 @@
 #define NOWDB_AST_VERTEX   10103
 #define NOWDB_AST_INDEX    10104
 #define NOWDB_AST_ON       10105
+#define NOWDB_AST_TYPE     10106
+#define NOWDB_AST_EDGE     10107
 
 /* -----------------------------------------------------------------------
  * Options
@@ -168,15 +172,18 @@
 
 /* -----------------------------------------------------------------------
  * Data
- * - key-value list (e.g. insert into ... (a=b, c=d, ...)
- * - value list (e.g. insert into ... (a, b, c, ...)
- * - field (also field list, e.g. create index xyz on ctx (a,b,c)
+ * - key-value list, e.g. insert into ... (a=b, c=d, ...)
+ * - value list, e.g. insert into ... (a, b, c, ...)
+ * - field, also field list, e.g. create index xyz on ctx (a,b,c)
+ * - decl, e.g. create type (a text, b int, ...)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_DATA     10300
 #define NOWDB_AST_KEYVAL   10301
 #define NOWDB_AST_VALLIST  10302
 #define NOWDB_AST_FIELD    10303
+#define NOWDB_AST_DECL     10305
+#define NOWDB_AST_OFF      10306
 
 /* -----------------------------------------------------------------------
  * Values
@@ -188,6 +195,8 @@
 #define NOWDB_AST_FLOAT    10312
 #define NOWDB_AST_UINT     10313
 #define NOWDB_AST_INT      10314
+#define NOWDB_AST_DATE     10315
+#define NOWDB_AST_TIME     10316
 
 /* -----------------------------------------------------------------------
  * Path and Location ('remote', 'local')

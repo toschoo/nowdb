@@ -18,6 +18,7 @@
 #include <nowdb/scope/loader.h>
 #include <nowdb/index/man.h>
 #include <nowdb/model/model.h>
+#include <nowdb/text/text.h>
 
 #include <tsalgo/tree.h>
 
@@ -26,16 +27,16 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t lock;     /* read/write lock */
-	uint32_t       state;    /* open or closed  */
-	nowdb_path_t   path;     /* base path       */
-	nowdb_path_t   catalog;  /* catalog path    */
-	nowdb_version_t ver;     /* db version      */
-	nowdb_store_t vertices;  /* vertices        */
+	nowdb_rwlock_t     lock; /* read/write lock */
+	uint32_t          state; /* open or closed  */
+	nowdb_path_t       path; /* base path       */
+	nowdb_path_t    catalog; /* catalog path    */
+	nowdb_version_t     ver; /* db version      */
+	nowdb_store_t  vertices; /* vertices        */
 	ts_algo_tree_t contexts; /* contexts        */
 	nowdb_index_man_t *iman; /* index manager   */
 	nowdb_model_t    *model; /* model           */
-	                         /* strings         */
+	nowdb_text_t      *text; /* strings         */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
