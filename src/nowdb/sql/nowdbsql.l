@@ -65,6 +65,8 @@
 (?i:INTEGER)		return NOWDB_SQL_INT;
 (?i:UINT)		return NOWDB_SQL_UINT;
 (?i:UINTEGER)		return NOWDB_SQL_UINT;
+(?i:PRIMARY\ KEY)	return NOWDB_SQL_PK;
+(?i:PK)			return NOWDB_SQL_PK;
 
 (?i:EDGE)		return NOWDB_SQL_EDGE;
 (?i:ORIGIN)		return NOWDB_SQL_ORIGIN;

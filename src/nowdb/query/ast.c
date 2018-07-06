@@ -98,7 +98,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
-	case NOWDB_AST_DECL: ASTCALLOC(3);
+	case NOWDB_AST_DECL: ASTCALLOC(4);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
@@ -212,6 +212,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_DISK: return "option disk";
 		case NOWDB_AST_IFEXISTS: return "if (not) exists";
 		case NOWDB_AST_IGNORE: return "option ignore";
+		case NOWDB_AST_PK: return "primary key";
 		default: return "unknown option";
 		}
 
@@ -569,7 +570,8 @@ static inline int ad3ecl(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
 	case NOWDB_AST_OFF: ADDKID(1);
-	case NOWDB_AST_DECL: ADDKID(2);
+	case NOWDB_AST_OPTION: ADDKID(2);
+	case NOWDB_AST_DECL: ADDKID(3);
 	default: return -1;
 	}
 }
@@ -582,18 +584,6 @@ static inline int addfield(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
-	default: return -1;
-	}
-}
-
-/* -----------------------------------------------------------------------
- * Add kid to type
- * -----------------------------------------------------------------------
- */
-static inline int addtype(nowdb_ast_t *n,
-                          nowdb_ast_t *k) {
-	switch(k->ntype) {
-	case NOWDB_AST_TYPE: ADDKID(0);
 	default: return -1;
 	}
 }

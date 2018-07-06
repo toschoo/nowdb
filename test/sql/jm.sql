@@ -7,6 +7,8 @@ create table weekpeak;
 create table stats;
 
 create type product (
+	product_key uint primary key,
+	product_desc text,
 	area_code uint,
 	area_desc text,
 	div_code uint,
@@ -17,8 +19,6 @@ create type product (
 	cat_desc text,
 	subcat_code uint,
 	subcat_desc text,
-	product_key uint,
-	product_desc text,
 	brand_code uint,
 	brand_desc text,
 	product_type_code uint,
@@ -27,7 +27,7 @@ create type product (
 	product_weight float
 );
 create type store (
-	store_key uint,
+	store_key uint primary key,
 	store_name text,
 	org_code text,
 	org_desc text,
@@ -42,8 +42,8 @@ create type store (
 	y float
 );
 create type client (
+	card_key uint primary key,
 	account_id uint,
-	card_key uint,
 	birthdate date,
 	gender text,
 	city text,

@@ -161,6 +161,7 @@
 #define NOWDB_AST_DISK     10208
 #define NOWDB_AST_STRESS   10209
 #define NOWDB_AST_IGNORE   10210
+#define NOWDB_AST_PK       10211
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:

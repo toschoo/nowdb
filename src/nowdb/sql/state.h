@@ -87,6 +87,18 @@ typedef struct {
 	}
 
 /* ------------------------------------------------------------------------
+ * Macro to add an option to an existing ast node
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_ADDOPT(n, o, x, v) \
+	nowdb_ast_t *k; \
+	NOWDB_SQL_CREATEAST(&k, NOWDB_AST_OPTION, o); \
+	if (x != 0) { \
+		nowdb_ast_setValue(k, x, v); \
+	} \
+	NOWDB_SQL_ADDKID(n,k);
+
+/* ------------------------------------------------------------------------
  * Create A DDL statement and push it to the stack
  * Parameters:
  * - C: an ast representing the DDL operation (CREATE, DROP, ALTER)
