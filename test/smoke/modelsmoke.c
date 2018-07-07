@@ -263,8 +263,8 @@ int addProp(nowdb_model_t  *model,
 	}
 	p->propid = propid;
 	p->roleid = roleid;
-	p->prop = NOWDB_MODEL_TEXT;
 	p->value  = NOWDB_TYP_UINT;
+	p->pk = FALSE;
 	p->name = strdup(name);
 	if (p->name == NULL) {
 		perror("out-of-mem");
@@ -332,6 +332,71 @@ int testGetProp(nowdb_model_t  *model,
 		fprintf(stderr, "wrong prop: %lu\n", p->propid);
 		return -1;
 	}
+	return 0;
+}
+
+void destroyProps(ts_algo_list_t *props) {
+	nowdb_model_prop_t *prop;
+	ts_algo_list_node_t *runner, *tmp;
+	
+	runner=props->head;
+	while(runner!=NULL) {
+		prop = runner->cont;
+		free(prop->name); free(prop);
+		tmp = runner->nxt;
+		free(runner); runner=tmp;
+	}
+}
+
+int addType(nowdb_model_t *model,
+            char          *name) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *prop;
+	ts_algo_list_t props;
+
+	ts_algo_list_init(&props);
+
+	fprintf(stderr, "adding type '%s'\n", name);
+
+	for(int i=0; i<3; i++) {
+		prop = calloc(1, sizeof(nowdb_model_prop_t));
+		if (prop == NULL) {
+			fprintf(stderr, "out-of-mem\n");
+			return -1;
+		}
+		switch(i) {
+		case 0: 
+			prop->name = strdup("ID");
+			prop->value = NOWDB_TYP_UINT;
+			prop->pk = TRUE; break;
+		case 1:
+			prop->name = strdup("NAME");
+			prop->value = NOWDB_TYP_TEXT;
+			prop->pk = FALSE; break;
+		case 2: 
+			prop->name = strdup("PRICE");
+			prop->value = NOWDB_TYP_FLOAT;
+			prop->pk = FALSE; break;
+		}
+		if (prop->name == NULL) {
+			free(prop);
+			fprintf(stderr, "out-of-mem\n");
+			return -1;
+		}
+		prop->propid = 1000 + i;
+		if (ts_algo_list_append(&props, prop) != TS_ALGO_OK) {
+			free(prop->name); free(prop);
+			destroyProps(&props);
+		}
+	}
+	err = nowdb_model_addType(model, name, &props);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		destroyProps(&props);
+		return -1;
+	}
+	ts_algo_list_destroy(&props);
 	return 0;
 }
 
@@ -533,6 +598,14 @@ int main() {
 		fprintf(stderr, "get removed prop P43 passed (1)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (addType(model, "product") != 0) {
+		fprintf(stderr, "cannot add type 'product'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addType(model, "product") == 0) {
+		fprintf(stderr, "adding existing type 'product' (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 
 	/* destroy and open again */
 	nowdb_model_destroy(model); free(model);
@@ -591,6 +664,10 @@ int main() {
 	}
 	if (testGetVertex(model, 5, "V5") == 0) {
 		fprintf(stderr, "get removed vertex 5, V5 passed (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addType(model, "product") == 0) {
+		fprintf(stderr, "adding existing type 'product' (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

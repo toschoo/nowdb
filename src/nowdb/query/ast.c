@@ -98,7 +98,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
-	case NOWDB_AST_DECL: ASTCALLOC(4);
+	case NOWDB_AST_DECL: ASTCALLOC(3);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
@@ -566,12 +566,11 @@ static inline int addcompare(nowdb_ast_t *n,
  * -----------------------------------------------------------------------
  */
 static inline int ad3ecl(nowdb_ast_t *n,
-                           nowdb_ast_t *k) {
+                         nowdb_ast_t *k) {
 	switch(k->ntype) {
-	case NOWDB_AST_FIELD: ADDKID(0);
-	case NOWDB_AST_OFF: ADDKID(1);
-	case NOWDB_AST_OPTION: ADDKID(2);
-	case NOWDB_AST_DECL: ADDKID(3);
+	case NOWDB_AST_OFF: ADDKID(0);
+	case NOWDB_AST_OPTION: ADDKID(1);
+	case NOWDB_AST_DECL: ADDKID(2);
 	default: return -1;
 	}
 }
@@ -852,6 +851,9 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	case NOWDB_AST_LOAD: 
 		return nowdb_ast_option(ast->kids[1], option);
 
+	case NOWDB_AST_DECL:
+		return nowdb_ast_option(ast->kids[1], option);
+
 	case NOWDB_AST_OPTION:
 		if (option == 0) return ast;
 		if (ast->stype == option) return ast;
@@ -860,6 +862,38 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	case NOWDB_AST_DML:
 	case NOWDB_AST_DQL: return NULL;
 
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get field declaration from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_declare(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL: return nowdb_ast_decl(
+	                     nowdb_ast_operation(ast));
+	case NOWDB_AST_CREATE:
+	case NOWDB_AST_ALTER: return ast->kids[3];
+
+	case NOWDB_AST_DECL: return ast->kids[2];
+
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get field offset from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DECL: return ast->kids[0];
 	default: return NULL;
 	}
 }

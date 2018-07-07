@@ -324,9 +324,23 @@ nowdb_ast_t *nowdb_ast_on(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get an option from the current AST node
+ * if option is 0, the first option found is returned,
+ * otherwise an option with the specific subcode is searched.
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
+
+/* -----------------------------------------------------------------------
+ * Get field declaration from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_declare(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get offset from field declaration
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get the projection from the current AST node (DQL only)

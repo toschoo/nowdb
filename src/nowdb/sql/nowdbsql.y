@@ -290,7 +290,7 @@ field_decl(F) ::= IDENTIFIER(I) type(T). {
 field_decl(F) ::= IDENTIFIER(I) type(T) PK. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-	NOWDB_SQL_ADDOPT(F, NOWDB_AST_PK, 0, NULL);
+	NOWDB_SQL_ADD_OPTION(F, NOWDB_AST_PK, 0, NULL);
 }
 
 field_decl_list(L) ::= field_decl(F). {

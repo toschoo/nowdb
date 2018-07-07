@@ -88,6 +88,26 @@ nowdb_err_t nowdb_model_removeProperty(nowdb_model_t  *model,
                                        nowdb_key_t    propid);
 
 /* ------------------------------------------------------------------------
+ * Add type in one go
+ * -------------------
+ * - name is the name of the type
+ * - props is a list of properties
+ * The properties do not need to have a roleid.
+ * The roleid is determined when adding.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
+                                char           *name,
+                                ts_algo_list_t *props);
+
+/* ------------------------------------------------------------------------
+ * Remove type in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
+                                   char           *name);
+
+/* ------------------------------------------------------------------------
  * Add an edge model
  * NOTE: the model must be unique in edgeid and name
  * ------------------------------------------------------------------------

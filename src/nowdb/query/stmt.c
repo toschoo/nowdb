@@ -277,6 +277,54 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Create Type
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createType(nowdb_ast_t  *op,
+                              char       *name,
+                          nowdb_scope_t *scope)  {
+	fprintf(stderr, "creating type %s\n", name);
+	return NOWDB_OK;
+	/*
+	return nowdb_err_get(nowdb_err_not_supp,
+	            FALSE, OBJECT, "createType");
+	*/
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Type
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropType(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	return nowdb_err_get(nowdb_err_not_supp,
+	             FALSE, OBJECT, "dropType");
+}
+
+/* -------------------------------------------------------------------------
+ * Create Edge
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createEdge(nowdb_ast_t  *op,
+                              char       *name,
+                          nowdb_scope_t *scope)  {
+	return nowdb_err_get(nowdb_err_not_supp,
+	           FALSE, OBJECT, "createEdge");
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Edge
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropEdge(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	return nowdb_err_get(nowdb_err_not_supp,
+	              FALSE, OBJECT, "dropEdge");
+}
+
+/* -------------------------------------------------------------------------
  * Load a file
  * TODO:
  * - Should be more versatile,
@@ -628,6 +676,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
 			return createIndex(op, trg->value, scope);
+		case NOWDB_AST_TYPE:
+			return createType(op, trg->value, scope);
+		case NOWDB_AST_EDGE:
+			return createEdge(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -641,6 +693,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
+		case NOWDB_AST_TYPE:
+			return dropType(op, trg->value, scope);
+		case NOWDB_AST_EDGE:
+			return dropEdge(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}

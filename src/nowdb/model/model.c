@@ -31,7 +31,7 @@ static char *OBJECT = "model";
 	                          FALSE, OBJECT, "model is NULL");
 
 #define NOMEM(s) \
-	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
 
 #define PROP(x) \
 	((nowdb_model_prop_t*)x)
@@ -41,6 +41,9 @@ static char *OBJECT = "model";
 
 #define EDGE(x) \
 	((nowdb_model_edge_t*)x)
+
+#define ROLEID(x) \
+	(*(nowdb_roleid_t*)x)
 
 /* ------------------------------------------------------------------------
  * compare properties by id (roleid, propid)
@@ -186,7 +189,9 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 		}
 
 		p = nowdb_path_append(model->path, f);
-		if (p == NULL) NOMEM("create model path");
+		if (p == NULL) {
+			NOMEM("create model path"); return err;
+		}
 
 		if (stat(p, &st) != 0) {
 			// fprintf(stderr, "creating %s\n", p);
@@ -225,7 +230,10 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (err != NOWDB_OK) return err;
 
 	model->path = strdup(path);
-	if (model->path == NULL) NOMEM("allocating path");
+	if (model->path == NULL) {
+		NOMEM("allocating path");
+		return err;
+	}
 
 	model->vrtxById = ts_algo_tree_new(&vrtxidcompare, NULL,
 	                                   &noupdate,
@@ -234,6 +242,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->vrtxById == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	model->vrtxByName = ts_algo_tree_new(&vrtxnamecompare, NULL,
@@ -243,6 +252,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->vrtxByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	model->propById = ts_algo_tree_new(&propidcompare, NULL,
@@ -252,6 +262,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->propById == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	model->propByName = ts_algo_tree_new(&propnamecompare, NULL,
@@ -261,6 +272,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->propByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	model->edgeById = ts_algo_tree_new(&edgeidcompare, NULL,
@@ -270,6 +282,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->edgeById == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	model->edgeByName = ts_algo_tree_new(&edgenamecompare, NULL,
@@ -279,6 +292,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	if (model->edgeByName == NULL) {
 		nowdb_model_destroy(model);
 		NOMEM("tree.new");
+		return err;
 	}
 
 	/* create the files if they do not exist */
@@ -405,7 +419,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &p->propid, 8); sz+=8;
 		memcpy(buf+sz, &p->roleid, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
-		memcpy(buf+sz, &p->prop, 1); sz+=1;
+		memcpy(buf+sz, &p->pk, 1); sz+=1;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
 }
@@ -457,7 +471,10 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 		return NOWDB_OK;
 	}
 	list = ts_algo_tree_toList(tree);
-	if (list == NULL) NOMEM("vrtxById.toList");
+	if (list == NULL) {
+		NOMEM("vrtxById.toList");
+		return err;
+	}
 
 	switch(what) {
 	case V: sz = computeVertexSize(list); break;
@@ -471,6 +488,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	if (buf == NULL) {
 		ts_algo_list_destroy(list); free(list);
 		NOMEM("allocating buffer");
+		return err;
 	}
 
 	vertex2buf(buf, sz, list);
@@ -488,6 +506,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	if (p == NULL) {
 		free(buf);
 		NOMEM("allocating path");
+		return err;
 	}
 
 	err = nowdb_writeFileWithBkp(model->path, p, buf, sz);
@@ -519,13 +538,17 @@ static nowdb_err_t readSize(nowdb_path_t   path,
  */
 static nowdb_err_t loadVertex(ts_algo_list_t *list,
                               char *buf, uint32_t sz) {
+	nowdb_err_t err;
 	uint32_t off = 0;
 	nowdb_model_vertex_t *v;
 	size_t s;
 
 	while(off < sz) {
 		v = calloc(1,sizeof(nowdb_model_vertex_t));
-		if (v == NULL) NOMEM("allocating vertex");
+		if (v == NULL) {
+			NOMEM("allocating vertex");
+			return err;
+		}
 		memcpy(&v->roleid, buf+off, 4); off+=4;
 		memcpy(&v->vid, buf+off, 1); off+=1;
 		s = strnlen(buf+off, 4097);
@@ -538,11 +561,13 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 		if (v->name == NULL) {
 			free(v);
 			NOMEM("allocating vertex name");
+			return err;
 		}
 		strcpy(v->name,buf+off); off+=s+1;
 		if (ts_algo_list_append(list, v) != TS_ALGO_OK) {
 			free(v);
 			NOMEM("list.append");
+			return err;
 		}
 	}
 	return NOWDB_OK;
@@ -554,17 +579,21 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
  */
 static nowdb_err_t loadProp(ts_algo_list_t   *list,
                             char *buf, uint32_t sz) {
+	nowdb_err_t err;
 	uint32_t off = 0;
 	nowdb_model_prop_t *p;
 	size_t s;
 
 	while(off < sz) {
 		p = calloc(1,sizeof(nowdb_model_prop_t));
-		if (p == NULL) NOMEM("allocating prop");
+		if (p == NULL) {
+			NOMEM("allocating prop");
+			return err;
+		}
 		memcpy(&p->propid, buf+off, 8); off+=8;
 		memcpy(&p->roleid, buf+off, 4); off+=4;
 		memcpy(&p->value, buf+off, 4); off+=4;
-		memcpy(&p->prop, buf+off, 1); off+=1;
+		memcpy(&p->pk, buf+off, 1); off+=1;
 		s = strnlen(buf+off, 4097);
 		if (s > 4096) {
 			free(p);
@@ -575,11 +604,13 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		if (p->name == NULL) {
 			free(p);
 			NOMEM("allocating property name");
+			return err;
 		}
 		strcpy(p->name,buf+off); off+=s+1;
 		if (ts_algo_list_append(list, p) != TS_ALGO_OK) {
 			free(p);
 			NOMEM("list.append");
+			return err;
 		}
 	}
 	return NOWDB_OK;
@@ -591,13 +622,17 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
  */
 static nowdb_err_t loadEdge(ts_algo_list_t   *list,
                             char *buf, uint32_t sz) {
+	nowdb_err_t err;
 	uint32_t off = 0;
 	nowdb_model_edge_t *e;
 	size_t s;
 
 	while(off < sz) {
 		e = calloc(1,sizeof(nowdb_model_edge_t));
-		if (e == NULL) NOMEM("allocating edge");
+		if (e == NULL) {
+			NOMEM("allocating edge");
+			return err;
+		}
 		memcpy(&e->edgeid, buf+off, 8); off+=8;
 		memcpy(&e->origin, buf+off, 4); off+=4;
 		memcpy(&e->destin, buf+off, 4); off+=4;
@@ -615,11 +650,13 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 		if (e->name == NULL) {
 			free(e);
 			NOMEM("allocating edge name");
+			return err;
 		}
 		strcpy(e->name,buf+off); off+=s+1;
 		if (ts_algo_list_append(list, e) != TS_ALGO_OK) {
 			free(e);
 			NOMEM("list.append");
+			return err;
 		}
 	}
 	return NOWDB_OK;
@@ -650,7 +687,10 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	}
 
 	p = nowdb_path_append(model->path, f);
-	if (p == NULL) NOMEM("allocating path");
+	if (p == NULL) {
+		NOMEM("allocating path");
+		return err;
+	}
 
 	err = readSize(p, &sz);
 	if (err != NOWDB_OK) {
@@ -661,6 +701,7 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	if (buf == NULL) {
 		free(p);
 		NOMEM("allocating buffer");
+		return err;
 	}
 
 	err = nowdb_readFile(p, buf, sz);
@@ -689,10 +730,12 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 		if (ts_algo_tree_insert(byId, runner->cont) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byId.insert");
+			return err;
 		}
 		if (ts_algo_tree_insert(byName, runner->cont) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byName.insert");
+			return err;
 		}
 	}
 	ts_algo_list_destroy(&list);
@@ -731,6 +774,37 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: generic add without locking 
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
+                                ts_algo_tree_t *byName,
+                                void           *thing) {
+	void *tmp;
+
+	tmp = ts_algo_tree_find(byId, thing);
+	if (tmp != NULL) {
+		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
+		                                                "id");
+	}
+
+	tmp = ts_algo_tree_find(byName, thing);
+	if (tmp != NULL) {
+		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
+		                                              "name");
+	}
+	if (ts_algo_tree_insert(byId, thing) != TS_ALGO_OK) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                      "tree.insert");
+	}
+	if (ts_algo_tree_insert(byName, thing) != TS_ALGO_OK) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                      "tree.insert");
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: generic add
  * ------------------------------------------------------------------------
  */
@@ -741,7 +815,6 @@ static inline nowdb_err_t add(nowdb_model_t  *model,
 	nowdb_err_t err2 = NOWDB_OK;
 	ts_algo_tree_t *byId;
 	ts_algo_tree_t *byName;
-	void *tmp;
 
 	if (thing == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                         FALSE, OBJECT, "object is NULL");
@@ -760,29 +833,8 @@ static inline nowdb_err_t add(nowdb_model_t  *model,
 	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
 
-	tmp = ts_algo_tree_find(byId, thing);
-	if (tmp != NULL) {
-		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
-		                                               "id");
-		goto unlock;
-	}
-
-	tmp = ts_algo_tree_find(byName, thing);
-	if (tmp != NULL) {
-		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
-		                                             "name");
-		goto unlock;
-	}
-	if (ts_algo_tree_insert(byId, thing) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "tree.insert");
-		goto unlock;
-	}
-	if (ts_algo_tree_insert(byName, thing) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "tree.insert");
-		goto unlock;
-	}
+	err = addNL(byId, byName, thing);
+	if (err != NOWDB_OK) goto unlock;
 
 	err = storeModel(model, what);
 
@@ -823,6 +875,150 @@ nowdb_err_t nowdb_model_addEdge(nowdb_model_t      *model,
                                 nowdb_model_edge_t *edge) {
 	MODELNULL();
 	return add(model, E, edge);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find pk in list of properties
+ * ------------------------------------------------------------------------
+ */
+static void findPK(ts_algo_list_t     *props,
+                   nowdb_model_prop_t **prop) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *tmp;
+
+	*prop = NULL;
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		tmp = runner->cont;
+		if (tmp->pk) {
+			*prop = tmp; break;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: set roleid to properties properties in a list
+ *         and check that they don't exist
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t propsUnique(nowdb_model_t  *model,
+                               nowdb_roleid_t roleid,
+                               ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *p, *tmp;
+
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		p = runner->cont;
+		p->roleid = roleid;
+		tmp = ts_algo_tree_find(model->propById, p);
+		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
+		                                 FALSE, OBJECT, p->name);
+		tmp = ts_algo_tree_find(model->propByName, p);
+		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
+		                                 FALSE, OBJECT, p->name);
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * min and max would be nice functions for ts_algo_tree
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_rc_t findMax(void *ignore, void *max, const void *node) {
+	if (ROLEID(max) < VRTX(node)->roleid) {
+		ROLEID(max) = VRTX(node)->roleid;
+	}
+	return TS_ALGO_OK;
+}
+
+static nowdb_roleid_t getNextRoleid(nowdb_model_t *model) {
+	nowdb_roleid_t max = 0;
+	ts_algo_tree_reduce(model->vrtxById, &max, &findMax);
+	return max+1;
+}
+
+/* ------------------------------------------------------------------------
+ * add type
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
+                                char           *name,
+                                ts_algo_list_t *props) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_model_prop_t *prop;
+	nowdb_model_vertex_t *vrtx, *tmp;
+	ts_algo_list_node_t *runner;
+
+	MODELNULL();
+	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "props is NULL");
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	findPK(props, &prop);
+	if (prop == NULL) {
+		err = nowdb_err_get(nowdb_err_invalid,
+	              FALSE, OBJECT, "no PK in type");
+		goto unlock;
+	}
+
+	vrtx = calloc(1, sizeof(nowdb_model_vertex_t));
+	if (vrtx == NULL) {
+		NOMEM("allocating vertex");
+		goto unlock;
+	}
+	vrtx->name = strdup(name);
+	if (vrtx->name == NULL) {
+		NOMEM("allocating vertex name");
+		free(vrtx); goto unlock;
+	}
+
+	tmp = ts_algo_tree_find(model->vrtxByName, vrtx);
+	if (tmp != NULL) {
+		err = nowdb_err_get(nowdb_err_dup_key,
+		                  FALSE, OBJECT, name);
+		free(vrtx->name); free(vrtx);
+		goto unlock;
+	}
+
+	vrtx->roleid = getNextRoleid(model);
+	vrtx->vid = prop->value==NOWDB_TYP_TEXT?
+	                       NOWDB_MODEL_TEXT:
+	                       NOWDB_MODEL_NUM;
+
+	err = propsUnique(model, vrtx->roleid, props);
+	if (err != NOWDB_OK) {
+		free(vrtx->name); free(vrtx);
+		goto unlock;
+	}
+
+	err = addNL(model->vrtxById, model->vrtxByName, vrtx);
+	if (err != NOWDB_OK) {
+		free(vrtx->name); free(vrtx);
+		goto unlock;
+	}
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		err = addNL(model->vrtxById,
+		            model->vrtxByName,
+		            runner->cont);
+		if (err != NOWDB_OK) break;
+	}
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, V);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, P);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_write(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -1111,6 +1307,7 @@ ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
 nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
                                       nowdb_roleid_t roleid,
                                       ts_algo_list_t *props) {
+	nowdb_err_t err;
 	nowdb_model_prop_t tmp;
 
 	MODELNULL();
@@ -1121,6 +1318,7 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
 	if (ts_algo_tree_filter(model->propById, props, &tmp,
 	                        propsByRoleid) != TS_ALGO_OK) {
 		NOMEM("tree.filter");
+		return err;
 	}
 	return NOWDB_OK;
 }
