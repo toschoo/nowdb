@@ -34,7 +34,7 @@ create type store (
 create type client (
 	card_key uint primary key,
 	account_id uint,
-	birthdate date,
+	age uint,
 	gender text,
 	city text,
 	province text,
@@ -44,12 +44,7 @@ create type client (
 	household_members uint,
 	email text,
 	phone text,
-	mobile text,
-	address_1 text,
-	address_2 text,
-	address_3 text,
-	address_4 text,
-	address_5 text
+	mobile text
 );
 create edge buys (
 	origin client,
