@@ -6,7 +6,6 @@
  */
 #include <nowdb/scope/scope.h>
 #include <nowdb/io/dir.h>
-#include <nowdb/query/ast.h>
 
 static char *OBJECT = "scope";
 
@@ -1204,11 +1203,7 @@ nowdb_err_t nowdb_scope_dropContext(nowdb_scope_t *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) goto unlock;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
 
 	err = findContext(scope, name, &ctx);
 	if (err != NOWDB_OK) goto unlock;
@@ -1613,11 +1608,11 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	}
 
 	e->edge = NOWDB_MODEL_TEXT;
-	e->label = label==NOWDB_AST_TEXT?
+	e->label = label==NOWDB_TYP_TEXT?
 	                  NOWDB_MODEL_TEXT:
 	                  NOWDB_MODEL_NUM;
-	e->weight = nowdb_ast_type(weight);
-	e->weight2 = nowdb_ast_type(weight2);
+	e->weight = weight;
+	e->weight2 = weight2;
 
 	err = nowdb_model_getVertexByName(scope->model, origin, &v);
 	if (err != NOWDB_OK) {
@@ -1639,19 +1634,44 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 		goto unlock;
 	}
 
-	fprintf(stderr, "EDGE %s: %lu\n", name, e->edgeid);
-	fprintf(stderr, "     origin: %u\n", e->origin);
-	fprintf(stderr, "     destin: %u\n", e->destin);
-	fprintf(stderr, "     weight: %u\n", e->weight);
-	fprintf(stderr, "    weight2: %u\n", e->weight2);
-	fprintf(stderr, "     label : %u\n", e->label);
-
 	err = nowdb_model_addEdge(scope->model, e);
 	if (err != NOWDB_OK) {
 		free(e->name); free(e);
 		goto unlock;
 	}
 
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop edge within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
+                                 char          *name) {
+	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_model_edge_t *e;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	err = nowdb_model_getEdgeByName(scope->model, name, &e);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_model_removeEdge(scope->model, e->edgeid);
+	if (err != NOWDB_OK) goto unlock;
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);
 	if (err2 != NOWDB_OK) {

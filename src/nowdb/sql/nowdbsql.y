@@ -366,6 +366,14 @@ drop_clause(C) ::= DROP INDEX IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_INDEX,I,NULL);
 }
 
+drop_clause(C) ::= DROP TYPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_TYPE,I,NULL);
+}
+
+drop_clause(C) ::= DROP EDGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_EDGE,I,NULL);
+}
+
 /* ------------------------------------------------------------------------
  * Context Options
  * ------------------------------------------------------------------------
@@ -664,6 +672,22 @@ field_list(L) ::= field(F) COMMA field_list(FL). {
 field(F) ::= IDENTIFIER(I). {
 	F=I;
 }
+field(F) ::= ORIGIN(O). {
+	F=O;
+}
+field(F) ::= DESTINATION(D). {
+	F=D;
+}
+field(F) ::= EDGE(E). {
+	F=E;
+}
+field(F) ::= LABEL(L). {
+	F=L;
+}
+field(F) ::= TIMESTAMP(T). {
+	F=T;
+}
+
 value(V) ::= STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);

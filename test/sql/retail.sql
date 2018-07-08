@@ -1,37 +1,26 @@
 drop schema retail if exists;
 create schema retail; use retail;
 
--- create large table tx;
--- create table baskets;
--- create table weekpeak;
--- create table stats;
+create large table tx;
+create table baskets;
+create table weekpeak;
+create table stats;
 
 create type product (
 	product_key uint primary key,
 	product_desc text,
-	area_code uint,
-	area_desc text,
-	div_code uint,
-	div_desc text,
-	family_code uint,
-	family_desc text,
-	cat_code uint,
-	cat_desc text,
-	subcat_code uint,
-	subcat_desc text,
-	brand_code uint,
-	brand_desc text,
-	product_type_code uint,
-	product_type_desc text,
+	family text,
+	category text,
+	subcat text,
+	brand text,
+	product_type text,
 	brand_type text,
 	product_weight float
 );
-
 create type store (
 	store_key uint primary key,
 	store_name text,
-	org_code text,
-	org_desc text,
+	store_group text,
 	cluster_area uint,
 	store_type text,
 	zip_code text,
@@ -39,18 +28,15 @@ create type store (
 	director text,
 	manager text,
 	sales_area float,
-	x float,
-	y float
+	coord_x float,
+	coord_y float
 );
-
 create type client (
 	card_key uint primary key,
 	account_id uint,
 	birthdate date,
 	gender text,
 	city text,
-	cep_4 uint,
-	cep_3 uint,
 	province text,
 	country text,
 	registration date,
@@ -58,9 +44,13 @@ create type client (
 	household_members uint,
 	email text,
 	phone text,
-	mobile text
-) if not exists;
-
+	mobile text,
+	address_1 text,
+	address_2 text,
+	address_3 text,
+	address_4 text,
+	address_5 text
+);
 create edge buys (
 	origin client,
 	dest product,

@@ -272,15 +272,17 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
-	nowdb_bool_t  x;
 
-	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
-	if (o != NULL) {
-		err = checkIndexExists(scope, name, &x);
-		if (err != NOWDB_OK) return err;
-		if (!x) return NOWDB_OK;
+	err = nowdb_scope_dropIndex(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
 	}
-	return nowdb_scope_dropIndex(scope, name);
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -314,8 +316,6 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 	ts_algo_list_t props;
 	nowdb_model_prop_t *p;
 	char x=0; /* do we have props ? */
-
-	fprintf(stderr, "creating type %s\n", name);
 
 	d = nowdb_ast_declare(op);
 	ts_algo_list_init(&props);
@@ -387,8 +387,19 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 static nowdb_err_t dropType(nowdb_ast_t  *op,
                             char       *name,
                         nowdb_scope_t *scope)  {
-	return nowdb_err_get(nowdb_err_not_supp,
-	             FALSE, OBJECT, "dropType");
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropType(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -407,8 +418,6 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 	uint32_t weight2 = NOWDB_TYP_NOTHING;
 	uint32_t label = NOWDB_TYP_NOTHING;
 
-	fprintf(stderr, "creating edge %s\n", name);
-
 	d = nowdb_ast_declare(op);
 	if (d == NULL) INVALIDAST("no declarations in AST");
 
@@ -424,11 +433,11 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 		} else {
 			switch((uint32_t)(uint64_t)d->value) {
 			case NOWDB_OFF_LABEL:
-				label = d->stype; break;
+				label = nowdb_ast_type(d->stype); break;
 			case NOWDB_OFF_WEIGHT:
-				weight = d->stype; break;
+				weight = nowdb_ast_type(d->stype); break;
 			case NOWDB_OFF_WEIGHT2:
-				weight2 = d->stype; break;
+				weight2 = nowdb_ast_type(d->stype); break;
 			default:
 				INVALIDAST("unknown field in edge");
 			}
@@ -457,8 +466,19 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 static nowdb_err_t dropEdge(nowdb_ast_t  *op,
                             char       *name,
                         nowdb_scope_t *scope)  {
-	return nowdb_err_get(nowdb_err_not_supp,
-	              FALSE, OBJECT, "dropEdge");
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropEdge(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -707,23 +727,15 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
                               nowdb_scope_t *scope) {
 	nowdb_ast_t *o;
 	nowdb_err_t err;
-	nowdb_bool_t  b;
 
-	err = checkContextExists(scope, name, &b);
-	if (err != NOWDB_OK) return err;
-	if (!b) {
+	err = nowdb_scope_dropContext(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
 			nowdb_err_release(err);
 			return NOWDB_OK;
 		}
-		return nowdb_err_get(nowdb_err_key_not_found,
-		                        FALSE, OBJECT, name);
-	}
-	err = nowdb_scope_dropContext(scope, name);
-	if (err != NOWDB_OK) {
-		nowdb_scope_destroy(scope); free(scope);
-		return err;
 	}
 	return NOWDB_OK;
 }
