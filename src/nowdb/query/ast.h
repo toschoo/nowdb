@@ -387,6 +387,12 @@ nowdb_ast_t *nowdb_ast_compare(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *node, int i);
 
 /* -----------------------------------------------------------------------
+ * Convert AST type to generic NOWDB type
+ * -----------------------------------------------------------------------
+ */
+nowdb_type_t nowdb_ast_type(uint32_t type);
+
+/* -----------------------------------------------------------------------
  * Get the 'value' field of the ast as either
  * - uinsigend integer
  * - sigend integer

@@ -149,6 +149,33 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
                                  nowdb_index_keys_t  *k,
                                  nowdb_index_t    **idx);
 
+/* -----------------------------------------------------------------------
+ * Create Type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createType(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   ts_algo_list_t *props);
+
+/* -----------------------------------------------------------------------
+ * Drop Type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropType(nowdb_scope_t *scope,
+                                 char          *name);
+
+/* -----------------------------------------------------------------------
+ * Create Edge
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   char           *origin,
+                                   char           *destin,
+                                   uint32_t        label,
+                                   uint32_t        weight,
+                                   uint32_t        weight2);
+
 /* ------------------------------------------------------------------------
  * Insert one record
  * ------------------------------------------------------------------------

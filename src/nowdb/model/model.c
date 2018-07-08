@@ -71,6 +71,16 @@ static ts_algo_cmp_t propnamecompare(void *ignore, void *one, void *two) {
 }
 
 /* ------------------------------------------------------------------------
+ * Filter by roleid
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
+                                                  const void *node) {
+	if (PROP(pattern)->roleid == PROP(node)->roleid) return TRUE;
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------
  * compare vertex by id 
  * ------------------------------------------------------------------------
  */
@@ -447,7 +457,7 @@ static void edge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: store vertex model
+ * Helper: store model
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
@@ -784,10 +794,10 @@ static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
 
 	tmp = ts_algo_tree_find(byId, thing);
 	if (tmp != NULL) {
+		fprintf(stderr, "found: %lu (%s)\n", PROP(tmp)->propid, PROP(tmp)->name);
 		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
 		                                                "id");
 	}
-
 	tmp = ts_algo_tree_find(byName, thing);
 	if (tmp != NULL) {
 		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
@@ -896,7 +906,25 @@ static void findPK(ts_algo_list_t     *props,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: set roleid to properties properties in a list
+ * Helper: no duplicated properties properties in a list
+ *         THIS IS NOT EFFICIENT!
+ * ------------------------------------------------------------------------
+ */
+static char propUnique(ts_algo_list_t *props,
+                       nowdb_model_prop_t *p) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t *q;
+
+	for(runner=props->head;runner!=NULL;runner=runner->nxt) {
+		q = runner->cont;
+		if (p == q) continue;
+		if (strcmp(p->name,q->name) == 0) return 0;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: set roleid to properties in a list
  *         and check that they don't exist
  * ------------------------------------------------------------------------
  */
@@ -915,6 +943,10 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		tmp = ts_algo_tree_find(model->propByName, p);
 		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
 		                                 FALSE, OBJECT, p->name);
+		if (!propUnique(props, p)) {
+			return nowdb_err_get(nowdb_err_dup_key,
+		                        FALSE, OBJECT, p->name);
+		}
 	}
 	return NOWDB_OK;
 }
@@ -945,22 +977,22 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
                                 ts_algo_list_t *props) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
-	nowdb_model_prop_t *prop;
+	nowdb_model_prop_t *prop=NULL;
 	nowdb_model_vertex_t *vrtx, *tmp;
 	ts_algo_list_node_t *runner;
 
 	MODELNULL();
-	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                          FALSE, OBJECT, "props is NULL");
 
 	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
 
-	findPK(props, &prop);
-	if (prop == NULL) {
-		err = nowdb_err_get(nowdb_err_invalid,
-	              FALSE, OBJECT, "no PK in type");
-		goto unlock;
+	if (props != NULL) {
+		findPK(props, &prop);
+		if (prop == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid,
+			       FALSE, OBJECT, "no PK in type");
+			goto unlock;
+		}
 	}
 
 	vrtx = calloc(1, sizeof(nowdb_model_vertex_t));
@@ -983,14 +1015,21 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	}
 
 	vrtx->roleid = getNextRoleid(model);
-	vrtx->vid = prop->value==NOWDB_TYP_TEXT?
-	                       NOWDB_MODEL_TEXT:
-	                       NOWDB_MODEL_NUM;
 
-	err = propsUnique(model, vrtx->roleid, props);
-	if (err != NOWDB_OK) {
-		free(vrtx->name); free(vrtx);
-		goto unlock;
+	if (prop != NULL) {
+		vrtx->vid = prop->value==NOWDB_TYP_TEXT?
+		                       NOWDB_MODEL_TEXT:
+		                        NOWDB_MODEL_NUM;
+	} else {
+		vrtx->vid = NOWDB_MODEL_NUM;
+	}
+
+	if (props != NULL) {
+		err = propsUnique(model, vrtx->roleid, props);
+		if (err != NOWDB_OK) {
+			free(vrtx->name); free(vrtx);
+			goto unlock;
+		}
 	}
 
 	err = addNL(model->vrtxById, model->vrtxByName, vrtx);
@@ -998,18 +1037,20 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		free(vrtx->name); free(vrtx);
 		goto unlock;
 	}
-	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
-		err = addNL(model->vrtxById,
-		            model->vrtxByName,
-		            runner->cont);
-		if (err != NOWDB_OK) break;
+	if (props != NULL) {
+		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+			err = addNL(model->propById,
+			            model->propByName,
+			            runner->cont);
+			if (err != NOWDB_OK) break;
+		}
+		if (err != NOWDB_OK) goto unlock;
+	
+		err = storeModel(model, P);
+		if (err != NOWDB_OK) goto unlock;
 	}
-	if (err != NOWDB_OK) goto unlock;
 
 	err = storeModel(model, V);
-	if (err != NOWDB_OK) goto unlock;
-
-	err = storeModel(model, P);
 	if (err != NOWDB_OK) goto unlock;
 
 unlock:
@@ -1127,6 +1168,64 @@ nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
 	ts_algo_tree_delete(model->edgeById, e);
 
 	err = storeModel(model, E);
+unlock:
+	err2 = nowdb_unlock_write(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove type in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
+                                   char           *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+	nowdb_model_prop_t ptmp;
+	nowdb_model_vertex_t *vrtx, vtmp;
+	ts_algo_list_t props;
+	ts_algo_list_node_t *runner;
+
+	MODELNULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	vtmp.name = name;
+
+	vrtx = ts_algo_tree_find(model->vrtxByName, &vtmp);
+	if (vrtx == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found,
+		                        FALSE, OBJECT, name);
+		goto unlock;
+	}
+
+	// get all properties
+	ptmp.roleid = vrtx->roleid;
+	ts_algo_list_init(&props);
+
+	if (ts_algo_tree_filter(model->propById, &props, &ptmp,
+	                          propsByRoleid) != TS_ALGO_OK) {
+		NOMEM("tree.filter");
+		goto unlock;
+	}
+
+	for(runner=props.head; runner!=NULL; runner=runner->nxt) {
+		ts_algo_tree_delete(model->propByName, runner->cont);
+		ts_algo_tree_delete(model->propById, runner->cont);
+	}
+
+	ts_algo_list_destroy(&props);
+
+	ts_algo_tree_delete(model->vrtxByName, vrtx);
+	ts_algo_tree_delete(model->vrtxById, vrtx);
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
 	if (err2 != NOWDB_OK) {
@@ -1288,16 +1387,6 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
 	if (*prop == NULL) return nowdb_err_get(nowdb_err_key_not_found,
 		                                 FALSE, OBJECT, "name");
 	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Filter
- * ------------------------------------------------------------------------
- */
-ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
-                                           const void *node) {
-	if (PROP(pattern)->roleid == PROP(node)->roleid) return TRUE;
-	return FALSE;
 }
 
 /* ------------------------------------------------------------------------

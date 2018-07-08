@@ -400,6 +400,21 @@ int addType(nowdb_model_t *model,
 	return 0;
 }
 
+int removeType(nowdb_model_t *model,
+               char          *name) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "removing type '%s'\n", name);
+
+	err = nowdb_model_removeType(model, name);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_model_t *model = NULL;
@@ -604,6 +619,18 @@ int main() {
 	}
 	if (addType(model, "product") == 0) {
 		fprintf(stderr, "adding existing type 'product' (1)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeType(model, "product") != 0) {
+		fprintf(stderr, "cannot remove type 'product'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeType(model, "product") == 0) {
+		fprintf(stderr, "can remove already removed type 'product'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addType(model, "product") != 0) {
+		fprintf(stderr, "cannot add type 'product' (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

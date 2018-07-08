@@ -6,6 +6,7 @@
  */
 #include <nowdb/scope/scope.h>
 #include <nowdb/io/dir.h>
+#include <nowdb/query/ast.h>
 
 static char *OBJECT = "scope";
 
@@ -19,6 +20,13 @@ static char *OBJECT = "scope";
 
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
+#define SCOPENOTOPEN() \
+	if (scope->state != NOWDB_SCOPE_OPEN) { \
+		err = nowdb_err_get(nowdb_err_invalid, \
+		      FALSE, OBJECT, "state not open"); \
+		goto unlock; \
+	}
 
 /* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare
@@ -1473,6 +1481,176 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
 		goto unlock;
 	}
 	*idx = desc->idx;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: add propids to props
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t addPropids(nowdb_scope_t  *scope,
+                              ts_algo_list_t *props) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t *prop;
+
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		prop = runner->cont;
+		err = nowdb_text_insert(scope->text, prop->name,
+		                                  &prop->propid);
+		if (err != NOWDB_OK) break;
+	}
+
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create type within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
+                                   char               *name,
+                                   ts_algo_list_t    *props) {
+	nowdb_err_t err2,err=NOWDB_OK;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	/* currently, we lock the scope
+	 * for reading, so it cannot be 
+	 * closed while we are working */
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	if (props != NULL) {
+		err = addPropids(scope, props);
+		if (err != NOWDB_OK) goto unlock;
+	}
+	err = nowdb_model_addType(scope->model, name, props);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop type within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropType(nowdb_scope_t     *scope,
+                                 char               *name) {
+	nowdb_err_t err2,err=NOWDB_OK;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	err = nowdb_model_removeType(scope->model, name);
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create edge within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   char           *origin,
+                                   char           *destin,
+                                   uint32_t        label,
+                                   uint32_t        weight,
+                                   uint32_t        weight2) {
+	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_model_edge_t   *e=NULL;
+	nowdb_model_vertex_t *v=NULL;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	e = calloc(1,sizeof(nowdb_model_edge_t));
+	if (e == NULL) {
+		NOMEM("allocating edge");
+		goto unlock;
+	}
+
+	e->name = strdup(name);
+	if (e->name == NULL) {
+		free(e);
+		NOMEM("allocating edge name");
+		goto unlock;
+	}
+
+	e->edge = NOWDB_MODEL_TEXT;
+	e->label = label==NOWDB_AST_TEXT?
+	                  NOWDB_MODEL_TEXT:
+	                  NOWDB_MODEL_NUM;
+	e->weight = nowdb_ast_type(weight);
+	e->weight2 = nowdb_ast_type(weight2);
+
+	err = nowdb_model_getVertexByName(scope->model, origin, &v);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+	e->origin = v->roleid;
+
+	err = nowdb_model_getVertexByName(scope->model, destin, &v);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+	e->destin = v->roleid;
+
+	err = nowdb_text_insert(scope->text, name, &e->edgeid);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+
+	fprintf(stderr, "EDGE %s: %lu\n", name, e->edgeid);
+	fprintf(stderr, "     origin: %u\n", e->origin);
+	fprintf(stderr, "     destin: %u\n", e->destin);
+	fprintf(stderr, "     weight: %u\n", e->weight);
+	fprintf(stderr, "    weight2: %u\n", e->weight2);
+	fprintf(stderr, "     label : %u\n", e->label);
+
+	err = nowdb_model_addEdge(scope->model, e);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
 
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);

@@ -899,6 +899,24 @@ nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *ast) {
 }
 
 /* -----------------------------------------------------------------------
+ * AST type to NOWDB type
+ * -----------------------------------------------------------------------
+ */
+nowdb_type_t nowdb_ast_type(uint32_t type) {
+	switch(type) {
+	case 0: return NOWDB_TYP_NOTHING;
+	case NOWDB_AST_TEXT: return NOWDB_TYP_TEXT;
+	case NOWDB_AST_FLOAT: return NOWDB_TYP_FLOAT;
+	case NOWDB_AST_UINT: return NOWDB_TYP_UINT;
+	case NOWDB_AST_INT: return NOWDB_TYP_INT;
+	case NOWDB_AST_DATE: return NOWDB_TYP_DATE;
+	case NOWDB_AST_TIME: return NOWDB_TYP_TIME;
+	default: return NOWDB_TYP_NOTHING;
+	}
+	return NOWDB_TYP_NOTHING;
+}
+
+/* -----------------------------------------------------------------------
  * Get value as UInt
  * -----------------------------------------------------------------------
  */

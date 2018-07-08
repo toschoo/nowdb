@@ -16,6 +16,13 @@
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "no mem"
+ * -------------------------------------------------------------------------
+ */
+#define NOMEM(s) \
+	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
 
 /* -------------------------------------------------------------------------
@@ -277,18 +284,100 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: destroy list of properties
+ * -------------------------------------------------------------------------
+ */
+static void destroyProps(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner, *tmp;
+	nowdb_model_prop_t *p;
+
+	runner=props->head;
+	while(runner!=NULL) {
+		p = runner->cont;
+		free(p->name); free(p);
+		tmp = runner->nxt;
+		ts_algo_list_remove(props, runner);
+		free(runner); runner = tmp;
+	}
+}
+
+/* -------------------------------------------------------------------------
  * Create Type
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t createType(nowdb_ast_t  *op,
                               char       *name,
                           nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *d;
+	ts_algo_list_t props;
+	nowdb_model_prop_t *p;
+	char x=0; /* do we have props ? */
+
 	fprintf(stderr, "creating type %s\n", name);
+
+	d = nowdb_ast_declare(op);
+	ts_algo_list_init(&props);
+
+	while (d != NULL) {
+		x = 1;
+		if (d->vtype != NOWDB_AST_V_STRING) {
+			destroyProps(&props);
+			INVALIDAST("missing property name");
+		}
+		p = calloc(1,sizeof(nowdb_model_prop_t));
+		if (p == NULL) {
+			destroyProps(&props);
+			NOMEM("allocating property");
+		}
+
+		p->name  = strdup(d->value);
+		if (p->name == NULL) {
+			destroyProps(&props);
+			NOMEM("allocating property name");
+		}
+
+		p->value = d->stype;
+		p->propid = 0;
+		p->roleid = 0;
+		p->pk = FALSE;
+
+		o = nowdb_ast_option(d, NOWDB_AST_PK);
+		if (o != NULL) p->pk = TRUE;
+
+		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+			destroyProps(&props);
+			NOMEM("list.addpend");
+		}
+
+		d = nowdb_ast_declare(d);
+	}
+
+	err = x?nowdb_scope_createType(scope, name, &props):
+	        nowdb_scope_createType(scope, name, NULL);
+	
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		destroyProps(&props);
+		/* if exists applies only for the type name */
+		if (err->info != NULL &&
+		    strcmp(err->info, name) == 0) {
+			o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+			if (o != NULL) {
+				nowdb_err_release(err);
+				err = NOWDB_OK;
+			} else {
+				return err;
+			}
+		}
+	}
+	if (err != NOWDB_OK) {
+		destroyProps(&props);
+		return err;
+	}
+	ts_algo_list_destroy(&props);
+	
 	return NOWDB_OK;
-	/*
-	return nowdb_err_get(nowdb_err_not_supp,
-	            FALSE, OBJECT, "createType");
-	*/
 }
 
 /* -------------------------------------------------------------------------
@@ -309,8 +398,56 @@ static nowdb_err_t dropType(nowdb_ast_t  *op,
 static nowdb_err_t createEdge(nowdb_ast_t  *op,
                               char       *name,
                           nowdb_scope_t *scope)  {
-	return nowdb_err_get(nowdb_err_not_supp,
-	           FALSE, OBJECT, "createEdge");
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *f;
+	nowdb_ast_t  *d;
+	char *origin=NULL, *destin=NULL;
+	uint32_t weight = NOWDB_TYP_NOTHING;
+	uint32_t weight2 = NOWDB_TYP_NOTHING;
+	uint32_t label = NOWDB_TYP_NOTHING;
+
+	fprintf(stderr, "creating edge %s\n", name);
+
+	d = nowdb_ast_declare(op);
+	if (d == NULL) INVALIDAST("no declarations in AST");
+
+	while(d != NULL) {
+		if (d->stype == NOWDB_AST_TYPE) {
+			f = nowdb_ast_off(d);
+			if (f == NULL) INVALIDAST("no offset in decl");
+			if (f->stype == NOWDB_OFF_ORIGIN) {
+				origin = d->value;
+			} else {
+				destin = d->value;
+			}
+		} else {
+			switch((uint32_t)(uint64_t)d->value) {
+			case NOWDB_OFF_LABEL:
+				label = d->stype; break;
+			case NOWDB_OFF_WEIGHT:
+				weight = d->stype; break;
+			case NOWDB_OFF_WEIGHT2:
+				weight2 = d->stype; break;
+			default:
+				INVALIDAST("unknown field in edge");
+			}
+		}
+		d = nowdb_ast_declare(d);
+	}
+	if (origin == NULL && destin == NULL) {
+		INVALIDAST("no vertex in edge");
+	}
+	err = nowdb_scope_createEdge(scope, name, origin, destin,
+	                                  label, weight, weight2);
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
