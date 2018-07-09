@@ -64,3 +64,5 @@ create edge quantity (
 	weight float,
 	label text
 );
+load '/opt/dbs/header.csv' into vertex use header as product;
+select * from vertex;

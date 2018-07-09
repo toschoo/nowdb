@@ -192,10 +192,14 @@ ddl ::= drop_clause(C) IF EXISTS. {
  * ------------------------------------------------------------------------
  */
 dll ::= LOAD STRING(S) INTO dml_target(T). {
-	NOWDB_SQL_MAKE_LOAD(S,T,NULL)
+	NOWDB_SQL_MAKE_LOAD(S,T,NULL,NULL)
 }
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
-	NOWDB_SQL_MAKE_LOAD(S,T,H)
+	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
+}
+
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
 }
 
 /* ------------------------------------------------------------------------

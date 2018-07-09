@@ -495,18 +495,14 @@ static nowdb_err_t dropEdge(nowdb_ast_t  *op,
 static nowdb_err_t load(nowdb_scope_t    *scope,
                         nowdb_path_t       path,
                         nowdb_ast_t        *trg,
-                        nowdb_bool_t        ign,
+                        char              *type,
+                        nowdb_bitmap32_t    flg,
                         nowdb_qry_result_t *res) {
 	FILE *stream;
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_context_t *ctx;
 	nowdb_loader_t   ldr;
-	nowdb_bitmap32_t flg=0;
 	nowdb_qry_report_t *rep;
-
-	/* ignore headers; instead, we should provide the flags:
-	 * use / ignore header */
-	if (ign) flg |= NOWDB_CSV_HAS_HEADER;
 
 	/* open stream from path */
 	stream = fopen(path, "rb");
@@ -517,11 +513,15 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 
 	/* create vertex loader */
 	case NOWDB_AST_VERTEX:
-		fprintf(stderr, "loading '%s' into vertex\n", path);
+		fprintf(stderr, "loading '%s' into vertex as type '%s'\n",
+		                path, type);
 
 		flg |= NOWDB_CSV_VERTEX;
 		err = nowdb_loader_init(&ldr, stream, stderr,
-		                      &scope->vertices, flg);
+		                        &scope->vertices,
+		                        scope->model,
+		                        scope->text,
+		                        type,  flg);
 		if (err != NOWDB_OK) {
 			fclose(stream); return err;
 		}
@@ -533,10 +533,14 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
 		if (err != NOWDB_OK) return err;
 
-		fprintf(stderr, "loading '%s' into '%s'\n", path, ctx->name);
+		fprintf(stderr, "loading '%s' into '%s' as edge '%s'\n",
+		                path, ctx->name, type);
 
 		err = nowdb_loader_init(&ldr, stream, stderr,
-		                           &ctx->store, flg);
+		                        &ctx->store,
+		                        scope->model,
+		                        scope->text,
+		                        type,  flg);
 		if (err != NOWDB_OK) {
 			fclose(stream); return err;
 		}
@@ -863,16 +867,22 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
                               nowdb_qry_result_t *res) {
 	size_t s;
 	nowdb_err_t  err;
-	nowdb_bool_t ign = FALSE;
 	nowdb_path_t p, tmp;
 	nowdb_ast_t *opts, *o;
+	nowdb_ast_t *m;
+	nowdb_bitmap32_t flgs = 0;
+	char *type = NULL;
 
 	/* get options */
 	opts = nowdb_ast_option(op, 0);
 	if (opts != NULL) {
 		/* ignore header */
 		o = nowdb_ast_option(opts, NOWDB_AST_IGNORE);
-		if (o != NULL) ign = TRUE;
+		if (o != NULL) flgs = NOWDB_CSV_HAS_HEADER;
+
+		o = nowdb_ast_option(opts, NOWDB_AST_USE);
+		if (o != NULL) flgs = NOWDB_CSV_HAS_HEADER |
+		                      NOWDB_CSV_USE_HEADER;
 	}
 	if (op->value == NULL) INVALIDAST("no path in load operation");
 
@@ -881,7 +891,7 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 
 	/* remove quotes from value:
 	   TODO: this should be done in the sql parser */
-	p = malloc(s);
+	p = malloc(s+1);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                                 "allocating path");
 	if (tmp[0] == '\'') {
@@ -890,8 +900,15 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 		strcpy(p, tmp);
 	}
 
+	/* get model type if any */
+	m = nowdb_ast_option(op, NOWDB_AST_TYPE);
+	if (m != NULL) {
+		type = m->value;
+		flgs |= NOWDB_CSV_MODEL;
+	}
+
 	/* load and cleanup */
-	err = load(scope, p, trg, ign, res); free(p);
+	err = load(scope, p, trg, type, flgs, res); free(p);
 	return err;
 }
 

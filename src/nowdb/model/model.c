@@ -1279,7 +1279,7 @@ nowdb_err_t nowdb_model_getVertexByName(nowdb_model_t        *model,
 	err = find(model, model->vrtxByName, &tmp, (void**)vrtx);
 	if (err != NOWDB_OK) return err;
 	if (*vrtx == NULL) return nowdb_err_get(nowdb_err_key_not_found,
-		                                 FALSE, OBJECT, "name");
+		                                   FALSE, OBJECT, name);
 	return NOWDB_OK;
 }
 
@@ -1319,7 +1319,7 @@ nowdb_err_t nowdb_model_getEdgeByName(nowdb_model_t      *model,
 	err = find(model, model->edgeByName, &tmp, (void**)edge);
 	if (err != NOWDB_OK) return err;
 	if (*edge == NULL) return nowdb_err_get(nowdb_err_key_not_found,
-		                                  FALSE, OBJECT, "name");
+		                                   FALSE, OBJECT, name);
 	return NOWDB_OK;
 }
 
@@ -1385,7 +1385,7 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
 	err = find(model, model->propByName, &tmp, (void**)prop);
 	if (err != NOWDB_OK) return err;
 	if (*prop == NULL) return nowdb_err_get(nowdb_err_key_not_found,
-		                                 FALSE, OBJECT, "name");
+		                                   FALSE, OBJECT, name);
 	return NOWDB_OK;
 }
 
