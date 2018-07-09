@@ -100,6 +100,8 @@ typedef struct {
 	nowdb_csv_field_t fproc; /* field callback    */
 	nowdb_csv_row_t   rproc; /* row   callback    */
 	char              delim; /* csv delimiter     */
+	char           *datefrm; /* date format       */
+	char           *timefrm; /* time format       */
 	nowdb_csv_t        *csv; /* csv state         */
 	nowdb_err_t         err; /* error occurred    */
 	uint64_t         loaded; /* rows loaded       */

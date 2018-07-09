@@ -338,7 +338,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 			NOMEM("allocating property name");
 		}
 
-		p->value = d->stype;
+		p->value = nowdb_ast_type(d->stype);
 		p->propid = 0;
 		p->roleid = 0;
 		p->pk = FALSE;

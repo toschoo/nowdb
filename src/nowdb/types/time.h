@@ -125,6 +125,22 @@ nowdb_time_t nowdb_time_week();
 nowdb_err_t nowdb_time_now(nowdb_time_t *time);
 
 /* ------------------------------------------------------------------------
+ * Get time from string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_fromString(const char *buf,
+                                  const char *frm,
+                                  nowdb_time_t *t);
+
+/* ------------------------------------------------------------------------
+ * Write time to string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
+                                const char *frm,
+                                      char *buf);
+
+/* ------------------------------------------------------------------------
  * Benchmarking: get monotonic timestamp
  * ------------------------------------------------------------------------
  */

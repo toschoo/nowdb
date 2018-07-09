@@ -149,6 +149,55 @@ nowdb_err_t nowdb_time_now(nowdb_time_t *time) {
 }
 
 /* ------------------------------------------------------------------------
+ * Get time from string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_fromString(const char *buf,
+                                  const char *frm,
+                                  nowdb_time_t *t) {
+	struct tm tm;
+	char  *nsecs, *hlp;
+	struct timespec tv;
+
+	nsecs = strptime(buf, frm, &tm);
+	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
+		return nowdb_err_get(nowdb_err_time,
+		          FALSE, OBJECT, "strptime");
+	}
+
+	tv.tv_sec = timegm(&tm);
+
+	if (nsecs != NULL && *nsecs != 0) {
+		nsecs++;
+
+		tv.tv_nsec = strtoul(nsecs, &hlp, 10);
+		if (hlp == NULL || *hlp != 0) {
+			return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+			                             "nanoseconds invalid");
+		}
+		switch(strlen(nsecs)) {
+		case 1: tv.tv_nsec *= 100000000; break;
+		case 2: tv.tv_nsec *= 10000000; break;
+		case 3: tv.tv_nsec *= 1000000; break;
+		case 4: tv.tv_nsec *= 100000; break;
+		case 5: tv.tv_nsec *= 10000; break;
+		case 6: tv.tv_nsec *= 1000; break;
+		case 7: tv.tv_nsec *= 100; break;
+		case 8: tv.tv_nsec *= 10; break;
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Write time to string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
+                                const char *frm,
+                                      char *buf);
+
+/* ------------------------------------------------------------------------
  * Nanoseconds according to unit
  * ------------------------------------------------------------------------
  */

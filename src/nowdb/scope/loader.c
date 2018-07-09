@@ -39,6 +39,7 @@ struct nowdb_csv_st {
 	struct csv_parser       p; /* the csv parser                 */
 	ts_algo_list_t      *list; /* temporary store for headers    */
 	nowdb_model_edge_t  *edge; /* edge model  : edge             */
+	nowdb_key_t           vid; /* edge model  : vertex id        */
 	nowdb_model_prop_t *props; /* vertex model: array of props   */
 	uint32_t              psz; /* vertex model: size of array    */
 	uint32_t            pkidx; /* vertex model: index of pk      */
@@ -84,6 +85,8 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->model  = model;
 	ldr->text   = text;
 	ldr->type   = type;
+	ldr->timefrm = NULL;
+	ldr->datefrm = NULL;
 	ldr->fproc = NULL;
 	ldr->rproc = NULL;
 	ldr->csv   = NULL;
@@ -91,6 +94,10 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->loaded = 0;
 	ldr->errors = 0;
 	ldr->runtime = 0;
+
+	/* this is just a temporary hack! */
+	ldr->datefrm = "%m/%d/%Y %H:%M:%S";
+	ldr->timefrm = "%m/%d/%Y %H:%M:%S";
 
 	if (flags & NOWDB_CSV_MODEL) {
 		ldr->rproc = &nowdb_csv_row;
@@ -444,7 +451,7 @@ void nowdb_csv_row(int c, void *ldr) {
 	LDR(ldr)->csv->fbcnt++;
 	LDR(ldr)->csv->total++;
 
-	if (LDR(ldr)->csv->pos >= BUFSIZE) {
+	if (LDR(ldr)->csv->pos + LDR(ldr)->csv->psz >= BUFSIZE) {
 		insertBuf(ldr);
 		LDR(ldr)->csv->pos = 0;
 		if (LDR(ldr)->csv->fbcnt >= FEEDBACK) {
@@ -709,6 +716,99 @@ void nowdb_csv_field_vertex(void *data, size_t len, void *ldr) {
 	}
 }
 
+static inline char getKeyFromText(nowdb_loader_t *ldr,
+                                  void *data, size_t len,
+                                  void *target) {
+	nowdb_err_t err;
+	char *txt = malloc(len+1);
+
+	if (txt == NULL) {
+		NOMEM("allocating string");
+		return -1;
+	}
+
+	memcpy(txt, data, len); txt[len] = 0;
+
+	err = nowdb_text_insert(ldr->text, txt, target); free(txt);
+	if (err != NOWDB_OK) {
+		ldr->err = err;
+		return -1;
+	}
+	return 0;
+}
+
+#define STROX(t,to) \
+	tmp = malloc(len+1); \
+	if (tmp == NULL) return -1; \
+	memcpy(tmp, data, len); tmp[len] = 0; \
+	*((t*)target) = to(tmp, &hlp, 10); \
+	if (*hlp != 0) {  \
+		free(tmp); return -1; \
+	} \
+	free(tmp);
+
+#define STROD() \
+	tmp = malloc(len+1); \
+	if (tmp == NULL) return -1; \
+	memcpy(tmp, data, len); tmp[len] = 0; \
+	*((double*)target) = strtod(tmp, &hlp); \
+	if (*hlp != 0) {  \
+		free(tmp); return -1; \
+	} \
+	free(tmp);
+
+#define STRTOTIME(frm) \
+	tmp = malloc(len+1); \
+	if (tmp == NULL) return -1; \
+	memcpy(tmp, data, len); tmp[len] = 0; \
+	err = nowdb_time_fromString(tmp,frm,target); \
+	if (err != NOWDB_OK) { \
+		free(tmp); \
+		ldr->err = err; \
+		return -1; \
+	} \
+	free(tmp);
+	
+
+static inline char getValueAsType(nowdb_loader_t *ldr,
+                                  void *data, size_t len,
+                                  nowdb_model_prop_t *p,
+                                  void *target) {
+	nowdb_err_t err;
+	char *tmp=NULL, *hlp=NULL;
+
+	switch(p->value) {
+	case NOWDB_TYP_NOTHING:
+		memset(target, 0, sizeof(nowdb_key_t)); break;
+
+	case NOWDB_TYP_TEXT:
+		return getKeyFromText(ldr, data, len, target);
+
+	case NOWDB_TYP_DATE:
+		STRTOTIME(ldr->datefrm);
+		break;
+
+	case NOWDB_TYP_TIME:
+		STRTOTIME(ldr->timefrm);
+		break;
+
+	case NOWDB_TYP_FLOAT:
+		STROD();
+		break;
+
+	case NOWDB_TYP_INT:
+		STROX(int64_t, strtol);
+		break;
+		
+	case NOWDB_TYP_UINT:
+		STROX(uint64_t, strtoul);
+		break;
+
+	default: return -1;
+	}
+	return 0;
+}
+
 /* ------------------------------------------------------------------------
  * Vertex field callback with model
  * ------------------------------------------------------------------------
@@ -718,7 +818,66 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
-	
+
+	int i = LDR(ldr)->csv->cur;
+
+	if (LDR(ldr)->csv->props[i].pk) {
+		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
+			if (getKeyFromText(LDR(ldr), data, len,
+			             &LDR(ldr)->csv->vid) != 0) {
+				REJECT(LDR(ldr)->csv->props[i].name,
+				                      "invalid key");
+			}
+		} else {
+			if (toUInt(LDR(ldr)->csv, data, len,
+			    &LDR(ldr)->csv->vid) != 0) {
+				REJECT(LDR(ldr)->csv->props[i].name,
+				                      "invalid key");
+			}
+		}
+	}
+
+	// propid (from props)
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_PROP,
+	      &LDR(ldr)->csv->props[i].propid, 8);
+
+	// value according to input buf and type
+	if (getValueAsType(ldr, data, len,
+	               LDR(ldr)->csv->props+i,
+	               LDR(ldr)->csv->buf  +
+	               LDR(ldr)->csv->pos  +
+	               NOWDB_OFF_VALUE) != 0) {
+		REJECT(LDR(ldr)->csv->props[i].name, "invalid value");
+	}
+
+	// vtype according to props
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_VTYPE,
+	      &LDR(ldr)->csv->props[i].value, 4);
+
+	// roleid according to props
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_ROLE,
+	      &LDR(ldr)->csv->props[i].roleid, 4);
+
+	/* increment field counter */
+	LDR(ldr)->csv->cur++;
+
+	/* last field */
+	if (LDR(ldr)->csv->cur == LDR(ldr)->csv->psz) {
+		for(i=0; i<LDR(ldr)->csv->psz; i++) {
+			memcpy(LDR(ldr)->csv->buf +
+			       LDR(ldr)->csv->pos - i *
+			       LDR(ldr)->csv->recsize,
+			      &LDR(ldr)->csv->vid, 8);
+		}
+		LDR(ldr)->csv->cur = 0;
+
+	/* otherwise increate position */
+	} else {
+		LDR(ldr)->csv->pos += LDR(ldr)->csv->recsize;
+	}
 }
 
 /* ------------------------------------------------------------------------
