@@ -34,6 +34,7 @@ struct nowdb_csv_st {
 	char               *inbuf; /* input buffer                   */
 	char                 *buf; /* result buffer                  */
 	uint32_t              pos; /* position in the result buffer  */
+	uint32_t              old; /* remember previous position     */
 	uint32_t          recsize; /* size of record                 */
 	char              hlp[96]; /* three 32 byte 'registers'      */
 	char             txt[256]; /* text buffer                    */
@@ -125,6 +126,7 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->csv->rejected = 0;
 	ldr->csv->cur = 0;
 	ldr->csv->pos = 0;
+	ldr->csv->old = 0;
 	ldr->csv->total = 0;
 	ldr->csv->fbcnt = 0;
 	ldr->csv->buf = NULL;
@@ -362,7 +364,6 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 		return;
 	}
 
-	fprintf(stderr, "loading type %s\n", v->name);
 	roleid = v->roleid;
 
 	ldr->csv->props = calloc(ldr->csv->psz, sizeof(nowdb_model_prop_t));
@@ -380,7 +381,6 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 			NOWDB_IGNORE(nowdb_unlock_read(&ldr->model->lock));
 			return;
 		}
-		fprintf(stderr, "loading prop %s\n", p->name);
 		ldr->csv->props[i].roleid = roleid;
 		ldr->csv->props[i].propid = p->propid;
 		ldr->csv->props[i].value = p->value;
@@ -459,17 +459,34 @@ void nowdb_csv_row(int c, void *ldr) {
 	if (LDR(ldr)->csv->rejected) {
 		LDR(ldr)->csv->rejected = 0;
 		LDR(ldr)->errors++;
-		/* count errors */
+		LDR(ldr)->csv->total++;
+
+		LDR(ldr)->csv->pos=LDR(ldr)->csv->old;
+
+		LDR(ldr)->csv->cur = 0;
 		return;
 	}
 
+	LDR(ldr)->csv->old=LDR(ldr)->csv->pos;
 	LDR(ldr)->csv->pos+=LDR(ldr)->csv->recsize;
 	LDR(ldr)->csv->fbcnt++;
 	LDR(ldr)->csv->total++;
 
-	if (LDR(ldr)->csv->pos + LDR(ldr)->csv->psz >= BUFSIZE) {
+	/*
+	fprintf(stderr, "%u + %u * %u == %u (%u)\n",
+			LDR(ldr)->csv->pos,
+			LDR(ldr)->csv->psz,
+			LDR(ldr)->csv->recsize,
+	                LDR(ldr)->csv->pos +
+	                LDR(ldr)->csv->psz *
+	                LDR(ldr)->csv->recsize, BUFSIZE);
+	*/
+	if (LDR(ldr)->csv->pos +
+	    LDR(ldr)->csv->psz *
+	    LDR(ldr)->csv->recsize >= BUFSIZE) {
 		insertBuf(ldr);
 		LDR(ldr)->csv->pos = 0;
+		LDR(ldr)->csv->old = 0;
 		if (LDR(ldr)->csv->fbcnt >= FEEDBACK) {
 			LDR(ldr)->csv->fbcnt = 0;
 			/* give feedback */
@@ -564,7 +581,8 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  */
 #define REJECT(n,s) \
 	LDR(ldr)->csv->rejected = 1; \
-	fprintf(stderr, "%s %s\n", n, s)
+	fprintf(LDR(ldr)->ostream, "[%09lu] %s %s\n", \
+	                   LDR(ldr)->csv->total, n, s);
 
 /* ------------------------------------------------------------------------
  * Macro to obtain a key field (edge, origin, destin, label, etc.)
@@ -831,8 +849,15 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
+	if (LDR(ldr)->csv->rejected) return;
 
 	int i = LDR(ldr)->csv->cur;
+	/*
+	memcpy(LDR(ldr)->csv->txt, data, len);
+	LDR(ldr)->csv->txt[len] = 0;
+	fprintf(stderr, "at %u: %s\n",  LDR(ldr)->csv->cur,
+	                                LDR(ldr)->csv->txt);
+	*/
 
 	if (LDR(ldr)->csv->props[i].pk) {
 		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
@@ -840,12 +865,14 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 			             &LDR(ldr)->csv->vid) != 0) {
 				REJECT(LDR(ldr)->csv->props[i].name,
 				                      "invalid key");
+				return;
 			}
 		} else {
 			if (toUInt(LDR(ldr)->csv, data, len,
 			    &LDR(ldr)->csv->vid) != 0) {
 				REJECT(LDR(ldr)->csv->props[i].name,
 				                      "invalid key");
+				return;
 			}
 		}
 	}
@@ -862,6 +889,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	               LDR(ldr)->csv->pos  +
 	               NOWDB_OFF_VALUE) != 0) {
 		REJECT(LDR(ldr)->csv->props[i].name, "invalid value");
+		return;
 	}
 
 	// vtype according to props
@@ -887,7 +915,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		}
 		LDR(ldr)->csv->cur = 0;
 
-	/* otherwise increate position */
+	/* otherwise increase position */
 	} else {
 		LDR(ldr)->csv->pos += LDR(ldr)->csv->recsize;
 	}

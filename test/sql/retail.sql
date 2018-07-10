@@ -67,4 +67,4 @@ create edge quantity (
 load '/opt/dbs/products.csv' into vertex use header as product;
 load '/opt/dbs/stores.csv' into vertex use header as store;
 load '/opt/dbs/clients.csv' into vertex use header as client;
-select * from vertex;
+-- select * from vertex;
