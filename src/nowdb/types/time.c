@@ -159,6 +159,8 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
 	char  *nsecs, *hlp;
 	struct timespec tv;
 
+	memset(&tm, 0, sizeof(struct tm));
+
 	nsecs = strptime(buf, frm, &tm);
 	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
 		return nowdb_err_get(nowdb_err_time,
@@ -170,7 +172,7 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
 	if (nsecs != NULL && *nsecs != 0) {
 		nsecs++;
 
-		tv.tv_nsec = strtoul(nsecs, &hlp, 10);
+		tv.tv_nsec = strtol(nsecs, &hlp, 10);
 		if (hlp == NULL || *hlp != 0) {
 			return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
 			                             "nanoseconds invalid");
@@ -186,6 +188,7 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
 		case 8: tv.tv_nsec *= 10; break;
 		}
 	}
+	fromSystem(&tv, t);
 	return NOWDB_OK;
 }
 

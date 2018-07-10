@@ -341,7 +341,7 @@ type(T) ::= TIME. {
 	T=NOWDB_AST_TIME;
 }
 type(T) ::= DATE. {
-	T=NOWDB_AST_TIME;
+	T=NOWDB_AST_DATE;
 }
 type(T) ::= FLOAT. {
 	T=NOWDB_AST_FLOAT;

@@ -21,7 +21,7 @@ create type store (
 	store_key uint primary key,
 	store_name text,
 	store_group text,
-	cluster_area uint,
+	cluster_area text,
 	store_type text,
 	zip_code text,
 	region text,
@@ -65,5 +65,6 @@ create edge quantity (
 	label text
 );
 load '/opt/dbs/products.csv' into vertex use header as product;
+load '/opt/dbs/stores.csv' into vertex use header as store;
 load '/opt/dbs/clients.csv' into vertex use header as client;
 select * from vertex;

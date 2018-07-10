@@ -36,6 +36,7 @@ struct nowdb_csv_st {
 	uint32_t              pos; /* position in the result buffer  */
 	uint32_t          recsize; /* size of record                 */
 	char              hlp[96]; /* three 32 byte 'registers'      */
+	char             txt[256]; /* text buffer                    */
 	struct csv_parser       p; /* the csv parser                 */
 	ts_algo_list_t      *list; /* temporary store for headers    */
 	nowdb_model_edge_t  *edge; /* edge model  : edge             */
@@ -95,9 +96,11 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->errors = 0;
 	ldr->runtime = 0;
 
-	/* this is just a temporary hack! */
-	ldr->datefrm = "%m/%d/%Y %H:%M:%S";
-	ldr->timefrm = "%m/%d/%Y %H:%M:%S";
+	/* nice feature would be to pass
+	 * date and time format in from SQL.
+	 * Currently, this is hard-coded! */
+	ldr->datefrm = NOWDB_DATE_FORMAT;
+	ldr->timefrm = NOWDB_TIME_FORMAT;
 
 	if (flags & NOWDB_CSV_MODEL) {
 		ldr->rproc = &nowdb_csv_row;
@@ -345,9 +348,17 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 
 	if (ldr->csv->list == NULL) return;
 
+	/* we lock the model until we have copied 
+	 * everything we need */
+	err = nowdb_lock_read(&ldr->model->lock);
+	if (err != NOWDB_OK) {
+		ldr->err = err; return;
+	}
+
 	err = nowdb_model_getVertexByName(ldr->model, ldr->type, &v);
 	if (err != NOWDB_OK) {
 		ldr->err = err;
+		NOWDB_IGNORE(nowdb_unlock_read(&ldr->model->lock));
 		return;
 	}
 
@@ -357,6 +368,7 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 	ldr->csv->props = calloc(ldr->csv->psz, sizeof(nowdb_model_prop_t));
 	if (ldr->csv->props == NULL) {
 		NOMEM("allocating props");
+		NOWDB_IGNORE(nowdb_unlock_read(&ldr->model->lock));
 		return;
 	}
 	runner=ldr->csv->list->head; 
@@ -365,6 +377,7 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 		                                runner->cont,  &p);
 		if (err != NOWDB_OK) {
 			ldr->err = err;
+			NOWDB_IGNORE(nowdb_unlock_read(&ldr->model->lock));
 			return;
 		}
 		fprintf(stderr, "loading prop %s\n", p->name);
@@ -382,6 +395,9 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 	}
 	ts_algo_list_destroy(ldr->csv->list);
 	free(ldr->csv->list); ldr->csv->list = NULL;
+
+	err = nowdb_unlock_read(&ldr->model->lock);
+	if (err != NOWDB_OK) ldr->err = err;
 }
 
 /* ------------------------------------------------------------------------
@@ -720,16 +736,11 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
                                   void *data, size_t len,
                                   void *target) {
 	nowdb_err_t err;
-	char *txt = malloc(len+1);
-
-	if (txt == NULL) {
-		NOMEM("allocating string");
-		return -1;
-	}
+	char *txt = ldr->csv->txt;
 
 	memcpy(txt, data, len); txt[len] = 0;
 
-	err = nowdb_text_insert(ldr->text, txt, target); free(txt);
+	err = nowdb_text_insert(ldr->text, txt, target);
 	if (err != NOWDB_OK) {
 		ldr->err = err;
 		return -1;
@@ -738,36 +749,38 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 }
 
 #define STROX(t,to) \
-	tmp = malloc(len+1); \
-	if (tmp == NULL) return -1; \
-	memcpy(tmp, data, len); tmp[len] = 0; \
-	*((t*)target) = to(tmp, &hlp, 10); \
-	if (*hlp != 0) {  \
-		free(tmp); return -1; \
+	if (len > 255) { \
+		return -1; \
 	} \
-	free(tmp);
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	*((t*)target) = to(ldr->csv->txt, &hlp, 10); \
+	if (*hlp != 0) {  \
+		return -1; \
+	} \
 
 #define STROD() \
-	tmp = malloc(len+1); \
-	if (tmp == NULL) return -1; \
-	memcpy(tmp, data, len); tmp[len] = 0; \
-	*((double*)target) = strtod(tmp, &hlp); \
-	if (*hlp != 0) {  \
-		free(tmp); return -1; \
+	if (len > 255) { \
+		return -1; \
 	} \
-	free(tmp);
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	*((double*)target) = strtod(ldr->csv->txt, &hlp); \
+	if (*hlp != 0) {  \
+		return -1; \
+	} \
 
 #define STRTOTIME(frm) \
-	tmp = malloc(len+1); \
-	if (tmp == NULL) return -1; \
-	memcpy(tmp, data, len); tmp[len] = 0; \
-	err = nowdb_time_fromString(tmp,frm,target); \
+	if (len > 255) { \
+		return -1; \
+	} \
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	err = nowdb_time_fromString(ldr->csv->txt,frm,target); \
 	if (err != NOWDB_OK) { \
-		free(tmp); \
 		ldr->err = err; \
 		return -1; \
 	} \
-	free(tmp);
 	
 
 static inline char getValueAsType(nowdb_loader_t *ldr,
@@ -775,7 +788,7 @@ static inline char getValueAsType(nowdb_loader_t *ldr,
                                   nowdb_model_prop_t *p,
                                   void *target) {
 	nowdb_err_t err;
-	char *tmp=NULL, *hlp=NULL;
+	char *hlp=NULL;
 
 	switch(p->value) {
 	case NOWDB_TYP_NOTHING:
