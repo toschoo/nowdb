@@ -349,6 +349,7 @@ static inline void rowModelHeader(nowdb_loader_t *ldr) {
 	int i=0;
 
 	if (ldr->csv->list == NULL) return;
+	if (ldr->err != NOWDB_OK) return;
 
 	/* we lock the model until we have copied 
 	 * everything we need */
@@ -444,6 +445,8 @@ static inline void fieldHeader(void *data, size_t len,
  * ------------------------------------------------------------------------
  */
 void nowdb_csv_row(int c, void *ldr) {
+
+	if (LDR(ldr)->err != NOWDB_OK) return;
 
 	if (LDR(ldr)->csv->first) {
 		LDR(ldr)->csv->first = FALSE;
@@ -750,6 +753,18 @@ void nowdb_csv_field_vertex(void *data, size_t len, void *ldr) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Handle errors
+ * ------------------------------------------------------------------------
+ */
+#define HANDLEERR(ldr, err) \
+	nowdb_err_send(err, fileno(ldr->ostream)); \
+	nowdb_err_release(err);
+
+/* ------------------------------------------------------------------------
+ * Convert text to key
+ * ------------------------------------------------------------------------
+ */
 static inline char getKeyFromText(nowdb_loader_t *ldr,
                                   void *data, size_t len,
                                   void *target) {
@@ -760,12 +775,16 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 
 	err = nowdb_text_insert(ldr->text, txt, target);
 	if (err != NOWDB_OK) {
-		ldr->err = err;
+		HANDLEERR(ldr, err);
 		return -1;
 	}
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * String to int or uint
+ * ------------------------------------------------------------------------
+ */
 #define STROX(t,to) \
 	if (len > 255) { \
 		return -1; \
@@ -775,8 +794,12 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 	*((t*)target) = to(ldr->csv->txt, &hlp, 10); \
 	if (*hlp != 0) {  \
 		return -1; \
-	} \
+	}
 
+/* ------------------------------------------------------------------------
+ * String to double
+ * ------------------------------------------------------------------------
+ */
 #define STROD() \
 	if (len > 255) { \
 		return -1; \
@@ -786,8 +809,12 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 	*((double*)target) = strtod(ldr->csv->txt, &hlp); \
 	if (*hlp != 0) {  \
 		return -1; \
-	} \
+	}
 
+/* ------------------------------------------------------------------------
+ * String to time
+ * ------------------------------------------------------------------------
+ */
 #define STRTOTIME(frm) \
 	if (len > 255) { \
 		return -1; \
@@ -796,11 +823,14 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 	ldr->csv->txt[len] = 0; \
 	err = nowdb_time_fromString(ldr->csv->txt,frm,target); \
 	if (err != NOWDB_OK) { \
-		ldr->err = err; \
+		HANDLEERR(ldr, err); \
 		return -1; \
-	} \
+	}
 	
-
+/* ------------------------------------------------------------------------
+ * Convert property value from string
+ * ------------------------------------------------------------------------
+ */
 static inline char getValueAsType(nowdb_loader_t *ldr,
                                   void *data, size_t len,
                                   nowdb_model_prop_t *p,
@@ -845,11 +875,13 @@ static inline char getValueAsType(nowdb_loader_t *ldr,
  * ------------------------------------------------------------------------
  */
 void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
+
+	if (LDR(ldr)->err != NOWDB_OK) return;
+	if (LDR(ldr)->csv->rejected) return;
 	if (LDR(ldr)->csv->first) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
-	if (LDR(ldr)->csv->rejected) return;
 
 	int i = LDR(ldr)->csv->cur;
 	/*
@@ -859,6 +891,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	                                LDR(ldr)->csv->txt);
 	*/
 
+	/* get PK (= vid) */
 	if (LDR(ldr)->csv->props[i].pk) {
 		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
 			if (getKeyFromText(LDR(ldr), data, len,
@@ -877,12 +910,12 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		}
 	}
 
-	// propid (from props)
+	/* get propid (from props) */
 	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
 	                         +NOWDB_OFF_PROP,
 	      &LDR(ldr)->csv->props[i].propid, 8);
 
-	// value according to input buf and type
+	/* value according to type */
 	if (getValueAsType(ldr, data, len,
 	               LDR(ldr)->csv->props+i,
 	               LDR(ldr)->csv->buf  +
@@ -892,12 +925,12 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		return;
 	}
 
-	// vtype according to props
+	/* vtype according to props */
 	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
 	                         +NOWDB_OFF_VTYPE,
 	      &LDR(ldr)->csv->props[i].value, 4);
 
-	// roleid according to props
+	/* roleid according to props */
 	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
 	                         +NOWDB_OFF_ROLE,
 	      &LDR(ldr)->csv->props[i].roleid, 4);
@@ -905,7 +938,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	/* increment field counter */
 	LDR(ldr)->csv->cur++;
 
-	/* last field */
+	/* last field: set vid to all properties */
 	if (LDR(ldr)->csv->cur == LDR(ldr)->csv->psz) {
 		for(i=0; i<LDR(ldr)->csv->psz; i++) {
 			memcpy(LDR(ldr)->csv->buf +
