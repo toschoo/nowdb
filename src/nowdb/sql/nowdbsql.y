@@ -202,6 +202,14 @@ dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
 }
 
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS EDGE(E). {
+	NOWDB_SQL_MAKE_LOAD(S,T,H,E)
+}
+
+dll ::= LOAD STRING(S) INTO dml_target(T) AS EDGE(E). {
+	NOWDB_SQL_MAKE_LOAD(S,T,NULL,E)
+}
+
 /* ------------------------------------------------------------------------
  * DQL
  * ------------------------------------------------------------------------

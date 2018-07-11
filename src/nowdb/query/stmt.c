@@ -531,7 +531,9 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	case NOWDB_AST_CONTEXT:
 		if (trg->value == NULL) INVALIDAST("no target name in AST");
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			fclose(stream); return err;
+		}
 
 		fprintf(stderr, "loading '%s' into '%s' as edge '%s'\n",
 		                path, ctx->name, type);
