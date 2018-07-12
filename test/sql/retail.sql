@@ -49,20 +49,20 @@ create type client (
 create edge buys (
 	origin client,
 	dest product,
+	label uint,
 	weight float,
-	label text
 );
 create edge tx (
 	origin client,
 	dest store,
+	label uint,
 	weight float,
-	label text
 );
 create edge quantity (
 	origin client,
 	dest product,
+	label uint,
 	weight float,
-	label text
 );
 load '/opt/dbs/products.csv' into vertex use header as product;
 load '/opt/dbs/stores.csv' into vertex use header as store;
