@@ -1011,14 +1011,13 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 	if (LDR(ldr)->csv->first) {
 		if (LDR(ldr)->flags & NOWDB_CSV_HAS_HEADER) return;
 	}
-
+	if (len >= 255) {
+		REJECT("EDGE", "value too big");
+		return;
+	}
 	switch(LDR(ldr)->csv->cur) {
 	case NOWDB_FIELD_EDGE:
 
-		if (len >= 255) {
-			REJECT("EDGE", "value too big");
-			return;
-		}
 		
 		memcpy(LDR(ldr)->csv->txt, data, len);
 		LDR(ldr)->csv->txt[len] = 0;
