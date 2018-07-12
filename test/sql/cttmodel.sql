@@ -78,6 +78,6 @@ create edge R_E (
 );
 
 load '/opt/data/ctt/ctt.actor.csv' into vertex use header as Actor;
-load '/opt/data/ctt/ctt.model.10.1.csv' into ctt as edge;
+load '/opt/dbs/fifo' into ctt as edge;
 -- select * from vertex;
 -- select * from ctt;

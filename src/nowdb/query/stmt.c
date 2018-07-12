@@ -535,8 +535,13 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 			fclose(stream); return err;
 		}
 
-		fprintf(stderr, "loading '%s' into '%s' as edge '%s'\n",
-		                path, ctx->name, type);
+		if (type != NULL) {
+			fprintf(stderr, "loading '%s' into '%s' as edge\n",
+			                                   path, ctx->name);
+		} else {
+			fprintf(stderr, "loading '%s' into '%s'\n",
+			                           path, ctx->name);
+		}
 
 		err = nowdb_loader_init(&ldr, stream, stderr,
 		                        &ctx->store,
