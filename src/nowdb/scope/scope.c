@@ -185,6 +185,9 @@ static nowdb_err_t initIndexMan(nowdb_scope_t *scope) {
 		free(scope->iman); scope->iman = NULL;
 		return err;
 	}
+
+	scope->vertices.iman = scope->iman;
+
 	return NOWDB_OK;
 }
 

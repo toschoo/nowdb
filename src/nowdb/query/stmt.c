@@ -222,7 +222,7 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 	nowdb_index_keys_t *k;
 	nowdb_bool_t x;
 	uint64_t utmp;
-	uint16_t sz = NOWDB_CONFIG_SIZE_TINY;
+	uint16_t sz = NOWDB_CONFIG_SIZE_SMALL;
 
 	on = nowdb_ast_on(op);
 	if (on == NULL) {
