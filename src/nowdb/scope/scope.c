@@ -221,6 +221,52 @@ static nowdb_err_t openModel(nowdb_scope_t *scope) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: initialise vertex
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
+                                     nowdb_version_t  ver) {
+	nowdb_path_t p;
+	nowdb_err_t err;
+
+	err = mkvtxpath(scope, &p);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_store_init(&scope->vertices, p, ver,
+	                       sizeof(nowdb_vertex_t),
+	                       NOWDB_FILE_MAPSIZE,
+	                       NOWDB_MEGA *
+	                       sizeof(nowdb_vertex_t));
+	free(p);
+	if (err != NOWDB_OK) return NOWDB_OK;
+
+	err = nowdb_store_configSort(&scope->vertices,
+	                  &nowdb_store_vertex_compare);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	/*
+	err = nowdb_store_configCompression(&(*ctx)->store, cfg->comp);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	*/
+	err = nowdb_store_configIndexing(&scope->vertices, scope->iman, NULL);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	err = nowdb_store_configWorkers(&scope->vertices, 2);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Allocate and initialise a new scope
  * -----------------------------------------------------------------------
  */
@@ -307,29 +353,15 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	}
 
 	/* vertex store */
-	p = nowdb_path_append(path, "vertex");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                         "allocating context path");
+	err = initVertex(scope, ver);
+	if (err != NOWDB_OK) {
 		free(scope->path); scope->path = NULL;
 		free(scope->catalog); scope->catalog = NULL;
 		nowdb_rwlock_destroy(&scope->lock);
 		ts_algo_tree_destroy(&scope->contexts);
 		return err;
 	}
-	err = nowdb_store_init(&scope->vertices, p, ver,
-	                       sizeof(nowdb_vertex_t),
-	                       NOWDB_FILE_MAPSIZE,
-	                       NOWDB_MEGA *
-	                       sizeof(nowdb_vertex_t));
-	if (err != NOWDB_OK) {
-		free(scope->path); scope->path = NULL; free(p);
-		free(scope->catalog); scope->catalog = NULL;
-		nowdb_rwlock_destroy(&scope->lock);
-		ts_algo_tree_destroy(&scope->contexts);
-		return err;
-	}
-	free(p);
+	
 	p = nowdb_path_append(path, "text");
 	if (p == NULL) {
 		nowdb_scope_destroy(scope);
@@ -1241,11 +1273,7 @@ nowdb_err_t nowdb_scope_getContext(nowdb_scope_t   *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) goto unlock;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
 
 	err = findContext(scope, name, ctx);
 	if (err != NOWDB_OK) goto unlock;
