@@ -1066,30 +1066,32 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		                                   scope->catalog);
 		goto unlock;
 	}
-	
-	err = nowdb_store_open(&scope->vertices);
-	if (err != NOWDB_OK) goto unlock;
 
 	err = readCatalog(scope);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
-		goto unlock;
-	}
+	if (err != NOWDB_OK) goto unlock;
 
 	err = initIndexMan(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_store_open(&scope->vertices);
 	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		goto unlock;
 	}
 
 	err = openAllContexts(scope);
 	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		goto unlock;
 	}
 
 	err = openModel(scope);
 	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		NOWDB_IGNORE(closeAllContexts(scope));
 		goto unlock;
@@ -1097,6 +1099,8 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 
 	err = nowdb_text_open(scope->text);
 	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
 		NOWDB_IGNORE(closeAllContexts(scope));
 		nowdb_model_destroy(scope->model);
@@ -1322,11 +1326,8 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
+
 	if (context != NULL) {
 		err = findContext(scope, context, &ctx);
 		if (err != NOWDB_OK) goto unlock;
