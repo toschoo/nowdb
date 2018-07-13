@@ -333,6 +333,12 @@ edge_field_decl(E) ::= WEIGHT type(T). {
 	        (void*)(uint64_t)NOWDB_OFF_WEIGHT);
 }
 
+edge_field_decl(E) ::= WEIGHT2 type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	        (void*)(uint64_t)NOWDB_OFF_WEIGHT2);
+}
+
 edge_field_decl_list(L) ::= edge_field_decl(E). {
 	L=E;
 }
