@@ -124,7 +124,7 @@
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
 [a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
-'[\40-\176]*'				return NOWDB_SQL_STRING;
+'[^']*'					return NOWDB_SQL_STRING;
 (\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
 (\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
 0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
