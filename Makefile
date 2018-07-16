@@ -49,6 +49,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/queue.o     \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
+      $(SRC)/mem/lru.o        \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
@@ -61,6 +62,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
+      $(SRC)/model/model.o    \
+      $(SRC)/text/text.o      \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/plan.o     \
@@ -81,6 +84,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/queue.h     \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
+      $(SRC)/mem/lru.h        \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
@@ -92,6 +96,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
+      $(SRC)/model/types.h    \
+      $(SRC)/model/model.h    \
+      $(SRC)/text/text.h      \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -137,6 +144,8 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
+	$(SMK)/modelsmoke              \
+	$(SMK)/textsmoke               \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -315,6 +324,16 @@ $(SMK)/indexersmoke: 	$(LIB) $(DEP) $(SMK)/indexersmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
@@ -484,6 +503,8 @@ clean:
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/vertex??
+	rm -rf $(RSC)/model??
+	rm -rf $(RSC)/text??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -500,6 +521,8 @@ clean:
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
+	rm -f $(SMK)/modelsmoke
+	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme

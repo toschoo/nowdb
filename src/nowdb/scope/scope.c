@@ -17,6 +17,16 @@ static char *OBJECT = "scope";
 	if (scope == NULL) return nowdb_err_get(nowdb_err_invalid, \
 	                          FALSE, OBJECT, "scope is NULL");
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
+#define SCOPENOTOPEN() \
+	if (scope->state != NOWDB_SCOPE_OPEN) { \
+		err = nowdb_err_get(nowdb_err_invalid, \
+		      FALSE, OBJECT, "state not open"); \
+		goto unlock; \
+	}
+
 /* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare
  * ------------------------------------------------------------------------
@@ -175,6 +185,87 @@ static nowdb_err_t initIndexMan(nowdb_scope_t *scope) {
 		free(scope->iman); scope->iman = NULL;
 		return err;
 	}
+
+	scope->vertices.iman = scope->iman;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: create and open model
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t openModel(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_path_t p;
+
+	if (scope->model != NULL) return NOWDB_OK;
+
+	p = nowdb_path_append(scope->path, "model");
+	if (p == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                            "allocating model path");
+	}
+	if (!nowdb_path_exists(p, NOWDB_DIR_TYPE_DIR)) {
+		fprintf(stderr, "%s does not exist\n", p);
+	}
+	scope->model = calloc(1,sizeof(nowdb_model_t));
+	if (scope->model == NULL) {
+		free(p);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                 "allocating model");
+	}
+	err = nowdb_model_init(scope->model, p); free(p);
+	if (err != NOWDB_OK) {
+		free(scope->model); scope->model = NULL;
+		return err;
+	}
+	return nowdb_model_load(scope->model);
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: initialise vertex
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
+                                     nowdb_version_t  ver) {
+	nowdb_path_t p;
+	nowdb_err_t err;
+
+	err = mkvtxpath(scope, &p);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_store_init(&scope->vertices, p, ver,
+	                       sizeof(nowdb_vertex_t),
+	                       NOWDB_FILE_MAPSIZE,
+	                       NOWDB_MEGA *
+	                       sizeof(nowdb_vertex_t));
+	free(p);
+	if (err != NOWDB_OK) return NOWDB_OK;
+
+	err = nowdb_store_configSort(&scope->vertices,
+	                  &nowdb_store_vertex_compare);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	/*
+	err = nowdb_store_configCompression(&(*ctx)->store, cfg->comp);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	*/
+	err = nowdb_store_configIndexing(&scope->vertices, scope->iman, NULL);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
+	err = nowdb_store_configWorkers(&scope->vertices, 2);
+	if (err != NOWDB_OK) {
+		nowdb_store_destroy(&scope->vertices);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -219,6 +310,8 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	/* set defaults */
 	scope->path = NULL;
 	scope->iman = NULL;
+	scope->model = NULL;
+	scope->text = NULL;
 	scope->ver  = ver;
 	scope->state = NOWDB_SCOPE_CLOSED;
 
@@ -263,30 +356,33 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	}
 
 	/* vertex store */
-	p = nowdb_path_append(path, "vertex");
-	if (p == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                         "allocating context path");
+	err = initVertex(scope, ver);
+	if (err != NOWDB_OK) {
 		free(scope->path); scope->path = NULL;
 		free(scope->catalog); scope->catalog = NULL;
 		nowdb_rwlock_destroy(&scope->lock);
 		ts_algo_tree_destroy(&scope->contexts);
 		return err;
 	}
-	err = nowdb_store_init(&scope->vertices, p, ver,
-	                       sizeof(nowdb_vertex_t),
-	                       NOWDB_FILE_MAPSIZE,
-	                       NOWDB_MEGA *
-	                       sizeof(nowdb_vertex_t));
-	if (err != NOWDB_OK) {
-		free(scope->path); scope->path = NULL; free(p);
-		free(scope->catalog); scope->catalog = NULL;
-		nowdb_rwlock_destroy(&scope->lock);
-		ts_algo_tree_destroy(&scope->contexts);
+	
+	p = nowdb_path_append(path, "text");
+	if (p == NULL) {
+		nowdb_scope_destroy(scope);
+		NOMEM("allocating path");
 		return err;
 	}
-	free(p); 
-
+	scope->text = calloc(1, sizeof(nowdb_text_t));
+	if (scope->text == NULL) {
+		free(p);
+		nowdb_scope_destroy(scope);
+		NOMEM("allocating text");
+		return err;
+	}
+	err = nowdb_text_init(scope->text, p); free(p);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -305,6 +401,14 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	}
 	if (scope->catalog != NULL) {
 		free(scope->catalog); scope->catalog = NULL;
+	}
+	if (scope->model != NULL) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+	}
+	if (scope->text != NULL) {
+		nowdb_text_destroy(scope->text);
+		free(scope->text); scope->text = NULL;
 	}
 	nowdb_rwlock_destroy(&scope->lock);
 	nowdb_store_destroy(&scope->vertices);
@@ -816,12 +920,37 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	err = storeCatalog(scope);
 	if (err != NOWDB_OK) goto unlock;
 
+	/* text */
+	err = nowdb_dir_create(scope->text->path);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_text_create(scope->text);
+	if (err != NOWDB_OK) goto unlock;
+
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
 	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: remove model
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t removeModel(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_path_t  p;
+
+	p = nowdb_path_append(scope->path, "model");
+	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                      FALSE, OBJECT, "allocate path");
+
+	err = nowdb_path_rRemove(p); free(p);
+	if (err != NOWDB_OK) return err; 
+
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -881,8 +1010,12 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	err = nowdb_store_drop(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
 
-	/* remove model dir */
-	err = removeFile(scope, "model");
+	/* remove model */
+	err = removeModel(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* drop text */
+	err = nowdb_text_drop(scope->text);
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove icat */
@@ -933,25 +1066,45 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		                                   scope->catalog);
 		goto unlock;
 	}
-	
-	err = nowdb_store_open(&scope->vertices);
-	if (err != NOWDB_OK) goto unlock;
 
 	err = readCatalog(scope);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
-		goto unlock;
-	}
+	if (err != NOWDB_OK) goto unlock;
 
 	err = initIndexMan(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_store_open(&scope->vertices);
 	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		goto unlock;
 	}
 
 	err = openAllContexts(scope);
 	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		goto unlock;
+	}
+
+	err = openModel(scope);
+	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		goto unlock;
+	}
+
+	err = nowdb_text_open(scope->text);
+	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 		goto unlock;
 	}
 
@@ -994,6 +1147,12 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
 	}
+	if (scope->model != NULL) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+	}
+	err = nowdb_text_close(scope->text);
+	if (err != NOWDB_OK) goto unlock;
 
 	scope->state = NOWDB_SCOPE_CLOSED;
 unlock:
@@ -1083,11 +1242,7 @@ nowdb_err_t nowdb_scope_dropContext(nowdb_scope_t *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) goto unlock;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
 
 	err = findContext(scope, name, &ctx);
 	if (err != NOWDB_OK) goto unlock;
@@ -1125,11 +1280,7 @@ nowdb_err_t nowdb_scope_getContext(nowdb_scope_t   *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) goto unlock;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
 
 	err = findContext(scope, name, ctx);
 	if (err != NOWDB_OK) goto unlock;
@@ -1175,11 +1326,8 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (scope->state == NOWDB_SCOPE_CLOSED) {
-		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                                "scope is not open");
-		goto unlock;
-	}
+	SCOPENOTOPEN();
+
 	if (context != NULL) {
 		err = findContext(scope, context, &ctx);
 		if (err != NOWDB_OK) goto unlock;
@@ -1361,6 +1509,201 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
 	}
 	*idx = desc->idx;
 
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: add propids to props
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t addPropids(nowdb_scope_t  *scope,
+                              ts_algo_list_t *props) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t *prop;
+
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		prop = runner->cont;
+		err = nowdb_text_insert(scope->text, prop->name,
+		                                  &prop->propid);
+		if (err != NOWDB_OK) break;
+	}
+
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create type within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
+                                   char               *name,
+                                   ts_algo_list_t    *props) {
+	nowdb_err_t err2,err=NOWDB_OK;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	/* currently, we lock the scope
+	 * for reading, so it cannot be 
+	 * closed while we are working */
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	if (props != NULL) {
+		err = addPropids(scope, props);
+		if (err != NOWDB_OK) goto unlock;
+	}
+	err = nowdb_model_addType(scope->model, name, props);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop type within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropType(nowdb_scope_t     *scope,
+                                 char               *name) {
+	nowdb_err_t err2,err=NOWDB_OK;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	err = nowdb_model_removeType(scope->model, name);
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create edge within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   char           *origin,
+                                   char           *destin,
+                                   uint32_t        label,
+                                   uint32_t        weight,
+                                   uint32_t        weight2) {
+	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_model_edge_t   *e=NULL;
+	nowdb_model_vertex_t *v=NULL;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	e = calloc(1,sizeof(nowdb_model_edge_t));
+	if (e == NULL) {
+		NOMEM("allocating edge");
+		goto unlock;
+	}
+
+	e->name = strdup(name);
+	if (e->name == NULL) {
+		free(e);
+		NOMEM("allocating edge name");
+		goto unlock;
+	}
+
+	e->edge = NOWDB_MODEL_TEXT;
+	e->label = label==NOWDB_TYP_TEXT?
+	                  NOWDB_MODEL_TEXT:
+	                  NOWDB_MODEL_NUM;
+	e->weight = weight;
+	e->weight2 = weight2;
+
+	err = nowdb_model_getVertexByName(scope->model, origin, &v);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+	e->origin = v->roleid;
+
+	err = nowdb_model_getVertexByName(scope->model, destin, &v);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+	e->destin = v->roleid;
+
+	err = nowdb_text_insert(scope->text, name, &e->edgeid);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+
+	err = nowdb_model_addEdge(scope->model, e);
+	if (err != NOWDB_OK) {
+		free(e->name); free(e);
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop edge within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
+                                 char          *name) {
+	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_model_edge_t *e;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	SCOPENOTOPEN();
+
+	err = nowdb_model_getEdgeByName(scope->model, name, &e);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_model_removeEdge(scope->model, e->edgeid);
+	if (err != NOWDB_OK) goto unlock;
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);
 	if (err2 != NOWDB_OK) {

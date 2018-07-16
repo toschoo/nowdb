@@ -133,6 +133,8 @@
  * - vertex
  * - index
  * - on is for indices: create index xyz on ...
+ * - type (vertex definition)
+ * - edge (context definition)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_TARGET   10100
@@ -141,6 +143,8 @@
 #define NOWDB_AST_VERTEX   10103
 #define NOWDB_AST_INDEX    10104
 #define NOWDB_AST_ON       10105
+#define NOWDB_AST_TYPE     10106
+#define NOWDB_AST_EDGE     10107
 
 /* -----------------------------------------------------------------------
  * Options
@@ -157,6 +161,7 @@
 #define NOWDB_AST_DISK     10208
 #define NOWDB_AST_STRESS   10209
 #define NOWDB_AST_IGNORE   10210
+#define NOWDB_AST_PK       10211
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:
@@ -168,15 +173,18 @@
 
 /* -----------------------------------------------------------------------
  * Data
- * - key-value list (e.g. insert into ... (a=b, c=d, ...)
- * - value list (e.g. insert into ... (a, b, c, ...)
- * - field (also field list, e.g. create index xyz on ctx (a,b,c)
+ * - key-value list, e.g. insert into ... (a=b, c=d, ...)
+ * - value list, e.g. insert into ... (a, b, c, ...)
+ * - field, also field list, e.g. create index xyz on ctx (a,b,c)
+ * - decl, e.g. create type (a text, b int, ...)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_DATA     10300
 #define NOWDB_AST_KEYVAL   10301
 #define NOWDB_AST_VALLIST  10302
 #define NOWDB_AST_FIELD    10303
+#define NOWDB_AST_DECL     10305
+#define NOWDB_AST_OFF      10306
 
 /* -----------------------------------------------------------------------
  * Values
@@ -188,6 +196,8 @@
 #define NOWDB_AST_FLOAT    10312
 #define NOWDB_AST_UINT     10313
 #define NOWDB_AST_INT      10314
+#define NOWDB_AST_DATE     10315
+#define NOWDB_AST_TIME     10316
 
 /* -----------------------------------------------------------------------
  * Path and Location ('remote', 'local')
@@ -314,9 +324,23 @@ nowdb_ast_t *nowdb_ast_on(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get an option from the current AST node
+ * if option is 0, the first option found is returned,
+ * otherwise an option with the specific subcode is searched.
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
+
+/* -----------------------------------------------------------------------
+ * Get field declaration from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_declare(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get offset from field declaration
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get the projection from the current AST node (DQL only)
@@ -361,6 +385,12 @@ nowdb_ast_t *nowdb_ast_compare(nowdb_ast_t *node);
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *node, int i);
+
+/* -----------------------------------------------------------------------
+ * Convert AST type to generic NOWDB type
+ * -----------------------------------------------------------------------
+ */
+nowdb_type_t nowdb_ast_type(uint32_t type);
 
 /* -----------------------------------------------------------------------
  * Get the 'value' field of the ast as either

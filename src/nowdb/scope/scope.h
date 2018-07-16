@@ -17,6 +17,8 @@
 #include <nowdb/scope/context.h>
 #include <nowdb/scope/loader.h>
 #include <nowdb/index/man.h>
+#include <nowdb/model/model.h>
+#include <nowdb/text/text.h>
 
 #include <tsalgo/tree.h>
 
@@ -25,16 +27,16 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t lock;     /* read/write lock */
-	uint32_t       state;    /* open or closed  */
-	nowdb_path_t   path;     /* base path       */
-	nowdb_path_t   catalog;  /* catalog path    */
-	nowdb_version_t ver;     /* db version      */
-	nowdb_store_t vertices;  /* vertices        */
+	nowdb_rwlock_t     lock; /* read/write lock */
+	uint32_t          state; /* open or closed  */
+	nowdb_path_t       path; /* base path       */
+	nowdb_path_t    catalog; /* catalog path    */
+	nowdb_version_t     ver; /* db version      */
+	nowdb_store_t  vertices; /* vertices        */
 	ts_algo_tree_t contexts; /* contexts        */
 	nowdb_index_man_t *iman; /* index manager   */
-	                         /* model           */
-	                         /* strings         */
+	nowdb_model_t    *model; /* model           */
+	nowdb_text_t      *text; /* strings         */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -146,6 +148,40 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
                                  char          *context,
                                  nowdb_index_keys_t  *k,
                                  nowdb_index_t    **idx);
+
+/* -----------------------------------------------------------------------
+ * Create Type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createType(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   ts_algo_list_t *props);
+
+/* -----------------------------------------------------------------------
+ * Drop Type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropType(nowdb_scope_t *scope,
+                                 char          *name);
+
+/* -----------------------------------------------------------------------
+ * Create Edge
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
+                                   char           *name,
+                                   char           *origin,
+                                   char           *destin,
+                                   uint32_t        label,
+                                   uint32_t        weight,
+                                   uint32_t        weight2);
+
+/* -----------------------------------------------------------------------
+ * Drop Edge
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
+                                 char          *name);
 
 /* ------------------------------------------------------------------------
  * Insert one record

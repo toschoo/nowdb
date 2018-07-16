@@ -269,7 +269,7 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 	switch(size) {
 		case NOWDB_CONFIG_SIZE_TINY:
 
-			targetsz = 512;
+			targetsz = 128;
 
 			cfg->leafCacheSize = 1000;
 			cfg->intCacheSize = 1000;
@@ -277,9 +277,17 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 			
 		case NOWDB_CONFIG_SIZE_SMALL: 
+
+			targetsz = 512;
+
+			cfg->leafCacheSize = 10000;
+			cfg->intCacheSize = 10000;
+
+			break;
+
 		case NOWDB_CONFIG_SIZE_MEDIUM:
 
-			targetsz = 1024;
+			targetsz = 512;
 
 			cfg->leafCacheSize = 10000;
 			cfg->intCacheSize = 10000;
@@ -385,7 +393,7 @@ static void computeHostSize(nowdb_index_desc_t *desc,
 /* ------------------------------------------------------------------------
  * Create index
  * "index" is a host beetree
- * there are other usages for beetree (vertex and strings),
+ * there are other usages for beetree (strings),
  * but they are not covered here!
  * ------------------------------------------------------------------------
  */

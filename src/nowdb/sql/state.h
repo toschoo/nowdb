@@ -105,17 +105,24 @@ typedef struct {
  * - S: string defining from where to load (path)
  * - T: ast representing the target
  * - O: ast representing options
+ * - M: string representing a type or edge
  * ------------------------------------------------------------------------
  */
-#define NOWDB_SQL_MAKE_LOAD(S,T,O) \
+#define NOWDB_SQL_MAKE_LOAD(S,T,O,M) \
 	NOWDB_SQL_CHECKSTATE(); \
 	nowdb_ast_t *l; \
 	nowdb_ast_t *d; \
+	nowdb_ast_t *m; \
 	NOWDB_SQL_CREATEAST(&l, NOWDB_AST_LOAD, 0); \
 	nowdb_ast_setValue(l, NOWDB_AST_V_STRING, S); \
 	NOWDB_SQL_ADDKID(l, T); \
 	if (O != NULL) { \
 		NOWDB_SQL_ADDKID(l, O); \
+	} \
+	if (M != NULL) { \
+		NOWDB_SQL_CREATEAST(&m, NOWDB_AST_OPTION, NOWDB_AST_TYPE); \
+		nowdb_ast_setValue(m, NOWDB_AST_V_STRING, M); \
+		NOWDB_SQL_ADDKID(l, m); \
 	} \
 	NOWDB_SQL_CREATEAST(&d, NOWDB_AST_DLL, 0); \
 	NOWDB_SQL_ADDKID(d, l); \
@@ -219,6 +226,22 @@ typedef struct {
 	if (O != NULL) { \
 		NOWDB_SQL_ADDKID(C,O); \
 	}
+
+/* ------------------------------------------------------------------------
+ * Make a and edge declaration for origin or destin
+ * Parameters:
+ * - C: the ast representing the edge
+ * - x: the offset subcode
+ * - I: the name of the user-defined type
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_EDGE_TYPE(E, x, I) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *o; \
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, NOWDB_AST_TYPE); \
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, I); \
+	NOWDB_SQL_CREATEAST(&o, NOWDB_AST_OFF, x); \
+	NOWDB_SQL_ADDKID(E,o);
 
 /* ------------------------------------------------------------------------
  * Make a DML target statement

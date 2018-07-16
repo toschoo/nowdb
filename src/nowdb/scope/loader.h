@@ -21,15 +21,19 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/time.h>
 #include <nowdb/store/store.h>
+#include <nowdb/text/text.h>
+#include <nowdb/model/model.h>
+#include <nowdb/mem/lru.h>
 
 /* ------------------------------------------------------------------------
  * Flags for CSV loader
  * ------------------------------------------------------------------------
  */
-#define NOWDB_CSV_VERTEX          2
-#define NOWDB_CSV_HAS_HEADER      8
-#define NOWDB_CSV_USE_HEADER     16
-#define NOWDB_CSV_GIVE_FEEDBACK  64
+#define NOWDB_CSV_VERTEX           2
+#define NOWDB_CSV_MODEL            4
+#define NOWDB_CSV_HAS_HEADER     128
+#define NOWDB_CSV_USE_HEADER     256
+#define NOWDB_CSV_GIVE_FEEDBACK 1024
 
 /* ------------------------------------------------------------------------
  * Number of fields in edge
@@ -89,10 +93,15 @@ typedef struct {
 	FILE            *stream; /* the input stream  */
 	FILE           *ostream; /* the output stream */
 	nowdb_store_t    *store; /* the output store  */
+	nowdb_model_t    *model; /* the db's model    */
+	nowdb_text_t      *text; /* the db's text     */
+	char              *type; /* type identifier   */
 	nowdb_bitmap32_t  flags; /* flags             */
 	nowdb_csv_field_t fproc; /* field callback    */
 	nowdb_csv_row_t   rproc; /* row   callback    */
 	char              delim; /* csv delimiter     */
+	char           *datefrm; /* date format       */
+	char           *timefrm; /* time format       */
 	nowdb_csv_t        *csv; /* csv state         */
 	nowdb_err_t         err; /* error occurred    */
 	uint64_t         loaded; /* rows loaded       */
@@ -108,6 +117,9 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
                               nowdb_store_t   *store,
+                              nowdb_model_t   *model,
+                              nowdb_text_t     *text,
+                              char             *type,
                               nowdb_bitmap32_t flags);
 
 /* ------------------------------------------------------------------------
@@ -124,10 +136,13 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr);
 
 /* ------------------------------------------------------------------------
  * Standard csv field callbacks for context and vertex
+ * with and without model
  * ------------------------------------------------------------------------
  */
 void nowdb_csv_field_context(void *data, size_t len, void *rsc);
 void nowdb_csv_field_vertex(void *data, size_t len, void *rsc);
+void nowdb_csv_field_edge(void *data, size_t len, void *rsc);
+void nowdb_csv_field_type(void *data, size_t len, void *rsc);
 
 /* ------------------------------------------------------------------------
  * Standard csv row callback

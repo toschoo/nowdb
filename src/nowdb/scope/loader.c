@@ -8,6 +8,8 @@
 #include <nowdb/types/error.h>
 #include <nowdb/scope/loader.h>
 
+#include <tsalgo/list.h>
+
 #include <csv.h>
 
 #include <time.h>
@@ -24,16 +26,27 @@ static char *OBJECT = "ldr";
  * ------------------------------------------------------------------------
  */
 struct nowdb_csv_st {
-	char       rejected; /* current row was rejected       */
-	uint32_t        cur; /* current field                  */
-	uint64_t      total; /* total number of rows processed */
-	uint64_t      fbcnt; /* counter for feedback           */
-	char         *inbuf; /* input buffer                   */
-	char           *buf; /* result buffer                  */
-	uint32_t        pos; /* position in the result buffer  */
-	uint32_t    recsize; /* size of record                 */
-	char        hlp[96]; /* three 32 byte 'registers'      */
-	struct csv_parser p; /* the csv parser                 */
+	char                rejected; /* current row was rejected       */
+	uint32_t                 cur; /* current field                  */
+	char                   first; /* first line                     */
+	uint64_t               total; /* total number of rows processed */
+	uint64_t               fbcnt; /* counter for feedback           */
+	char                  *inbuf; /* input buffer                   */
+	char                    *buf; /* result buffer                  */
+	uint32_t                 pos; /* position in the result buffer  */
+	uint32_t                 old; /* remember previous position     */
+	uint32_t             recsize; /* size of record                 */
+	char                 hlp[96]; /* three 32 byte 'registers'      */
+	char                txt[256]; /* text buffer                    */
+	struct csv_parser          p; /* the csv parser                 */
+	ts_algo_list_t         *list; /* temporary store for headers    */
+	nowdb_model_edge_t     *edge; /* edge model                     */
+	nowdb_model_vertex_t *origin; /* edge model                     */
+	nowdb_model_vertex_t *destin; /* edge model                     */
+	nowdb_key_t              vid; /* edge model  : vertex id        */
+	nowdb_model_prop_t    *props; /* vertex model: array of props   */
+	uint32_t                 psz; /* vertex model: size of array    */
+	uint32_t               pkidx; /* vertex model: index of pk      */
 };
 
 /* ------------------------------------------------------------------------
@@ -62,6 +75,9 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
                               nowdb_store_t   *store,
+                              nowdb_model_t   *model,
+                              nowdb_text_t     *text,
+                              char             *type,
                               nowdb_bitmap32_t flags) {
 	nowdb_err_t err;
 
@@ -70,6 +86,11 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->stream = stream==NULL?stdin:stream;
 	ldr->ostream = ostream==NULL?stderr:ostream;
 	ldr->store  = store;
+	ldr->model  = model;
+	ldr->text   = text;
+	ldr->type   = type;
+	ldr->timefrm = NULL;
+	ldr->datefrm = NULL;
 	ldr->fproc = NULL;
 	ldr->rproc = NULL;
 	ldr->csv   = NULL;
@@ -78,7 +99,20 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->errors = 0;
 	ldr->runtime = 0;
 
-	if (flags & NOWDB_CSV_VERTEX) {
+	/* nice feature would be to pass
+	 * date and time format in from SQL.
+	 * Currently, this is hard-coded! */
+	ldr->datefrm = NOWDB_DATE_FORMAT;
+	ldr->timefrm = NOWDB_TIME_FORMAT;
+
+	if (flags & NOWDB_CSV_MODEL) {
+		ldr->rproc = &nowdb_csv_row;
+		if (flags & NOWDB_CSV_VERTEX) {
+			ldr->fproc = &nowdb_csv_field_type;
+		} else {
+			ldr->fproc = &nowdb_csv_field_edge;
+		}
+	} else if (flags & NOWDB_CSV_VERTEX) {
 		ldr->fproc = &nowdb_csv_field_vertex;
 		ldr->rproc = &nowdb_csv_row;
 	} else {
@@ -90,12 +124,21 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	if (ldr->csv == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                    FALSE, OBJECT, "allocating csv parser");
 
+	ldr->csv->first = 1;
 	ldr->csv->rejected = 0;
 	ldr->csv->cur = 0;
 	ldr->csv->pos = 0;
+	ldr->csv->old = 0;
 	ldr->csv->total = 0;
 	ldr->csv->fbcnt = 0;
 	ldr->csv->buf = NULL;
+	ldr->csv->list = NULL;
+	ldr->csv->edge = NULL;
+	ldr->csv->origin = NULL;
+	ldr->csv->destin = NULL;
+	ldr->csv->props = NULL;
+	ldr->csv->psz = 0;
+	ldr->csv->pkidx = 0;
 
 	if (flags & NOWDB_CSV_VERTEX) {
 		ldr->csv->recsize = sizeof(nowdb_vertex_t);
@@ -134,6 +177,22 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 }
 
 /* ------------------------------------------------------------------------
+ * Destroy prop list
+ * ------------------------------------------------------------------------
+ */
+static void destroyPropList(ts_algo_list_t *list) {
+	ts_algo_list_node_t *runner, *tmp;
+
+	runner = list->head;
+	while(runner!=NULL) {
+		free(runner->cont); tmp = runner->nxt;
+		ts_algo_list_remove(list, runner);
+		free(runner); runner = tmp;
+	}
+	ts_algo_list_destroy(list);
+}
+
+/* ------------------------------------------------------------------------
  * Destroy the loader
  * ------------------------------------------------------------------------
  */
@@ -147,6 +206,19 @@ void nowdb_loader_destroy(nowdb_loader_t *ldr) {
 		if (ldr->csv->inbuf != NULL) {
 			free(ldr->csv->inbuf);
 			ldr->csv->inbuf = NULL;
+		}
+		if (ldr->csv->props != NULL) {
+			for(int i=0;i<ldr->csv->psz;i++) {
+				if (ldr->csv->props[i].name != NULL) {
+					free(ldr->csv->props[i].name);
+				}
+			}
+			free(ldr->csv->props); ldr->csv->props = NULL;
+		}
+		if (ldr->csv->list != NULL) {
+			destroyPropList(ldr->csv->list);
+			free(ldr->csv->list);
+			ldr->csv->list = NULL;
 		}
 		free(ldr->csv);
 		ldr->csv = NULL;
@@ -223,18 +295,38 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 
 	nowdb_timestamp(&t1);
 
+	/* we lock the model, so nobody can change
+	 * or remove types while we are working */
+	if (ldr->model != NULL) {
+		err = nowdb_lock_read(&ldr->model->lock);
+		if (err != NOWDB_OK) return err;
+	}
 	do {
 		err = fillbuf(ldr->stream, ldr->csv->inbuf+off,
 		                           INBUFSIZE-off, &sz);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			if (ldr->model != NULL) {
+				NOWDB_IGNORE(nowdb_unlock_read(
+				            &ldr->model->lock));
+			}
+			return err;
+		}
 		r = csv_parse(&ldr->csv->p, ldr->csv->inbuf, sz,
 		                   ldr->fproc, ldr->rproc, ldr);
 		if (ldr->err != NOWDB_OK) {
+			if (ldr->model != NULL) {
+				NOWDB_IGNORE(nowdb_unlock_read(
+				            &ldr->model->lock));
+			}
 			err = ldr->err; ldr->err = NOWDB_OK;
 			return err;
 		}
 		off = sz - r;
 		if (off > 0) {
+			if (ldr->model != NULL) {
+				NOWDB_IGNORE(nowdb_unlock_read(
+				            &ldr->model->lock));
+			}
 			return nowdb_err_get(nowdb_err_loader, FALSE, OBJECT,
 			       (char*)csv_strerror(csv_error(&ldr->csv->p)));
 		}
@@ -242,8 +334,16 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 
 	csv_fini(&ldr->csv->p, ldr->fproc, ldr->rproc, ldr);
 	if (ldr->err != NOWDB_OK) {
+		if (ldr->model != NULL) {
+			NOWDB_IGNORE(nowdb_unlock_read(
+				    &ldr->model->lock));
+		}
 		err = ldr->err; ldr->err = NOWDB_OK;
 		return err;
+	}
+	if (ldr->model != NULL) {
+		err = nowdb_unlock_read(&ldr->model->lock);
+		if (err != NOWDB_OK) return err;
 	}
 
 	cleanBuf(ldr);
@@ -259,33 +359,188 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	return NOWDB_OK;
 }
 
+#define NOMEM(s) \
+	ldr->err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
+
+/* ------------------------------------------------------------------------
+ * Row header with vertex model
+ * ------------------------------------------------------------------------
+ */
+static inline void rowTypeHeader(nowdb_loader_t *ldr) {
+	ts_algo_list_node_t *runner, *tmp;
+	nowdb_roleid_t roleid;
+	nowdb_model_vertex_t *v;
+	nowdb_model_prop_t *p;
+	nowdb_err_t err;
+	int i=0;
+
+	if (ldr->csv->list == NULL) return;
+	if (ldr->err != NOWDB_OK) return;
+
+	err = nowdb_model_getVertexByName(ldr->model, ldr->type, &v);
+	if (err != NOWDB_OK) {
+		ldr->err = err;
+		return;
+	}
+
+	roleid = v->roleid;
+
+	ldr->csv->props = calloc(ldr->csv->psz, sizeof(nowdb_model_prop_t));
+	if (ldr->csv->props == NULL) {
+		NOMEM("allocating props");
+		return;
+	}
+	runner=ldr->csv->list->head; 
+	for(i=0; runner!=NULL; i++) {
+		err = nowdb_model_getPropByName(ldr->model, roleid,
+		                                runner->cont,  &p);
+		if (err != NOWDB_OK) {
+			ldr->err = err;
+			return;
+		}
+		ldr->csv->props[i].roleid = roleid;
+		ldr->csv->props[i].propid = p->propid;
+		ldr->csv->props[i].value = p->value;
+		ldr->csv->props[i].pk = p->pk;
+		if (p->pk) ldr->csv->pkidx = i;
+
+		ldr->csv->props[i].name = runner->cont;
+
+		tmp = runner->nxt;
+		ts_algo_list_remove(ldr->csv->list, runner);
+		free(runner); runner = tmp;
+	}
+	ts_algo_list_destroy(ldr->csv->list);
+	free(ldr->csv->list); ldr->csv->list = NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * Field header
+ * ------------------------------------------------------------------------
+ */
+static inline void fieldHeader(void *data, size_t len,
+                               nowdb_loader_t    *ldr) {
+	char *nm;
+
+	if (ldr->csv->list == NULL) {
+		ldr->csv->list = calloc(1, sizeof(ts_algo_list_t));
+		if (ldr->csv->list == NULL) {
+			NOMEM("allocating list");
+			return;
+		}
+		ts_algo_list_init(ldr->csv->list);
+	}
+
+	ldr->csv->psz++;
+
+	nm = malloc(len+1);
+	if (nm == NULL) {
+		NOMEM("allocating field name");
+		return;
+	}
+	memcpy(nm, data, len); nm[len] = 0;
+	if (ts_algo_list_append(ldr->csv->list, nm) != TS_ALGO_OK) {
+		free(nm);
+		NOMEM("list.append");
+		return;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Convert Loader
+ * ------------------------------------------------------------------------
+ */
+#define LDR(x) \
+	((nowdb_loader_t*)x)
+
 /* ------------------------------------------------------------------------
  * Row callback
  * ------------------------------------------------------------------------
  */
-void nowdb_csv_row(int c, void *rsc) {
-	nowdb_loader_t *ldr = rsc;
+void nowdb_csv_row(int c, void *ldr) {
 
-	if (ldr->csv->rejected) {
-		ldr->csv->rejected = 0;
-		ldr->errors++;
-		/* count errors */
+	if (LDR(ldr)->err != NOWDB_OK) return;
+
+	if (LDR(ldr)->csv->first) {
+		LDR(ldr)->csv->first = FALSE;
+
+		/* we have a header */
+		if (LDR(ldr)->flags & NOWDB_CSV_HAS_HEADER) {
+
+			/* ... and we actually use it */
+			if (LDR(ldr)->flags & NOWDB_CSV_USE_HEADER) {
+
+				/* ... we have a model */
+				if (LDR(ldr)->flags & NOWDB_CSV_MODEL) {
+					if (LDR(ldr)->flags &
+					    NOWDB_CSV_VERTEX) {
+						rowTypeHeader(ldr);
+					}
+					return;
+				}
+
+			/* ... or we do not use the header */
+			} 
+			if ((LDR(ldr)->flags & NOWDB_CSV_MODEL) &&
+			    (LDR(ldr)->flags & NOWDB_CSV_VERTEX)) {
+				LDR(ldr)->err =  
+					nowdb_err_get(nowdb_err_invalid,
+					                  FALSE, OBJECT,
+					  "vertex model without header");
+			}
+			return; /* header processed */
+
+		/* if we do not have a header */
+		} else if ((LDR(ldr)->flags & NOWDB_CSV_MODEL) &&
+		           (LDR(ldr)->flags & NOWDB_CSV_VERTEX)) {
+			LDR(ldr)->err =nowdb_err_get(
+			               nowdb_err_invalid,
+				           FALSE, OBJECT,
+			   "vertex model without header");
+			return;
+		}
+	}
+
+	/* current row was regjected */
+	if (LDR(ldr)->csv->rejected) {
+		LDR(ldr)->csv->rejected = 0;
+		LDR(ldr)->errors++;
+		LDR(ldr)->csv->total++;
+
+		LDR(ldr)->csv->pos=LDR(ldr)->csv->old;
+
+		LDR(ldr)->csv->cur = 0;
 		return;
 	}
 
-	ldr->csv->pos+=ldr->csv->recsize;
-	ldr->csv->fbcnt++;
-	ldr->csv->total++;
+	/* finally: the normal processing */
+	LDR(ldr)->csv->old=LDR(ldr)->csv->pos;
+	LDR(ldr)->csv->pos+=LDR(ldr)->csv->recsize;
+	LDR(ldr)->csv->fbcnt++;
+	LDR(ldr)->csv->total++;
 
-	if (ldr->csv->pos >= BUFSIZE) {
+	/*
+	fprintf(stderr, "%u + %u * %u == %u (%u)\n",
+			LDR(ldr)->csv->pos,
+			LDR(ldr)->csv->psz,
+			LDR(ldr)->csv->recsize,
+	                LDR(ldr)->csv->pos +
+	                LDR(ldr)->csv->psz *
+	                LDR(ldr)->csv->recsize, BUFSIZE);
+	*/
+	if (LDR(ldr)->csv->pos     +
+	    LDR(ldr)->csv->psz     *
+	    LDR(ldr)->csv->recsize + 
+	    LDR(ldr)->csv->recsize >= BUFSIZE) {
 		insertBuf(ldr);
-		ldr->csv->pos = 0;
-		if (ldr->csv->fbcnt >= FEEDBACK) {
-			ldr->csv->fbcnt = 0;
+		LDR(ldr)->csv->pos = 0;
+		LDR(ldr)->csv->old = 0;
+		if (LDR(ldr)->csv->fbcnt >= FEEDBACK) {
+			LDR(ldr)->csv->fbcnt = 0;
 			/* give feedback */
 		}
 	}
-	if (ldr->err == NOWDB_OK) ldr->loaded++;
+	if (LDR(ldr)->err == NOWDB_OK) LDR(ldr)->loaded++;
 }
 
 /* ------------------------------------------------------------------------
@@ -373,16 +628,17 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * ------------------------------------------------------------------------
  */
 #define REJECT(n,s) \
-	ldr->csv->rejected = 1; \
-	fprintf(stderr, "%s %s\n", n, s)
+	LDR(ldr)->csv->rejected = 1; \
+	fprintf(LDR(ldr)->ostream, "[%09lu] %s %s\n", \
+	                   LDR(ldr)->csv->total, n, s);
 
 /* ------------------------------------------------------------------------
  * Macro to obtain a key field (edge, origin, destin, label, etc.)
  * ------------------------------------------------------------------------
  */
 #define GETKEY(d, l, name, fld) \
-	if (toUInt(ldr->csv, data, l,\
-	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
+	if (toUInt(LDR(ldr)->csv, data, l,\
+	    LDR(ldr)->csv->buf+LDR(ldr)->csv->pos+fld) != 0) \
 	{ \
 		REJECT(name, "invalid key"); \
 	}
@@ -392,8 +648,8 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * ------------------------------------------------------------------------
  */
 #define GETTMSTMP(d, l, name, fld) \
-	if (toInt(ldr->csv, data, l,\
-	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
+	if (toInt(LDR(ldr)->csv, data, l,\
+	    LDR(ldr)->csv->buf+LDR(ldr)->csv->pos+fld) != 0) \
 	{ \
 		REJECT(name, "invalid timestamp"); \
 	}
@@ -403,7 +659,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * ------------------------------------------------------------------------
  */
 #define GETWEIGHT(d, l, name, fld) \
-	if (tohlp(ldr->csv, data, l, 4*(fld-WEIGHT)) != 0) \
+	if (tohlp(LDR(ldr)->csv, data, l, 4*(fld-WEIGHT)) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
 	}
@@ -413,8 +669,8 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * ------------------------------------------------------------------------
  */
 #define GETTYPE(d, l, name, fld) \
-	if (toUInt32(ldr->csv, data, l,\
-	    ldr->csv->buf+ldr->csv->pos+fld) != 0) \
+	if (toUInt32(LDR(ldr)->csv, data, l,\
+	    LDR(ldr)->csv->buf+LDR(ldr)->csv->pos+fld) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
 	}
@@ -425,21 +681,21 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  */
 #define GETTYPEDWEIGHT(name, fld) \
 	if (fld == WEIGHT) { \
-		if (nowdb_edge_strtow((nowdb_edge_t*)(ldr->csv->buf+ \
-		                                      ldr->csv->pos), \
-		                    *((nowdb_type_t*)(ldr->csv->buf+ \
-		                                      ldr->csv->pos+ \
+		if (nowdb_edge_strtow((nowdb_edge_t*)(LDR(ldr)->csv->buf+ \
+		                                      LDR(ldr)->csv->pos), \
+		                    *((nowdb_type_t*)(LDR(ldr)->csv->buf+ \
+		                                      LDR(ldr)->csv->pos+ \
 		                                      WTYPE)),       \
-		                     ldr->csv->hlp) != 0) { \
+		                     LDR(ldr)->csv->hlp) != 0) { \
 			REJECT(name, "invalid weight"); \
 		} \
 	} else { \
-		if (nowdb_edge_strtow2((nowdb_edge_t*)(ldr->csv->buf+ \
-		                                       ldr->csv->pos), \
-		                     *((nowdb_type_t*)(ldr->csv->buf+ \
-		                                       ldr->csv->pos+ \
+		if (nowdb_edge_strtow2((nowdb_edge_t*)(LDR(ldr)->csv->buf+ \
+		                                       LDR(ldr)->csv->pos), \
+		                     *((nowdb_type_t*)(LDR(ldr)->csv->buf+ \
+		                                       LDR(ldr)->csv->pos+ \
 		                                       WTYPE2)), \
-		                     ldr->csv->hlp+32) != 0) { \
+		                     LDR(ldr)->csv->hlp+32) != 0) { \
 			REJECT(name, "invalid weight"); \
 		} \
 	}
@@ -448,39 +704,38 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * Context field callback
  * ------------------------------------------------------------------------
  */
-void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
-	nowdb_loader_t *ldr = rsc;
+void nowdb_csv_field_context(void *data, size_t len, void *ldr) {
 
-	switch(ldr->csv->cur) {
+	switch(LDR(ldr)->csv->cur) {
 	case NOWDB_FIELD_EDGE:
 		GETKEY(data, len, "EDGE", EDGE);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_ORIGIN:
 		GETKEY(data, len, "ORIGIN", ORIGIN);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_DESTIN:
 		GETKEY(data, len, "DESTIN", DESTIN);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_LABEL:
 		GETKEY(data, len, "LABEL", LABEL);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_TIMESTAMP:
 		GETTMSTMP(data, len, "TIMESTAMP", TMSTMP);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_WEIGHT:
 		GETWEIGHT(data, len, "WEIGHT", WEIGHT);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_WEIGHT2:
 		GETWEIGHT(data, len, "WEIGHT2", WEIGH2);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE:
 		GETTYPE(data, len, "WTYPE", WTYPE);
 		GETTYPEDWEIGHT("WEIGHT", WEIGHT);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_WTYPE2:
 		GETTYPE(data, len, "WTYPE2", WTYPE2);
 		GETTYPEDWEIGHT("WEIGHT2", WEIGH2);
-		ldr->csv->cur = 0;
+		LDR(ldr)->csv->cur = 0;
 	}
 }
 
@@ -499,7 +754,7 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
  * ------------------------------------------------------------------------
  */
 #define GETVALUE(d, l, name, fld) \
-	if (tohlp(ldr->csv, data, l, 0) != 0) \
+	if (tohlp(LDR(ldr)->csv, data, l, 0) != 0) \
 	{ \
 		REJECT(name, "invalid value"); \
 	}
@@ -509,12 +764,12 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
  * ------------------------------------------------------------------------
  */
 #define GETTYPEDVALUE(name, fld) \
-	if (nowdb_vertex_strtov((nowdb_vertex_t*)(ldr->csv->buf+  \
-		                                  ldr->csv->pos), \
-		              *((nowdb_type_t*)(ldr->csv->buf+    \
-		                                ldr->csv->pos+    \
+	if (nowdb_vertex_strtov((nowdb_vertex_t*)(LDR(ldr)->csv->buf+  \
+		                                  LDR(ldr)->csv->pos), \
+		              *((nowdb_type_t*)(LDR(ldr)->csv->buf+    \
+		                                LDR(ldr)->csv->pos+    \
 		                                        VTYPE)),  \
-		                ldr->csv->hlp) != 0) { \
+		                LDR(ldr)->csv->hlp) != 0) { \
 		REJECT(name, "invalid value"); \
 	} \
 
@@ -522,25 +777,425 @@ void nowdb_csv_field_context(void *data, size_t len, void *rsc) {
  * Vertex field callback
  * ------------------------------------------------------------------------
  */
-void nowdb_csv_field_vertex(void *data, size_t len, void *rsc) {
-	nowdb_loader_t *ldr = rsc;
-
-	switch(ldr->csv->cur) {
+void nowdb_csv_field_vertex(void *data, size_t len, void *ldr) {
+	switch(LDR(ldr)->csv->cur) {
 	case NOWDB_FIELD_VERTEX:
 		GETKEY(data, len, "VERTEX", VERTEX);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_PROPERTY:
 		GETKEY(data, len, "PROPERTY", PROP);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_VALUE:
 		GETVALUE(data, len, "VALUE", VALUE);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_VTYPE:
 		GETTYPE(data, len, "VTYPE", VTYPE);
 		GETTYPEDVALUE("VALUE", VALUE);
-		ldr->csv->cur++; break;
+		LDR(ldr)->csv->cur++; break;
 	case NOWDB_FIELD_ROLE:
 		GETTYPE(data, len, "ROLE", ROLE);
-		ldr->csv->cur = 0;
+		LDR(ldr)->csv->cur = 0;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Handle errors
+ * ------------------------------------------------------------------------
+ */
+#define HANDLEERR(ldr, err) \
+	nowdb_err_send(err, fileno(ldr->ostream)); \
+	nowdb_err_release(err);
+
+/* ------------------------------------------------------------------------
+ * Convert text to key
+ * ------------------------------------------------------------------------
+ */
+static inline char getKeyFromText(nowdb_loader_t *ldr,
+                                  void *data, size_t len,
+                                  void *target) {
+	nowdb_err_t err;
+	char *txt = ldr->csv->txt;
+
+	memcpy(txt, data, len); txt[len] = 0;
+
+	err = nowdb_text_insert(ldr->text, txt, target);
+	if (err != NOWDB_OK) {
+		HANDLEERR(ldr, err);
+		return -1;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * String to int or uint
+ * ------------------------------------------------------------------------
+ */
+#define STROX(t,to) \
+	if (len > 255) { \
+		return -1; \
+	} \
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	*((t*)target) = to(ldr->csv->txt, &hlp, 10); \
+	if (*hlp != 0) {  \
+		return -1; \
+	}
+
+/* ------------------------------------------------------------------------
+ * String to double
+ * ------------------------------------------------------------------------
+ */
+#define STROD() \
+	if (len > 255) { \
+		return -1; \
+	} \
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	*((double*)target) = strtod(ldr->csv->txt, &hlp); \
+	if (*hlp != 0) {  \
+		return -1; \
+	}
+
+/* ------------------------------------------------------------------------
+ * String to time
+ * ------------------------------------------------------------------------
+ */
+#define STRTOTIME(frm) \
+	if (len > 255) { \
+		return -1; \
+	} \
+	memcpy(ldr->csv->txt, data, len); \
+	ldr->csv->txt[len] = 0; \
+	err = nowdb_time_fromString(ldr->csv->txt,frm,target); \
+	if (err != NOWDB_OK) { \
+		HANDLEERR(ldr, err); \
+		return -1; \
+	}
+	
+/* ------------------------------------------------------------------------
+ * Convert property value from string
+ * ------------------------------------------------------------------------
+ */
+static inline char getValueAsType(nowdb_loader_t *ldr,
+                                  void *data, size_t len,
+                                  nowdb_type_t      typ,
+                                  void *target) {
+	nowdb_err_t err;
+	char *hlp=NULL;
+
+	switch(typ) {
+	case NOWDB_TYP_NOTHING:
+		memset(target, 0, sizeof(nowdb_key_t)); break;
+
+	case NOWDB_TYP_TEXT:
+		return getKeyFromText(ldr, data, len, target);
+
+	case NOWDB_TYP_DATE:
+		STRTOTIME(ldr->datefrm);
+		break;
+
+	case NOWDB_TYP_TIME:
+		STRTOTIME(ldr->timefrm);
+		break;
+
+	case NOWDB_TYP_FLOAT:
+		STROD();
+		break;
+
+	case NOWDB_TYP_INT:
+		STROX(int64_t, strtol);
+		break;
+		
+	case NOWDB_TYP_UINT:
+		STROX(uint64_t, strtoul);
+		break;
+
+	default: return -1;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Vertex field callback with model
+ * ------------------------------------------------------------------------
+ */
+void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
+
+	if (LDR(ldr)->err != NOWDB_OK) return;
+	if (LDR(ldr)->csv->rejected) return;
+	if (LDR(ldr)->csv->first) {
+		fieldHeader(data, len, ldr);
+		return;
+	}
+
+	int i = LDR(ldr)->csv->cur;
+	/*
+	memcpy(LDR(ldr)->csv->txt, data, len);
+	LDR(ldr)->csv->txt[len] = 0;
+	fprintf(stderr, "at %u: %s\n",  LDR(ldr)->csv->cur,
+	                                LDR(ldr)->csv->txt);
+	*/
+
+	/* get PK (= vid) */
+	if (LDR(ldr)->csv->props[i].pk) {
+		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
+			if (getKeyFromText(LDR(ldr), data, len,
+			             &LDR(ldr)->csv->vid) != 0) {
+				REJECT(LDR(ldr)->csv->props[i].name,
+				                      "invalid key");
+				return;
+			}
+		} else {
+			if (toUInt(LDR(ldr)->csv, data, len,
+			    &LDR(ldr)->csv->vid) != 0) {
+				REJECT(LDR(ldr)->csv->props[i].name,
+				                      "invalid key");
+				return;
+			}
+		}
+	}
+
+	/* get propid (from props) */
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_PROP,
+	      &LDR(ldr)->csv->props[i].propid, 8);
+
+	/* value according to type */
+	if (getValueAsType(ldr, data, len,
+	               LDR(ldr)->csv->props[i].value,
+	               LDR(ldr)->csv->buf  +
+	               LDR(ldr)->csv->pos  +
+	               NOWDB_OFF_VALUE) != 0) {
+		REJECT(LDR(ldr)->csv->props[i].name, "invalid value");
+		return;
+	}
+
+	/* vtype according to props */
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_VTYPE,
+	      &LDR(ldr)->csv->props[i].value, 4);
+
+	/* roleid according to props */
+	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
+	                         +NOWDB_OFF_ROLE,
+	      &LDR(ldr)->csv->props[i].roleid, 4);
+
+	/* increment field counter */
+	LDR(ldr)->csv->cur++;
+
+	/* last field: set vid to all properties */
+	if (LDR(ldr)->csv->cur == LDR(ldr)->csv->psz) {
+		for(i=0; i<LDR(ldr)->csv->psz; i++) {
+			memcpy(LDR(ldr)->csv->buf +
+			       LDR(ldr)->csv->pos - i *
+			       LDR(ldr)->csv->recsize,
+			      &LDR(ldr)->csv->vid, 8);
+		}
+		LDR(ldr)->csv->cur = 0;
+
+	/* otherwise increase position */
+	} else {
+		LDR(ldr)->csv->pos += LDR(ldr)->csv->recsize;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Edge field callback with model
+ * ------------------------------------------------------------------------
+ */
+void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
+	nowdb_err_t err;
+
+	if (LDR(ldr)->err != NOWDB_OK) return;
+	if (LDR(ldr)->csv->rejected) return;
+	if (LDR(ldr)->csv->first) {
+		if (LDR(ldr)->flags & NOWDB_CSV_HAS_HEADER) return;
+	}
+	if (len >= 255) {
+		REJECT("EDGE", "value too big");
+		return;
+	}
+	switch(LDR(ldr)->csv->cur) {
+	case NOWDB_FIELD_EDGE:
+
+		
+		memcpy(LDR(ldr)->csv->txt, data, len);
+		LDR(ldr)->csv->txt[len] = 0;
+
+		/*
+		fprintf(stderr, "at %p+%u %u: %s\n",
+		        LDR(ldr)->csv->buf,
+		        LDR(ldr)->csv->cur,
+		        LDR(ldr)->csv->pos,
+		        LDR(ldr)->csv->txt);
+		*/
+
+		if (LDR(ldr)->csv->edge == NULL ||
+		    strcmp(LDR(ldr)->csv->edge->name,
+		           LDR(ldr)->csv->txt) != 0) {
+	
+			err = nowdb_model_getEdgeByName(LDR(ldr)->model,
+			                                LDR(ldr)->csv->txt,
+		                                       &LDR(ldr)->csv->edge);
+			if (err != NOWDB_OK) {
+				REJECT("EDGE", "invalid key");
+				nowdb_err_release(err);
+				return;
+			}
+
+			/* create edge model on the fly? */
+
+			err = nowdb_model_getVertexById(
+			                  LDR(ldr)->model,
+			                  LDR(ldr)->csv->edge->origin,
+		                         &LDR(ldr)->csv->origin);
+			if (err != NOWDB_OK) {
+				REJECT("ORIGIN", "invalid key");
+				nowdb_err_release(err);
+				return;
+			}
+
+			err = nowdb_model_getVertexById(
+			                  LDR(ldr)->model,
+			                  LDR(ldr)->csv->edge->destin,
+		                         &LDR(ldr)->csv->destin);
+			if (err != NOWDB_OK) {
+				REJECT("DESTIN", "invalid key");
+				nowdb_err_release(err);
+				return;
+			}
+		}
+
+		memcpy(LDR(ldr)->csv->buf+
+		       LDR(ldr)->csv->pos,
+		      &LDR(ldr)->csv->edge->edgeid,
+		       sizeof(nowdb_key_t));
+
+		memcpy(LDR(ldr)->csv->buf+
+		       LDR(ldr)->csv->pos+
+		       NOWDB_OFF_WTYPE,
+		      &LDR(ldr)->csv->edge->weight,
+		       sizeof(nowdb_type_t));
+
+		memcpy(LDR(ldr)->csv->buf+
+		       LDR(ldr)->csv->pos+
+		       NOWDB_OFF_WTYPE2,
+		      &LDR(ldr)->csv->edge->weight2,
+		       sizeof(nowdb_type_t));
+
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_ORIGIN:
+
+		/* validate that resulting id is of that roleid! */
+		if (LDR(ldr)->csv->origin->vid == NOWDB_MODEL_TEXT) {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_TEXT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_ORIGIN) != 0) {
+				REJECT("origin", "invalid value");
+				return;
+			}
+		} else {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_UINT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_ORIGIN) != 0) {
+				REJECT("origin", "invalid value");
+				return;
+			}
+		}
+		
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_DESTIN:
+
+		/* validate that resulting id is of that roleid! */
+		if (LDR(ldr)->csv->origin->vid == NOWDB_MODEL_TEXT) {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_TEXT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_DESTIN) != 0) {
+				REJECT("destin", "invalid value");
+				return;
+			}
+		} else {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_UINT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_DESTIN) != 0) {
+				REJECT("destin", "invalid value");
+				return;
+			}
+		}
+
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_LABEL:
+
+		if (LDR(ldr)->csv->edge->label == NOWDB_MODEL_TEXT) {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_TEXT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_LABEL) != 0) {
+				REJECT("label", "invalid value");
+				return;
+			}
+		} else {
+			if (getValueAsType(ldr, data, len,
+			                   NOWDB_TYP_UINT,
+	        	                   LDR(ldr)->csv->buf +
+	        	                   LDR(ldr)->csv->pos +
+	        	                   NOWDB_OFF_LABEL) != 0) {
+				REJECT("label", "invalid value");
+				return;
+			}
+		}
+
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_TIMESTAMP:
+
+		if (getValueAsType(ldr, data, len,
+		           NOWDB_TYP_TIME,
+	                   LDR(ldr)->csv->buf  +
+	                   LDR(ldr)->csv->pos  +
+	                   NOWDB_OFF_TMSTMP) != 0) {
+			REJECT("weight", "invalid weight");
+			return;
+		}
+
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_WEIGHT:
+
+		if (getValueAsType(ldr, data, len,
+	                   LDR(ldr)->csv->edge->weight,
+	                   LDR(ldr)->csv->buf  +
+	                   LDR(ldr)->csv->pos  +
+	                   NOWDB_OFF_WEIGHT) != 0) {
+			REJECT("weight", "invalid weight");
+			return;
+		}
+
+		LDR(ldr)->csv->cur++; break;
+
+	case NOWDB_FIELD_WEIGHT2:
+
+		if (getValueAsType(ldr, data, len,
+	                   LDR(ldr)->csv->edge->weight2,
+	                   LDR(ldr)->csv->buf  +
+	                   LDR(ldr)->csv->pos  +
+	                   NOWDB_OFF_WEIGHT2) != 0) {
+			REJECT("weight2", "invalid weight");
+			return;
+		}
+
+		LDR(ldr)->csv->cur = 0;
 	}
 }

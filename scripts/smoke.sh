@@ -135,4 +135,20 @@ then
 	exit 1
 fi
 
+echo "running modelsmoke" >> log/test.log
+test/smoke/modelsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: modelsmoke failed"
+	exit 1
+fi
+
+echo "running textsmoke" >> log/test.log
+test/smoke/textsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: textsmoke failed"
+	exit 1
+fi
+
 echo "PASSED"
