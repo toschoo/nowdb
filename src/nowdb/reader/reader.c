@@ -477,7 +477,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 
 	ber = beet_index_getIter(index->idx, (*reader)->state, key,
 	                                     (*reader)->iter);
-	if (ber != BEET_OK) {
+	if (ber != BEET_OK && ber != BEET_ERR_KEYNOF) {
 		nowdb_reader_destroy(*reader); free(*reader);
 		return makeBeetError(ber);
 	}

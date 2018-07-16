@@ -585,8 +585,6 @@ table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-table_spec ::= IDENTIFIER AS IDENTIFIER. 
-
 /* ------------------------------------------------------------------------
  * where clause and expr
  * ------------------------------------------------------------------------

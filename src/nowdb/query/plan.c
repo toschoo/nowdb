@@ -26,11 +26,11 @@ static char *OBJECT = "plan";
  * - the type of the field (if known!)
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getField(char       *name,
-                                   nowdb_ast_t *trg,
-                                   uint32_t    *off,
-                                   uint32_t     *sz,
-                                   int        *type) {
+static inline nowdb_err_t getField(char            *name,
+                                   nowdb_ast_t      *trg,
+                                   uint32_t         *off,
+                                   uint32_t          *sz,
+                                   nowdb_type_t    *type) {
 	if (strcasecmp(name, "VID") == 0) {
 		*off = NOWDB_OFF_VERTEX; *sz = 8;
 		*type = NOWDB_TYP_UINT; /* may be string! */
@@ -58,7 +58,7 @@ static inline nowdb_err_t getField(char       *name,
 	}
 	if (strcasecmp(name, "EDGE") == 0) {
 		*off = NOWDB_OFF_EDGE; *sz = 8;
-		*type = NOWDB_TYP_UINT; /* may be string! */
+		*type = NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "ORIGIN") == 0) {
@@ -107,6 +107,74 @@ static inline nowdb_err_t getField(char       *name,
 }
 
 /* ------------------------------------------------------------------------
+ * Get edge field:
+ * ---------------
+ * - sets the offset into the structure
+ * - the size of the field
+ * - the type of the field (if known!)
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdgeField(char              *name,
+                                       nowdb_model_edge_t   *e,
+                                       nowdb_model_vertex_t *o,
+                                       nowdb_model_vertex_t *d,
+                                       nowdb_ast_t        *trg,
+                                       uint32_t           *off,
+                                       uint32_t            *sz,
+                                       nowdb_type_t      *type) {
+	if (strcasecmp(name, "EDGE") == 0) {
+		*off = NOWDB_OFF_EDGE; *sz = 8;
+		*type = NOWDB_TYP_TEXT;
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "ORIGIN") == 0) {
+		*off = NOWDB_OFF_ORIGIN; *sz = 8;
+		if (o != NULL && o->vid == NOWDB_MODEL_TEXT) {
+			*type = NOWDB_TYP_TEXT;
+		} else {
+			*type = NOWDB_TYP_UINT;
+		}
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "DESTIN") == 0) {
+		*off = NOWDB_OFF_DESTIN; *sz = 8;
+		if (d != NULL && d->vid == NOWDB_MODEL_TEXT) {
+			*type = NOWDB_TYP_TEXT;
+		} else {
+			*type = NOWDB_TYP_UINT;
+		}
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "LABEL") == 0) {
+		*off = NOWDB_OFF_LABEL; *sz = 8;
+		if (e != NULL && e->edge == NOWDB_MODEL_TEXT) {
+			*type = NOWDB_TYP_TEXT;
+		} else {
+			*type = NOWDB_TYP_UINT;
+		}
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "TIMESTAMP") == 0) {
+		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
+		*type = NOWDB_TYP_TIME;
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "WEIGHT") == 0) {
+		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*type = e!=NULL?e->weight:0;
+		return NOWDB_OK;
+	}
+	if (strcasecmp(name, "WEIGHT2") == 0) {
+		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*type = e!=NULL?e->weight2:0;
+		return NOWDB_OK;
+	}
+	*off = 0; *sz = 0; *type = 0;
+	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                     "unknown field");
+}
+
+/* ------------------------------------------------------------------------
  * Get Value:
  * ----------
  * The type of the value is inferred either from
@@ -118,12 +186,14 @@ static inline nowdb_err_t getField(char       *name,
  * - handle strings!!!
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getValue(char    *str,
-                                   uint32_t  sz,
-                                   int     *typ,
-                                   int    stype,
-                                   void **value) {
+static inline nowdb_err_t getValue(nowdb_scope_t *scope,
+                                   char            *str,
+                                   uint32_t          sz,
+                                   nowdb_type_t    *typ,
+                                   int            stype,
+                                   void         **value) {
 	char *tmp;
+	nowdb_err_t err;
 
 	*value = malloc(sz);
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -159,6 +229,13 @@ static inline nowdb_err_t getValue(char    *str,
 			**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
 		break;
 
+	case NOWDB_TYP_TEXT:
+		err = nowdb_text_getKey(scope->text, str, *value);
+		if (err != NOWDB_OK) {
+			free(*value); *value = NULL;
+		}
+		return err;
+
 	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
@@ -167,6 +244,10 @@ static inline nowdb_err_t getValue(char    *str,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get typed Value:
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
                                         char                *str,
                                         nowdb_model_prop_t *prop,
@@ -210,6 +291,49 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * Create an edge filter comparison node from an ast comparison node 
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdgeCompare(nowdb_scope_t   *scope,
+                                          nowdb_ast_t      *trg,
+                                          nowdb_model_edge_t *e,
+                                          int          operator,
+                                          nowdb_ast_t      *op1,
+                                          nowdb_ast_t      *op2,
+                                          nowdb_filter_t **comp) {
+	nowdb_err_t err;
+	nowdb_model_vertex_t *o;
+	nowdb_model_vertex_t *d;
+	nowdb_ast_t *op;
+	void *value;
+	uint32_t off,sz;
+	nowdb_type_t typ;
+
+	err = nowdb_model_getVertexById(scope->model, e->origin, &o);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_model_getVertexById(scope->model, e->destin, &d);
+	if (err != NOWDB_OK) return err;
+
+	op = op1->ntype == NOWDB_AST_FIELD?op1:op2;
+
+	err = getEdgeField(op->value, e, o, d, trg, &off, &sz, &typ);
+	if (err != NOWDB_OK) return err;
+
+	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
+
+	err = getValue(scope, op->value, sz, &typ, 0, &value);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_filter_newCompare(comp, operator, off, sz, typ, value);
+	if (err != NOWDB_OK) {
+		free(value); return err;
+	}
+	nowdb_filter_own(*comp);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Create a typed filter comparison node from an ast comparison node 
  * ------------------------------------------------------------------------
  */
@@ -237,16 +361,19 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 	if (err != NOWDB_OK) return err;
 
 	// make comp propid == 'propid'
-	err = nowdb_filter_newCompare(&pid, NOWDB_FILTER_EQ,
-	                                     NOWDB_OFF_PROP,
-	                                sizeof(nowdb_key_t),
-	                                     NOWDB_TYP_UINT,
-	                                        &p->propid);
-	if (err != NOWDB_OK) return err;
+	if (!p->pk) {
+		err = nowdb_filter_newCompare(&pid, NOWDB_FILTER_EQ,
+		                                     NOWDB_OFF_PROP,
+		                                sizeof(nowdb_key_t),
+		                                     NOWDB_TYP_UINT,
+	                                     	        &p->propid);
+		if (err != NOWDB_OK) return err;
+	}
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getTypedValue(scope, op->value, p, &value);
+	err = getValue(scope, op->value, sizeof(nowdb_key_t),
+	                               &p->value, 0, &value);
 	if (err != NOWDB_OK) {
 		nowdb_filter_destroy(pid);
 		free(pid); return err;
@@ -264,6 +391,10 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 		free(value); return err;
 	}
 	nowdb_filter_own(val);
+
+	if (p->pk) {
+		*comp = val; return NOWDB_OK;
+	}
 
 	err = nowdb_filter_newBool(&and, NOWDB_FILTER_AND);
 	if (err != NOWDB_OK) {
@@ -284,6 +415,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
  */
 static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
                                      nowdb_ast_t        *trg,
+                                     nowdb_model_edge_t   *e,
                                      nowdb_model_vertex_t *v,
                                      nowdb_filter_t   **comp,
                                      nowdb_ast_t        *ast) {
@@ -291,7 +423,7 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 	nowdb_ast_t *op1, *op2;
 	uint32_t off, sz;
 	void *conv;
-	int typ;
+	nowdb_type_t typ;
 
 	op1 = nowdb_ast_operand(ast, 1);
 	if (op1 == NULL) INVALIDAST("no first operand in compare");
@@ -305,17 +437,22 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 	if (trg->stype == NOWDB_AST_TYPE) {
 		return getTypedCompare(scope, trg, v,
 		          ast->stype, op1, op2, comp);
+	} else if (e != NULL) {
+		return getEdgeCompare(scope, trg, e,
+		         ast->stype, op1, op2, comp);
 	}
 
 	/* check whether op1 is field or value */
 	if (op1->ntype == NOWDB_AST_FIELD) {
 		err = getField(op1->value, trg, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op2->value, sz, &typ, op2->stype, &conv);
+		err = getValue(scope, op2->value, sz,
+		             &typ, op2->stype, &conv);
 	} else {
 		err = getField(op2->value, trg, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(op1->value, sz, &typ, op1->stype, &conv);
+		err = getValue(scope, op1->value, sz, &typ,
+		                         op1->stype, &conv);
 	}
 	if (err != NOWDB_OK) return err;
 
@@ -333,6 +470,7 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
  */
 static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
                                        nowdb_ast_t        *trg,
+                                       nowdb_model_edge_t   *e,
                                        nowdb_model_vertex_t *v,
                                        nowdb_filter_t      **b,
                                        nowdb_ast_t        *ast) {
@@ -340,15 +478,15 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 	nowdb_err_t err;
 
 	switch(ast->ntype) {
-	case NOWDB_AST_COMPARE: return getCompare(scope, trg, v, b, ast);
-	case NOWDB_AST_JUST: return getCondition(scope, trg, v, b,
-	                                 nowdb_ast_operand(ast,1));
+	case NOWDB_AST_COMPARE: return getCompare(scope, trg, e, v, b, ast);
+	case NOWDB_AST_JUST: return getCondition(scope, trg, e, v, b,
+	                                   nowdb_ast_operand(ast,1));
 
 	case NOWDB_AST_NOT:
 		err = nowdb_filter_newBool(b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
-		return getCondition(scope, trg, v, &(*b)->left,
-		                     nowdb_ast_operand(ast, 1));
+		return getCondition(scope, trg, e, v, &(*b)->left,
+		                       nowdb_ast_operand(ast, 1));
 
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:
@@ -356,14 +494,13 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 		                               NOWDB_FILTER_OR;
 		err = nowdb_filter_newBool(b,op);
 		if (err != NOWDB_OK) return err;
-		err = getCondition(scope, trg, v, &(*b)->left,
-		                     nowdb_ast_operand(ast,1));
+		err = getCondition(scope, trg, e, v, &(*b)->left,
+		                       nowdb_ast_operand(ast,1));
 		if (err != NOWDB_OK) return err;
-		return getCondition(scope, trg, v, &(*b)->right,
-		                       nowdb_ast_operand(ast,2));
+		return getCondition(scope, trg, e, v, &(*b)->right,
+		                         nowdb_ast_operand(ast,2));
 
 	default:
-		fprintf(stderr, "unknown: %d\n", ast->ntype); 
 		INVALIDAST("unknown condition type in ast");
 	}
 }
@@ -588,6 +725,92 @@ static inline nowdb_err_t getType(nowdb_scope_t    *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * Search edge name in where
+ * this is a workaround and should go away soon!
+ * ------------------------------------------------------------------------
+ */
+static inline char *searchEdgeInWhere(nowdb_ast_t *ast) {
+	char x = 0;
+	char *tmp = NULL;
+	nowdb_ast_t *op;
+
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_COMPARE: 
+
+		if (ast->stype == NOWDB_AST_EQ) {
+			op = nowdb_ast_operand(ast, 1);
+			if (op == NULL ||
+			    op->ntype != NOWDB_AST_FIELD) {
+				x=1;
+				op = nowdb_ast_operand(ast, 2);
+				if (op == NULL || 
+				    op->ntype != NOWDB_AST_FIELD) {
+					return NULL;
+				}
+			}
+			if (strcasecmp(op->value, "EDGE") == 0) {
+				if (x) op = nowdb_ast_operand(ast, 1);
+				else op = nowdb_ast_operand(ast,2);
+				if (op == NULL) return NULL;
+				return op->value;
+			}
+			
+		}
+		return NULL;
+
+	case NOWDB_AST_JUST: 
+	case NOWDB_AST_NOT:
+		return searchEdgeInWhere(nowdb_ast_operand(ast, 1));
+
+	case NOWDB_AST_AND:
+	case NOWDB_AST_OR:
+		tmp = searchEdgeInWhere(nowdb_ast_operand(ast, 1));
+		if (tmp != NULL) return tmp;
+		return searchEdgeInWhere(nowdb_ast_operand(ast, 1));
+
+	case NOWDB_AST_WHERE:
+		return searchEdgeInWhere(nowdb_ast_operand(ast, 1));
+
+	default:
+		return NULL;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Add edge to filter
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdge(nowdb_scope_t    *scope,
+                                  nowdb_ast_t        *trg,
+                                  nowdb_ast_t      *where,
+                                  nowdb_filter_t **filter,
+                                  nowdb_model_edge_t  **e) {
+	nowdb_err_t err;
+	char *name;
+
+	name = searchEdgeInWhere(where);
+	if (name == NULL) return NOWDB_OK;
+
+	err = nowdb_model_getEdgeByName(scope->model, name, e);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_key_not_found) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+		return err;
+	}
+
+	/*
+	err = nowdb_filter_newCompare(filter, NOWDB_FILTER_EQ,
+	                  NOWDB_OFF_EDGE, sizeof(nowdb_key_t),
+	                       NOWDB_TYP_UINT, &(*e)->edgeid);
+	if (err != NOWDB_OK) return err;
+	*/
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get filter
  * ----------
  * this is way to simple. we need to get the where *per target* and
@@ -612,11 +835,15 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 	nowdb_filter_t *t = NULL;
 	nowdb_filter_t *and;
 	nowdb_model_vertex_t *v=NULL;
+	nowdb_model_edge_t   *e=NULL;
 
 	*filter = NULL;
 
 	if (trg->stype == NOWDB_AST_TYPE) {
 		err = getType(scope, trg, &t, &v);
+		if (err != NOWDB_OK) return err;
+	} else {
+		err = getEdge(scope, trg, ast, &t, &e);
 		if (err != NOWDB_OK) return err;
 	}
 	if (ast == NULL) return NOWDB_OK;
@@ -629,7 +856,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 	*/
 
 	/* get condition creates a filter */
-	err = getCondition(scope, trg, v, &w, cond);
+	err = getCondition(scope, trg, e, v, &w, cond);
 	if (err != NOWDB_OK) {
 		if (*filter != NULL) {
 			nowdb_filter_destroy(*filter); 

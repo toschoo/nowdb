@@ -228,6 +228,7 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
+	char x = 0;
 	nowdb_err_t err = NOWDB_OK;
 
 	cur->cur = 0;
@@ -236,8 +237,13 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 	/* initialise readers */
 	for (int i=0; i<cur->numr; i++) {
 		err = nowdb_reader_move(cur->rdrs[i]);
+		if (nowdb_err_contains(err, nowdb_err_eof)) {
+			nowdb_err_release(err); continue;
+		}
 		if (err != NOWDB_OK) break;
+		x=1;
 	}
+	if (x==0) return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	return err;
 }
 
@@ -282,6 +288,9 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			src = nowdb_reader_page(cur->rdrs[r]);
 			cur->off = 0;
 		}
+
+		if (src == NULL) return nowdb_err_get(nowdb_err_eof,
+		                               FALSE, OBJECT, NULL);
 
 		/* we hit the nullrecord and pass on to the next page */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
