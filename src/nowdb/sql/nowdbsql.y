@@ -9,14 +9,11 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
- * - Get rid of the 'state', it not needed nor in any way useful
- * - clarify the role of the semicolon: do we need it???
  * - qualified names
  * - aliases
  * - joins
  * - NULL
  * - TRUE and FALSE
- * - straighten out the create syntax
  * - alter
  * - insert and update
  * - make load more versatile (csv, json, binary, avron)
@@ -583,7 +580,6 @@ table_spec(T) ::= IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-/* with alias: alias should be a node in itself */
 table_spec ::= VERTEX AS IDENTIFIER.
 table_spec ::= IDENTIFIER AS IDENTIFIER. 
 
