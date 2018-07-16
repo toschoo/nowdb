@@ -30,7 +30,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	nowdb_plan_idx_t *pidx;
 
 	/* target is vertex */
-	if (plan->helper == NOWDB_AST_VERTEX) {
+	if (plan->helper == NOWDB_AST_VERTEX ||
+	    plan->helper == NOWDB_AST_TYPE) {
 		cur->recsize = 32;
 		store = &scope->vertices;
 

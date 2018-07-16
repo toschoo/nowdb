@@ -26,10 +26,11 @@ static char *OBJECT = "plan";
  * - the type of the field (if known!)
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getField(char    *name,
-                                   uint32_t *off,
-                                   uint32_t  *sz,
-                                   int     *type) {
+static inline nowdb_err_t getField(char       *name,
+                                   nowdb_ast_t *trg,
+                                   uint32_t    *off,
+                                   uint32_t     *sz,
+                                   int        *type) {
 	if (strcasecmp(name, "VID") == 0) {
 		*off = NOWDB_OFF_VERTEX; *sz = 8;
 		*type = NOWDB_TYP_UINT; /* may be string! */
@@ -166,11 +167,126 @@ static inline nowdb_err_t getValue(char    *str,
 	return NOWDB_OK;
 }
 
+static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
+                                        char                *str,
+                                        nowdb_model_prop_t *prop,
+                                        void             **value) {
+	nowdb_err_t err;
+	char *tmp;
+
+	*value = malloc(sizeof(nowdb_key_t));
+	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
+		             FALSE, OBJECT, "allocating buffer");
+	switch(prop->value) {
+	case NOWDB_TYP_FLOAT:
+		**(double**)value = (double)strtod(str, &tmp);
+		break;
+
+	case NOWDB_TYP_UINT:
+		**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
+		break;
+
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_INT:
+		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
+		break;
+
+	case NOWDB_TYP_TEXT:
+		err = nowdb_text_getKey(scope->text, str, *value);
+		if (err != NOWDB_OK) {
+			free(*value); *value = NULL;
+		}
+		return err;
+
+	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	                                          "unexpected type");
+	}
+	if (*tmp != 0) {
+		free(*value); *value = NULL;
+		return nowdb_err_get(nowdb_err_invalid,
+	           FALSE, OBJECT, "conversion failed");
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Create a typed filter comparison node from an ast comparison node 
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
+                                          nowdb_ast_t        *trg,
+                                          nowdb_model_vertex_t *v,
+                                          int            operator,
+                                          nowdb_ast_t        *op1,
+                                          nowdb_ast_t        *op2,
+                                          nowdb_filter_t   **comp) {
+	nowdb_err_t err;
+	nowdb_filter_t *pid=NULL;
+	nowdb_filter_t *val=NULL;
+	nowdb_filter_t *and;
+	nowdb_model_prop_t *p;
+	nowdb_ast_t *op;
+	void *value;
+	uint32_t off;
+
+	op = op1->ntype == NOWDB_AST_FIELD?op1:op2;
+
+	// get propid
+	err = nowdb_model_getPropByName(scope->model,
+	                   v->roleid, op->value, &p);
+	if (err != NOWDB_OK) return err;
+
+	// make comp propid == 'propid'
+	err = nowdb_filter_newCompare(&pid, NOWDB_FILTER_EQ,
+	                                     NOWDB_OFF_PROP,
+	                                sizeof(nowdb_key_t),
+	                                     NOWDB_TYP_UINT,
+	                                        &p->propid);
+	if (err != NOWDB_OK) return err;
+
+	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
+
+	err = getTypedValue(scope, op->value, p, &value);
+	if (err != NOWDB_OK) {
+		nowdb_filter_destroy(pid);
+		free(pid); return err;
+	}
+
+	// if pk, it is just vid!
+	off = p->pk?NOWDB_OFF_VERTEX:NOWDB_OFF_VALUE;
+
+	err = nowdb_filter_newCompare(&val, operator, off,
+		                      sizeof(nowdb_key_t),
+		                                 p->value,
+		                                    value);
+	if (err != NOWDB_OK) {
+		nowdb_filter_destroy(pid); free(pid); 
+		free(value); return err;
+	}
+	nowdb_filter_own(val);
+
+	err = nowdb_filter_newBool(&and, NOWDB_FILTER_AND);
+	if (err != NOWDB_OK) {
+		nowdb_filter_destroy(pid); free(pid); 
+		nowdb_filter_destroy(val); free(val); 
+		free(value); return err;
+	}
+	and->left = pid;
+	and->right = val;
+	*comp = and;
+
+	return NOWDB_OK;
+}
+
 /* ------------------------------------------------------------------------
  * Create a filter comparison node from an ast comparison node 
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
+static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
+                                     nowdb_ast_t        *trg,
+                                     nowdb_model_vertex_t *v,
+                                     nowdb_filter_t   **comp,
+                                     nowdb_ast_t        *ast) {
 	nowdb_err_t err;
 	nowdb_ast_t *op1, *op2;
 	uint32_t off, sz;
@@ -186,13 +302,18 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
 	if (op1->value == NULL) INVALIDAST("first operand in compare is NULL");
 	if (op2->value == NULL) INVALIDAST("second operand in compare is NULL");
 
+	if (trg->stype == NOWDB_AST_TYPE) {
+		return getTypedCompare(scope, trg, v,
+		          ast->stype, op1, op2, comp);
+	}
+
 	/* check whether op1 is field or value */
 	if (op1->ntype == NOWDB_AST_FIELD) {
-		err = getField(op1->value, &off, &sz, &typ);
+		err = getField(op1->value, trg, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
 		err = getValue(op2->value, sz, &typ, op2->stype, &conv);
 	} else {
-		err = getField(op2->value, &off, &sz, &typ);
+		err = getField(op2->value, trg, &off, &sz, &typ);
 		if (err != NOWDB_OK) return err;
 		err = getValue(op1->value, sz, &typ, op1->stype, &conv);
 	}
@@ -210,18 +331,24 @@ static inline nowdb_err_t getCompare(nowdb_filter_t **comp, nowdb_ast_t *ast) {
  * Get filter condition (boolean or comparison) from ast condition node
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
+static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
+                                       nowdb_ast_t        *trg,
+                                       nowdb_model_vertex_t *v,
+                                       nowdb_filter_t      **b,
+                                       nowdb_ast_t        *ast) {
 	int op;
 	nowdb_err_t err;
 
 	switch(ast->ntype) {
-	case NOWDB_AST_COMPARE: return getCompare(b, ast);
-	case NOWDB_AST_JUST: return getCondition(b, nowdb_ast_operand(ast,1));
+	case NOWDB_AST_COMPARE: return getCompare(scope, trg, v, b, ast);
+	case NOWDB_AST_JUST: return getCondition(scope, trg, v, b,
+	                                 nowdb_ast_operand(ast,1));
 
 	case NOWDB_AST_NOT:
 		err = nowdb_filter_newBool(b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
-		return getCondition(&(*b)->left, nowdb_ast_operand(ast, 1));
+		return getCondition(scope, trg, v, &(*b)->left,
+		                     nowdb_ast_operand(ast, 1));
 
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:
@@ -229,9 +356,11 @@ static inline nowdb_err_t getCondition(nowdb_filter_t **b, nowdb_ast_t *ast) {
 		                               NOWDB_FILTER_OR;
 		err = nowdb_filter_newBool(b,op);
 		if (err != NOWDB_OK) return err;
-		err = getCondition(&(*b)->left, nowdb_ast_operand(ast,1));
+		err = getCondition(scope, trg, v, &(*b)->left,
+		                     nowdb_ast_operand(ast,1));
 		if (err != NOWDB_OK) return err;
-		return getCondition(&(*b)->right, nowdb_ast_operand(ast,2));
+		return getCondition(scope, trg, v, &(*b)->right,
+		                       nowdb_ast_operand(ast,2));
 
 	default:
 		fprintf(stderr, "unknown: %d\n", ast->ntype); 
@@ -397,6 +526,7 @@ static inline nowdb_err_t intersect(ts_algo_list_t *cands,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
+                                     int             stype,
                                      char           *context,
                                      nowdb_filter_t *filter, 
                                      ts_algo_list_t *res) {
@@ -407,7 +537,7 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 
 	if (filter == NULL) return NOWDB_OK;
 
-	if (context != NULL) {
+	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
 		err = nowdb_scope_getContext(scope, context, &ctx);
 		if (err != NOWDB_OK) return err;
 	}
@@ -438,6 +568,26 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * Add vertex type to filter
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getType(nowdb_scope_t    *scope,
+                                  nowdb_ast_t      *trg,
+                                  nowdb_filter_t  **filter,
+                                  nowdb_model_vertex_t **v) {
+	nowdb_err_t err;
+
+	err = nowdb_model_getVertexByName(scope->model, trg->value, v);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_filter_newCompare(filter, NOWDB_FILTER_EQ,
+	               NOWDB_OFF_ROLE, sizeof(nowdb_roleid_t),
+	                       NOWDB_TYP_UINT, &(*v)->roleid);
+	if (err != NOWDB_OK) return err;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get filter
  * ----------
  * this is way to simple. we need to get the where *per target* and
@@ -452,11 +602,23 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
  * TRUE, FALSE
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getFilter(nowdb_ast_t     *ast,
+static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
+                                    nowdb_ast_t     *trg,
+                                    nowdb_ast_t     *ast,
                                     nowdb_filter_t **filter) {
-	nowdb_err_t   err;
-	nowdb_ast_t  *cond;
+	nowdb_err_t     err;
+	nowdb_ast_t    *cond;
+	nowdb_filter_t *w = NULL;
+	nowdb_filter_t *t = NULL;
+	nowdb_filter_t *and;
+	nowdb_model_vertex_t *v=NULL;
 
+	*filter = NULL;
+
+	if (trg->stype == NOWDB_AST_TYPE) {
+		err = getType(scope, trg, &t, &v);
+		if (err != NOWDB_OK) return err;
+	}
 	if (ast == NULL) return NOWDB_OK;
 
 	cond = nowdb_ast_operand(ast,1);
@@ -467,8 +629,29 @@ static inline nowdb_err_t getFilter(nowdb_ast_t     *ast,
 	*/
 
 	/* get condition creates a filter */
-	err = getCondition(filter, cond);
-	if (err != NOWDB_OK) return err;
+	err = getCondition(scope, trg, v, &w, cond);
+	if (err != NOWDB_OK) {
+		if (*filter != NULL) {
+			nowdb_filter_destroy(*filter); 
+			free(*filter); *filter = NULL;
+			return err;
+		}
+		return err;
+	}
+	if (t != NULL && w != NULL) {
+		err = nowdb_filter_newBool(&and, NOWDB_FILTER_AND);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(t);
+			nowdb_filter_destroy(w);
+			free(t); t = NULL;
+			free(w); w = NULL;
+			return err;
+		}
+		and->left = t;
+		and->right = w;
+		*filter = and;
+
+	} else if (t != NULL) *filter = t; else *filter = w;
 
 	return NOWDB_OK;
 }
@@ -476,7 +659,8 @@ static inline nowdb_err_t getFilter(nowdb_ast_t     *ast,
 /* -----------------------------------------------------------------------
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
- * - we create 1 reader fullscan+ on either vertex or context
+ * - we create 1 reader fullscan+ or indexsearch 
+ *   on either vertex or context
  * - that's it
  * -----------------------------------------------------------------------
  */
@@ -512,14 +696,14 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	}
 
 	/* create filter from where */
-	err = getFilter(nowdb_ast_where(ast), &filter);
+	err = getFilter(scope, trg, nowdb_ast_where(ast), &filter);
 	if (err != NOWDB_OK) {
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
 	/* find indices for filter */
 	ts_algo_list_init(&idxes);
-	err = getIndices(scope, trg->value, filter, &idxes);
+	err = getIndices(scope, trg->stype, trg->value, filter, &idxes);
 	if (err != NOWDB_OK) {
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);

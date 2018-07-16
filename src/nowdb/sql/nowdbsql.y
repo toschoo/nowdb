@@ -580,7 +580,11 @@ table_spec(T) ::= IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-table_spec ::= VERTEX AS IDENTIFIER.
+table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_TYPE);
+	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+}
+
 table_spec ::= IDENTIFIER AS IDENTIFIER. 
 
 /* ------------------------------------------------------------------------
@@ -705,7 +709,7 @@ field(F) ::= TIMESTAMP(T). {
 value(V) ::= STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);
-	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, S);
+	NOWDB_SQL_SETSTRING(V, S);
 }
 value(V) ::= UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();

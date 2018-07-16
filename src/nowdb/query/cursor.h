@@ -30,6 +30,7 @@ typedef struct {
 typedef struct {
 	uint32_t          disc; /* iter discipline               */
 	uint32_t          numr; /* number of readers             */
+	nowdb_model_t   *model; /* model                         */
 	nowdb_reader_t  **rdrs; /* array of pointers to readers  */
 	nowdb_storefile_t  stf; /* should be a list of stf!      */
 	nowdb_filter_t *filter; /* main filter                   */
