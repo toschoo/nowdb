@@ -98,6 +98,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
+	case NOWDB_AST_DECL: ASTCALLOC(3);
+	case NOWDB_AST_OFF: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
@@ -159,6 +161,24 @@ static inline char *tellType(int ntype, int stype) {
 		default: return "unknown type of value";
 		}
 
+	case NOWDB_AST_DECL: 
+		switch(stype) {
+		case NOWDB_AST_TEXT: return "text field"; 
+		case NOWDB_AST_FLOAT: return "float field"; 
+		case NOWDB_AST_UINT: return "uint field"; 
+		case NOWDB_AST_INT: return "int field"; 
+		case NOWDB_AST_DATE: return "date field"; 
+		case NOWDB_AST_TIME: return "time field"; 
+		case NOWDB_AST_TYPE: return "user defined"; 
+		default: return "unknown field type";
+		}
+
+	case NOWDB_AST_OFF: 
+		switch(stype) {
+		case NOWDB_OFF_ORIGIN: return "origin";
+		case NOWDB_OFF_DESTIN: return "destination";
+		}
+
 	case NOWDB_AST_USE: return "use";
 
 	case NOWDB_AST_TARGET:
@@ -167,6 +187,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_VERTEX: return "vertex";
 		case NOWDB_AST_CONTEXT: return "context";
 		case NOWDB_AST_INDEX: return "index";
+		case NOWDB_AST_TYPE: return "type";
+		case NOWDB_AST_EDGE: return "edge";
 		default: return "unknown target";
 		}
 
@@ -190,6 +212,9 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_DISK: return "option disk";
 		case NOWDB_AST_IFEXISTS: return "if (not) exists";
 		case NOWDB_AST_IGNORE: return "option ignore";
+		case NOWDB_AST_USE: return "option use";
+		case NOWDB_AST_PK: return "primary key";
+		case NOWDB_AST_TYPE: return "as type";
 		default: return "unknown option";
 		}
 
@@ -228,9 +253,6 @@ static void destroy(nowdb_ast_t *n, char r) {
 			free(n->value);
 		}
 		n->value = NULL;
-	}
-	if (n->conv != NULL) {
-		free(n->conv); n->conv = NULL;
 	}
 	for(int i=0;r && i<n->nKids;i++) {
 		if (n->kids[i] != NULL) {
@@ -365,6 +387,7 @@ static inline int addcreate(nowdb_ast_t *n,
 	case NOWDB_AST_OPTION: ADDKID(1);
 	case NOWDB_AST_ON: ADDKID(2);
 	case NOWDB_AST_FIELD: ADDKID(3);
+	case NOWDB_AST_DECL: ADDKID(3);
 	default: return -1;
 	}
 }
@@ -544,6 +567,20 @@ static inline int addcompare(nowdb_ast_t *n,
  * Add kid to field
  * -----------------------------------------------------------------------
  */
+static inline int ad3ecl(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_OFF: ADDKID(0);
+	case NOWDB_AST_OPTION: ADDKID(1);
+	case NOWDB_AST_DECL: ADDKID(2);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to field
+ * -----------------------------------------------------------------------
+ */
 static inline int addfield(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
@@ -595,6 +632,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_DATA: return ad3ata(n,k);
 
 	case NOWDB_AST_FIELD: return addfield(n,k);
+	case NOWDB_AST_DECL: return ad3ecl(n,k);
 
 	default: return -1;
 	}
@@ -815,6 +853,9 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 	case NOWDB_AST_LOAD: 
 		return nowdb_ast_option(ast->kids[1], option);
 
+	case NOWDB_AST_DECL:
+		return nowdb_ast_option(ast->kids[1], option);
+
 	case NOWDB_AST_OPTION:
 		if (option == 0) return ast;
 		if (ast->stype == option) return ast;
@@ -825,6 +866,56 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 
 	default: return NULL;
 	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get field declaration from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_declare(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DDL: return nowdb_ast_decl(
+	                     nowdb_ast_operation(ast));
+	case NOWDB_AST_CREATE:
+	case NOWDB_AST_ALTER: return ast->kids[3];
+
+	case NOWDB_AST_DECL: return ast->kids[2];
+
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get field offset from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_DECL: return ast->kids[0];
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * AST type to NOWDB type
+ * -----------------------------------------------------------------------
+ */
+nowdb_type_t nowdb_ast_type(uint32_t type) {
+	switch(type) {
+	case 0: return NOWDB_TYP_NOTHING;
+	case NOWDB_AST_TEXT: return NOWDB_TYP_TEXT;
+	case NOWDB_AST_FLOAT: return NOWDB_TYP_FLOAT;
+	case NOWDB_AST_UINT: return NOWDB_TYP_UINT;
+	case NOWDB_AST_INT: return NOWDB_TYP_INT;
+	case NOWDB_AST_DATE: return NOWDB_TYP_DATE;
+	case NOWDB_AST_TIME: return NOWDB_TYP_TIME;
+	default: return NOWDB_TYP_NOTHING;
+	}
+	return NOWDB_TYP_NOTHING;
 }
 
 /* -----------------------------------------------------------------------

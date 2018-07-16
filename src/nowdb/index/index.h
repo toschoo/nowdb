@@ -42,6 +42,34 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
                                   nowdb_index_keys_t **to);
 
 /* ------------------------------------------------------------------------
+ * Keysize vertex
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k);
+
+/* ------------------------------------------------------------------------
+ * Keysize edge
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k);
+
+/* ------------------------------------------------------------------------
+ * Grab keys from vertex
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_grabVertexKeys(nowdb_index_keys_t *k,
+                                const char    *vertex,
+                                      char      *keys);
+
+/* ------------------------------------------------------------------------
+ * Grab keys from edge
+ * ------------------------------------------------------------------------
+ */
+void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
+                              const char      *edge,
+                                    char      *keys);
+
+/* ------------------------------------------------------------------------
  * Destroy Index Keys
  * ------------------------------------------------------------------------
  */
@@ -49,6 +77,8 @@ void nowdb_index_keys_destroy(nowdb_index_keys_t *keys);
 
 /* ------------------------------------------------------------------------
  * Index
+ * TODO: consider to add callbacks, e.g.:
+ *       - keySize
  * ------------------------------------------------------------------------
  */
 typedef struct {
@@ -130,5 +160,26 @@ nowdb_err_t nowdb_index_use(nowdb_index_t *idx);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Insert into index 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
+                               char             *keys,
+                               nowdb_pageid_t    pge,
+                               nowdb_bitmap64_t *map);
+
+/* ------------------------------------------------------------------------
+ * Get index 'compare' method
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Get index resource
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_index_getResource(nowdb_index_t *idx);
 
 #endif

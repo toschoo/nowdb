@@ -70,48 +70,49 @@ void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
 
 		cfg->allocsize = NOWDB_MEGA;
 		cfg->largesize = 8 * NOWDB_MEGA;
-		cfg->sorters   = 1;
+		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_MEDIUM) {
 
 		cfg->allocsize = 8 * NOWDB_MEGA;
 		cfg->largesize = 64 * NOWDB_MEGA;
-		cfg->sorters   = 2;
+		cfg->sorters   = 4;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_BIG) {
 
 		cfg->allocsize = 8 * NOWDB_MEGA;
 		cfg->largesize = 128 * NOWDB_MEGA;
-		cfg->sorters   = 2;
+		cfg->sorters   = 6;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_LARGE) {
 
 		cfg->allocsize = 8 * NOWDB_MEGA;
 		cfg->largesize = 256 * NOWDB_MEGA;
-		cfg->sorters   = 2;
+		cfg->sorters   = 8;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_HUGE) {
 
 		cfg->allocsize = 8 * NOWDB_MEGA;
 		cfg->largesize = 1024 * NOWDB_MEGA;
-		cfg->sorters   = 2;
+		cfg->sorters   = 10;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 	}
 	if (options & NOWDB_CONFIG_INSERT_MODERATE) {
 
-		if (cfg->sorters < 3) cfg->sorters = 3;
+		if (cfg->sorters < 2) cfg->sorters = 2;
 
 	} else if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
 
-		cfg->sorters += 2;
+		cfg->sorters += 4;
 
 	} else if (options & NOWDB_CONFIG_INSERT_INSANE) {
 
 		cfg->sorters *= 2;
+		if (cfg->sorters > 32) cfg->sorters = 32;
 		if (cfg->allocsize < 8) cfg->allocsize = 8;
 		cfg->largesize = 1024;
 	}

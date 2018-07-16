@@ -38,7 +38,9 @@ nowdb_err_t nowdb_task_create(nowdb_task_t       *task,
  * ------------------------------------------------------------------------
  */
 void nowdb_task_destroy(nowdb_task_t task) {
-	pthread_detach(task);
+	/* since we join before,
+	 * this is not necessary! */
+	/* pthread_detach(task); */
 }
 
 /* ------------------------------------------------------------------------

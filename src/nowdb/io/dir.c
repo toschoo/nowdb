@@ -220,7 +220,6 @@ nowdb_err_t nowdb_writeFileWithBkp(nowdb_path_t base,
                             char *buf, uint32_t size) {
 	nowdb_err_t  err;
 	nowdb_path_t p=NULL;
-	// nowdb_bool_t bkp;
 	int bkp;
 	ssize_t x;
 	FILE *f;

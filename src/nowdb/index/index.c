@@ -111,6 +111,35 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Keysize vertex
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
+	uint32_t sz = 0;
+
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_VTYPE) sz += 8; else sz +=4;
+		
+	}
+	return sz;
+}
+
+/* ------------------------------------------------------------------------
+ * Keysize edge
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k) {
+	uint32_t sz = 0;
+
+	for(int i=0; i<k->sz; i++) {
+		if (k->off[i] < NOWDB_OFF_WTYPE) sz += 8; else sz +=4;
+		
+	}
+	return sz;
+}
+
+
 /* -----------------------------------------------------------------------
  * Destroy index keys
  * -----------------------------------------------------------------------
@@ -240,7 +269,7 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 	switch(size) {
 		case NOWDB_CONFIG_SIZE_TINY:
 
-			targetsz = 512;
+			targetsz = 128;
 
 			cfg->leafCacheSize = 1000;
 			cfg->intCacheSize = 1000;
@@ -248,9 +277,17 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 			
 		case NOWDB_CONFIG_SIZE_SMALL: 
+
+			targetsz = 512;
+
+			cfg->leafCacheSize = 10000;
+			cfg->intCacheSize = 10000;
+
+			break;
+
 		case NOWDB_CONFIG_SIZE_MEDIUM:
 
-			targetsz = 1024;
+			targetsz = 512;
 
 			cfg->leafCacheSize = 10000;
 			cfg->intCacheSize = 10000;
@@ -356,7 +393,7 @@ static void computeHostSize(nowdb_index_desc_t *desc,
 /* ------------------------------------------------------------------------
  * Create index
  * "index" is a host beetree
- * there are other usages for beetree (vertex and strings),
+ * there are other usages for beetree (strings),
  * but they are not covered here!
  * ------------------------------------------------------------------------
  */
@@ -569,3 +606,44 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 	IDXNULL();
 	return nowdb_unlock_read(&idx->lock);
 }
+
+/* ------------------------------------------------------------------------
+ * Insert into index 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
+                               char            *keys,
+                               nowdb_pageid_t    pge,
+                               nowdb_bitmap64_t *map) {
+	beet_err_t  ber;
+	beet_pair_t pair;
+
+	IDXNULL();
+
+	pair.key = &pge;
+	pair.data = map;
+
+	ber = beet_index_insert(idx->idx, keys, &pair);
+	if (ber != BEET_OK) return makeBeetError(ber);
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get index 'compare' method
+ * ------------------------------------------------------------------------
+ */
+beet_compare_t nowdb_index_getCompare(nowdb_index_t *idx) {
+	if (idx == NULL) return NULL;
+	return beet_index_getCompare(idx->idx);
+}
+
+/* ------------------------------------------------------------------------
+ * Get index resource
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_index_getResource(nowdb_index_t *idx) {
+	if (idx == NULL) return NULL;
+	return beet_index_getResource(idx->idx);
+}
+

@@ -30,6 +30,7 @@ TST = test
 COM = common
 BENCH= bench
 SMK = test/smoke
+STRESS = test/stress
 BIN = bin
 LOG = log
 TOOLS = tools
@@ -48,8 +49,10 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/queue.o     \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
+      $(SRC)/mem/lru.o        \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
+      $(SRC)/store/indexer.o  \
       $(SRC)/store/storewrk.o \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
@@ -59,6 +62,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
+      $(SRC)/model/model.o    \
+      $(SRC)/text/text.o      \
       $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/plan.o     \
@@ -79,8 +84,10 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/queue.h     \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
+      $(SRC)/mem/lru.h        \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
+      $(SRC)/store/indexer.h  \
       $(SRC)/store/storewrk.h \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
@@ -89,6 +96,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
+      $(SRC)/model/types.h    \
+      $(SRC)/model/model.h    \
+      $(SRC)/text/text.h      \
       $(SRC)/query/ast.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -107,6 +117,7 @@ tools:	bin/randomfile    \
 	bin/catalog       \
 	bin/keepstoreopen \
 	bin/waitstore     \
+	bin/waitscope     \
 	bin/writecsv      \
 	bin/scopetool
 
@@ -132,9 +143,14 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/scopesmoke              \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
+	$(SMK)/indexersmoke            \
+	$(SMK)/modelsmoke              \
+	$(SMK)/textsmoke               \
 	$(SMK)/sqlsmoke
 
-tests: smoke
+stress:	$(STRESS)/deepscope
+
+tests: smoke stress
 
 debug:	CFLAGS += -g
 debug:	default
@@ -303,6 +319,21 @@ $(SMK)/indexsmoke: 	$(LIB) $(DEP) $(SMK)/indexsmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/indexersmoke: 	$(LIB) $(DEP) $(SMK)/indexersmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
@@ -311,6 +342,15 @@ $(SMK)/sqlsmoke:	$(LIB) $(DEP) $(SMK)/sqlsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $(SMK)/sqlsmoke \
 			         $(SMK)/sqlsmoke.o $(libs) -lnowdb
+# STRESSTESTS
+$(STRESS)/deepscope:	$(LIB) $(DEP) $(STRESS)/deepscope.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(STRESS)/deepscope.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                 $(libs) -lnowdb
 		
 # BENCHMARKS
 $(BIN)/readplainbench:	$(LIB) $(DEP) $(BENCH)/readplainbench.o \
@@ -406,6 +446,12 @@ $(BIN)/waitstore:	$(LIB) $(DEP) $(TOOLS)/waitstore.o
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitstore.o \
 			                 $(libs) -lnowdb
 
+$(BIN)/waitscope:	$(LIB) $(DEP) $(TOOLS)/waitscope.o $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/waitscope.o \
+			                 $(COM)/cmd.o \
+			                 $(libs) -lnowdb
+
 $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              $(COM)/bench.o      \
 			              $(COM)/cmd.o
@@ -457,6 +503,8 @@ clean:
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/vertex??
+	rm -rf $(RSC)/model??
+	rm -rf $(RSC)/text??
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke
@@ -472,7 +520,11 @@ clean:
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
+	rm -f $(SMK)/indexersmoke
+	rm -f $(SMK)/modelsmoke
+	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/sqlsmoke
+	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
 	rm -f $(BIN)/randomfile
@@ -483,6 +535,7 @@ clean:
 	rm -f $(BIN)/parserbench
 	rm -f $(BIN)/keepstoreopen
 	rm -f $(BIN)/waitstore
+	rm -f $(BIN)/waitscope
 	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/scopetool
 	rm -f $(BIN)/qstress

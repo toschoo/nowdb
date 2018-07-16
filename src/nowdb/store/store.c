@@ -19,6 +19,24 @@ extern char nowdb_nullrec[64];
 #define MAX_SPARES 9
 #define MIN_SPARES 3
 
+#define STORENULL() \
+	if (store == NULL) { \
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, \
+		                              "store object is NULL"); \
+	}
+
+#define LISTNULL() \
+	if (list == NULL) { \
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, \
+		                               "list object is NULL"); \
+	}
+
+#define FILENULL() \
+	if (file == NULL) { \
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, \
+		                               "file object is NULL"); \
+	}
+
 /* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
@@ -31,10 +49,9 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             uint32_t    largesize)
 {
 	nowdb_err_t err = NOWDB_OK;
-	if (store == NULL) {
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                    "pointer to store object is NULL");
-	}
+
+	STORENULL();
+
 	*store = malloc(sizeof(nowdb_store_t));
 	if (*store == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -298,10 +315,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	nowdb_err_t err;
 	size_t s;
 
-	if (store == NULL) {
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                              "store object is NULL");
-	}
+	STORENULL();
 
 	/* defaults */
 	store->version = ver;
@@ -309,10 +323,13 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->filesize = filesize;
 	store->largesize = largesize;
 	store->starting = FALSE;
+	store->state = NOWDB_STORE_CLOSED;
 	store->path = NULL;
 	store->catalog = NULL;
 	store->writer = NULL;
 	store->compare = NULL;
+	store->iman = NULL;
+	store->context = NULL;
 	store->comp = NOWDB_COMP_FLAT;
 	store->ctx  = NULL;
 	store->nextid = 1;
@@ -369,8 +386,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
  */
 nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
                                    nowdb_comprsc_t compare) {
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
+	STORENULL();
 	store->compare = compare;
 	return NOWDB_OK;
 }
@@ -381,11 +397,24 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  */
 nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
                                       uint32_t    tasknum) {
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
+	STORENULL();
 	if (tasknum > 32) return nowdb_err_get(nowdb_err_invalid,
 	             FALSE, OBJECT, "tasknum too big (max: 32)");
+
 	store->tasknum = tasknum;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Configure indexing
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configIndexing(nowdb_store_t *store,
+                                       void           *iman,
+                                       void        *context) {
+	STORENULL();
+	store->iman = iman;
+	store->context = context;
 	return NOWDB_OK;
 }
 
@@ -397,12 +426,12 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
                                           nowdb_comp_t   comp) {
 	nowdb_err_t err;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
+	STORENULL();
+
 	store->comp = comp;
 	if (comp == NOWDB_COMP_FLAT) return NOWDB_OK;
 	
-	err = nowdb_compctx_new(&store->ctx, 4, 128);
+	err = nowdb_compctx_new(&store->ctx, 32, 128);
 	if (err != NOWDB_OK) return err;
 
 	return NOWDB_OK;
@@ -496,10 +525,8 @@ nowdb_err_t nowdb_store_createReader(nowdb_store_t *store,
 	nowdb_fileid_t fid;
 	char fname[MAX_FILE_NAME];
 
-	if (store == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "store object is NULL");
-	if (file == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1130,6 +1157,9 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 	if (err != NOWDB_OK) {
 		destroyAllFiles(store); goto unlock;
 	}
+
+	store->state = NOWDB_STORE_OPEN;
+
 unlock:
 	store->starting = FALSE;
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1147,7 +1177,19 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	nowdb_err_t err  = NOWDB_OK;
 	nowdb_err_t err2 = NOWDB_OK;
 
-	/* stop workers
+	/* check if store is open */
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+	
+	if (store->state != NOWDB_STORE_OPEN) {
+		return nowdb_unlock_write(&store->lock);
+	}
+
+	/* close store is NOT THREADSAFE */
+	err = nowdb_unlock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	/* stop workers: IS NOT THREADSAFE!!!
 	 * DONT LOCK the store when stopping workers! */
 	err = stopWorkers(store);
 	if (err != NOWDB_OK) return err;
@@ -1160,7 +1202,10 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 	if (err != NOWDB_OK) goto unlock;
 
 	destroyAllFiles(store);
+
 	err = initAllFiles(store);
+
+	store->state = NOWDB_STORE_CLOSED;
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1179,10 +1224,7 @@ nowdb_err_t nowdb_store_create(nowdb_store_t *store) {
 	nowdb_err_t err2 = NOWDB_OK;
 	char *p;
 
-	if (store == NULL) {
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                              "store object is NULL");
-	}
+	STORENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1241,10 +1283,7 @@ nowdb_err_t nowdb_store_drop(nowdb_store_t *store) {
 	nowdb_err_t err =NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
 
-	if (store == NULL) {
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                              "store object is NULL");
-	}
+	STORENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1282,10 +1321,7 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	nowdb_err_t err2 = NOWDB_OK;
 	uint32_t pos;
 
-	if (store == NULL) {
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                              "store object is NULL");
-	}
+	STORENULL();
 	if (store->writer == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                 "store is not open");
@@ -1409,10 +1445,8 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "list pointer is NULL");
+	STORENULL();
+	LISTNULL();
 
 	err = nowdb_lock_read(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1425,6 +1459,40 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t *store,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get all pending files
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getAllWaiting(nowdb_store_t *store,
+                                        ts_algo_list_t *list) {
+	nowdb_file_t *file;
+	nowdb_err_t    err;
+
+	if (store->waiting.len > 0) {
+		err = copyFileList(&store->waiting, list, TRUE,
+		                               NOWDB_TIME_DAWN,
+		                               NOWDB_TIME_DUSK);
+		if (err != NOWDB_OK) return err;
+	}
+
+	/* writer */
+	err = copyFile(store->writer, &file);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_file_makeReader(file);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) return err;
+
+	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                                     "list append");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: get all files for period start - end
  * ------------------------------------------------------------------------
  */
@@ -1432,7 +1500,6 @@ static inline nowdb_err_t getFiles(nowdb_store_t *store,
                                    ts_algo_list_t *list,
                                    nowdb_time_t   start,
                                    nowdb_time_t     end) {
-	nowdb_file_t *file;
 	nowdb_err_t    err;
 	
 	/* readers */
@@ -1443,24 +1510,10 @@ static inline nowdb_err_t getFiles(nowdb_store_t *store,
 	err = setDecomp(store, list);
 	if (err != NOWDB_OK) return err;
 
-	/* pending */
-	if (store->waiting.len > 0) {
-		err = copyFileList(&store->waiting, list, TRUE, start, end);
-		if (err != NOWDB_OK) return err;
-	}
-	/* writer */
-	err = copyFile(store->writer, &file);
-	if (err != NOWDB_OK) return err;
-	err = nowdb_file_makeReader(file);
-	if (err != NOWDB_OK) return err;
-	err = nowdb_file_open(file);
+	/* pending and writer */
+	err = getAllWaiting(store, list);
 	if (err != NOWDB_OK) return err;
 
-	if (ts_algo_list_append(list, file) != TS_ALGO_OK) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                     "list append");
-		return err;
-	}
 	return NOWDB_OK;
 }
 
@@ -1475,10 +1528,8 @@ nowdb_err_t nowdb_store_getFiles(nowdb_store_t *store,
 	nowdb_err_t  err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
-	if (list  == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "list pointer is NULL");
+	STORENULL();
+	LISTNULL();
 
 	err = nowdb_lock_read(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1504,8 +1555,7 @@ nowdb_err_t nowdb_store_getNFiles(nowdb_store_t  *store,
 	nowdb_err_t  err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                   FALSE, OBJECT, "store object is NULL");
+	STORENULL();
 	if (lists == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                   FALSE, OBJECT, "list pointer is NULL");
 
@@ -1526,6 +1576,29 @@ unlock:
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Get all pending (pending only)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getAllWaiting(nowdb_store_t  *store,
+                                      ts_algo_list_t *list) {
+	nowdb_err_t  err=NOWDB_OK;
+	nowdb_err_t err2=NOWDB_OK;
+
+	STORENULL();
+	LISTNULL();
+
+	err = nowdb_lock_read(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = getAllWaiting(store, list);
+
+	err2 = nowdb_unlock_read(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Find file in spares
@@ -1537,13 +1610,10 @@ nowdb_err_t nowdb_store_findSpare(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
-	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "store object is NULL");
-	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "file object is NULL");
+	STORENULL();
+	FILENULL();
 	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                       "found parameter is NULL");
-
 	*found = FALSE;
 
 	err = nowdb_lock_read(&store->lock);
@@ -1568,13 +1638,10 @@ nowdb_err_t nowdb_store_findWaiting(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
-	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "store object is NULL");
-	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "file object is NULL");
-	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	STORENULL();
+	FILENULL();
+	if (found == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                       "found parameter is NULL");
-
 	*found = FALSE;
 
 	err = nowdb_lock_read(&store->lock);
@@ -1599,11 +1666,9 @@ nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
-	if (store != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "store object is NULL");
-	if (file != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                          "file object is NULL");
-	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	STORENULL();
+	FILENULL();
+	if (found == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                       "found parameter is NULL");
 
 	*found = FALSE;
@@ -1641,10 +1706,8 @@ nowdb_err_t nowdb_store_getFreeReader(nowdb_store_t *store,
 	nowdb_err_t err2;
 	nowdb_file_t  *tmp=NULL;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
-	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                      OBJECT, "pointer to file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1685,10 +1748,8 @@ nowdb_err_t nowdb_store_releaseReader(nowdb_store_t *store,
 	nowdb_err_t err2;
 	nowdb_file_t  *tmp=NULL;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
-	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                      OBJECT, "pointer to file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1723,10 +1784,8 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
 	ts_algo_list_node_t *tmp;
 	nowdb_file_t *f;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
-	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                      OBJECT, "pointer to file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1765,10 +1824,8 @@ nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
 	ts_algo_list_node_t *tmp;
 	nowdb_file_t *f;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
-	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                      OBJECT, "pointer to file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
@@ -1799,8 +1856,7 @@ nowdb_err_t nowdb_store_promote(nowdb_store_t  *store,
 	nowdb_err_t err2;
 	ts_algo_list_node_t *tmp;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
+	STORENULL();
 	if (waiting == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                                        OBJECT, "waiting is NULL");
 	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
@@ -1838,14 +1894,13 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                 OBJECT, "store object is NULL");
-	if (file == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                      OBJECT, "pointer to file object is NULL");
+	STORENULL();
+	FILENULL();
 
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
+	file->used = FALSE;
 	err = makeSpare(store, file);
 
 	err2 = nowdb_unlock_write(&store->lock);
@@ -1865,15 +1920,19 @@ static inline void releaseDecomp(nowdb_store_t  *store,
 	ts_algo_list_node_t *runner;
 	nowdb_file_t        *file;
 
+	if (files->head == NULL) return;
+	file = files->head->cont;
+	if (file->dctx != NULL) {
+		err = nowdb_compctx_releaseDCtx(store->ctx,
+			                        file->dctx);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+		}
+	}
 	for(runner=files->head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
 		if (file->dctx != NULL) {
-			err = nowdb_compctx_releaseDCtx(store->ctx,
-			                                file->dctx);
-			if (err != NOWDB_OK) {
-				nowdb_err_print(err);
-				nowdb_err_release(err);
-			}
 			file->dctx = NULL;
 			file->ddict = NULL;
 		}

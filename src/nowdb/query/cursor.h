@@ -18,8 +18,9 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_store_t *store;
-	ts_algo_list_t files;
+	nowdb_store_t   *store;
+	ts_algo_list_t   files;
+	ts_algo_list_t pending;
 } nowdb_storefile_t;
 
 /* ------------------------------------------------------------------------
@@ -27,12 +28,14 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t         numr; /* number of readers             */
-	nowdb_reader_t **rdrs; /* array of pointers to readers  */
-	nowdb_storefile_t stf; /* should be a list of stf! */
-	uint32_t          off; /* offset in the current reader  */
-	uint32_t      recsize; /* record size                   */
-	/* iterator ?               */
+	uint32_t          disc; /* iter discipline               */
+	uint32_t          numr; /* number of readers             */
+	nowdb_reader_t  **rdrs; /* array of pointers to readers  */
+	nowdb_storefile_t  stf; /* should be a list of stf!      */
+	nowdb_filter_t *filter; /* main filter                   */
+	uint32_t           cur; /* current reader                */
+	uint32_t           off; /* offset in the current reader  */
+	uint32_t       recsize; /* record size                   */
 	/* projection !             */
 	/* grouping, ordering, etc. */
 	/* sub-queries?             */

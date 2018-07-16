@@ -11,6 +11,8 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#include <pthread.h> // debug!!!
+
 static char *OBJECT = "file";
 
 /* ------------------------------------------------------------------------
@@ -401,6 +403,10 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 	size_t sz;
 
 	if (file->cdict != NULL) {
+		/*
+		fprintf(stderr, "[%lu] pointers: %p, %p, %p, %p\n", pthread_self(),
+				file->cctx, file->tmp, buf, file->cdict);
+		*/
 		sz = ZSTD_compress_usingCDict(file->cctx,
 		                              file->tmp, file->bufsize,
 		                              buf, size,
@@ -897,7 +903,19 @@ nowdb_err_t nowdb_file_position(nowdb_file_t *file, uint32_t pos) {
  * Load the current block into memory
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
+nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file) {
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                            "file descriptor is NULL");
+	}
+	if (file->state != nowdb_file_state_open) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                 "file descriptor is in wrong state");
+	}
+	if (file->comp == NOWDB_COMP_FLAT) return plainload(file);
+	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+	return compmove(file);
+}
 
 /* ------------------------------------------------------------------------
  * Load only the current header into memory

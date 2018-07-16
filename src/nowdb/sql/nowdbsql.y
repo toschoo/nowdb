@@ -9,14 +9,11 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
- * - Get rid of the 'state', it not needed nor in any way useful
- * - clarify the role of the semicolon: do we need it???
  * - qualified names
  * - aliases
  * - joins
  * - NULL
  * - TRUE and FALSE
- * - straighten out the create syntax
  * - alter
  * - insert and update
  * - make load more versatile (csv, json, binary, avron)
@@ -48,7 +45,7 @@
  */
 %token_type {char*}
 %token_destructor {
-	/* fprintf(stderr, "freeing token '%s'\n", (char*)$$); */
+	// fprintf(stderr, "freeing token '%s'\n", (char*)$$);
 	UNUSED_VAR_SILENCER();
 	free($$);
 }
@@ -123,6 +120,20 @@
 %type header_clause {nowdb_ast_t*}
 %destructor header_clause {nowdb_ast_destroyAndFree($$);}
 
+%type field_decl {nowdb_ast_t*}
+%destructor field_decl {nowdb_ast_destroyAndFree($$);}
+
+%type field_decl_list {nowdb_ast_t*}
+%destructor field_decl_list {nowdb_ast_destroyAndFree($$);}
+
+%type edge_field_decl {nowdb_ast_t*}
+%destructor edge_field_decl {nowdb_ast_destroyAndFree($$);}
+
+%type edge_field_decl_list {nowdb_ast_t*}
+%destructor edge_field_decl_list {nowdb_ast_destroyAndFree($$);}
+
+%type type {int}
+
 %extra_argument { nowdbsql_state_t *nowdbres }
 
 %parse_accept {
@@ -178,10 +189,22 @@ ddl ::= drop_clause(C) IF EXISTS. {
  * ------------------------------------------------------------------------
  */
 dll ::= LOAD STRING(S) INTO dml_target(T). {
-	NOWDB_SQL_MAKE_LOAD(S,T,NULL)
+	NOWDB_SQL_MAKE_LOAD(S,T,NULL,NULL)
 }
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
-	NOWDB_SQL_MAKE_LOAD(S,T,H)
+	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
+}
+
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
+}
+
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS EDGE(E). {
+	NOWDB_SQL_MAKE_LOAD(S,T,H,E)
+}
+
+dll ::= LOAD STRING(S) INTO dml_target(T) AS EDGE(E). {
+	NOWDB_SQL_MAKE_LOAD(S,T,NULL,E)
 }
 
 /* ------------------------------------------------------------------------
@@ -245,6 +268,20 @@ create_clause(C) ::= CREATE sizing(S) INDEX IDENTIFIER(I) ON index_target(T) LPA
 	NOWDB_SQL_ADDKID(C, F);
 }
 
+create_clause(C) ::= CREATE TYPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
+}
+
+create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
 index_target(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
@@ -253,6 +290,80 @@ index_target(T) ::= IDENTIFIER(I). {
 index_target(T) ::= VERTEX. {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_VERTEX);
 }
+
+field_decl(F) ::= IDENTIFIER(I) type(T). {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+}
+
+field_decl(F) ::= IDENTIFIER(I) type(T) PK. {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+	NOWDB_SQL_ADD_OPTION(F, NOWDB_AST_PK, 0, NULL);
+}
+
+field_decl_list(L) ::= field_decl(F). {
+	L=F;
+}
+
+field_decl_list(L) ::= field_decl(F) COMMA field_decl_list(L2). {
+	NOWDB_SQL_ADDKID(F,L2);
+	L=F;
+}
+
+edge_field_decl(E) ::= ORIGIN IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_ORIGIN,I);
+}
+
+edge_field_decl(E) ::= DESTINATION IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_DESTIN,I);
+}
+
+edge_field_decl(E) ::= LABEL type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	         (void*)(uint64_t)NOWDB_OFF_LABEL);
+}
+edge_field_decl(E) ::= WEIGHT type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	        (void*)(uint64_t)NOWDB_OFF_WEIGHT);
+}
+
+edge_field_decl(E) ::= WEIGHT2 type(T). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
+	        (void*)(uint64_t)NOWDB_OFF_WEIGHT2);
+}
+
+edge_field_decl_list(L) ::= edge_field_decl(E). {
+	L=E;
+}
+
+edge_field_decl_list(L) ::= edge_field_decl(E) COMMA edge_field_decl_list(L2). {
+	NOWDB_SQL_ADDKID(E,L2);
+	L=E;
+}
+
+type(T) ::= TEXT. {
+	T=NOWDB_AST_TEXT;
+}
+type(T) ::= TIME. {
+	T=NOWDB_AST_TIME;
+}
+type(T) ::= DATE. {
+	T=NOWDB_AST_DATE;
+}
+type(T) ::= FLOAT. {
+	T=NOWDB_AST_FLOAT;
+}
+type(T) ::= INT. {
+	T=NOWDB_AST_INT;
+}
+type(T) ::= UINT. {
+	T=NOWDB_AST_UINT;
+}
+type ::= LONGTEXT.
 
 /* ------------------------------------------------------------------------
  *  Drop Clause
@@ -268,6 +379,14 @@ drop_clause(C) ::= DROP SCOPE IDENTIFIER(I). {
 
 drop_clause(C) ::= DROP INDEX IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_INDEX,I,NULL);
+}
+
+drop_clause(C) ::= DROP TYPE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_TYPE,I,NULL);
+}
+
+drop_clause(C) ::= DROP EDGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_EDGE,I,NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -461,7 +580,6 @@ table_spec(T) ::= IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-/* with alias: alias should be a node in itself */
 table_spec ::= VERTEX AS IDENTIFIER.
 table_spec ::= IDENTIFIER AS IDENTIFIER. 
 
@@ -568,6 +686,22 @@ field_list(L) ::= field(F) COMMA field_list(FL). {
 field(F) ::= IDENTIFIER(I). {
 	F=I;
 }
+field(F) ::= ORIGIN(O). {
+	F=O;
+}
+field(F) ::= DESTINATION(D). {
+	F=D;
+}
+field(F) ::= EDGE(E). {
+	F=E;
+}
+field(F) ::= LABEL(L). {
+	F=L;
+}
+field(F) ::= TIMESTAMP(T). {
+	F=T;
+}
+
 value(V) ::= STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);

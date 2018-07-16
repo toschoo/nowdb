@@ -16,6 +16,13 @@
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "no mem"
+ * -------------------------------------------------------------------------
+ */
+#define NOMEM(s) \
+	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
 
 /* -------------------------------------------------------------------------
@@ -215,7 +222,7 @@ static nowdb_err_t createIndex(nowdb_ast_t  *op,
 	nowdb_index_keys_t *k;
 	nowdb_bool_t x;
 	uint64_t utmp;
-	uint16_t sz = NOWDB_CONFIG_SIZE_BIG;
+	uint16_t sz = NOWDB_CONFIG_SIZE_SMALL;
 
 	on = nowdb_ast_on(op);
 	if (on == NULL) {
@@ -265,15 +272,213 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
-	nowdb_bool_t  x;
 
-	o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
-	if (o != NULL) {
-		err = checkIndexExists(scope, name, &x);
-		if (err != NOWDB_OK) return err;
-		if (!x) return NOWDB_OK;
+	err = nowdb_scope_dropIndex(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
 	}
-	return nowdb_scope_dropIndex(scope, name);
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: destroy list of properties
+ * -------------------------------------------------------------------------
+ */
+static void destroyProps(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner, *tmp;
+	nowdb_model_prop_t *p;
+
+	runner=props->head;
+	while(runner!=NULL) {
+		p = runner->cont;
+		free(p->name); free(p);
+		tmp = runner->nxt;
+		ts_algo_list_remove(props, runner);
+		free(runner); runner = tmp;
+	}
+}
+
+/* -------------------------------------------------------------------------
+ * Create Type
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createType(nowdb_ast_t  *op,
+                              char       *name,
+                          nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *d;
+	ts_algo_list_t props;
+	nowdb_model_prop_t *p;
+	char x=0; /* do we have props ? */
+
+	d = nowdb_ast_declare(op);
+	ts_algo_list_init(&props);
+
+	while (d != NULL) {
+		x = 1;
+		if (d->vtype != NOWDB_AST_V_STRING) {
+			destroyProps(&props);
+			INVALIDAST("missing property name");
+		}
+		p = calloc(1,sizeof(nowdb_model_prop_t));
+		if (p == NULL) {
+			destroyProps(&props);
+			NOMEM("allocating property");
+		}
+
+		p->name  = strdup(d->value);
+		if (p->name == NULL) {
+			destroyProps(&props);
+			NOMEM("allocating property name");
+		}
+
+		p->value = nowdb_ast_type(d->stype);
+		p->propid = 0;
+		p->roleid = 0;
+		p->pk = FALSE;
+
+		o = nowdb_ast_option(d, NOWDB_AST_PK);
+		if (o != NULL) p->pk = TRUE;
+
+		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+			destroyProps(&props);
+			NOMEM("list.addpend");
+		}
+
+		d = nowdb_ast_declare(d);
+	}
+
+	err = x?nowdb_scope_createType(scope, name, &props):
+	        nowdb_scope_createType(scope, name, NULL);
+	
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		destroyProps(&props);
+		/* if exists applies only for the type name */
+		if (err->info != NULL &&
+		    strcmp(err->info, name) == 0) {
+			o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+			if (o != NULL) {
+				nowdb_err_release(err);
+				err = NOWDB_OK;
+			} else {
+				return err;
+			}
+		}
+	}
+	if (err != NOWDB_OK) {
+		destroyProps(&props);
+		return err;
+	}
+	ts_algo_list_destroy(&props);
+	
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Type
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropType(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropType(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Create Edge
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createEdge(nowdb_ast_t  *op,
+                              char       *name,
+                          nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *f;
+	nowdb_ast_t  *d;
+	char *origin=NULL, *destin=NULL;
+	uint32_t weight = NOWDB_TYP_NOTHING;
+	uint32_t weight2 = NOWDB_TYP_NOTHING;
+	uint32_t label = NOWDB_TYP_NOTHING;
+
+	d = nowdb_ast_declare(op);
+	if (d == NULL) INVALIDAST("no declarations in AST");
+
+	while(d != NULL) {
+		if (d->stype == NOWDB_AST_TYPE) {
+			f = nowdb_ast_off(d);
+			if (f == NULL) INVALIDAST("no offset in decl");
+			if (f->stype == NOWDB_OFF_ORIGIN) {
+				origin = d->value;
+			} else {
+				destin = d->value;
+			}
+		} else {
+			switch((uint32_t)(uint64_t)d->value) {
+			case NOWDB_OFF_LABEL:
+				label = nowdb_ast_type(d->stype); break;
+			case NOWDB_OFF_WEIGHT:
+				weight = nowdb_ast_type(d->stype); break;
+			case NOWDB_OFF_WEIGHT2:
+				weight2 = nowdb_ast_type(d->stype); break;
+			default:
+				INVALIDAST("unknown field in edge");
+			}
+		}
+		d = nowdb_ast_declare(d);
+	}
+	if (origin == NULL && destin == NULL) {
+		INVALIDAST("no vertex in edge");
+	}
+	err = nowdb_scope_createEdge(scope, name, origin, destin,
+	                                  label, weight, weight2);
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Edge
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropEdge(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropEdge(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -290,18 +495,14 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 static nowdb_err_t load(nowdb_scope_t    *scope,
                         nowdb_path_t       path,
                         nowdb_ast_t        *trg,
-                        nowdb_bool_t        ign,
+                        char              *type,
+                        nowdb_bitmap32_t    flg,
                         nowdb_qry_result_t *res) {
 	FILE *stream;
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_context_t *ctx;
 	nowdb_loader_t   ldr;
-	nowdb_bitmap32_t flg=0;
 	nowdb_qry_report_t *rep;
-
-	/* ignore headers; instead, we should provide the flags:
-	 * use / ignore header */
-	if (ign) flg |= NOWDB_CSV_HAS_HEADER;
 
 	/* open stream from path */
 	stream = fopen(path, "rb");
@@ -312,11 +513,15 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 
 	/* create vertex loader */
 	case NOWDB_AST_VERTEX:
-		fprintf(stderr, "loading '%s' into vertex\n", path);
+		fprintf(stderr, "loading '%s' into vertex as type '%s'\n",
+		                path, type);
 
 		flg |= NOWDB_CSV_VERTEX;
 		err = nowdb_loader_init(&ldr, stream, stderr,
-		                      &scope->vertices, flg);
+		                        &scope->vertices,
+		                        scope->model,
+		                        scope->text,
+		                        type,  flg);
 		if (err != NOWDB_OK) {
 			fclose(stream); return err;
 		}
@@ -326,12 +531,23 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	case NOWDB_AST_CONTEXT:
 		if (trg->value == NULL) INVALIDAST("no target name in AST");
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			fclose(stream); return err;
+		}
 
-		fprintf(stderr, "loading '%s' into '%s'\n", path, ctx->name);
+		if (type != NULL) {
+			fprintf(stderr, "loading '%s' into '%s' as edge\n",
+			                                   path, ctx->name);
+		} else {
+			fprintf(stderr, "loading '%s' into '%s'\n",
+			                           path, ctx->name);
+		}
 
 		err = nowdb_loader_init(&ldr, stream, stderr,
-		                           &ctx->store, flg);
+		                        &ctx->store,
+		                        scope->model,
+		                        scope->text,
+		                        type,  flg);
 		if (err != NOWDB_OK) {
 			fclose(stream); return err;
 		}
@@ -522,23 +738,15 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
                               nowdb_scope_t *scope) {
 	nowdb_ast_t *o;
 	nowdb_err_t err;
-	nowdb_bool_t  b;
 
-	err = checkContextExists(scope, name, &b);
-	if (err != NOWDB_OK) return err;
-	if (!b) {
+	err = nowdb_scope_dropContext(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
 			nowdb_err_release(err);
 			return NOWDB_OK;
 		}
-		return nowdb_err_get(nowdb_err_key_not_found,
-		                        FALSE, OBJECT, name);
-	}
-	err = nowdb_scope_dropContext(scope, name);
-	if (err != NOWDB_OK) {
-		nowdb_scope_destroy(scope); free(scope);
-		return err;
 	}
 	return NOWDB_OK;
 }
@@ -628,6 +836,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
 			return createIndex(op, trg->value, scope);
+		case NOWDB_AST_TYPE:
+			return createType(op, trg->value, scope);
+		case NOWDB_AST_EDGE:
+			return createEdge(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -641,6 +853,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
+		case NOWDB_AST_TYPE:
+			return dropType(op, trg->value, scope);
+		case NOWDB_AST_EDGE:
+			return dropEdge(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -658,16 +874,22 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
                               nowdb_qry_result_t *res) {
 	size_t s;
 	nowdb_err_t  err;
-	nowdb_bool_t ign = FALSE;
 	nowdb_path_t p, tmp;
 	nowdb_ast_t *opts, *o;
+	nowdb_ast_t *m;
+	nowdb_bitmap32_t flgs = 0;
+	char *type = NULL;
 
 	/* get options */
 	opts = nowdb_ast_option(op, 0);
 	if (opts != NULL) {
 		/* ignore header */
 		o = nowdb_ast_option(opts, NOWDB_AST_IGNORE);
-		if (o != NULL) ign = TRUE;
+		if (o != NULL) flgs = NOWDB_CSV_HAS_HEADER;
+
+		o = nowdb_ast_option(opts, NOWDB_AST_USE);
+		if (o != NULL) flgs = NOWDB_CSV_HAS_HEADER |
+		                      NOWDB_CSV_USE_HEADER;
 	}
 	if (op->value == NULL) INVALIDAST("no path in load operation");
 
@@ -676,7 +898,7 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 
 	/* remove quotes from value:
 	   TODO: this should be done in the sql parser */
-	p = malloc(s);
+	p = malloc(s+1);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                                 "allocating path");
 	if (tmp[0] == '\'') {
@@ -685,8 +907,15 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 		strcpy(p, tmp);
 	}
 
+	/* get model type if any */
+	m = nowdb_ast_option(op, NOWDB_AST_TYPE);
+	if (m != NULL) {
+		type = m->value;
+		flgs |= NOWDB_CSV_MODEL;
+	}
+
 	/* load and cleanup */
-	err = load(scope, p, trg, ign, res); free(p);
+	err = load(scope, p, trg, type, flgs, res); free(p);
 	return err;
 }
 
@@ -744,18 +973,18 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	/* transform ast -> plan, i.e.
 	 * create and optimise plan */
 	ts_algo_list_init(&plan);
-	err = nowdb_plan_fromAst(ast, &plan);
+	err = nowdb_plan_fromAst(scope, ast, &plan);
 	if (err != NOWDB_OK) return err;
 
 	/* create cursor */
 	err = nowdb_cursor_new(scope, &plan, &cur);
 	if (err != NOWDB_OK) {
-		nowdb_plan_destroy(&plan);
+		nowdb_plan_destroy(&plan, TRUE);
 		return err;
 	}
 
 	/* cleanup and terminate */
-	nowdb_plan_destroy(&plan);
+	nowdb_plan_destroy(&plan, FALSE);
 	res->result = cur;
 	return NOWDB_OK;
 }

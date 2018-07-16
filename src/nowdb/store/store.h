@@ -23,6 +23,10 @@
 
 #include <zstd.h>
 
+/* ------------------------------------------------------------------------
+ * Store
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
@@ -39,11 +43,21 @@ typedef struct {
 	nowdb_comp_t       comp; /* compression                 */
 	nowdb_compctx_t    *ctx; /* compression context         */
 	nowdb_comprsc_t compare; /* comparison                  */
+	void              *iman; /* index manager               */
+	void           *context; /* context for indexing        */
 	uint32_t        tasknum; /* number of sorter tasks      */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
+	char              state; /* open or closed              */
 } nowdb_store_t;
+
+/* ------------------------------------------------------------------------
+ * Store state
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_STORE_CLOSED 0
+#define NOWDB_STORE_OPEN   1
 
 /* ------------------------------------------------------------------------
  * Default compare for edges and vertices
@@ -94,6 +108,14 @@ nowdb_err_t nowdb_store_configCompression(nowdb_store_t *store,
  */
 nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
                                       uint32_t    tasknum);
+
+/* ------------------------------------------------------------------------
+ * Configure indexing
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_configIndexing(nowdb_store_t *store,
+                                       void           *iman,
+                                       void       *context);
 
 /* ------------------------------------------------------------------------
  * Destroy store
@@ -171,6 +193,13 @@ nowdb_err_t nowdb_store_getReaders(nowdb_store_t  *store,
                                    ts_algo_list_t *files,
                                    nowdb_time_t    start,
                                    nowdb_time_t     end);
+
+/* ------------------------------------------------------------------------
+ * Get all pending (pending only)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_getAllWaiting(nowdb_store_t  *store,
+                                      ts_algo_list_t *files);
 
 /* ------------------------------------------------------------------------
  * Destroy files and list
