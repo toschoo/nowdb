@@ -37,6 +37,7 @@ void helptxt(char *progname) {
  * -----------------------------------------------------------------------
  */
 int global_count = 0;
+char global_typed = 0;
 nowdb_scope_t *global_scope = NULL;
 
 /* -----------------------------------------------------------------------
@@ -48,6 +49,13 @@ int parsecmd(int argc, char **argv) {
 
 	global_count = ts_algo_args_findUint(
 	            argc, argv, 2, "count", 1000, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+
+	global_typed = ts_algo_args_findBool(
+	            argc, argv, 2, "typed", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -80,6 +88,100 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
 		fprintf(stdout, "%lu (%u), %lu (%u)\n",
 		                buf[i].weight, buf[i].wtype[0],
 		                buf[i].weight2, buf[i].wtype[1]);
+	}
+}
+
+#define HANDLEERR(s) \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "%s:\n", s); \
+		nowdb_err_print(err); \
+		nowdb_err_release(err); \
+		return; \
+	}
+
+
+/* -----------------------------------------------------------------------
+ * Print edges typed
+ * -----------------------------------------------------------------------
+ */
+void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
+	nowdb_model_t *m;
+	nowdb_text_t  *t;
+	nowdb_model_edge_t *edge=NULL;
+	nowdb_model_vertex_t *origin=NULL;
+	nowdb_model_vertex_t *destin=NULL;
+	nowdb_type_t typ;
+	nowdb_err_t err;
+	char *str;
+	void *w;
+
+	m = global_scope->model;
+	t = global_scope->text;
+	for(uint32_t i=0; i<sz; i++) {
+		if (edge == NULL || edge->edgeid != buf[i].edge) {
+			err = nowdb_model_getEdgeById(m,
+			             buf[i].edge, &edge);
+			HANDLEERR("unknown edge");
+			err = nowdb_model_getVertexById(m,
+			            edge->origin, &origin);
+			HANDLEERR("unknown vertex (origin)");
+			err = nowdb_model_getVertexById(m,
+			            edge->destin, &destin);
+			HANDLEERR("unknown vertex (destin)");
+		}
+		fprintf(stdout, "%s;", edge->name);
+		if (origin->vid == NOWDB_MODEL_TEXT) {
+			err = nowdb_text_getText(t, buf[i].origin, &str);
+			HANDLEERR("unknown text (origin)");
+			fprintf(stdout, "%s;", str);
+		} else {
+			fprintf(stdout, "%lu;", buf[i].origin);
+		}
+		if (destin->vid == NOWDB_MODEL_TEXT) {
+			err = nowdb_text_getText(t, buf[i].destin, &str);
+			HANDLEERR("unknown text (destin)");
+			fprintf(stdout, "%s;", str);
+		} else {
+			fprintf(stdout, "%lu;", buf[i].destin);
+		}
+		if (edge->label == NOWDB_MODEL_TEXT) {
+			err = nowdb_text_getText(t, buf[i].label, &str);
+			HANDLEERR("unknown text (label)");
+			fprintf(stdout, "%s;", str);
+		} else {
+			fprintf(stdout, "%lu;", buf[i].label);
+		}
+		fprintf(stdout, "%ld;", buf[i].timestamp); // toString!
+		for(int z=0;z<2;z++) {
+			if (z == 0) {
+				typ = buf[i].wtype[0];
+				w = &buf[i].weight;
+			} else {
+				typ = buf[i].wtype[1];
+				w = &buf[i].weight2;
+			}
+			switch(typ) {
+			case NOWDB_TYP_TEXT:
+				err = nowdb_text_getText(t,
+				       *(uint64_t*)w, &str);
+				HANDLEERR("unknown text (weight)");
+				fprintf(stdout, "%s;", str); break;
+			case NOWDB_TYP_TIME:
+			case NOWDB_TYP_DATE:
+				fprintf(stdout, "%ld;", *(int64_t*)w); break;
+			case NOWDB_TYP_UINT:
+				fprintf(stdout, "%lu;", *(uint64_t*)w); break;
+			case NOWDB_TYP_INT:
+				fprintf(stdout, "%ld;", *(int64_t*)w); break;
+			case NOWDB_TYP_FLOAT:
+				fprintf(stdout, "%.4f;", *(double*)w); break;
+			default:
+				fprintf(stdout, ";");
+
+			}
+		}
+
+		fprintf(stdout, "\n");
 	}
 }
 
@@ -135,7 +237,11 @@ int processCursor(nowdb_cursor_t *cur) {
 		if (cur->recsize == 32) {
 			printVertex((nowdb_vertex_t*)buf, osz/32);
 		} else if (cur->recsize == 64) {
-			printEdge((nowdb_edge_t*)buf, osz/64);
+			if (global_typed) {
+				printTypedEdge((nowdb_edge_t*)buf, osz/64);
+			} else {
+				printEdge((nowdb_edge_t*)buf, osz/64);
+			}
 		}
 	}
 	fprintf(stderr, "Read: %lu\n", total);
