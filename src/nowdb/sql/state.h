@@ -103,7 +103,7 @@ typedef struct {
 			} \
 			for(int i=0;i<x-1; i++) z[i] = s[i+1]; \
 			z[x-2] = 0; \
-			nowdb_ast_setValue(n, NOWDB_AST_V_STRING, z); \
+			nowdb_ast_setValueAsString(n,NOWDB_AST_V_STRING,z); \
 			free(s); \
 		} \
 	}

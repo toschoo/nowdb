@@ -235,6 +235,7 @@ typedef struct nowdb_ast_st {
 	int                  ntype; /* node type                       */
 	int                  stype; /* subtype                         */
 	int                  vtype; /* value type                      */
+        char                 isstr; /* value represents a string       */
 	void                *value; /* value stored by the node        */
 	int                  nKids; /* number of kids                  */
 	struct nowdb_ast_st **kids; /* array of pointers to the kids   */
@@ -268,7 +269,13 @@ void nowdb_ast_destroyAndFree(nowdb_ast_t *n);
  * Set value of that AST node
  * -----------------------------------------------------------------------
  */
-int nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
+void nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
+
+/* -----------------------------------------------------------------------
+ * Set value of that AST node, set string indicator
+ * -----------------------------------------------------------------------
+ */
+void nowdb_ast_setValueAsString(nowdb_ast_t *n, int vtype, void *val);
 
 /* -----------------------------------------------------------------------
  * Add a kid to this AST node

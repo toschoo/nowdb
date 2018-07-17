@@ -295,7 +295,7 @@ void nowdb_ast_destroyAndFree(nowdb_ast_t *n) {
  * Set the value
  * -----------------------------------------------------------------------
  */
-int nowdb_ast_setValue(nowdb_ast_t *n,
+void nowdb_ast_setValue(nowdb_ast_t *n,
                   int vtype, void *val) 
 {
 	n->vtype = vtype;
@@ -303,7 +303,18 @@ int nowdb_ast_setValue(nowdb_ast_t *n,
 	                 * this pointer, since it is used
 	                 * in an action, so we can just
 	                 * take it over and free it later! */
-	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Set the value
+ * -----------------------------------------------------------------------
+ */
+void nowdb_ast_setValueAsString(nowdb_ast_t *n,
+                          int vtype, void *val) 
+{
+	n->isstr = 1;
+	n->vtype = vtype;
+	n->value = val;
 }
 
 /* -----------------------------------------------------------------------
