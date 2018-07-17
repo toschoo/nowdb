@@ -1,0 +1,94 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * Projection services
+ * ========================================================================
+ */
+#ifndef nowdb_row_decl
+#define nowdb_row_decl
+
+#include <nowdb/types/types.h>
+#include <nowdb/types/error.h>
+#include <nowdb/model/model.h>
+#include <nowdb/text/text.h>
+#include <nowdb/scope/scope.h>
+
+#include <stdint.h>
+
+#include <tsalgo/list.h>
+
+#define NOWDB_FIELD_SELECT 1
+#define NOWDB_FIELD_ORDER  2
+#define NOWDB_FIELD_GROUP  4
+#define NOWDB_FIELD_AGG    8
+
+typedef struct {
+	nowdb_target_t target; /* context or vertex                      */
+	uint32_t          off; /* identifies the field for edges         */
+	char            *name; /* name of a property                     */
+	nowdb_key_t     *prop; /* propid for this property               */
+	nowdb_bitmap8_t flags; /* what to do with the field              */
+	uint32_t         func; /* non-aggregate to apply to the field    */
+	uint32_t          agg; /* aggregate function to apply on the row */
+} nowdb_field_t;
+
+typedef struct {
+	uint32_t             sz; /* number of fields */
+	nowdb_field_t   *fields; /* the fields       */
+	nowdb_model_t    *model; /* the model to use for projection */
+	nowdb_text_t      *text; /* the text  to use for projection */
+	nowdb_model_vertex_t *v; /* the current vertex model        */
+	nowdb_model_prop_t   *p; /* the current property model      */
+	nowdb_model_edge_t   *e; /* the current edge   model        */
+	nowdb_model_vertex_t *o; /* the origin of the edge          */
+	nowdb_model_vertex_t *d; /* the destin of the edge          */
+} nowdb_row_t;
+
+/* ------------------------------------------------------------------------
+ * initialise the row
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
+                           nowdb_scope_t   *scope,
+                           ts_algo_list_t *fields);
+
+/* ------------------------------------------------------------------------
+ * destroy the row
+ * ------------------------------------------------------------------------
+ */
+void nowdb_row_destroy(nowdb_row_t *row);
+
+/* ------------------------------------------------------------------------
+ * project
+ * -------
+ * write data from src
+ * according to the projection rules defined in row
+ * to the output buf.
+ * The result buffer is self-contained an can be printed
+ * or transformed to a string without the help of a row.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_project(nowdb_row_t *row,
+                              char *src, uint32_t recsz,
+                              char *buf, uint32_t sz,
+                              uint32_t *osz);
+
+/* ------------------------------------------------------------------------
+ * switch group
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_group(nowdb_row_t *row);
+
+/* ------------------------------------------------------------------------
+ * transform projected buffer to string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_toString(char  *buf,
+                               char **str);
+
+/* ------------------------------------------------------------------------
+ * write (e.g. print) buffer
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_write(char *buf, int fd);
+#endif

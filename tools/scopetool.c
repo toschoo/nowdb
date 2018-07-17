@@ -91,6 +91,10 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Save a lot of code
+ * -----------------------------------------------------------------------
+ */
 #define HANDLEERR(s) \
 	if (err != NOWDB_OK) { \
 		fprintf(stderr, "%s:\n", s); \
@@ -105,6 +109,7 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
  * -----------------------------------------------------------------------
  */
 void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
+	char tmp[32];
 	nowdb_model_t *m;
 	nowdb_text_t  *t;
 	nowdb_model_edge_t *edge=NULL;
@@ -151,7 +156,12 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 		} else {
 			fprintf(stdout, "%lu;", buf[i].label);
 		}
-		fprintf(stdout, "%ld;", buf[i].timestamp); // toString!
+		err = nowdb_time_toString(buf[i].timestamp,
+		                          NOWDB_TIME_FORMAT,
+		                          tmp, 32);
+		HANDLEERR("cannot convert timestamp");
+		fprintf(stdout, "%s;", tmp);
+
 		for(int z=0;z<2;z++) {
 			if (z == 0) {
 				typ = buf[i].wtype[0];
@@ -168,7 +178,10 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 				fprintf(stdout, "%s;", str); break;
 			case NOWDB_TYP_TIME:
 			case NOWDB_TYP_DATE:
-				fprintf(stdout, "%ld;", *(int64_t*)w); break;
+				err = nowdb_time_toString(*(int64_t*)w,
+				            NOWDB_TIME_FORMAT, tmp, 32);
+				HANDLEERR("cannot convert time (weight)");
+				fprintf(stdout, "%s;", tmp); break;
 			case NOWDB_TYP_UINT:
 				fprintf(stdout, "%lu;", *(uint64_t*)w); break;
 			case NOWDB_TYP_INT:

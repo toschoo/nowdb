@@ -147,7 +147,8 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
  */
 nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
                                 const char *frm,
-                                      char *buf);
+                                      char *buf,
+                                     size_t max);
 
 /* ------------------------------------------------------------------------
  * Benchmarking: get monotonic timestamp

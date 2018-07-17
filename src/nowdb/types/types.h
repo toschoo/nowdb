@@ -76,6 +76,12 @@ typedef uint8_t nowdb_content_t;
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
 
+/* context or vertex */
+typedef char nowdb_target_t;
+
+#define NOWDB_TARGET_EDGE    1
+#define NOWDB_TARGET_VERTEX  2
+
 /* possible types of value */
 typedef uint32_t nowdb_type_t;
 

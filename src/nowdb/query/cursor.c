@@ -308,7 +308,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* copy the record to the output buffer */
+		/* copy the record to the output buffer *
+		 * project ... */
 		memcpy(buf+x, src+cur->off, recsz);
 
 		/* increment buf index and reader offset */
