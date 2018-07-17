@@ -79,7 +79,7 @@ static inline nowdb_err_t getField(char            *name,
 	}
 	if (strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
-		*type = NOWDB_TYP_TIME;
+		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_TIME;
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "WEIGHT") == 0) {
@@ -189,6 +189,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
  */
 static inline nowdb_err_t getValue(nowdb_scope_t *scope,
                                    char            *str,
+				   uint32_t         off,
                                    uint32_t          sz,
                                    nowdb_type_t    *typ,
                                    int            stype,
@@ -231,7 +232,13 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		break;
 
 	case NOWDB_TYP_TEXT:
-		err = nowdb_text_getKey(scope->text, str, *value);
+		if (off == NOWDB_OFF_TMSTMP) {
+			err = nowdb_time_fromString(str,
+			      NOWDB_TIME_FORMAT, *value);
+			fprintf(stderr, "%ld\n", **(int64_t**)value);
+		} else {
+			err = nowdb_text_getKey(scope->text, str, *value);
+		}
 		if (err != NOWDB_OK) {
 			free(*value); *value = NULL;
 		}
@@ -323,7 +330,7 @@ static inline nowdb_err_t getEdgeCompare(nowdb_scope_t   *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, sz, &typ, 0, &value);
+	err = getValue(scope, op->value, off, sz, &typ, 0, &value);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_filter_newCompare(comp, operator, off, sz, typ, value);
@@ -352,7 +359,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 	nowdb_model_prop_t *p;
 	nowdb_ast_t *op;
 	void *value;
-	uint32_t off;
+	uint32_t off=0;
 
 	op = op1->ntype == NOWDB_AST_FIELD?op1:op2;
 
@@ -371,17 +378,17 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 		if (err != NOWDB_OK) return err;
 	}
 
+	// if pk, it is just vid!
+	off = p->pk?NOWDB_OFF_VERTEX:NOWDB_OFF_VALUE;
+
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, sizeof(nowdb_key_t),
-	                               &p->value, 0, &value);
+	err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
+	                                    &p->value, 0, &value);
 	if (err != NOWDB_OK) {
 		nowdb_filter_destroy(pid);
 		free(pid); return err;
 	}
-
-	// if pk, it is just vid!
-	off = p->pk?NOWDB_OFF_VERTEX:NOWDB_OFF_VALUE;
 
 	err = nowdb_filter_newCompare(&val, operator, off,
 		                      sizeof(nowdb_key_t),
@@ -448,14 +455,14 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 		err = getField(op1->value, trg, &off,
 		               &sz, op2->isstr, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op2->value, sz,
-		             &typ, op2->stype, &conv);
+		err = getValue(scope, op2->value, off, sz,
+		                 &typ, op2->stype, &conv);
 	} else {
 		err = getField(op2->value, trg, &off,
 		               &sz, op1->isstr, &typ);
 		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op1->value, sz, &typ,
-		                         op1->stype, &conv);
+		err = getValue(scope, op1->value, off, sz,
+		                 &typ, op1->stype, &conv);
 	}
 	if (err != NOWDB_OK) return err;
 

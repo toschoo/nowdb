@@ -261,7 +261,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	if (reader->file == NULL) {
 		reader->file = findfile(reader->files, fid);
 		if (reader->file == NULL) {
-			fprintf(stderr, "file not found\n");
+			// fprintf(stderr, "file not found %u\n", fid);
 			return nowdb_err_get(nowdb_err_key_not_found,
 			                         FALSE, OBJECT, NULL);
 		}

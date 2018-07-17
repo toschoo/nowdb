@@ -160,6 +160,7 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
 	struct timespec tv;
 
 	memset(&tm, 0, sizeof(struct tm));
+	memset(&tv, 0, sizeof(struct timespec));
 
 	nsecs = strptime(buf, frm, &tm);
 	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
