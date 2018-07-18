@@ -12,6 +12,7 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/reader/reader.h>
 #include <nowdb/query/plan.h>
+#include <nowdb/query/row.h>
 
 /* ------------------------------------------------------------------------
  * Pair of (store, files obtained from that store)
@@ -34,6 +35,7 @@ typedef struct {
 	nowdb_reader_t  **rdrs; /* array of pointers to readers  */
 	nowdb_storefile_t  stf; /* should be a list of stf!      */
 	nowdb_filter_t *filter; /* main filter                   */
+	nowdb_row_t       *row; /* projection                    */
 	uint32_t           cur; /* current reader                */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
@@ -75,7 +77,8 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur);
  */
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,
-                                      uint32_t *osz);
+                                       uint32_t *osz,
+                                     uint32_t *count);
 
 /* ------------------------------------------------------------------------
  * Reset cursor to start position

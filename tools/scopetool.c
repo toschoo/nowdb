@@ -92,6 +92,15 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
 }
 
 /* -----------------------------------------------------------------------
+ * Print rows
+ * -----------------------------------------------------------------------
+ */
+void printRow(char *buf, uint32_t sz) {
+	// fprintf(stderr, "printing row\n");
+	NOWDB_IGNORE(nowdb_row_write(buf, sz, stdout));
+}
+
+/* -----------------------------------------------------------------------
  * Save a lot of code
  * -----------------------------------------------------------------------
  */
@@ -102,7 +111,6 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
 		nowdb_err_release(err); \
 		return; \
 	}
-
 
 /* -----------------------------------------------------------------------
  * Print edges typed
@@ -138,21 +146,21 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 		if (origin->vid == NOWDB_MODEL_TEXT) {
 			err = nowdb_text_getText(t, buf[i].origin, &str);
 			HANDLEERR("unknown text (origin)");
-			fprintf(stdout, "%s;", str);
+			fprintf(stdout, "%s;", str); free(str);
 		} else {
 			fprintf(stdout, "%lu;", buf[i].origin);
 		}
 		if (destin->vid == NOWDB_MODEL_TEXT) {
 			err = nowdb_text_getText(t, buf[i].destin, &str);
 			HANDLEERR("unknown text (destin)");
-			fprintf(stdout, "%s;", str);
+			fprintf(stdout, "%s;", str); free(str);
 		} else {
 			fprintf(stdout, "%lu;", buf[i].destin);
 		}
 		if (edge->label == NOWDB_MODEL_TEXT) {
 			err = nowdb_text_getText(t, buf[i].label, &str);
 			HANDLEERR("unknown text (label)");
-			fprintf(stdout, "%s;", str);
+			fprintf(stdout, "%s;", str); free(str);
 		} else {
 			fprintf(stdout, "%lu;", buf[i].label);
 		}
@@ -175,7 +183,8 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 				err = nowdb_text_getText(t,
 				       *(uint64_t*)w, &str);
 				HANDLEERR("unknown text (weight)");
-				fprintf(stdout, "%s;", str); break;
+				fprintf(stdout, "%s;", str); 
+				free(str); break;
 			case NOWDB_TYP_TIME:
 			case NOWDB_TYP_DATE:
 				err = nowdb_time_toString(*(int64_t*)w,
@@ -225,6 +234,7 @@ char buf[8192];
  */
 int processCursor(nowdb_cursor_t *cur) {
 	uint32_t osz;
+	uint32_t cnt;
 	uint64_t total=0;
 	nowdb_err_t err=NOWDB_OK;
 
@@ -238,7 +248,7 @@ int processCursor(nowdb_cursor_t *cur) {
 	}
 
 	for(;;) {
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz);
+		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
@@ -246,12 +256,14 @@ int processCursor(nowdb_cursor_t *cur) {
 			}
 			break;
 		}
-		total += osz/cur->recsize;
+		total += cnt;
 		if (cur->recsize == 32) {
 			printVertex((nowdb_vertex_t*)buf, osz/32);
 		} else if (cur->recsize == 64) {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);
+			} else if (cur->row != NULL) {
+				printRow(buf, osz);
 			} else {
 				printEdge((nowdb_edge_t*)buf, osz/64);
 			}

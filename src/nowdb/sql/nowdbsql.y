@@ -549,6 +549,11 @@ projection_clause(P) ::= SELECT STAR. {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
 }
 
+projection_clause(P) ::= SELECT field_list(F). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
+	NOWDB_SQL_ADDKID(P,F);
+}
+
 /* ------------------------------------------------------------------------
  * from clause 
  * ------------------------------------------------------------------------
@@ -701,6 +706,12 @@ field(F) ::= LABEL(L). {
 	F=L;
 }
 field(F) ::= TIMESTAMP(T). {
+	F=T;
+}
+field(F) ::= WEIGHT(T). {
+	F=T;
+}
+field(F) ::= WEIGHT2(T). {
 	F=T;
 }
 

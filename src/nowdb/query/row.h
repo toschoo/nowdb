@@ -33,15 +33,17 @@ typedef struct {
 } nowdb_field_t;
 
 typedef struct {
-	uint32_t             sz; /* number of fields */
-	nowdb_field_t   *fields; /* the fields       */
-	nowdb_model_t    *model; /* the model to use for projection */
-	nowdb_text_t      *text; /* the text  to use for projection */
-	nowdb_model_vertex_t *v; /* the current vertex model        */
-	nowdb_model_prop_t   *p; /* the current property model      */
-	nowdb_model_edge_t   *e; /* the current edge   model        */
-	nowdb_model_vertex_t *o; /* the origin of the edge          */
-	nowdb_model_vertex_t *d; /* the destin of the edge          */
+	uint32_t             sz; /* number of fields                  */
+	uint32_t            cur; /* current field                     */
+	uint32_t          dirty; /* we are in the middle of something */
+	nowdb_field_t   *fields; /* the fields                        */
+	nowdb_model_t    *model; /* the model to use for projection   */
+	nowdb_text_t      *text; /* the text  to use for projection   */
+	nowdb_model_vertex_t *v; /* the current vertex model          */
+	nowdb_model_prop_t   *p; /* the current property model        */
+	nowdb_model_edge_t   *e; /* the current edge   model          */
+	nowdb_model_vertex_t *o; /* the origin of the edge            */
+	nowdb_model_vertex_t *d; /* the destin of the edge            */
 } nowdb_row_t;
 
 /* ------------------------------------------------------------------------
@@ -71,7 +73,8 @@ void nowdb_row_destroy(nowdb_row_t *row);
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
-                              uint32_t *osz);
+                              uint32_t *osz,
+                              char *complete);
 
 /* ------------------------------------------------------------------------
  * switch group
@@ -90,5 +93,5 @@ nowdb_err_t nowdb_row_toString(char  *buf,
  * write (e.g. print) buffer
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_row_write(char *buf, int fd);
+nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream);
 #endif

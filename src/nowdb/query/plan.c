@@ -6,6 +6,7 @@
  */
 #include <nowdb/query/plan.h>
 #include <nowdb/reader/filter.h>
+#include <nowdb/query/row.h>
 
 #include <string.h>
 
@@ -17,6 +18,13 @@ static char *OBJECT = "plan";
  */
 #define INVALIDAST(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
+
+/* ------------------------------------------------------------------------
+ * Macro to wrap the frequent error "no memory"
+ * ------------------------------------------------------------------------
+ */
+#define NOMEM(s) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
 
 /* ------------------------------------------------------------------------
  * Get field:
@@ -805,6 +813,91 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 }
 
 /* -----------------------------------------------------------------------
+ * Destroy list of fields
+ * -----------------------------------------------------------------------
+ */
+static inline void destroyFieldList(ts_algo_list_t *list) {
+	ts_algo_list_node_t *runner, *tmp;
+	nowdb_field_t *f;
+
+	if (list == NULL) return;
+	runner=list->head;
+	while(runner!=NULL) {
+		f = runner->cont;
+		if (f->name != NULL) free(f->name);
+		free(f);
+		tmp = runner->nxt;
+		ts_algo_list_remove(list, runner);
+		free(runner); runner=tmp;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get Projection
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getProjection(nowdb_scope_t   *scope,
+                                        nowdb_ast_t     *trg,
+                                        nowdb_ast_t     *sel,
+                                        ts_algo_list_t **fields) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_ast_t *field;
+	nowdb_field_t *f;
+	int off;
+
+	*fields = calloc(1, sizeof(ts_algo_list_t));
+	if (*fields == NULL) {
+		NOMEM("allocating list");
+		return err;
+	}
+
+	ts_algo_list_init(*fields);
+
+	field = nowdb_ast_field(sel);
+	while (field != NULL) {
+
+		// fprintf(stderr, "%s\n", (char*)field->value);
+
+		f = calloc(1, sizeof(nowdb_field_t));
+		if (f == NULL) {
+			NOMEM("allocating field");
+			break;
+		}
+		/* we need to distinguish the target! */
+		f->target = NOWDB_TARGET_EDGE;
+		off = nowdb_edge_offByName(field->value);
+		if (off < 0) {
+			f->name = strdup(field->value);
+			if (f->name == NULL) {
+				NOMEM("allocating field name");
+				free(f); break;
+			}
+		} else {
+			f->off = (uint32_t)off;
+			f->name = NULL;
+		}
+
+		f->flags = NOWDB_FIELD_SELECT;
+		f->func   = 0;
+		f->agg    = 0;
+
+		if (ts_algo_list_append(*fields, f) != TS_ALGO_OK) {
+			if (f->name != NULL) free(f->name);
+			free(f);
+			NOMEM("list.append");
+			break;
+		}
+
+		field = nowdb_ast_field(field);
+	}
+	if (err != NOWDB_OK) {
+		destroyFieldList(*fields);
+		free(*fields);
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
@@ -816,9 +909,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
                                nowdb_ast_t    *ast,
                                ts_algo_list_t *plan) {
 	nowdb_filter_t *filter = NULL;
+	ts_algo_list_t *fields;
 	ts_algo_list_t idxes;
 	nowdb_err_t   err;
-	nowdb_ast_t  *trg, *from;
+	nowdb_ast_t  *trg, *from, *sel;
 	nowdb_plan_t *stp;
 
 	from = nowdb_ast_from(ast);
@@ -925,6 +1019,44 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			free(stp); return err;
 		}
 	}
+
+	/* add projection */
+	sel = nowdb_ast_select(ast);
+	if (sel == NULL) return NOWDB_OK;
+	if (sel->stype == NOWDB_AST_ALL) return NOWDB_OK;
+
+	err = getProjection(scope, trg, sel, &fields);
+	if (err != NOWDB_OK) {
+		if (filter != NULL) {
+			nowdb_filter_destroy(filter); free(filter);
+		}
+		nowdb_plan_destroy(plan, FALSE); return err;
+	}
+	stp = malloc(sizeof(nowdb_plan_t));
+	if (stp == NULL) {
+		NOMEM("allocating plan");
+		destroyFieldList(fields); free(fields);
+		if (filter != NULL) {
+			nowdb_filter_destroy(filter); free(filter);
+		}
+		nowdb_plan_destroy(plan, FALSE); return err;
+	}
+
+	stp->ntype = NOWDB_PLAN_PROJECTION;
+	stp->stype = 0;
+	stp->helper = 0;
+	stp->name = NULL;
+	stp->load = fields; 
+
+	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
+		NOMEM("list.append");
+		destroyFieldList(fields); free(fields);
+		if (filter != NULL) {
+			nowdb_filter_destroy(filter); free(filter);
+		}
+		nowdb_plan_destroy(plan, FALSE);
+		free(stp); return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -942,6 +1074,9 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 		node = runner->cont;
 		if (cont && node->ntype == NOWDB_PLAN_FILTER) {
 			nowdb_filter_destroy(node->load); free(node->load);
+		}
+		if (node->ntype == NOWDB_PLAN_PROJECTION) {
+			destroyFieldList(node->load); free(node->load);
 		}
 		free(node); tmp = runner->nxt;
 		ts_algo_list_remove(plan, runner);

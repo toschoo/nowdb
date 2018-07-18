@@ -185,15 +185,35 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	/* pass on to the filter (in fact, there should/may be,
 	 * one filter per reader */
 	runner = runner->nxt;
+	if (runner!=NULL) {
+		stp = runner->cont;
+
+		/* this should be sent per reader and added
+		 * to the corresponding reader... */
+		if (stp->ntype == NOWDB_PLAN_FILTER) {
+			(*cur)->filter = stp->load;
+			for(i=0;i<rn;i++) {
+				(*cur)->rdrs[i]->filter = stp->load;
+			}
+		}
+	}
+
+	/* pass on to projection */
+	runner = runner->nxt;
 	if (runner == NULL) return NOWDB_OK;
 	stp = runner->cont;
 
-	/* this should be sent per reader and added
-	 * to the corresponding reader... */
-	if (stp->ntype == NOWDB_PLAN_FILTER) {
-		(*cur)->filter = stp->load;
-		for(i=0;i<rn;i++) {
-			(*cur)->rdrs[i]->filter = stp->load;
+	if (stp->ntype == NOWDB_PLAN_PROJECTION) {
+		(*cur)->row = calloc(1, sizeof(nowdb_row_t));
+		if ((*cur)->row == NULL) {
+			nowdb_cursor_destroy(*cur); free(*cur);
+			return err;
+		}
+		err = nowdb_row_init((*cur)->row, scope, stp->load);
+		if (err != NOWDB_OK) {
+			free((*cur)->row); (*cur)->row = NULL;
+			nowdb_cursor_destroy(*cur); free(*cur);
+			return err;
 		}
 	}
 	return NOWDB_OK;
@@ -220,6 +240,10 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
 		ts_algo_list_destroy(&cur->stf.pending);
 		cur->stf.store = NULL;
+	}
+	if (cur->row != NULL) {
+		nowdb_row_destroy(cur->row);
+		free(cur->row); cur->row = NULL;
 	}
 }
 
@@ -270,7 +294,8 @@ static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
  */
 static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
                                    char *buf, uint32_t sz,
-                                            uint32_t *osz) 
+                                            uint32_t *osz,
+                                          uint32_t *count) 
 {
 	nowdb_err_t err;
 	uint32_t x = 0;
@@ -278,8 +303,13 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t recsz = cur->rdrs[r]->recsize;
 	nowdb_filter_t *filter = cur->rdrs[r]->filter;
 	char *src = nowdb_reader_page(cur->rdrs[r]);
+	char complete=0;
+
+	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
+		                        FALSE, OBJECT, NULL);
 
 	*osz = 0;
+	*count = 0;
 	for(uint32_t i=0;i<sz;i+=recsz) {
 		/* we have reached the end of the current page */
 		if (cur->off >= NOWDB_IDX_PAGE) {
@@ -289,15 +319,16 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off = 0;
 		}
 
-		if (src == NULL) return nowdb_err_get(nowdb_err_eof,
-		                               FALSE, OBJECT, NULL);
-
 		/* we hit the nullrecord and pass on to the next page */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = NOWDB_IDX_PAGE; continue;
 		}
 
-		/* check content */
+		/* check content
+		 * -------------
+		 * here's potential for imporvement:
+		 * 1) we can immediately advance to the next record
+		 * 2) if we have read all records, we can leave */
 		if (!checkpos(cur->rdrs[r], cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
@@ -308,12 +339,22 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* copy the record to the output buffer *
-		 * project ... */
-		memcpy(buf+x, src+cur->off, recsz);
+		/* copy the record to the output buffer */
+		if (cur->row == NULL) {
+			memcpy(buf+x, src+cur->off, recsz);
+			x += recsz; cur->off += recsz;
+			(*count)++;
 
-		/* increment buf index and reader offset */
-		x += recsz; cur->off += recsz;
+		/* project ... */
+		} else {
+			err = nowdb_row_project(cur->row,
+			                        src+cur->off, recsz,
+			                        buf, sz, &x, &complete);
+			if (complete) {
+				cur->off += recsz;
+				(*count)++;
+			}
+		}
 	}
 	*osz = x;
 	return NOWDB_OK;
@@ -325,12 +366,13 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
  */
 static inline nowdb_err_t seqfetch(nowdb_cursor_t *cur,
                                 char *buf, uint32_t sz,
-                                         uint32_t *osz) 
+                                         uint32_t *osz,
+                                         uint32_t *cnt) 
 {
 	nowdb_err_t err;
 
 	for(;;) {
-		err = simplefetch(cur, buf, sz, osz);
+		err = simplefetch(cur, buf, sz, osz, cnt);
 		if (err == NOWDB_OK) return NOWDB_OK;
 		if (err->errcode == nowdb_err_eof) {
 			cur->cur++;
@@ -351,11 +393,12 @@ static inline nowdb_err_t seqfetch(nowdb_cursor_t *cur,
  */
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,
-                                       uint32_t *osz)
+                                       uint32_t *osz,
+                                       uint32_t *cnt)
 {
-	if (cur->numr == 1) return simplefetch(cur, buf, sz, osz);
+	if (cur->numr == 1) return simplefetch(cur, buf, sz, osz, cnt);
 	switch(cur->disc) {
-	case NOWDB_ITER_SEQ: return seqfetch(cur, buf, sz, osz);
+	case NOWDB_ITER_SEQ: return seqfetch(cur, buf, sz, osz, cnt);
 	case NOWDB_ITER_MERGE:
 	case NOWDB_ITER_JOIN:
 	default:

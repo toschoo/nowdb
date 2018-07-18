@@ -775,6 +775,7 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 	                           nowdb_ast_operation(ast));
 
 	case NOWDB_AST_CREATE: return ast->kids[3];
+	case NOWDB_AST_SELECT: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
 
 	default: return NULL;

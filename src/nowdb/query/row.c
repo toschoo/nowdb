@@ -41,6 +41,8 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->e = NULL;
 	row->o = NULL;
 	row->d = NULL;
+	row->cur = 0;
+	row->dirty = 0;
 
 	row->fields = NULL;
 
@@ -72,6 +74,32 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 }
 
 /* ------------------------------------------------------------------------
+ * save a lot of code
+ * ------------------------------------------------------------------------
+ */
+#define HANDLETEXT(what) \
+	t = (char)NOWDB_TYP_TEXT; \
+	err = nowdb_text_getText(row->text, \
+	                        what, &str); \
+	if (err != NOWDB_OK) return err; \
+	s = strlen(str); \
+	if ((*osz)+s+2 >= sz) { \
+		free(str); *nsp=1; \
+		return NOWDB_OK; \
+	} \
+	memcpy(buf+*osz, &t, 1); (*osz)++; \
+	memcpy(buf+*osz, str, s+1); (*osz)+=s+1; \
+	free(str);
+
+#define HANDLEBINARY(what, how) \
+	t = (char)how; \
+	if ((*osz)+9 >= sz) { \
+		*nsp=1; return NOWDB_OK; \
+	} \
+	memcpy(buf+*osz, &t, 1); (*osz)++; \
+	memcpy(buf+*osz, what, 8); (*osz)+=8;
+
+/* ------------------------------------------------------------------------
  * Helper: edge projection
  * ------------------------------------------------------------------------
  */
@@ -80,11 +108,16 @@ static inline nowdb_err_t projectEdge(nowdb_row_t *row,
                                       int i,
                                       char *buf,
                                       uint32_t sz,
-                                      uint32_t *osz) {
+                                      uint32_t *osz,
+                                      char *nsp) {
+	nowdb_value_t *w=NULL;
+	nowdb_type_t typ;
 	nowdb_err_t err;
 	size_t s;
 	char   t;
 	char *str;
+
+	*nsp = 0;
 	if (row->e == NULL || row->e->edgeid != src->edge) {
 		err = nowdb_model_getEdgeById(row->model,
 		                      src->edge, &row->e);
@@ -99,86 +132,68 @@ static inline nowdb_err_t projectEdge(nowdb_row_t *row,
 		if (err != NOWDB_OK) return err;
 	}
 	switch(row->fields[i].off) {
+
 	case NOWDB_OFF_EDGE:
 		t = (char)NOWDB_TYP_TEXT;
 		s = strlen(row->e->name);
-		if ((*osz)+s+2 >= sz) return NOWDB_OK;
+		if ((*osz)+s+2 >= sz) {
+			*nsp = 1; return NOWDB_OK;
+		}
 		memcpy(buf+*osz, &t, 1); (*osz)++;
 		memcpy(buf+*osz, row->e->name, s+1); (*osz)+=s+1;
 		break;
 
 	case NOWDB_OFF_ORIGIN:
 		if (row->o->vid == NOWDB_MODEL_TEXT) {
-			t = (char)NOWDB_TYP_TEXT;
-			err = nowdb_text_getText(row->text,
-			                src->origin, &str);
-			if (err != NOWDB_OK) return err;
-			s = strlen(str);
-			if ((*osz)+s+2 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, str, s+1); (*osz)+=s+1;
+			HANDLETEXT(src->origin);
 		} else {
-			t = (char)NOWDB_TYP_UINT;
-			if ((*osz)+9 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, &src->origin, 8); (*osz)+=8;
+			HANDLEBINARY(&src->origin, NOWDB_TYP_UINT);
 		}
 		break;
 
 	case NOWDB_OFF_DESTIN:
 		if (row->d->vid == NOWDB_MODEL_TEXT) {
-			t = (char)NOWDB_TYP_TEXT;
-			err = nowdb_text_getText(row->text,
-			                 src->destin, &str);
-			if (err != NOWDB_OK) return err;
-			s = strlen(str);
-			if ((*osz)+s+2 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, str, s+1); (*osz)+=s+1;
+			HANDLETEXT(src->destin);
 		} else {
-			t = (char)NOWDB_TYP_UINT;
-			if ((*osz)+9 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, &src->destin, 8); (*osz)+=8;
+			HANDLEBINARY(&src->destin, NOWDB_TYP_UINT);
 		}
 		break;
 
 	case NOWDB_OFF_LABEL:
 		if (row->e->label == NOWDB_MODEL_TEXT) {
-			t = (char)NOWDB_TYP_TEXT;
-			err = nowdb_text_getText(row->text,
-			                  src->label, &str);
-			if (err != NOWDB_OK) return err;
-			s = strlen(str);
-			if ((*osz)+s+2 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, str, s+1); (*osz)+=s+1;
+			HANDLETEXT(src->label);
 		} else {
-			t = (char)NOWDB_TYP_UINT;
-			if ((*osz)+9 >= sz) return NOWDB_OK;
-			memcpy(buf+*osz, &t, 1); (*osz)++;
-			memcpy(buf+*osz, &src->label, 8); (*osz)+=8;
+			HANDLEBINARY(&src->label, NOWDB_TYP_UINT);
 		}
 		break;
 
 	case NOWDB_OFF_TMSTMP:
-		t = (char)NOWDB_TYP_TEXT;
-		if ((*osz)+33 >= sz) return NOWDB_OK;
-		memcpy(buf+(*osz), &t, 1); (*osz)++;
-		err = nowdb_time_toString(src->timestamp,
-		                       NOWDB_TIME_FORMAT,
-		                       buf+*osz, 32);
-		if (err != NOWDB_OK) return err;
-		(*osz)+=strlen(buf+*osz)+1;
+		HANDLEBINARY(&src->timestamp, NOWDB_TYP_TIME);
 		break;
 
 	case NOWDB_OFF_WEIGHT:
-		break;
+		w = &src->weight;
+		typ = row->e->weight;
 
 	case NOWDB_OFF_WEIGHT2:
-		break;
-	}
+		if (w == NULL) {
+			w = &src->weight2;
+			typ = row->e->weight2;
+		}
+		switch(typ) {
+		case NOWDB_TYP_TEXT:
+			HANDLETEXT(*w); break;
 
+		case NOWDB_TYP_DATE:
+		case NOWDB_TYP_TIME:
+		case NOWDB_TYP_FLOAT:
+		case NOWDB_TYP_INT:
+		case NOWDB_TYP_UINT:
+			HANDLEBINARY(w, typ); break;
+
+		default: break;
+		}
+	}
 	return NOWDB_OK;
 }
 
@@ -191,22 +206,40 @@ static inline nowdb_err_t projectEdge(nowdb_row_t *row,
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
-                              uint32_t *osz) {
+                              uint32_t *osz, char *ok) {
 	nowdb_err_t err;
+	char nsp = 0;
 
 	ROWNULL();
 
-	for(int i=0; i<row->sz; i++) {
+	*ok = 0;
+	if (row->cur == 0 && row->dirty) {
+		if ((*osz)+1 < sz) {
+			buf[*osz] = '\n';
+			(*osz)++;
+			row->dirty = 0;
+		}
+	}
+	for(int i=row->cur; i<row->sz; i++) {
 		if (row->fields[i].target == NOWDB_TARGET_EDGE) {
 			err = projectEdge(row, (nowdb_edge_t*)src, i,
-			                               buf, sz, osz);
+			                         buf, sz, osz, &nsp);
 			if (err != NOWDB_OK) return err;
+			if (nsp) return NOWDB_OK;
 
 		} else {
 			/* TODO */
 			fprintf(stderr, "not yet working...\n");
 		}
+		if (!row->dirty) row->dirty = 1;
 	}
+	if ((*osz)+1 < sz) {
+		buf[*osz] = '\n';
+		(*osz)++;
+		*ok = 1;
+		row->dirty = 0;
+	}
+	row->cur = 0;
 	return NOWDB_OK;
 }
 
@@ -227,4 +260,45 @@ nowdb_err_t nowdb_row_toString(char  *buf,
  * write (e.g. print) buffer
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_row_write(char *buf, int fd);
+nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream) {
+	nowdb_err_t err;
+	char tmp[32];
+	uint32_t i=0;
+	char t;
+	while(i<sz) {
+		t = buf[i]; i++;
+		if (t == '\n') {
+			fprintf(stream, "\n"); continue;
+		}
+		switch((nowdb_type_t)t) {
+		case NOWDB_TYP_TEXT:
+			fprintf(stream, "%s;", buf+i);
+			i+=strlen(buf+i)+1; break;
+
+		case NOWDB_TYP_DATE: 
+		case NOWDB_TYP_TIME: 
+			err = nowdb_time_toString(*(nowdb_time_t*)(buf+i),
+		                                        NOWDB_TIME_FORMAT,
+		                                                  tmp, 32);
+			if (err != NOWDB_OK) return err;
+			fprintf(stream, "%s;", tmp); i+=8; break;
+
+		case NOWDB_TYP_INT: 
+			fprintf(stream, "%ld;", *(int64_t*)(buf+i));
+			i+=8; break;
+
+		case NOWDB_TYP_UINT: 
+			fprintf(stream, "%lu;", *(uint64_t*)(buf+i));
+			i+=8; break;
+
+		case NOWDB_TYP_FLOAT: 
+			fprintf(stream, "%.4f;", *(double*)(buf+i));
+			i+=8; break;
+
+		default:
+			return nowdb_err_get(nowdb_err_invalid,
+			  FALSE, OBJECT, "unknown type in row");
+		}
+	}
+	return NOWDB_OK;
+}

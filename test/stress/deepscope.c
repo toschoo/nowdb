@@ -141,7 +141,7 @@ void params_destroy(params_t *params) {
  */
 int processCursor(nowdb_cursor_t *cur) {
 	int rc = 0;
-	uint32_t osz;
+	uint32_t osz, cnt;
 	uint64_t total=0;
 	nowdb_err_t err=NOWDB_OK;
 	char *buf=NULL;
@@ -161,7 +161,7 @@ int processCursor(nowdb_cursor_t *cur) {
 		goto cleanup;
 	}
 	for(;;) {
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz);
+		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
@@ -169,7 +169,7 @@ int processCursor(nowdb_cursor_t *cur) {
 			}
 			break;
 		}
-		total += osz/cur->recsize;
+		total += cnt;
 	}
 	if (global_count == 0) {
 		fprintf(stderr, "setting expected to %lu\n", total);
