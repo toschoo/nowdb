@@ -241,6 +241,7 @@ int processCursor(nowdb_cursor_t *cur) {
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
+			fprintf(stderr, "Read: 0\n");
 			nowdb_err_release(err);
 			err = NOWDB_OK;
 		}
@@ -254,6 +255,7 @@ int processCursor(nowdb_cursor_t *cur) {
 				nowdb_err_release(err);
 				err = NOWDB_OK;
 			}
+			if (cnt > 0) fprintf(stderr, "EOF\n");
 			break;
 		}
 		total += cnt;
