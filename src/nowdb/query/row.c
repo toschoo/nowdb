@@ -118,6 +118,9 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 	if (row->vrtx != NULL) {
 		free(row->vrtx); row->vrtx = NULL;
 	}
+	if (row->p != NULL) {
+		free(row->p); row->p = NULL;
+	}
 	if (row->tlru != NULL) {
 		nowdb_ptlru_destroy(row->tlru);
 		free(row->tlru); row->tlru = NULL;

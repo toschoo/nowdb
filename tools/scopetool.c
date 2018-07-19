@@ -24,19 +24,17 @@
 void helptxt(char *progname) {
 	fprintf(stderr, "%s <path-to-base> [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
+	fprintf(stderr, "global_typed: present typed version of untyped edges\n");
+	fprintf(stderr, "global_timing: timing information\n");
 }
 
 /* -----------------------------------------------------------------------
  * options
  * -------
- * global_count: how many edges we will insert
- * global_report: report back every n edges
- * global_context: the context in which to insert
- * global_nocomp: don't compress
- * global_nosort: don't sort
  * -----------------------------------------------------------------------
  */
 int global_count = 0;
+char global_timing = 0;
 char global_typed = 0;
 nowdb_scope_t *global_scope = NULL;
 
@@ -56,6 +54,13 @@ int parsecmd(int argc, char **argv) {
 
 	global_typed = ts_algo_args_findBool(
 	            argc, argv, 2, "typed", 0, &err);
+	if (err != 0) {
+		fprintf(stderr, "command line error: %d\n", err);
+		return -1;
+	}
+
+	global_timing = ts_algo_args_findBool(
+	            argc, argv, 2, "timing", 0, &err);
 	if (err != 0) {
 		fprintf(stderr, "command line error: %d\n", err);
 		return -1;
@@ -328,6 +333,7 @@ int queries(nowdb_path_t path, FILE *stream) {
 	int rc = 0;
 	nowdbsql_parser_t parser;
 	nowdb_ast_t       *ast;
+	struct timespec t1, t2;
 
 	if (nowdbsql_parser_init(&parser, stream) != 0) {
 		fprintf(stderr, "cannot init parser\n");
@@ -347,12 +353,18 @@ int queries(nowdb_path_t path, FILE *stream) {
 			fprintf(stderr, "no error, no ast :-(\n");
 			rc = NOWDB_SQL_ERR_UNKNOWN; break;
 		}
+		timestamp(&t1);
 		rc = handleAst(path, ast);
 		if (rc != 0) {
 			nowdb_ast_destroy(ast); free(ast);
 			fprintf(stderr, "cannot handle ast\n"); break;
 		}
 		nowdb_ast_destroy(ast); free(ast); ast = NULL;
+		timestamp(&t2);
+		if (global_timing) {
+			fprintf(stderr, "overall: %luus\n",
+			   nowdb_time_minus(&t2, &t1)/1000);
+		}
 	}
 	if (rc != 0) {
 		fprintf(stderr, "ERROR: %s\n",

@@ -32,9 +32,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 static ts_algo_cmp_t compare(void *ignore, void *one, void *two) {
-	int x = strcmp(PAIR(one)->str, PAIR(two)->str);
-	if (x < 0) return ts_algo_cmp_less;
-	if (x > 0) return ts_algo_cmp_greater;
+	if (PAIR(one)->key < PAIR(two)->key) return ts_algo_cmp_less;
+	if (PAIR(one)->key < PAIR(two)->key) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
 }
 
@@ -126,12 +125,10 @@ nowdb_err_t nowdb_ptlru_add(nowdb_ptlru_t *lru,
 		NOMEM("allocating lru node");
 		return err;
 	}
+
 	pair->key = key;
-	pair->str = strdup(str);
-	if (pair->str == NULL) {
-		NOMEM("allocating text");
-		free(pair); return err;
-	}
+	pair->str = str;
+
 	if (ts_algo_lru_add(lru, pair) != TS_ALGO_OK) {
 		NOMEM("adding content to LRU");
 		free(pair->str); free(pair);
