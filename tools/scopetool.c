@@ -260,7 +260,11 @@ int processCursor(nowdb_cursor_t *cur) {
 		}
 		total += cnt;
 		if (cur->recsize == 32) {
-			printVertex((nowdb_vertex_t*)buf, osz/32);
+			if (cur->row != NULL) {
+				printRow(buf, osz);
+			} else {
+				printVertex((nowdb_vertex_t*)buf, osz/32);
+			}
 		} else if (cur->recsize == 64) {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);

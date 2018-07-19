@@ -26,7 +26,7 @@ typedef struct {
 	nowdb_target_t target; /* context or vertex                      */
 	uint32_t          off; /* identifies the field for edges         */
 	char            *name; /* name of a property                     */
-	nowdb_key_t     *prop; /* propid for this property               */
+	nowdb_key_t    propid; /* propid for this property               */
 	nowdb_bitmap8_t flags; /* what to do with the field              */
 	uint32_t         func; /* non-aggregate to apply to the field    */
 	uint32_t          agg; /* aggregate function to apply on the row */
@@ -35,12 +35,14 @@ typedef struct {
 typedef struct {
 	uint32_t             sz; /* number of fields                  */
 	uint32_t            cur; /* current field                     */
+	uint32_t           vcur; /* current vertex field              */
 	uint32_t          dirty; /* we are in the middle of something */
 	nowdb_field_t   *fields; /* the fields                        */
+	nowdb_vertex_t    *vrtx; /* remember what we have seen        */
 	nowdb_model_t    *model; /* the model to use for projection   */
 	nowdb_text_t      *text; /* the text  to use for projection   */
 	nowdb_model_vertex_t *v; /* the current vertex model          */
-	nowdb_model_prop_t   *p; /* the current property model        */
+	nowdb_model_prop_t  **p; /* the current property models       */
 	nowdb_model_edge_t   *e; /* the current edge   model          */
 	nowdb_model_vertex_t *o; /* the origin of the edge            */
 	nowdb_model_vertex_t *d; /* the destin of the edge            */
@@ -74,6 +76,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
                               uint32_t *osz,
+                              char *count,
                               char *complete);
 
 /* ------------------------------------------------------------------------

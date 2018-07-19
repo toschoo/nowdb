@@ -843,7 +843,7 @@ static inline nowdb_err_t getProjection(nowdb_scope_t   *scope,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_ast_t *field;
 	nowdb_field_t *f;
-	int off;
+	int off=-1;
 
 	*fields = calloc(1, sizeof(ts_algo_list_t));
 	if (*fields == NULL) {
@@ -864,8 +864,16 @@ static inline nowdb_err_t getProjection(nowdb_scope_t   *scope,
 			break;
 		}
 		/* we need to distinguish the target! */
-		f->target = NOWDB_TARGET_EDGE;
-		off = nowdb_edge_offByName(field->value);
+		if (trg->stype == NOWDB_AST_CONTEXT) {
+			f->target = NOWDB_TARGET_EDGE;
+			off = nowdb_edge_offByName(field->value);
+		} else if (trg->stype == NOWDB_AST_TYPE) {
+			f->target = NOWDB_TARGET_VERTEX;
+			off = -1;
+		} else {
+			fprintf(stderr, "STYPE: %d\n", trg->stype);
+			break;
+		}
 		if (off < 0) {
 			f->name = strdup(field->value);
 			if (f->name == NULL) {

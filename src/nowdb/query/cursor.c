@@ -303,7 +303,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t recsz = cur->rdrs[r]->recsize;
 	nowdb_filter_t *filter = cur->rdrs[r]->filter;
 	char *src = nowdb_reader_page(cur->rdrs[r]);
-	char complete=0;
+	char complete=0, cc=0;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
@@ -349,10 +349,11 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		} else {
 			err = nowdb_row_project(cur->row,
 			                        src+cur->off, recsz,
-			                        buf, sz, &x, &complete);
+			                        buf, sz, &x, &cc,
+			                        &complete);
 			if (complete) {
 				cur->off += recsz;
-				(*count)++;
+				(*count)+=cc;
 			}
 		}
 	}

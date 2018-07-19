@@ -23,8 +23,9 @@ static char *OBJECT = "row";
 nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
                            nowdb_scope_t   *scope,
                            ts_algo_list_t *fields) {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	ts_algo_list_node_t *runner;
+	nowdb_field_t *tmp;
 	int i=0;
 
 	ROWNULL();
@@ -42,7 +43,9 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->o = NULL;
 	row->d = NULL;
 	row->cur = 0;
+	row->vcur = 0;
 	row->dirty = 0;
+	row->vrtx = NULL;
 
 	row->fields = NULL;
 
@@ -50,13 +53,35 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	if (row->sz == 0) return NOWDB_OK;
 
 	row->fields = calloc(row->sz,sizeof(nowdb_field_t));
-	if (fields == NULL) {
+	if (row->fields == NULL) {
 		NOMEM("allocating fields");
 		return err;
 	}
+	row->vrtx = calloc(row->sz, sizeof(nowdb_vertex_t));
+	if (row->vrtx == NULL) {
+		NOMEM("allocating vertex memory");
+		return err;
+	}
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
-		// field names!
-		memcpy(row->fields+i, runner->cont, sizeof(nowdb_field_t));i++;
+		tmp = runner->cont;
+		memcpy(row->fields+i, tmp, sizeof(nowdb_field_t));
+		row->fields[i].name = NULL;
+		if (tmp->name != NULL) {
+			row->fields[i].name = strdup(tmp->name);
+			if (row->fields[i].name == NULL) {
+				NOMEM("allocating field name");
+				row->sz = i; break;
+			}
+			err = nowdb_text_getKey(row->text,
+			              row->fields[i].name,
+			           &row->fields[i].propid);
+			if (err != NOWDB_OK) break;
+		}
+		i++;
+	}
+	if (err != NOWDB_OK) {
+		nowdb_row_destroy(row); free(row);
+		return err;
 	}
 	return NOWDB_OK;
 }
@@ -68,8 +93,16 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 void nowdb_row_destroy(nowdb_row_t *row) {
 	if (row == NULL) return;
 	if (row->fields != NULL) {
-		// field names!
+		for(int i=0;i<row->sz;i++) {
+			if (row->fields[i].name != NULL) {
+				free(row->fields[i].name);
+				row->fields[i].name = NULL;
+			}
+		}
 		free(row->fields); row->fields = NULL;
+	}
+	if (row->vrtx != NULL) {
+		free(row->vrtx); row->vrtx = NULL;
 	}
 }
 
@@ -103,13 +136,13 @@ void nowdb_row_destroy(nowdb_row_t *row) {
  * Helper: edge projection
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t projectEdge(nowdb_row_t *row,
-                                      nowdb_edge_t *src,
-                                      int i,
-                                      char *buf,
-                                      uint32_t sz,
-                                      uint32_t *osz,
-                                      char *nsp) {
+static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
+                                           nowdb_edge_t *src,
+                                           int i,
+                                           char *buf,
+                                           uint32_t sz,
+                                           uint32_t *osz,
+                                           char *nsp) {
 	nowdb_value_t *w=NULL;
 	nowdb_type_t typ;
 	nowdb_err_t err;
@@ -198,6 +231,76 @@ static inline nowdb_err_t projectEdge(nowdb_row_t *row,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: vertex projection
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t projectVertex(nowdb_row_t *row,
+                                        char *buf,
+                                        uint32_t sz,
+                                        uint32_t *osz,
+                                        char *nsp) {
+	nowdb_err_t err;
+	size_t s;
+	char   t;
+	char *str;
+
+	*nsp = 0;
+	if (row->v == NULL) {
+		err = nowdb_model_getVertexById(row->model,
+		                row->vrtx[0].role, &row->v);
+		if (err != NOWDB_OK) return err;
+	}
+	if (row->p == NULL) {
+		row->p = calloc(row->sz, sizeof(nowdb_model_prop_t*));
+		if (row->p == NULL) {
+			NOMEM("allocating props");
+			return err;
+		}
+		for(int i=0;i<row->sz;i++) {
+			err = nowdb_model_getPropByName(row->model,
+			                            row->v->roleid,
+			                       row->fields[i].name,
+                                                         row->p+i);
+			if (err != NOWDB_OK) return err;
+		}
+	}
+	for(int i=row->vcur; i<row->sz; i++) {
+		switch(row->p[i]->value) {
+		case NOWDB_TYP_TEXT:
+			HANDLETEXT(row->vrtx[i].value); break;
+
+		case NOWDB_TYP_DATE:
+		case NOWDB_TYP_TIME:
+		case NOWDB_TYP_FLOAT:
+		case NOWDB_TYP_INT:
+		case NOWDB_TYP_UINT:
+			HANDLEBINARY(&row->vrtx[i].value,
+			                row->p[i]->value);
+			break;
+
+		default:
+			break;
+		}
+		row->vcur++;
+	}
+	row->vcur = 0;
+	return NOWDB_OK;
+}
+
+static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
+	for(int i=0; i<row->sz; i++) {
+		/*
+		fprintf(stderr, "%s: %lu == %lu\n",
+			row->fields[i].name,
+			row->fields[i].propid,
+			v->property);
+		*/
+		if (row->fields[i].propid == v->property) return i;
+	}
+	return -1;
+}
+
+/* ------------------------------------------------------------------------
  * project
  * TODO:
  * we may have more than one src buffer!
@@ -206,37 +309,52 @@ static inline nowdb_err_t projectEdge(nowdb_row_t *row,
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
-                              uint32_t *osz, char *ok) {
+                              uint32_t *osz,
+                              char *cnt, char *ok) {
 	nowdb_err_t err;
 	char nsp = 0;
 
 	ROWNULL();
 
 	*ok = 0;
+	*cnt = 0;
 	if (row->cur == 0 && row->dirty) {
 		if ((*osz)+1 < sz) {
 			buf[*osz] = '\n';
 			(*osz)++;
 			row->dirty = 0;
+			(*cnt)++;
 		}
 	}
 	for(int i=row->cur; i<row->sz; i++) {
 		if (row->fields[i].target == NOWDB_TARGET_EDGE) {
-			err = projectEdge(row, (nowdb_edge_t*)src, i,
-			                         buf, sz, osz, &nsp);
+			err = projectEdgeField(row, (nowdb_edge_t*)src, i,
+			                              buf, sz, osz, &nsp);
 			if (err != NOWDB_OK) return err;
 			if (nsp) return NOWDB_OK;
 
 		} else {
-			/* TODO */
-			fprintf(stderr, "not yet working...\n");
+			*ok = 1;
+			int k = findProp(row, (nowdb_vertex_t*)src);
+			if (k < 0) return NOWDB_OK;
+			if (!row->dirty) row->dirty = 1;
+			memcpy(row->vrtx+k, src, sizeof(nowdb_vertex_t));
+			row->cur++;
+			if (row->cur == row->sz) break;
+			return NOWDB_OK;
 		}
 		if (!row->dirty) row->dirty = 1;
+	}
+	if (recsz == sizeof(nowdb_vertex_t)) {
+		err = projectVertex(row, buf, sz, osz, &nsp);
+		if (err != NOWDB_OK) return err;
+		if (nsp) return NOWDB_OK;
 	}
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';
 		(*osz)++;
 		*ok = 1;
+		(*cnt)++;
 		row->dirty = 0;
 	}
 	row->cur = 0;
