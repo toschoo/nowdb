@@ -13,7 +13,7 @@
 #ifndef nowdb_sql_state_decl
 #define nowdb_sql_state_decl
 
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/scope/context.h>
 
 /* ------------------------------------------------------------------------

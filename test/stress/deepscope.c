@@ -5,7 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/scope/scope.h>
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/query/stmt.h>
 #include <nowdb/query/cursor.h>
 #include <nowdb/sql/parser.h>

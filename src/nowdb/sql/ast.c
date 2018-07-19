@@ -4,7 +4,7 @@
  * AST: Abstract Syntax Tree
  * ========================================================================
  */
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 
 #include <stdlib.h>
 #include <string.h>

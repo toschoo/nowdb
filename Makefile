@@ -65,11 +65,11 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/reader/filter.o  \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
-      $(SRC)/query/ast.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
       $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
+      $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
@@ -102,11 +102,11 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
-      $(SRC)/query/ast.h      \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
       $(SRC)/query/cursor.h   \
+      $(SRC)/sql/ast.h        \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
@@ -411,12 +411,12 @@ $(BIN)/qstress:		$(LIB) $(DEP) $(BENCH)/qstress.o \
 			                 $(libs) -lnowdb
 
 $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
-			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
+			$(SRC)/sql/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(BENCH)/parserbench.o $(COM)/bench.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $(BIN)/parserbench  \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
-			         $(SRC)/query/ast.o $(SQL)/state.o \
+			         $(SRC)/sql/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
 			         $(BENCH)/parserbench.o -lnowdb
 		

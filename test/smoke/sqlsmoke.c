@@ -5,7 +5,7 @@
  * parses an sql statement passed in through stdin
  * ========================================================================
  */
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/sql/parser.h>
 
 #include <stdio.h>

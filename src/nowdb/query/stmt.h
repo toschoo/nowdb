@@ -13,7 +13,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/io/dir.h>
 #include <nowdb/scope/scope.h>
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 
 #include <tsalgo/list.h>
 

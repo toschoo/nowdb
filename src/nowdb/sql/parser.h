@@ -14,7 +14,7 @@
 #ifndef nowdbsql_parser_decl
 #define nowdbsql_parser_decl
 
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/sql/state.h>
 #include <nowdb/sql/lex.h>
 #include <nowdb/sql/nowdbsql.h>

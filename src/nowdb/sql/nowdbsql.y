@@ -34,7 +34,7 @@
 #include <string.h>
 
 #include <nowdb/scope/context.h>
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
 }
