@@ -50,6 +50,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/mem/lru.o        \
+      $(SRC)/mem/ptlru.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
@@ -86,6 +87,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/mem/lru.h        \
+      $(SRC)/mem/ptlru.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \

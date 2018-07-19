@@ -12,6 +12,7 @@
 #include <nowdb/model/model.h>
 #include <nowdb/text/text.h>
 #include <nowdb/scope/scope.h>
+#include <nowdb/mem/ptlru.h>
 
 #include <stdint.h>
 
@@ -41,6 +42,7 @@ typedef struct {
 	nowdb_vertex_t    *vrtx; /* remember what we have seen        */
 	nowdb_model_t    *model; /* the model to use for projection   */
 	nowdb_text_t      *text; /* the text  to use for projection   */
+	nowdb_ptlru_t     *tlru; /* private text lru cache            */
 	nowdb_model_vertex_t *v; /* the current vertex model          */
 	nowdb_model_prop_t  **p; /* the current property models       */
 	nowdb_model_edge_t   *e; /* the current edge   model          */

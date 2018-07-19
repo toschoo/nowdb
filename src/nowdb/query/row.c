@@ -37,6 +37,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 
 	row->model = scope->model;
 	row->text  = scope->text;
+	row->tlru = NULL;
 	row->v = NULL;
 	row->p = NULL;
 	row->e = NULL;
@@ -60,6 +61,19 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->vrtx = calloc(row->sz, sizeof(nowdb_vertex_t));
 	if (row->vrtx == NULL) {
 		NOMEM("allocating vertex memory");
+		free(row->fields); row->fields = NULL;
+		return err;
+	}
+	row->tlru = calloc(1, sizeof(nowdb_ptlru_t));
+	if (row->tlru == NULL) {
+		NOMEM("allocating text lru");
+		free(row->fields); row->fields = NULL;
+		free(row->vrtx); row->vrtx = NULL;
+		return err;
+	}
+	err = nowdb_ptlru_init(row->tlru, 100000);
+	if (err != NOWDB_OK) {
+		nowdb_row_destroy(row);
 		return err;
 	}
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
@@ -104,6 +118,30 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 	if (row->vrtx != NULL) {
 		free(row->vrtx); row->vrtx = NULL;
 	}
+	if (row->tlru != NULL) {
+		nowdb_ptlru_destroy(row->tlru);
+		free(row->tlru); row->tlru = NULL;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: get text and cache it
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getText(nowdb_row_t *row,
+                                  nowdb_key_t  key,
+                                  char       **str) {
+	nowdb_err_t err;
+
+	err = nowdb_ptlru_get(row->tlru, key, str);
+	if (err != NOWDB_OK) return err;
+
+	if (*str != NULL) return NOWDB_OK;
+
+	err = nowdb_text_getText(row->text, key, str);
+	if (err != NOWDB_OK) return err;
+
+	return nowdb_ptlru_add(row->tlru, key, *str);
 }
 
 /* ------------------------------------------------------------------------
@@ -112,17 +150,15 @@ void nowdb_row_destroy(nowdb_row_t *row) {
  */
 #define HANDLETEXT(what) \
 	t = (char)NOWDB_TYP_TEXT; \
-	err = nowdb_text_getText(row->text, \
-	                        what, &str); \
+	err = getText(row, what, &str); \
 	if (err != NOWDB_OK) return err; \
 	s = strlen(str); \
 	if ((*osz)+s+2 >= sz) { \
-		free(str); *nsp=1; \
+		*nsp=1; \
 		return NOWDB_OK; \
 	} \
 	memcpy(buf+*osz, &t, 1); (*osz)++; \
-	memcpy(buf+*osz, str, s+1); (*osz)+=s+1; \
-	free(str);
+	memcpy(buf+*osz, str, s+1); (*osz)+=s+1;
 
 #define HANDLEBINARY(what, how) \
 	t = (char)how; \
