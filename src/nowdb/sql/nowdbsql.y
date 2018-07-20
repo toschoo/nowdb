@@ -96,6 +96,9 @@
 %type where_clause {nowdb_ast_t*}
 %destructor where_clause {nowdb_ast_destroyAndFree($$);}
 
+%type group_clause {nowdb_ast_t*}
+%destructor group_clause {nowdb_ast_destroyAndFree($$);}
+
 %type stress_spec {nowdb_ast_t*}
 %destructor stress_spec {nowdb_ast_destroyAndFree($$);}
 
@@ -217,6 +220,14 @@ dql ::= projection_clause(P) from_clause(F). {
 
 dql ::= projection_clause(P) from_clause(F) where_clause(W). {
 	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(g). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,g,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) group_clause(g). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,g,NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -561,6 +572,15 @@ projection_clause(P) ::= SELECT field_list(F). {
 from_clause(F) ::= FROM table_list(T). {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FROM, 0);
 	NOWDB_SQL_ADDKID(F, T);
+}
+
+/* ------------------------------------------------------------------------
+ * group clause
+ * ------------------------------------------------------------------------
+ */
+group_clause(G) ::= GROUP BY field_list(F). {
+	NOWDB_SQL_CREATEAST(&G, NOWDB_AST_GROUP, 0);
+	NOWDB_SQL_ADDKID(G,F);
 }
 
 /* ------------------------------------------------------------------------

@@ -354,12 +354,14 @@ int queries(nowdb_path_t path, FILE *stream) {
 			rc = NOWDB_SQL_ERR_UNKNOWN; break;
 		}
 		timestamp(&t1);
+
 		rc = handleAst(path, ast);
 		if (rc != 0) {
 			nowdb_ast_destroy(ast); free(ast);
 			fprintf(stderr, "cannot handle ast\n"); break;
 		}
 		nowdb_ast_destroy(ast); free(ast); ast = NULL;
+
 		timestamp(&t2);
 		if (global_timing) {
 			fprintf(stderr, "overall: %luus\n",

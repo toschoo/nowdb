@@ -83,6 +83,8 @@
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:FROM)		return NOWDB_SQL_FROM;
 (?i:WHERE)		return NOWDB_SQL_WHERE;
+(?i:GROUP)		return NOWDB_SQL_GROUP;
+(?i:BY)			return NOWDB_SQL_BY;
 (?i:AND)		return NOWDB_SQL_AND;
 (?i:OR)			return NOWDB_SQL_OR;
 (?i:NOT)		return NOWDB_SQL_NOT;

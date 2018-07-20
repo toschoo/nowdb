@@ -327,7 +327,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* check content
 		 * -------------
 		 * here's potential for imporvement:
-		 * 1) we can immediately advance to the next record
+		 * 1) we can immediately advance to the next marked record
 		 * 2) if we have read all records, we can leave */
 		if (!checkpos(cur->rdrs[r], cur->off/recsz)) {
 			cur->off += recsz; continue;

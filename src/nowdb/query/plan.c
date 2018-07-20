@@ -677,7 +677,19 @@ static inline nowdb_err_t intersect(ts_algo_list_t *cands,
 }
 
 /* ------------------------------------------------------------------------
- * Find indices
+ * Find indices for group
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getGroupIndex(nowdb_scope_t  *scope,
+                                        int             stype,
+                                        char           *context,
+                                        ts_algo_list_t *fields, 
+                                        ts_algo_list_t *res) {
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Find indices for filter
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
@@ -836,10 +848,10 @@ static inline void destroyFieldList(ts_algo_list_t *list) {
  * Get Projection
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t getProjection(nowdb_scope_t   *scope,
-                                        nowdb_ast_t     *trg,
-                                        nowdb_ast_t     *sel,
-                                        ts_algo_list_t **fields) {
+static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
+                                    nowdb_ast_t     *trg,
+                                    nowdb_ast_t     *ast,
+                                    ts_algo_list_t **fields) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_ast_t *field;
 	nowdb_field_t *f;
@@ -853,7 +865,7 @@ static inline nowdb_err_t getProjection(nowdb_scope_t   *scope,
 
 	ts_algo_list_init(*fields);
 
-	field = nowdb_ast_field(sel);
+	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
 		// fprintf(stderr, "%s\n", (char*)field->value);
@@ -917,10 +929,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
                                nowdb_ast_t    *ast,
                                ts_algo_list_t *plan) {
 	nowdb_filter_t *filter = NULL;
-	ts_algo_list_t *fields;
+	ts_algo_list_t *pj, *grp;
 	ts_algo_list_t idxes;
 	nowdb_err_t   err;
-	nowdb_ast_t  *trg, *from, *sel;
+	nowdb_ast_t  *trg, *from, *sel, *group;
 	nowdb_plan_t *stp;
 
 	from = nowdb_ast_from(ast);
@@ -951,14 +963,43 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
-	/* find indices for filter */
+	/* init index list */
 	ts_algo_list_init(&idxes);
-	err = getIndices(scope, trg->stype, trg->value, filter, &idxes);
-	if (err != NOWDB_OK) {
-		if (filter != NULL) {
-			nowdb_filter_destroy(filter); free(filter);
+
+	/* get group by */
+	group = nowdb_ast_group(ast);
+	if (group != NULL) {
+		err = getFields(scope, trg, group, &grp);
+		if (err != NOWDB_OK) {
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
 		}
-		nowdb_plan_destroy(plan, FALSE); return err;
+		/* find index for group by */
+		err = getGroupIndex(scope, trg->stype,
+		                           trg->value, grp, &idxes);
+		if (err != NOWDB_OK) {
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+	}
+
+	/* find indices for filter */
+	if (idxes.len == 0) {
+		err = getIndices(scope, trg->stype,
+		                        trg->value, filter, &idxes);
+		if (err != NOWDB_OK) {
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
 	}
 
 	/* create reader from target or index */
@@ -974,12 +1015,18 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	}
 
 	stp->ntype = NOWDB_PLAN_READER;
-	if (idxes.len == 1) {
+	if (idxes.len == 1 && grp == NULL) {
 		stp->stype = NOWDB_READER_SEARCH_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
-		/* keys? */
+
+	} if (idxes.len == 1) {
+		stp->stype = NOWDB_READER_RANGE_;
+		stp->helper = trg->stype;
+		stp->name = trg->value;
+		stp->load = idxes.head->cont;
+	
 	} else {
 		stp->stype = NOWDB_READER_FS_; /* default is fullscan+ */
 		stp->helper = trg->stype;
@@ -1033,7 +1080,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	if (sel == NULL) return NOWDB_OK;
 	if (sel->stype == NOWDB_AST_ALL) return NOWDB_OK;
 
-	err = getProjection(scope, trg, sel, &fields);
+	err = getFields(scope, trg, sel, &pj);
 	if (err != NOWDB_OK) {
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);
@@ -1043,7 +1090,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) {
 		NOMEM("allocating plan");
-		destroyFieldList(fields); free(fields);
+		destroyFieldList(pj); free(pj);
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);
 		}
@@ -1054,11 +1101,11 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	stp->stype = 0;
 	stp->helper = 0;
 	stp->name = NULL;
-	stp->load = fields; 
+	stp->load = pj; 
 
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		NOMEM("list.append");
-		destroyFieldList(fields); free(fields);
+		destroyFieldList(pj); free(pj);
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);
 		}
