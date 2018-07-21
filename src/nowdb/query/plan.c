@@ -243,7 +243,6 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		if (off == NOWDB_OFF_TMSTMP) {
 			err = nowdb_time_fromString(str,
 			      NOWDB_TIME_FORMAT, *value);
-			fprintf(stderr, "%ld\n", **(int64_t**)value);
 		} else {
 			err = nowdb_text_getKey(scope->text, str, *value);
 		}
