@@ -284,11 +284,8 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 
 	if (reader->lru != NULL) {
 		err = nowdb_pplru_get(reader->lru, pge, &reader->page);
-		if (err == NOWDB_OK) return NOWDB_OK;
-		if (err->errcode != nowdb_err_key_not_found) {
-			return err;
-		}
-		nowdb_err_release(err);
+		if (err != NOWDB_OK) return err;
+		if (reader->page != NULL) return NOWDB_OK;
 	}
 
 	getFilePos(pge, &fid, &pos);
@@ -385,7 +382,6 @@ static inline nowdb_err_t moveRange(nowdb_reader_t *reader) {
 		BEETERR(ber);
 	}
 	for(;;) {
-		// fprintf(stderr, "in outer loop\n");
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
@@ -396,6 +392,8 @@ static inline nowdb_err_t moveRange(nowdb_reader_t *reader) {
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
 			BEETERR(ber);
+
+			// fprintf(stderr, "key[1]: %lu\n", *(uint64_t*)(reader->key+8));
 
 			ber = beet_iter_enter(reader->iter);
 			if (ber == BEET_ERR_EOF) continue;
@@ -411,6 +409,7 @@ static inline nowdb_err_t moveRange(nowdb_reader_t *reader) {
 		BEETERR(ber);
 
 		err = getpage(reader, *pge);
+		// fprintf(stderr, "%lu: %p\n", *pge, reader->page);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_key_not_found) {
 			nowdb_err_release(err); continue;

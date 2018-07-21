@@ -33,7 +33,7 @@ typedef struct {
  */
 static ts_algo_cmp_t compare(void *ignore, void *one, void *two) {
 	if (PAIR(one)->key < PAIR(two)->key) return ts_algo_cmp_less;
-	if (PAIR(one)->key < PAIR(two)->key) return ts_algo_cmp_greater;
+	if (PAIR(one)->key > PAIR(two)->key) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
 }
 
