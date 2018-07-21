@@ -20,8 +20,7 @@ static char *OBJECT = "reader";
 #define BEETERR(x) \
 	if (x == BEET_ERR_EOF) { \
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); \
-	} \
-	if (x != BEET_OK) { \
+	} else if (x != BEET_OK) { \
 		return makeBeetError(x); \
 	}
 
@@ -323,10 +322,12 @@ static inline nowdb_err_t moveFullscan(nowdb_reader_t *reader) {
 static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 	nowdb_err_t     err;
 	nowdb_pageid_t *pge;
+	beet_err_t      ber;
 
 	for(;;) {
-		BEETERR(beet_iter_move(reader->iter, (void**)&pge,
-		                           (void**)&reader->cont));
+		ber = beet_iter_move(reader->iter, (void**)&pge,
+		                          (void**)&reader->cont);
+		BEETERR(ber);
 		/*
 		fprintf(stderr, "content: %lu|%lu (%lu)\n",
 		                           reader->cont[0],
@@ -356,23 +357,37 @@ static inline nowdb_err_t moveRange(nowdb_reader_t *reader) {
 	if (reader->key == NULL) {
 		/* we need to do this in a loop too! */
 		fprintf(stderr, "initial move\n");
-		BEETERR(beet_iter_move(reader->iter, &reader->key, NULL));
-		BEETERR(beet_iter_enter(reader->iter));
+		ber = beet_iter_move(reader->iter, &reader->key, NULL);
+		BEETERR(ber);
+		ber = beet_iter_enter(reader->iter);
+		BEETERR(ber);
 	}
 	for(;;) {
+		// fprintf(stderr, "in outer loop\n");
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
-			BEETERR(beet_iter_leave(reader->iter));
-			BEETERR(beet_iter_move(reader->iter,
-			                &reader->key, NULL));
+			// fprintf(stderr, "in inner loop\n");
+			ber = beet_iter_leave(reader->iter);
+			BEETERR(ber);
+			
+			ber = beet_iter_move(reader->iter,
+			               &reader->key, NULL);
+			BEETERR(ber);
 
 			ber = beet_iter_enter(reader->iter);
 			if (ber == BEET_ERR_EOF) continue;
 			BEETERR(ber);
 
+			ber = beet_iter_move(reader->iter,
+			                    (void**)&pge,
+			                    (void**)&reader->cont);
+			if (ber == BEET_ERR_EOF) continue;
+			BEETERR(ber);
 			break;
 		}
+		BEETERR(ber);
+
 		err = getpage(reader, *pge);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_key_not_found) {
