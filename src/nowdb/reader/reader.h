@@ -14,6 +14,7 @@
 #include <nowdb/io/file.h>
 #include <nowdb/reader/filter.h>
 #include <nowdb/index/index.h>
+#include <nowdb/mem/pplru.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -43,6 +44,7 @@ typedef struct {
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	nowdb_file_t           *file; /* current file (search)         */
 	ts_algo_tree_t       readers; /* files for index-based readers */
+	nowdb_pplru_t           *lru; /* LRU cache for range reader    */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
 	nowdb_filter_t       *filter; /* filter                        */

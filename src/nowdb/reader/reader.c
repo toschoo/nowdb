@@ -24,6 +24,9 @@ static char *OBJECT = "reader";
 		return makeBeetError(x); \
 	}
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
 /* ------------------------------------------------------------------------
  * Helper: initialise an already allocated reader
  * ------------------------------------------------------------------------
@@ -34,6 +37,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->size = 0;
 	reader->off = 0;
 	reader->buf = NULL;
+	reader->lru = NULL;
 	reader->page = NULL;
 	reader->key = NULL;
 	reader->start = NULL;
@@ -182,6 +186,10 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			NOWDB_IGNORE(nowdb_file_close(reader->file));
 			reader->file = NULL;
 		}
+		if (reader->lru != NULL) {
+			nowdb_pplru_destroy(reader->lru);
+			reader->lru = NULL;
+		}
 		return;
 
 	case NOWDB_READER_BUF:
@@ -274,6 +282,15 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	nowdb_fileid_t fid;
 	uint32_t pos;
 
+	if (reader->lru != NULL) {
+		err = nowdb_pplru_get(reader->lru, pge, &reader->page);
+		if (err == NOWDB_OK) return NOWDB_OK;
+		if (err->errcode != nowdb_err_key_not_found) {
+			return err;
+		}
+		nowdb_err_release(err);
+	}
+
 	getFilePos(pge, &fid, &pos);
 
 	// fprintf(stderr, "file: %u/%u (%lu)\n", fid, pos, pge);
@@ -302,6 +319,11 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	if (err != NOWDB_OK) return err;
 
 	reader->page = reader->file->bptr;
+
+	if (reader->lru != NULL) {
+		err = nowdb_pplru_add(reader->lru, pge, reader->page);
+		if (err != NOWDB_OK) return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -600,6 +622,18 @@ nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
 	(*reader)->files = files;
+	(*reader)->lru = calloc(1, sizeof(nowdb_pplru_t));
+	if ((*reader)->lru == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		NOMEM("allocating lru");
+		return err;
+	}
+	err = nowdb_pplru_init((*reader)->lru, 10000);
+	if (err != NOWDB_OK) {
+		free((*reader)->lru); (*reader)->lru = NULL;
+		nowdb_reader_destroy(*reader); free(*reader);
+		return err;
+	}
 
 	ber = beet_iter_alloc(index->idx, &(*reader)->iter);
 	if (ber != BEET_OK) {
