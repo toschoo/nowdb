@@ -677,6 +677,43 @@ static inline nowdb_err_t intersect(ts_algo_list_t *cands,
 }
 
 /* ------------------------------------------------------------------------
+ * fields to keys
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
+                                      nowdb_index_keys_t **keys) {
+	nowdb_err_t err;
+	nowdb_field_t *f;
+	ts_algo_list_node_t *runner;
+	int i=0;
+
+	if (fields->len == 0) return NOWDB_OK;
+
+	*keys = calloc(1,sizeof(nowdb_index_keys_t));
+	if (*keys == NULL) {
+		NOMEM("allocating keys");
+		return err;
+	}
+	(*keys)->sz = fields->len;
+	(*keys)->off = calloc(fields->len, sizeof(uint16_t));
+	if ((*keys)->off == NULL) {
+		NOMEM("allocating key offsets");
+		free(*keys);
+		return err;
+	}
+	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
+		f = runner->cont;
+		if (f->name != NULL) {
+			// for the moment no properties!
+			free((*keys)->off); free(*keys);
+			INVALIDAST("cannot handle property fields");
+		}
+		(*keys)->off[i] = (uint16_t)f->off; i++;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Find indices for group
  * ------------------------------------------------------------------------
  */
@@ -685,6 +722,46 @@ static inline nowdb_err_t getGroupIndex(nowdb_scope_t  *scope,
                                         char           *context,
                                         ts_algo_list_t *fields, 
                                         ts_algo_list_t *res) {
+	nowdb_index_keys_t *keys=NULL;
+	nowdb_index_desc_t *desc;
+	nowdb_context_t    *ctx;
+	nowdb_plan_idx_t   *idx;
+	nowdb_err_t err;
+
+	err = fields2keys(fields, &keys);
+	if (err != NOWDB_OK) return err;
+	if (keys == NULL) return NOWDB_OK;
+
+	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
+		err = nowdb_scope_getContext(scope, context, &ctx);
+		if (err != NOWDB_OK) {
+			free(keys->off); free(keys);
+			return err;
+		}
+	}
+
+	err = nowdb_index_man_getByKeys(scope->iman, ctx, keys, &desc);
+	if (err != NOWDB_OK) {
+		free(keys->off); free(keys);
+		return err;
+	}
+
+	idx = calloc(1,sizeof(nowdb_plan_idx_t));
+	if (idx == NULL) {
+		free(keys->off); free(keys);
+		NOMEM("allocating plan index");
+		return err;
+	}
+
+	idx->idx = desc->idx;
+	idx->keys = NULL;
+
+	free(keys->off); free(keys);
+
+	if (ts_algo_list_append(res, idx) != TS_ALGO_OK) {
+		NOMEM("list.append");
+		free(idx); return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -845,7 +922,7 @@ static inline void destroyFieldList(ts_algo_list_t *list) {
 }
 
 /* -----------------------------------------------------------------------
- * Get Projection
+ * Get fields for projection, grouping and ordering 
  * -----------------------------------------------------------------------
  */
 static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
@@ -918,6 +995,41 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 }
 
 /* -----------------------------------------------------------------------
+ * grouping and projection must be equivalent
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
+                                             ts_algo_list_t *sel) {
+	ts_algo_list_node_t *grun, *srun;
+	nowdb_field_t *gf, *sf;
+
+	srun = sel->head;
+	for(grun=grp->head; grun != NULL; grun=grun->nxt) {
+		if (srun == NULL) INVALIDAST("projection incomplete");
+		gf = grun->cont;
+		sf = srun->cont;
+		if (gf->name != NULL) {
+			if (sf->name == NULL) {
+				INVALIDAST("projection and grouping differ");
+			}
+			if (strcmp(gf->name, sf->name) != 0) {
+				INVALIDAST("projection and grouping differ");
+			}
+		} else if (sf->name != NULL) {
+			INVALIDAST("projection and grouping differ");
+
+		} else if (gf->off != sf->off) {
+			INVALIDAST("projection and grouping differ");
+		}
+		srun = srun->nxt;
+	}
+	if (srun != NULL) {
+		INVALIDAST("projection and grouping differ");
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
@@ -929,10 +1041,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
                                nowdb_ast_t    *ast,
                                ts_algo_list_t *plan) {
 	nowdb_filter_t *filter = NULL;
-	ts_algo_list_t *pj, *grp;
+	ts_algo_list_t *pj, *grp=NULL;
 	ts_algo_list_t idxes;
 	nowdb_err_t   err;
-	nowdb_ast_t  *trg, *from, *sel, *group;
+	nowdb_ast_t  *trg, *from, *sel, *group=NULL;
 	nowdb_plan_t *stp;
 
 	from = nowdb_ast_from(ast);
@@ -998,6 +1110,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			if (filter != NULL) {
 				nowdb_filter_destroy(filter); free(filter);
 			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
 	}
@@ -1010,18 +1125,22 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);
 		}
+		if (grp != NULL) {
+			destroyFieldList(grp); free(grp);
+		}
 		ts_algo_list_destroy(&idxes);
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
 	stp->ntype = NOWDB_PLAN_READER;
-	if (idxes.len == 1 && grp == NULL) {
+	if (idxes.len == 1 && group == NULL) {
 		stp->stype = NOWDB_READER_SEARCH_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 
-	} if (idxes.len == 1) {
+	} else if (idxes.len == 1) {
+		fprintf(stderr, "creating range\n");
 		stp->stype = NOWDB_READER_RANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1044,6 +1163,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		if (filter != NULL) {
 			nowdb_filter_destroy(filter); free(filter);
 		}
+		if (grp != NULL) {
+			destroyFieldList(grp); free(grp);
+		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
@@ -1055,6 +1177,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			                                 "allocating plan");
 			if (filter != NULL) {
 				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
 			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
@@ -1071,6 +1196,42 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			if (filter != NULL) {
 				nowdb_filter_destroy(filter); free(filter);
 			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			free(stp); return err;
+		}
+	}
+
+	/* add group by */
+	if (group != NULL) {
+		stp = malloc(sizeof(nowdb_plan_t));
+		if (stp == NULL) {
+			NOMEM("allocating plan");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+
+		stp->ntype = NOWDB_PLAN_GROUPING;
+		stp->stype = 0;
+		stp->helper = 0;
+		stp->name = NULL;
+		stp->load = grp; 
+	
+		if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
+			NOMEM("list.append");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			nowdb_plan_destroy(plan, FALSE);
 			free(stp); return err;
 		}
 	}
@@ -1087,6 +1248,18 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
+
+	if (grp != NULL) {
+		err = compareForGrouping(grp, pj);
+		if (err != NOWDB_OK) {
+			destroyFieldList(pj); free(pj);
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+	}
+
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) {
 		NOMEM("allocating plan");
@@ -1131,6 +1304,9 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 			nowdb_filter_destroy(node->load); free(node->load);
 		}
 		if (node->ntype == NOWDB_PLAN_PROJECTION) {
+			destroyFieldList(node->load); free(node->load);
+		}
+		if (node->ntype == NOWDB_PLAN_GROUPING) {
 			destroyFieldList(node->load); free(node->load);
 		}
 		free(node); tmp = runner->nxt;

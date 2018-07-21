@@ -788,6 +788,8 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_CREATE: return ast->kids[3];
 	case NOWDB_AST_SELECT: return ast->kids[0];
+	case NOWDB_AST_GROUP: return ast->kids[0];
+	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
 
 	default: return NULL;
@@ -809,7 +811,7 @@ nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *ast) {
  */
 nowdb_ast_t *nowdb_ast_group(nowdb_ast_t *ast) {
 	if (ast->ntype != NOWDB_AST_DQL) return NULL;
-	return ast->kids[0];
+	return ast->kids[3];
 }
 
 /* -----------------------------------------------------------------------

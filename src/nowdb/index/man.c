@@ -38,7 +38,7 @@ static ts_algo_cmp_t comparebyname(void *ignore, void *left, void *right) {
  * ------------------------------------------------------------------------
  */
 static inline ts_algo_cmp_t comparekeys(nowdb_index_keys_t *left,
-                          nowdb_index_keys_t *right) 
+                                        nowdb_index_keys_t *right) 
 {
 	for(int i=0; i<left->sz; i++) {
 		if (left->off[i] < right->off[i]) return ts_algo_cmp_less;

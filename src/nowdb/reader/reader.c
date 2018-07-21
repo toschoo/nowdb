@@ -151,6 +151,7 @@ static inline nowdb_err_t rewindRange(nowdb_reader_t *reader) {
 void nowdb_reader_destroy(nowdb_reader_t *reader) {
 	if (reader == NULL) return;
 	switch(reader->type) {
+
 	case NOWDB_READER_FULLSCAN:
 		reader->files = NULL;
 		return;
@@ -173,6 +174,17 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		return;
 
 	case NOWDB_READER_RANGE:
+		reader->files = NULL;
+		if (reader->iter != NULL) {
+			beet_iter_destroy(reader->iter);
+			reader->iter = NULL;
+		}
+		if (reader->file != NULL) {
+			NOWDB_IGNORE(nowdb_file_close(reader->file));
+			reader->file = NULL;
+		}
+		return;
+
 	case NOWDB_READER_BUF:
 		fprintf(stderr, "not implemented\n");
 		return;
@@ -342,6 +354,8 @@ static inline nowdb_err_t moveRange(nowdb_reader_t *reader) {
 	nowdb_pageid_t *pge;
 
 	if (reader->key == NULL) {
+		/* we need to do this in a loop too! */
+		fprintf(stderr, "initial move\n");
 		BEETERR(beet_iter_move(reader->iter, &reader->key, NULL));
 		BEETERR(beet_iter_enter(reader->iter));
 	}
@@ -550,8 +564,8 @@ nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
                                void *start, void *end) {
 	nowdb_err_t err;
 	beet_err_t  ber;
-	beet_range_t range;
-	beet_dir_t  dir;
+	beet_range_t range, *rptr=NULL;
+	beet_dir_t  dir=BEET_DIR_ASC;
 	beet_compare_t cmp;
 	void *rsc;
 
@@ -580,26 +594,31 @@ nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
 
 	(*reader)->start = start;
 	(*reader)->end = end;
-	range.fromkey = start;
-	range.tokey = end;
 
-	cmp = nowdb_index_getCompare(index);
-	rsc = nowdb_index_getResource(index);
-	dir = cmp(start, end, rsc) == BEET_CMP_GREATER?BEET_DIR_ASC:
-	                                              BEET_DIR_DESC;
+	if (start != NULL && end != NULL) {
+		range.fromkey = start;
+		range.tokey = end;
+		rptr = &range;
+		cmp = nowdb_index_getCompare(index);
+		rsc = nowdb_index_getResource(index);
+		dir = cmp(start, end, rsc) == BEET_CMP_GREATER?BEET_DIR_ASC:
+		                                               BEET_DIR_DESC;
+	}
 
-	ber = beet_index_range(index->idx, &range, dir,
-	                               (*reader)->iter);
+	ber = beet_index_range(index->idx, rptr, dir,
+	                             (*reader)->iter);
 	if (ber != BEET_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);
 		return makeBeetError(ber);
 	}
 
+	/*
 	err = rewindRange(*reader);
 	if (err != NOWDB_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);
 		return err;
 	}
+	*/
 	return NOWDB_OK;
 }
 

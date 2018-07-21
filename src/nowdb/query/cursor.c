@@ -57,6 +57,14 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                          pidx->idx,
 		                          pidx->keys,NULL);
 		free(pidx->keys); free(pidx);
+
+	} else if (plan->stype == NOWDB_READER_RANGE_) {
+		pidx = plan->load;
+		err = nowdb_reader_range(cur->rdrs+idx,
+		                       &cur->stf.files,
+		                        pidx->idx, NULL,
+		                        NULL, NULL); /* range ! */
+		free(pidx); /* the index should be destroyed by plan */
 	
 	/* create a fullscan reader */
 	} else {
@@ -182,6 +190,9 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 	}
 
+	/* In case of range:
+	 * create a bufscanner */
+
 	/* pass on to the filter (in fact, there should/may be,
 	 * one filter per reader */
 	runner = runner->nxt;
@@ -198,10 +209,25 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 	}
 
-	/* pass on to projection */
+	/* pass on to projection or group by */
 	runner = runner->nxt;
 	if (runner == NULL) return NOWDB_OK;
 	stp = runner->cont;
+
+	if (stp->ntype == NOWDB_PLAN_GROUPING) {
+
+		/* what do we need for grouping? */
+
+		runner = runner->nxt;
+		if (runner == NULL) {
+			if (stp->stype == NOWDB_PLAN_GROUPING) {
+				nowdb_cursor_destroy(*cur); free(*cur);
+				INVALIDPLAN("grouping without projection");	
+			}
+			return NOWDB_OK;
+		}
+		stp = runner->cont;
+	}
 
 	if (stp->ntype == NOWDB_PLAN_PROJECTION) {
 		(*cur)->row = calloc(1, sizeof(nowdb_row_t));
