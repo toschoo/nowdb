@@ -101,6 +101,8 @@ typedef uint64_t nowdb_rowid_t;
 
 extern char nowdb_nullrec[64];
 
+int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
+
 /* ------------------------------------------------------------------------
  * Vertex Offsets
  * ------------------------------------------------------------------------

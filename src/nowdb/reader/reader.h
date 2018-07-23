@@ -44,7 +44,7 @@ typedef struct {
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	nowdb_file_t           *file; /* current file (search)         */
 	ts_algo_tree_t       readers; /* files for index-based readers */
-	nowdb_pplru_t           *lru; /* LRU cache for range reader    */
+	nowdb_pplru_t          *plru; /* LRU cache for range reader    */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
 	nowdb_filter_t       *filter; /* filter                        */
@@ -55,6 +55,7 @@ typedef struct {
 	char                   *page; /* pointer to current page       */
 	uint32_t                 off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
+	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
@@ -167,9 +168,11 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
                                 nowdb_filter_t  *filter);
 
 /* ------------------------------------------------------------------------
- * Index Range scan
- * ----------------
- * Instantiate a reader as index range scan.
+ * Index Full Range scan
+ * ---------------------
+ * Instantiate a reader as full index range scan,
+ * reading all pages of all keys in range.
+ *
  * Parameters:
  * - Reader: out parameter
  * - files : list of relevant files
@@ -178,11 +181,37 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
  * - start/end: indicate the range in terms of keys of that index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
-                               ts_algo_list_t  *files,
-                               nowdb_index_t   *index,
-                               nowdb_filter_t  *filter,
-                               void *start, void *end);
+nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Index Key Range scan
+ * --------------------
+ * Instantiate a reader as key index range scan,
+ * reading all keys in range, but not their pages.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Index Count Range scan
+ * ----------------------
+ * Instantiate a reader as count index range scan,
+ * reading all keys in range and their bitmap, but not the pages.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
 
 /* ------------------------------------------------------------------------
  * Buffer scan

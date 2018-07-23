@@ -1171,10 +1171,16 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 
+ 	/* this is for group without aggregates */
+	} else if (idxes.len == 1 && order == NULL) {
+		stp->stype = NOWDB_READER_KRANGE_;
+		stp->helper = trg->stype;
+		stp->name = trg->value;
+		stp->load = idxes.head->cont;
+
  	/* this is for order and group with aggregates */
 	} else if (idxes.len == 1) {
-		fprintf(stderr, "creating range\n");
-		stp->stype = NOWDB_READER_RANGE_;
+		stp->stype = NOWDB_READER_FRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;

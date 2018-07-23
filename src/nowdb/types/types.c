@@ -271,3 +271,19 @@ int nowdb_edge_offByName(char *fld) {
 	return -1;
 }
 
+int nowdb_sizeByOff(uint32_t recsize, uint16_t off) {
+	if (recsize == 32) {
+		switch(off) {
+		case NOWDB_OFF_VTYPE:
+		case NOWDB_OFF_ROLE: return 4;
+		default: return 8;
+		
+		}
+	} else {
+		switch(off) {
+		case NOWDB_OFF_WTYPE:
+		case NOWDB_OFF_WTYPE2: return 4;
+		default: return 8;
+		}
+	}
+}

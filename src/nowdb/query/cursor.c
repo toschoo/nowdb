@@ -58,10 +58,26 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                          pidx->keys,NULL);
 		free(pidx->keys); free(pidx);
 
-	} else if (plan->stype == NOWDB_READER_RANGE_) {
+	} else if (plan->stype == NOWDB_READER_FRANGE_) {
 		pidx = plan->load;
-		err = nowdb_reader_range(cur->rdrs+idx,
-		                       &cur->stf.files,
+		err = nowdb_reader_frange(cur->rdrs+idx,
+		                        &cur->stf.files,
+		                         pidx->idx, NULL,
+		                         NULL, NULL); /* range ! */
+		free(pidx); /* the index should be destroyed by plan */
+
+	} else if (plan->stype == NOWDB_READER_KRANGE_) {
+		pidx = plan->load;
+		err = nowdb_reader_krange(cur->rdrs+idx,
+		                        &cur->stf.files,
+		                        pidx->idx, NULL,
+		                        NULL, NULL); /* range ! */
+		free(pidx); /* the index should be destroyed by plan */
+
+	} else if (plan->stype == NOWDB_READER_CRANGE_) {
+		pidx = plan->load;
+		err = nowdb_reader_crange(cur->rdrs+idx,
+		                        &cur->stf.files,
 		                        pidx->idx, NULL,
 		                        NULL, NULL); /* range ! */
 		free(pidx); /* the index should be destroyed by plan */
@@ -334,18 +350,24 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t x = 0;
 	uint32_t r = cur->cur;
 	uint32_t recsz = cur->rdrs[r]->recsize;
+	uint32_t rtype = cur->rdrs[r]->type;
 	nowdb_filter_t *filter = cur->rdrs[r]->filter;
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
+	uint32_t mx;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
 
 	*osz = 0;
 	*count = 0;
+	mx = cur->rdrs[r]->type != NOWDB_READER_KRANGE &&
+	     cur->rdrs[r]->type != NOWDB_READER_CRANGE?
+	     NOWDB_IDX_PAGE:recsz;
+
 	for(uint32_t i=0;i<sz;i+=recsz) {
 		/* we have reached the end of the current page */
-		if (cur->off >= NOWDB_IDX_PAGE) {
+		if (cur->off >= mx) {
 			err = nowdb_reader_move(cur->rdrs[r]);
 			if (err != NOWDB_OK) return err;
 			src = nowdb_reader_page(cur->rdrs[r]);
@@ -373,7 +395,9 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		}
 
 		/* copy the record to the output buffer */
-		if (cur->row == NULL) {
+		if (cur->row == NULL ||
+		   (rtype == NOWDB_READER_KRANGE ||
+		    rtype == NOWDB_READER_CRANGE)) {
 			memcpy(buf+x, src+cur->off, recsz);
 			x += recsz; cur->off += recsz;
 			(*count)++;
