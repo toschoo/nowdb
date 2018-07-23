@@ -84,6 +84,7 @@
 (?i:FROM)		return NOWDB_SQL_FROM;
 (?i:WHERE)		return NOWDB_SQL_WHERE;
 (?i:GROUP)		return NOWDB_SQL_GROUP;
+(?i:ORDER)		return NOWDB_SQL_ORDER;
 (?i:BY)			return NOWDB_SQL_BY;
 (?i:AND)		return NOWDB_SQL_AND;
 (?i:OR)			return NOWDB_SQL_OR;

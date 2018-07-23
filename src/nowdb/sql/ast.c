@@ -504,6 +504,18 @@ static inline int addgroup(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
+ * Add kid to a order node
+ * -----------------------------------------------------------------------
+ */
+static inline int addorder(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Add kid to a from node
  * -----------------------------------------------------------------------
  */
@@ -642,7 +654,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_NOT: 
 	case NOWDB_AST_JUST: return addnot(n,k);
 	case NOWDB_AST_GROUP: return addgroup(n,k);
-	case NOWDB_AST_ORDER:   return -1;
+	case NOWDB_AST_ORDER: return addorder(n,k);
 	case NOWDB_AST_JOIN:  return -1;
 
 	case NOWDB_AST_COMPARE: return addcompare(n,k);
@@ -812,6 +824,15 @@ nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *ast) {
 nowdb_ast_t *nowdb_ast_group(nowdb_ast_t *ast) {
 	if (ast->ntype != NOWDB_AST_DQL) return NULL;
 	return ast->kids[3];
+}
+
+/* -----------------------------------------------------------------------
+ * Get order
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *ast) {
+	if (ast->ntype != NOWDB_AST_DQL) return NULL;
+	return ast->kids[4];
 }
 
 /* -----------------------------------------------------------------------

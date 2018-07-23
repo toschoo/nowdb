@@ -209,11 +209,18 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 	}
 
-	/* pass on to projection or group by */
+	/* pass on to projection or order by or group by */
 	runner = runner->nxt;
 	if (runner == NULL) return NOWDB_OK;
 	stp = runner->cont;
 
+	if (stp->ntype == NOWDB_PLAN_ORDERING) {
+		runner = runner->nxt;
+		if (runner == NULL) return NOWDB_OK;
+		stp = runner->cont;
+	}
+
+	/* group by */
 	if (stp->ntype == NOWDB_PLAN_GROUPING) {
 
 		/* what do we need for grouping? */

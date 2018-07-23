@@ -362,6 +362,12 @@ nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_group(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
+ * Get the order clause from the current AST node (DQL only)
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
  * Get field list from the current AST node
  * -----------------------------------------------------------------------
  */

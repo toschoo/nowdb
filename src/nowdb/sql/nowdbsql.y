@@ -99,6 +99,9 @@
 %type group_clause {nowdb_ast_t*}
 %destructor group_clause {nowdb_ast_destroyAndFree($$);}
 
+%type order_clause {nowdb_ast_t*}
+%destructor order_clause {nowdb_ast_destroyAndFree($$);}
+
 %type stress_spec {nowdb_ast_t*}
 %destructor stress_spec {nowdb_ast_destroyAndFree($$);}
 
@@ -222,12 +225,28 @@ dql ::= projection_clause(P) from_clause(F) where_clause(W). {
 	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,NULL);
 }
 
-dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(g). {
-	NOWDB_SQL_MAKE_DQL(P,F,W,g,NULL);
+dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(G). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,G,NULL);
 }
 
-dql ::= projection_clause(P) from_clause(F) group_clause(g). {
-	NOWDB_SQL_MAKE_DQL(P,F,NULL,g,NULL);
+dql ::= projection_clause(P) from_clause(F) where_clause(W) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(G) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,G,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) group_clause(G). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,G,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,NULL,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) group_clause(G) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,G,O);
 }
 
 /* ------------------------------------------------------------------------
@@ -581,6 +600,15 @@ from_clause(F) ::= FROM table_list(T). {
 group_clause(G) ::= GROUP BY field_list(F). {
 	NOWDB_SQL_CREATEAST(&G, NOWDB_AST_GROUP, 0);
 	NOWDB_SQL_ADDKID(G,F);
+}
+
+/* ------------------------------------------------------------------------
+ * order clause
+ * ------------------------------------------------------------------------
+ */
+order_clause(O) ::= ORDER BY field_list(F). {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_ORDER, 0);
+	NOWDB_SQL_ADDKID(O,F);
 }
 
 /* ------------------------------------------------------------------------

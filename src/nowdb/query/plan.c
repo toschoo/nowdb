@@ -716,11 +716,11 @@ static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
  * Find indices for group
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getGroupIndex(nowdb_scope_t  *scope,
-                                        int             stype,
-                                        char           *context,
-                                        ts_algo_list_t *fields, 
-                                        ts_algo_list_t *res) {
+static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
+                                             int             stype,
+                                             char           *context,
+                                             ts_algo_list_t *fields, 
+                                             ts_algo_list_t *res) {
 	nowdb_index_keys_t *keys=NULL;
 	nowdb_index_desc_t *desc;
 	nowdb_context_t    *ctx;
@@ -1040,10 +1040,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
                                nowdb_ast_t    *ast,
                                ts_algo_list_t *plan) {
 	nowdb_filter_t *filter = NULL;
-	ts_algo_list_t *pj, *grp=NULL;
+	ts_algo_list_t *pj, *grp=NULL, *ord=NULL;
 	ts_algo_list_t idxes;
 	nowdb_err_t   err;
-	nowdb_ast_t  *trg, *from, *sel, *group=NULL;
+	nowdb_ast_t  *trg, *from, *sel, *group=NULL, *order=NULL;
 	nowdb_plan_t *stp;
 
 	from = nowdb_ast_from(ast);
@@ -1088,14 +1088,41 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
 		/* find index for group by */
-		err = getGroupIndex(scope, trg->stype,
-		                           trg->value, grp, &idxes);
+		err = getGroupOrderIndex(scope, trg->stype,
+		                  trg->value, grp, &idxes);
 		if (err != NOWDB_OK) {
 			if (filter != NULL) {
 				nowdb_filter_destroy(filter); free(filter);
 			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+	}
+
+	/* get order by */
+	order = nowdb_ast_order(ast);
+	if (order != NULL && idxes.len == 0) {
+		err = getFields(scope, trg, order, &ord);
+		if (err != NOWDB_OK) {
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+		/* find index for order by */
+		err = getGroupOrderIndex(scope, trg->stype,
+		                  trg->value, ord, &idxes);
+		if (err != NOWDB_OK) {
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
 			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
@@ -1112,6 +1139,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
 			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
+			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
 	}
@@ -1127,17 +1157,21 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		if (grp != NULL) {
 			destroyFieldList(grp); free(grp);
 		}
+		if (ord != NULL) {
+			destroyFieldList(ord); free(ord);
+		}
 		ts_algo_list_destroy(&idxes);
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
 	stp->ntype = NOWDB_PLAN_READER;
-	if (idxes.len == 1 && group == NULL) {
+	if (idxes.len == 1 && group == NULL && order == NULL) {
 		stp->stype = NOWDB_READER_SEARCH_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 
+ 	/* this is for order and group with aggregates */
 	} else if (idxes.len == 1) {
 		fprintf(stderr, "creating range\n");
 		stp->stype = NOWDB_READER_RANGE_;
@@ -1165,6 +1199,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		if (grp != NULL) {
 			destroyFieldList(grp); free(grp);
 		}
+		if (ord != NULL) {
+			destroyFieldList(ord); free(ord);
+		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
@@ -1179,6 +1216,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
 			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
@@ -1198,6 +1238,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
 			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
+			}
 			free(stp); return err;
 		}
 	}
@@ -1212,6 +1255,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
 			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
@@ -1229,6 +1275,47 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
+			}
+			nowdb_plan_destroy(plan, FALSE);
+			free(stp); return err;
+		}
+
+	/* add order by */
+	} else  if (order != NULL) {
+		stp = malloc(sizeof(nowdb_plan_t));
+		if (stp == NULL) {
+			NOMEM("allocating plan");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
+			}
+			nowdb_plan_destroy(plan, FALSE); return err;
+		}
+
+		stp->ntype = NOWDB_PLAN_ORDERING;
+		stp->stype = 0;
+		stp->helper = 0;
+		stp->name = NULL;
+		stp->load = ord; 
+	
+		if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
+			NOMEM("list.append");
+			if (filter != NULL) {
+				nowdb_filter_destroy(filter); free(filter);
+			}
+			if (grp != NULL) {
+				destroyFieldList(grp); free(grp);
+			}
+			if (ord != NULL) {
+				destroyFieldList(ord); free(ord);
 			}
 			nowdb_plan_destroy(plan, FALSE);
 			free(stp); return err;
@@ -1306,6 +1393,9 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 			destroyFieldList(node->load); free(node->load);
 		}
 		if (node->ntype == NOWDB_PLAN_GROUPING) {
+			destroyFieldList(node->load); free(node->load);
+		}
+		if (node->ntype == NOWDB_PLAN_ORDERING) {
 			destroyFieldList(node->load); free(node->load);
 		}
 		free(node); tmp = runner->nxt;
