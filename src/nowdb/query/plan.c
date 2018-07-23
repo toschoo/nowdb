@@ -241,6 +241,7 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 
 	case NOWDB_TYP_TEXT:
 		if (off == NOWDB_OFF_TMSTMP) {
+			*typ = NOWDB_TYP_TIME;
 			err = nowdb_time_fromString(str,
 			      NOWDB_TIME_FORMAT, *value);
 		} else {
