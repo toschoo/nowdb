@@ -65,6 +65,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
 
+	fprintf(stderr, "files: %d\n", cur->stf.files.len);
+
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		pidx = rplan->load;
