@@ -22,6 +22,17 @@
 typedef char nowdb_ordering_t;  /* just for the moment */
 
 /* ------------------------------------------------------------------------
+ * Reader Types
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_READER_FULLSCAN 1
+#define NOWDB_READER_SEARCH   10
+#define NOWDB_READER_FRANGE   100
+#define NOWDB_READER_KRANGE   101
+#define NOWDB_READER_CRANGE   102
+#define NOWDB_READER_BUF      1000
+
+/* ------------------------------------------------------------------------
  * Reader   
  * ------
  * Reader is a fundamental interface to get access to data.

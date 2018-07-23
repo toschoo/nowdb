@@ -17,6 +17,20 @@
 static char *OBJECT = "cursor";
 
 /* ------------------------------------------------------------------------
+ * Helper: Index contains model identifier
+ * ------------------------------------------------------------------------
+ */
+static inline char hasId(nowdb_plan_idx_t *pidx) {
+	nowdb_index_keys_t *keys;
+	keys = nowdb_index_getResource(pidx->idx);
+	for(int i=0; i<keys->sz; i++) {
+		if (keys->off[i] == NOWDB_OFF_EDGE) return 1;
+		if (keys->off[i] == NOWDB_OFF_VERTEX) return 1;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
  * Init Reader 
  * ------------------------------------------------------------------------
  */
@@ -43,6 +57,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		store = &ctx->store;
 	}
 
+	cur->hasid = TRUE;
+
 	/* we still need to get the period from the filter */
 	err = nowdb_store_getFiles(store, &cur->stf.files,
 		                          NOWDB_TIME_DAWN,
@@ -50,7 +66,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	if (err != NOWDB_OK) return err;
 
 	/* create an index search reader */
-	if (plan->stype == NOWDB_READER_SEARCH_) {
+	if (plan->stype == NOWDB_PLAN_SEARCH_) {
 		pidx = plan->load;
 		err = nowdb_reader_search(cur->rdrs+idx,
 		                         &cur->stf.files,
@@ -58,7 +74,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                          pidx->keys,NULL);
 		free(pidx->keys); free(pidx);
 
-	} else if (plan->stype == NOWDB_READER_FRANGE_) {
+	} else if (plan->stype == NOWDB_PLAN_FRANGE_) {
 		pidx = plan->load;
 		err = nowdb_reader_frange(cur->rdrs+idx,
 		                        &cur->stf.files,
@@ -66,16 +82,18 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                         NULL, NULL); /* range ! */
 		free(pidx); /* the index should be destroyed by plan */
 
-	} else if (plan->stype == NOWDB_READER_KRANGE_) {
+	} else if (plan->stype == NOWDB_PLAN_KRANGE_) {
 		pidx = plan->load;
+		cur->hasid = hasId(pidx);
 		err = nowdb_reader_krange(cur->rdrs+idx,
 		                        &cur->stf.files,
 		                        pidx->idx, NULL,
 		                        NULL, NULL); /* range ! */
 		free(pidx); /* the index should be destroyed by plan */
 
-	} else if (plan->stype == NOWDB_READER_CRANGE_) {
+	} else if (plan->stype == NOWDB_PLAN_CRANGE_) {
 		pidx = plan->load;
+		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(cur->rdrs+idx,
 		                        &cur->stf.files,
 		                        pidx->idx, NULL,
@@ -151,7 +169,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	if (rstp->ntype != NOWDB_PLAN_READER) {
 		INVALIDPLAN("reader expected in plan");
 	}
-	if (rstp->stype == NOWDB_READER_SEARCH_) rn++;
+	if (rstp->stype == NOWDB_PLAN_SEARCH_) rn++;
 
 	/* allocate the cursor */
 	*cur = calloc(1, sizeof(nowdb_cursor_t));
@@ -171,7 +189,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		                               "allocating readers");
 	}
 	(*cur)->numr = rn;
-	if (rn > 1 && rstp->stype == NOWDB_READER_SEARCH_) {
+	if (rn > 1 && rstp->stype == NOWDB_PLAN_SEARCH_) {
 		(*cur)->disc = NOWDB_ITER_SEQ;
 	}
 
@@ -189,7 +207,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	}
 	i++;
 
-	if (rstp->stype == NOWDB_READER_SEARCH_) {
+	if (rstp->stype == NOWDB_PLAN_SEARCH_) {
 		err = getPending(&(*cur)->stf.files,
 		                 &(*cur)->stf.pending);
 		if (err != NOWDB_OK) {
@@ -350,7 +368,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t x = 0;
 	uint32_t r = cur->cur;
 	uint32_t recsz = cur->rdrs[r]->recsize;
-	uint32_t rtype = cur->rdrs[r]->type;
 	nowdb_filter_t *filter = cur->rdrs[r]->filter;
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
@@ -395,9 +412,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		}
 
 		/* copy the record to the output buffer */
-		if (cur->row == NULL ||
-		   (rtype == NOWDB_READER_KRANGE ||
-		    rtype == NOWDB_READER_CRANGE)) {
+		if (cur->row == NULL || !cur->hasid) {
 			memcpy(buf+x, src+cur->off, recsz);
 			x += recsz; cur->off += recsz;
 			(*count)++;
@@ -408,6 +423,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			                        src+cur->off, recsz,
 			                        buf, sz, &x, &cc,
 			                        &complete);
+			if (err != NOWDB_OK) return err;
 			if (complete) {
 				cur->off += recsz;
 				(*count)+=cc;

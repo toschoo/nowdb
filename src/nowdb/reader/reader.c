@@ -9,7 +9,7 @@
 static char *OBJECT = "reader";
 
 /* ------------------------------------------------------------------------
- * Helper: initialise an new reader
+ * Reader Types
  * ------------------------------------------------------------------------
  */
 #define NOWDB_READER_FULLSCAN 1
@@ -508,7 +508,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
  * ------------------------------------------------------------------------
  */
 char *nowdb_reader_page(nowdb_reader_t *reader) {
-	int sz;
+	int sz, off=0;
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
 	case NOWDB_READER_SEARCH:
@@ -521,7 +521,8 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 			sz = nowdb_sizeByOff(reader->recsize,
 			                     reader->ikeys->off[i]);
 			memcpy(reader->buf+reader->ikeys->off[i],
-			            (char*)(reader->key)+sz, sz);
+			           (char*)(reader->key)+off, sz);
+			off+=sz;
 		}
 		return reader->buf;
 

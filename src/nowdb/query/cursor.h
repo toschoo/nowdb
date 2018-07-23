@@ -39,8 +39,7 @@ typedef struct {
 	uint32_t           cur; /* current reader                */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
-	/* projection !             */
-	/* grouping, ordering, etc. */
+	char             hasid; /* has id to identify model      */
 	/* sub-queries?             */
 } nowdb_cursor_t;
 

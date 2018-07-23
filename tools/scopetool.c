@@ -241,6 +241,7 @@ int processCursor(nowdb_cursor_t *cur) {
 	uint32_t osz;
 	uint32_t cnt;
 	uint64_t total=0;
+	char eof=0;
 	nowdb_err_t err=NOWDB_OK;
 
 	err = nowdb_cursor_open(cur);
@@ -259,13 +260,14 @@ int processCursor(nowdb_cursor_t *cur) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
 				err = NOWDB_OK;
+				eof = 1;
 			}
-			if (cnt > 0) fprintf(stderr, "EOF\n");
-			break;
+			if (cnt == 0) break;
 		}
 		total += cnt;
+		// fprintf(stderr, "%lu\n", total);
 		if (cur->recsize == 32) {
-			if (cur->row != NULL) {
+			if (cur->row != NULL && cur->hasid) {
 				printRow(buf, osz);
 			} else {
 				printVertex((nowdb_vertex_t*)buf, osz/32);
@@ -273,12 +275,13 @@ int processCursor(nowdb_cursor_t *cur) {
 		} else if (cur->recsize == 64) {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);
-			} else if (cur->row != NULL) {
+			} else if (cur->row != NULL && cur->hasid) {
 				printRow(buf, osz);
 			} else {
 				printEdge((nowdb_edge_t*)buf, osz/64);
 			}
 		}
+		if (eof) break;
 	}
 	fprintf(stderr, "Read: %lu\n", total);
 

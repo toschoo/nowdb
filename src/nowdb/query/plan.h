@@ -41,16 +41,16 @@
  * - range+
  * ------------------------------------------------------------------------
  */
-#define NOWDB_READER_FS       10 
-#define NOWDB_READER_FS_      11  
-#define NOWDB_READER_SEARCH   20
-#define NOWDB_READER_SEARCH_  21
-#define NOWDB_READER_FRANGE   30
-#define NOWDB_READER_FRANGE_  31
-#define NOWDB_READER_KRANGE   40
-#define NOWDB_READER_KRANGE_  41
-#define NOWDB_READER_CRANGE   50
-#define NOWDB_READER_CRANGE_  51
+#define NOWDB_PLAN_FS       10 
+#define NOWDB_PLAN_FS_      11  
+#define NOWDB_PLAN_SEARCH   20
+#define NOWDB_PLAN_SEARCH_  21
+#define NOWDB_PLAN_FRANGE   30
+#define NOWDB_PLAN_FRANGE_  31
+#define NOWDB_PLAN_KRANGE   40
+#define NOWDB_PLAN_KRANGE_  41
+#define NOWDB_PLAN_CRANGE   50
+#define NOWDB_PLAN_CRANGE_  51
 
 /* ------------------------------------------------------------------------
  * Iterator Types:
