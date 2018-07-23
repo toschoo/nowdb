@@ -12,6 +12,7 @@
 #include <nowdb/types/error.h>
 
 #include <stdint.h>
+#include <stdio.h>
 
 /* ------------------------------------------------------------------------
  * Node type
@@ -96,5 +97,18 @@ nowdb_bool_t nowdb_filter_eval(nowdb_filter_t *filter, void *data);
  */
 nowdb_err_t nowdb_filter_copy(nowdb_filter_t *src, nowdb_filter_t *trg);
 
+/* ------------------------------------------------------------------------
+ * Extract period from filter
+ * ------------------------------------------------------------------------
+ */
+void nowdb_filter_period(nowdb_filter_t *filter,
+                         nowdb_time_t   *start,
+                         nowdb_time_t   *end);
+
+/* ------------------------------------------------------------------------
+ * Print filter to stream
+ * ------------------------------------------------------------------------
+ */
+void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream);
 #endif
 

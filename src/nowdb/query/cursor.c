@@ -37,22 +37,24 @@ static inline char hasId(nowdb_plan_idx_t *pidx) {
 static inline nowdb_err_t initReader(nowdb_scope_t *scope,
                                      nowdb_cursor_t  *cur,
                                      int              idx,
-                                     nowdb_plan_t   *plan)  {
+                                     nowdb_time_t   start,
+                                     nowdb_time_t     end,
+                                     nowdb_plan_t  *rplan) {
 	nowdb_err_t      err;
 	nowdb_store_t *store;
 	nowdb_context_t *ctx;
 	nowdb_plan_idx_t *pidx;
 
 	/* target is vertex */
-	if (plan->helper == NOWDB_AST_VERTEX ||
-	    plan->helper == NOWDB_AST_TYPE) {
+	if (rplan->helper == NOWDB_AST_VERTEX ||
+	    rplan->helper == NOWDB_AST_TYPE) {
 		cur->recsize = 32;
 		store = &scope->vertices;
 
 	/* target is a context */
 	} else {
 		cur->recsize = 64;
-		err = nowdb_scope_getContext(scope, plan->name, &ctx);
+		err = nowdb_scope_getContext(scope, rplan->name, &ctx);
 		if (err != NOWDB_OK) return err;
 		store = &ctx->store;
 	}
@@ -60,30 +62,28 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	cur->hasid = TRUE;
 
 	/* we still need to get the period from the filter */
-	err = nowdb_store_getFiles(store, &cur->stf.files,
-		                          NOWDB_TIME_DAWN,
-	                                  NOWDB_TIME_DUSK);
+	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
 
 	/* create an index search reader */
-	if (plan->stype == NOWDB_PLAN_SEARCH_) {
-		pidx = plan->load;
+	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
+		pidx = rplan->load;
 		err = nowdb_reader_search(cur->rdrs+idx,
 		                         &cur->stf.files,
 		                          pidx->idx,
 		                          pidx->keys,NULL);
 		free(pidx->keys); free(pidx);
 
-	} else if (plan->stype == NOWDB_PLAN_FRANGE_) {
-		pidx = plan->load;
+	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
+		pidx = rplan->load;
 		err = nowdb_reader_frange(cur->rdrs+idx,
 		                        &cur->stf.files,
 		                         pidx->idx, NULL,
 		                         NULL, NULL); /* range ! */
 		free(pidx); /* the index should be destroyed by plan */
 
-	} else if (plan->stype == NOWDB_PLAN_KRANGE_) {
-		pidx = plan->load;
+	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
+		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_krange(cur->rdrs+idx,
 		                        &cur->stf.files,
@@ -91,8 +91,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                        NULL, NULL); /* range ! */
 		free(pidx); /* the index should be destroyed by plan */
 
-	} else if (plan->stype == NOWDB_PLAN_CRANGE_) {
-		pidx = plan->load;
+	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
+		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(cur->rdrs+idx,
 		                        &cur->stf.files,
@@ -146,9 +146,11 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
                              nowdb_cursor_t  **cur) {
 	int i=0;
 	ts_algo_list_node_t *runner;
-	nowdb_plan_t *stp, *rstp;
+	nowdb_plan_t *stp=NULL, *rstp=NULL;
 	nowdb_err_t   err;
 	uint32_t rn=0;
+	nowdb_time_t start = NOWDB_TIME_DAWN;
+	nowdb_time_t end = NOWDB_TIME_DUSK;
 
 	/* point to head of plan */
 	runner=plan->head;
@@ -199,7 +201,19 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
 
-	err = initReader(scope, *cur, i, rstp);
+	/* pass on to the filter (in fact, there should/may be,
+	 * one filter per reader */
+	runner = runner->nxt;
+	if (runner!=NULL) {
+		stp = runner->cont;
+		if (stp->ntype == NOWDB_PLAN_FILTER) {
+			(*cur)->filter = stp->load;
+			nowdb_filter_period(stp->load, &start, &end);
+			runner = runner->nxt;
+		}
+	}
+
+	err = initReader(scope, *cur, i, start, end, rstp);
 	if (err != NOWDB_OK) {
 		free((*cur)->rdrs); (*cur)->rdrs = NULL;
 		free(*cur); *cur = NULL;
@@ -223,28 +237,16 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			free(*cur); *cur = NULL;
 		}
 	}
+	if ((*cur)->filter != NULL) {
+		for(i=0;i<rn;i++) {
+			(*cur)->rdrs[i]->filter = (*cur)->filter;
+		}
+	}
 
 	/* In case of range:
 	 * create a bufscanner */
 
-	/* pass on to the filter (in fact, there should/may be,
-	 * one filter per reader */
-	runner = runner->nxt;
-	if (runner!=NULL) {
-		stp = runner->cont;
-
-		/* this should be sent per reader and added
-		 * to the corresponding reader... */
-		if (stp->ntype == NOWDB_PLAN_FILTER) {
-			(*cur)->filter = stp->load;
-			for(i=0;i<rn;i++) {
-				(*cur)->rdrs[i]->filter = stp->load;
-			}
-		}
-	}
-
 	/* pass on to projection or order by or group by */
-	runner = runner->nxt;
 	if (runner == NULL) return NOWDB_OK;
 	stp = runner->cont;
 

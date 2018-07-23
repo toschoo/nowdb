@@ -88,6 +88,7 @@ int testJust() {
 	f->left = mkBool(NOWDB_FILTER_FALSE);
 	if (f->left == NULL) return 0;
 
+	nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
 	x = nowdb_filter_eval(f,NULL);
 	nowdb_filter_destroy(f); free(f);
 
@@ -99,6 +100,7 @@ int testJust() {
 	f->left = mkBool(NOWDB_FILTER_TRUE);
 	if (f->left == NULL) return 0;
 
+	nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
 	x = nowdb_filter_eval(f,NULL);
 	nowdb_filter_destroy(f); free(f);
 
@@ -129,6 +131,7 @@ int testOr() {
 		}
 		if (f->right == NULL) return 0;
 
+		nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
 		x = nowdb_filter_eval(f,NULL);
 		nowdb_filter_destroy(f); free(f);
 
@@ -164,6 +167,7 @@ int testAnd() {
 		}
 		if (f->right == NULL) return 0;
 
+		nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
 		x = nowdb_filter_eval(f,NULL);
 		nowdb_filter_destroy(f); free(f);
 
