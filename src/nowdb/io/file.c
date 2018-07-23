@@ -412,8 +412,9 @@ static inline void deltas(char *buf, uint32_t size,
 		if (*tmp < from) from = *tmp;
 	}
 	delta = to - from;
-	if (delta > MAX32) return;
-	*d = (uint32_t)delta;
+	*d = (uint32_t)(delta >> 32);
+	(*d)++;
+	// fprintf(stderr, "%lu - %lu = %lu (%u,%lu)\n", to, from, delta, x,y);
 	*t = from;
 }
 
@@ -984,6 +985,7 @@ nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
                              char         *worth) {
 	nowdb_err_t err;
 	nowdb_time_t to;
+	nowdb_time_t tmp;
 
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -1004,7 +1006,9 @@ nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
 	if (file->hdr.delta == 0 && file->hdr.from == 0) return NOWDB_OK;
 
 	to = file->hdr.from;
-	to += (nowdb_time_t)file->hdr.delta;
+	tmp = (nowdb_time_t)file->hdr.delta;
+	tmp <<= 32;
+	to += tmp;
 
 	if (end < file->hdr.from || start > to) *worth = 0;
 

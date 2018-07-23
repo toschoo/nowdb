@@ -69,6 +69,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
+		fprintf(stderr, "SEARCH\n");
 		pidx = rplan->load;
 		err = nowdb_reader_search(cur->rdrs+idx,
 		                         &cur->stf.files,
@@ -111,6 +112,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		nowdb_store_destroyFiles(store, &cur->stf.files);
 		return err;
 	}
+
+	nowdb_reader_setPeriod(cur->rdrs[idx], start, end);
 
 	/* remember where the files came from */
 	cur->stf.store = store;

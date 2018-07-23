@@ -43,7 +43,8 @@ static ts_algo_cmp_t compare(void *ignore, void *one, void *two) {
 static void destroy(void *ignore, void **n) {
 	if (n == NULL) return;
 	if (*n == NULL) return;
-	if (PAIR(*n)->page != NULL) {
+	if (PAIR(*n)->page != NULL &&
+	    PAIR(*n)->page != NOWDB_BLACK_PAGE) {
 		free(PAIR(*n)->page);
 		PAIR(*n)->page = NULL;
 	}
@@ -132,7 +133,9 @@ nowdb_err_t nowdb_pplru_add(nowdb_pplru_t *lru,
 		NOMEM("allocating page");
 		return err;
 	}
-	memcpy(pair->page, page, NOWDB_IDX_PAGE);
+	if (page != NOWDB_BLACK_PAGE) {
+		memcpy(pair->page, page, NOWDB_IDX_PAGE);
+	}
 
 	if (ts_algo_lru_add(lru, pair) != TS_ALGO_OK) {
 		NOMEM("adding content to LRU");
