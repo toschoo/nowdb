@@ -57,8 +57,8 @@ typedef enum {
 typedef struct {
 	nowdb_bitmap64_t set[2]; /* set if not deleted */
 	uint32_t           size; /* compressed size    */
-	uint32_t       reserve4;
-	uint64_t       reserve8;
+	uint32_t          delta; /* delta from - to    */
+	int64_t           from;  /* from               */
 } nowdb_block_hdr_t;
 
 /* ------------------------------------------------------------------------
@@ -262,4 +262,12 @@ nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
  */
 nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file);
 
+/* ------------------------------------------------------------------------
+ * It's worth to have a loock at the current block
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
+                             nowdb_time_t  start,
+                             nowdb_time_t    end,
+                             char         *worth);
 #endif

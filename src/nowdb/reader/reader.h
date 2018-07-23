@@ -70,6 +70,8 @@ typedef struct {
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
+	nowdb_time_t            from; /* start of period               */
+	nowdb_time_t              to; /* end   of period               */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------
@@ -146,6 +148,14 @@ nowdb_err_t nowdb_reader_read(nowdb_reader_t *reader,
                               char           *buf,
                               uint32_t        size,
                               uint32_t       *osize);
+
+/* ------------------------------------------------------------------------
+ * Set Period
+ * ------------------------------------------------------------------------
+ */
+void nowdb_reader_setPeriod(nowdb_reader_t *reader,
+                            nowdb_time_t     start,
+                            nowdb_time_t       end);
 
 /* ------------------------------------------------------------------------
  * Fullscan

@@ -52,6 +52,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->file = NULL;
 	reader->cont = NULL;
 	reader->ikeys = NULL;
+	reader->from = NOWDB_TIME_DAWN;
+	reader->to   = NOWDB_TIME_DUSK;
 
 	return NOWDB_OK;
 }
@@ -557,6 +559,17 @@ nowdb_err_t nowdb_reader_read(nowdb_reader_t *reader,
                               char           *buf,
                               uint32_t        size,
                               uint32_t       *osize);
+
+/* ------------------------------------------------------------------------
+ * Set Period
+ * ------------------------------------------------------------------------
+ */
+void nowdb_reader_setPeriod(nowdb_reader_t *reader,
+                            nowdb_time_t     start,
+                            nowdb_time_t       end) {
+	reader->from = start;
+	reader->to   = end;
+}
 
 /* ------------------------------------------------------------------------
  * Fullscan
