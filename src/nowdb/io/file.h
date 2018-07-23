@@ -263,7 +263,7 @@ nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
 nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
- * It's worth to have a loock at the current block
+ * Is it worth to have a loock at the current block?
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_worth(nowdb_file_t *file,

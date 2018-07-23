@@ -291,6 +291,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	nowdb_err_t err;
 	nowdb_fileid_t fid;
 	uint32_t pos;
+	char w=1;
 
 	if (reader->plru != NULL) {
 		err = nowdb_pplru_get(reader->plru, pge, &reader->page);
@@ -321,6 +322,11 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	}
 	err = nowdb_file_position(reader->file, pos);
 	if (err != NOWDB_OK) return err;
+
+	/* this is sloppy */
+	err = nowdb_file_worth(reader->file, reader->from, reader->to, &w);
+	if (!w) return nowdb_err_get(nowdb_err_key_not_found,
+	                                 FALSE, OBJECT, NULL);
 
 	err = nowdb_file_loadBlock(reader->file);
 	if (err != NOWDB_OK) return err;
