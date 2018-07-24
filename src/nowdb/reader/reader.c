@@ -227,15 +227,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	nowdb_err_t err;
 
-	/* this is sloppy */
-	/*
-	err = nowdb_file_worth(reader->current->cont,
-	                       reader->from, reader->to, &w);
-	if (err != NOWDB_OK) return err;
-	if (!w) return nowdb_err_get(nowdb_err_key_not_found,
-	                                 FALSE, OBJECT, NULL);
-	*/
-
 	err = nowdb_file_movePeriod(reader->current->cont,
                                  reader->from, reader->to);
 	if (err == NOWDB_OK) {

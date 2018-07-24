@@ -785,6 +785,9 @@ static inline char worthBlock(nowdb_file_t  *file,
 	nowdb_time_t to;
 	nowdb_time_t tmp;
 
+	if (start == NOWDB_TIME_DAWN &&
+	    end   == NOWDB_TIME_DUSK) return 1;
+
 	if (file->hdr.delta == 0 && file->hdr.from == 0) return 1;
 
 	to = file->hdr.from;

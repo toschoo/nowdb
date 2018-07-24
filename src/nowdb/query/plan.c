@@ -530,7 +530,6 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 static nowdb_err_t idxFromFilter(nowdb_filter_t *filter,
                                  ts_algo_list_t *cands) {
 	nowdb_err_t err;
-	int x;
 
 	if (filter == NULL) return NOWDB_OK;
 
@@ -545,15 +544,23 @@ static nowdb_err_t idxFromFilter(nowdb_filter_t *filter,
 		}
 	}
 	if (filter->ntype == NOWDB_FILTER_BOOL) {
-		if (filter->op == NOWDB_FILTER_AND) {
-			x = cands->len;	
+		switch(filter->op) {
+		case NOWDB_FILTER_AND:
 			err = idxFromFilter(filter->left, cands);
 			if (err != NOWDB_OK) return err;
-			if (x == cands->len) return NOWDB_OK;
 			err = idxFromFilter(filter->right, cands);
 			if (err != NOWDB_OK) return err;
-		}
+			return NOWDB_OK;
+
+		case NOWDB_FILTER_JUST:
+			err = idxFromFilter(filter->left, cands);
+			if (err != NOWDB_OK) return err;
+			return NOWDB_OK;
+
 		/* or is multi-index */
+		default: return NOWDB_OK;
+		}
+
 	}
 	return NOWDB_OK;
 }
@@ -797,7 +804,7 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 	}
 	
 	err = idxFromFilter(filter, &cands);
-	if (err != NOWDB_OK) {
+	if (err != NOWDB_OK || cands.len == 0) {
 		ts_algo_list_destroy(&cands);
 		ts_algo_list_destroy(&idxes);
 		return err;
@@ -1078,6 +1085,23 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	/* init index list */
 	ts_algo_list_init(&idxes);
 
+	/* the selection of indices follows the precedence
+	 * group > order > where,
+	 * i.e. if we have grouping, use the index for grouping
+	 *      if we have ordering, use the index for ordering
+	 * only if we don't have grouping nor ordering,
+	 *         we use the indices for the where.
+	 *
+	 * This is, because we currently don't have a way
+	 * to order or to group without indices.
+	 * At the end, when we have such means,
+	 * the precedence should be the contrary:
+	 * whenever we can use and index for filtering,
+	 * do so! It is better to sort some 1000 data points,
+	 * then to scan the whole database -- even when it is
+	 * by means of an index.
+	 * Exception: when we have a small range! */
+
 	/* get group by */
 	group = nowdb_ast_group(ast);
 	if (group != NULL) {
@@ -1172,8 +1196,8 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 
- 	/* this is for group without aggregates */
-	} else if (idxes.len == 1 && order == NULL) {
+ 	/* this is for group without aggregates and without filter */
+	} else if (idxes.len == 1 && order == NULL && filter == NULL) {
 		stp->stype = NOWDB_PLAN_KRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
