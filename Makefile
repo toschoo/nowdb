@@ -147,6 +147,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
 	$(SMK)/scopesmoke              \
+	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
@@ -315,6 +316,15 @@ $(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/scopesmoke2:	$(LIB) $(DEP) $(SMK)/scopesmoke2.o \
+			$(COM)/scopes.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(COM)/scopes.o \
+			                 $(COM)/bench.o  \
+			                 $(libs) -lnowdb
+
 $(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
@@ -475,6 +485,7 @@ $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
+
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -505,6 +516,7 @@ clean:
 	rm -rf $(RSC)/testscope
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
+	rm -rf $(RSC)/scope???
 	rm -rf $(RSC)/iman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
@@ -524,6 +536,7 @@ clean:
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
+	rm -f $(SMK)/scopesmoke2
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
