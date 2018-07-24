@@ -243,8 +243,6 @@ int main() {
 	}
 
 cleanup:
-	closeScopes();
-	nowdb_close();
 	if (scope != NULL) {
 		closeScope(scope);
 		nowdb_scope_destroy(scope); free(scope);
@@ -253,6 +251,9 @@ cleanup:
 	if (clients != NULL) free(clients);
 	fprintf(stderr, "freeing products\n");
 	if (products != NULL) free(products);
+
+	closeScopes();
+	nowdb_close();
 
 	if (rc == EXIT_SUCCESS) {
 		fprintf(stderr, "PASSED\n");
