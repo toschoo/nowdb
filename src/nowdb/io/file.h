@@ -245,6 +245,14 @@ nowdb_err_t nowdb_file_rewind(nowdb_file_t *file);
 nowdb_err_t nowdb_file_move(nowdb_file_t *file);
 
 /* ------------------------------------------------------------------------
+ * Move file to next relevant block according to period
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_movePeriod(nowdb_file_t *file,
+                                  nowdb_time_t start,
+                                  nowdb_time_t   end);
+
+/* ------------------------------------------------------------------------
  * Position file freely ("reader")
  * ------------------------------------------------------------------------
  */

@@ -775,6 +775,28 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: check header - worth decompressing the block?
+ * -----------------------------------------------------------------------
+ */
+static inline char worthBlock(nowdb_file_t  *file,
+                              nowdb_time_t  start,
+                              nowdb_time_t    end) {
+	nowdb_time_t to;
+	nowdb_time_t tmp;
+
+	if (file->hdr.delta == 0 && file->hdr.from == 0) return 1;
+
+	to = file->hdr.from;
+	tmp = (nowdb_time_t)file->hdr.delta;
+	tmp <<= 32;
+	to += tmp;
+
+	if (end < file->hdr.from || start > to) return 0;
+
+	return 1;
+}
+
 /* ------------------------------------------------------------------------
  * Helper function to load a block from a compressed file
  * ------------------------------------------------------------------------
@@ -830,7 +852,9 @@ static inline nowdb_err_t compload(nowdb_file_t *file,
  * Helper function to move through a compressed file
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t compmove(nowdb_file_t *file) {
+static inline nowdb_err_t compmove(nowdb_file_t *file,
+                                   nowdb_time_t start,
+                                   nowdb_time_t   end) {
 	nowdb_err_t err = NOWDB_OK;
 
 	/* no header loaded */
@@ -849,8 +873,10 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
 		/* decompress */
-		err = zstddecomp(file);
-		if (err != NOWDB_OK) return err;
+		if (worthBlock(file, start, end)) {
+			err = zstddecomp(file);
+			if (err != NOWDB_OK) return err;
+		}
 
 		/* move on to next header */
 		file->off += file->hdr.size;
@@ -889,7 +915,9 @@ static inline nowdb_err_t plainmove(nowdb_file_t *file) {
  * Move file one block forward
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
+nowdb_err_t filemove(nowdb_file_t *file,
+                     nowdb_time_t start,
+                     nowdb_time_t   end) {
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                            "file descriptor is NULL");
@@ -901,7 +929,25 @@ nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
 	}
 	if (file->state == nowdb_file_state_mapped) return remap(file);
 	if (file->comp == NOWDB_COMP_FLAT) return plainmove(file);
-	return compmove(file);
+	return compmove(file, start, end);
+}
+
+/* ------------------------------------------------------------------------
+ * Move file one block forward
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
+	return filemove(file, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
+}
+
+/* ------------------------------------------------------------------------
+ * Move file to next relevant block according to period
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_movePeriod(nowdb_file_t *file,
+                                  nowdb_time_t start,
+                                  nowdb_time_t   end) {
+	return filemove(file, start, end);
 }
 
 /* ------------------------------------------------------------------------
@@ -943,7 +989,7 @@ nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file) {
 	}
 	if (file->comp == NOWDB_COMP_FLAT) return plainload(file);
 	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
-	return compmove(file);
+	return compmove(file, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 }
 
 /* ------------------------------------------------------------------------
@@ -984,8 +1030,6 @@ nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
                              nowdb_time_t    end,
                              char         *worth) {
 	nowdb_err_t err;
-	nowdb_time_t to;
-	nowdb_time_t tmp;
 
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -1003,14 +1047,6 @@ nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
 	err = nowdb_file_loadHeader(file);
 	if (err != NOWDB_OK) return err;
 
-	if (file->hdr.delta == 0 && file->hdr.from == 0) return NOWDB_OK;
-
-	to = file->hdr.from;
-	tmp = (nowdb_time_t)file->hdr.delta;
-	tmp <<= 32;
-	to += tmp;
-
-	if (end < file->hdr.from || start > to) *worth = 0;
-
+	*worth = worthBlock(file, start, end);
 	return NOWDB_OK;
 }

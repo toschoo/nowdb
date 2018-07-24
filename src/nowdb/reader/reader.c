@@ -166,6 +166,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		free(reader->bplru);
 		reader->bplru = NULL;
 	}
+
 	switch(reader->type) {
 
 	case NOWDB_READER_FULLSCAN:
@@ -226,7 +227,17 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	nowdb_err_t err;
 
-	err = nowdb_file_move(reader->current->cont);
+	/* this is sloppy */
+	/*
+	err = nowdb_file_worth(reader->current->cont,
+	                       reader->from, reader->to, &w);
+	if (err != NOWDB_OK) return err;
+	if (!w) return nowdb_err_get(nowdb_err_key_not_found,
+	                                 FALSE, OBJECT, NULL);
+	*/
+
+	err = nowdb_file_movePeriod(reader->current->cont,
+                                 reader->from, reader->to);
 	if (err == NOWDB_OK) {
 		reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
 		return NOWDB_OK;
@@ -301,20 +312,11 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	nowdb_fileid_t fid;
 	uint32_t pos;
 	char w=1;
-	char *dummy;
 
 	if (reader->plru != NULL) {
 		err = nowdb_pplru_get(reader->plru, pge, &reader->page);
 		if (err != NOWDB_OK) return err;
 		if (reader->page != NULL) return NOWDB_OK;
-	}
-	if (reader->bplru != NULL) {
-		err = nowdb_pplru_get(reader->bplru, pge, &dummy);
-		if (err != NOWDB_OK) return err;
-		if (reader->page == NOWDB_BLACK_PAGE) {
-			return nowdb_err_get(nowdb_err_key_not_found,
-			                         FALSE, OBJECT, NULL);
-		}
 	}
 
 	getFilePos(pge, &fid, &pos);
@@ -344,22 +346,8 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	/* this is sloppy */
 	err = nowdb_file_worth(reader->file, reader->from, reader->to, &w);
 	if (err != NOWDB_OK) return err;
-	if (!w) {
-		// fprintf(stderr, "ignoring %lu\n", pge);
-		/*
-		if (reader->bplru != NULL) {
-			err = nowdb_pplru_add(reader->bplru, pge,
-			                        NOWDB_BLACK_PAGE);
-			if (err != NOWDB_OK) return err;
-		}
-		*/
-		return nowdb_err_get(nowdb_err_key_not_found,
+	if (!w) return nowdb_err_get(nowdb_err_key_not_found,
 	                                 FALSE, OBJECT, NULL);
-	}
-	/* else {
-		fprintf(stderr, "considering %lu %lu\n", reader->from, reader->to);
-	}
-	*/
 
 	err = nowdb_file_loadBlock(reader->file);
 	if (err != NOWDB_OK) return err;
@@ -691,20 +679,6 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 		nowdb_reader_destroy(*reader); free(*reader);
 		return makeBeetError(ber);
 	}
-	(*reader)->bplru = calloc(1, sizeof(nowdb_pplru_t));
-	if ((*reader)->bplru == NULL) {
-		nowdb_reader_destroy(*reader); free(*reader);
-		NOMEM("allocating page lru");
-		return err;
-	}
-
-	err = nowdb_pplru_init((*reader)->bplru, 10000);
-	if (err != NOWDB_OK) {
-		free((*reader)->bplru); (*reader)->bplru = NULL;
-		nowdb_reader_destroy(*reader); free(*reader);
-		return err;
-	}
-
 	err = rewindSearch(*reader);
 	if (err != NOWDB_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);
@@ -759,19 +733,6 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 		err = nowdb_pplru_init((*reader)->plru, 10000);
 		if (err != NOWDB_OK) {
 			free((*reader)->plru); (*reader)->plru = NULL;
-			nowdb_reader_destroy(*reader); free(*reader);
-			return err;
-		}
-		(*reader)->bplru = calloc(1, sizeof(nowdb_pplru_t));
-		if ((*reader)->bplru == NULL) {
-			nowdb_reader_destroy(*reader); free(*reader);
-			NOMEM("allocating page lru");
-			return err;
-		}
-
-		err = nowdb_pplru_init((*reader)->bplru, 10000);
-		if (err != NOWDB_OK) {
-			free((*reader)->bplru); (*reader)->bplru = NULL;
 			nowdb_reader_destroy(*reader); free(*reader);
 			return err;
 		}
