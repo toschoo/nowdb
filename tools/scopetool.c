@@ -264,8 +264,8 @@ int processCursor(nowdb_cursor_t *cur) {
 				nowdb_err_release(err);
 				err = NOWDB_OK;
 				eof = 1;
-			}
-			if (cnt == 0) break;
+				if (cnt == 0) break;
+			} else break;
 		}
 		nowdb_timestamp(&t2);
 		fprintf(stderr, "FETCH (%u): %ldus\n", cnt, nowdb_time_minus(&t2, &t1)/1000);

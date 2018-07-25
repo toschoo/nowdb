@@ -379,7 +379,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
 	uint32_t mx;
-	char more = 1;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
@@ -387,7 +386,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	     cur->rdrs[r]->type != NOWDB_READER_CRANGE?
 	     NOWDB_IDX_PAGE:recsz;
 
-	while(more && *osz < sz) {
+	while(*osz < sz) {
 		// fprintf(stderr, "fetch %u %u\n", cur->off, *osz);
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
@@ -435,7 +434,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				cur->off+=recsz;
 				(*count)+=cc;
 			}
-			if (cc == 0) more=0;
+			if (cc == 0) break;
 		}
 	}
 	return NOWDB_OK;

@@ -361,19 +361,10 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t moveFullscan(nowdb_reader_t *reader) {
-	nowdb_err_t err;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
 	                                           FALSE, OBJECT, NULL);
-	for(;;) {
-		err = nextpage(reader);
-		if (err == NOWDB_OK) break;
-		if (err->errcode == nowdb_err_key_not_found) {
-			fprintf(stderr, "ingored\n");
-			nowdb_err_release(err); continue;
-		}
-		return err;
-	}
-	return NOWDB_OK;
+	/* test getpage for fullscan ! */
+	return nextpage(reader);
 }
 
 /* ------------------------------------------------------------------------
@@ -389,6 +380,7 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		BEETERR(ber);
+
 		/*
 		fprintf(stderr, "content: %lu|%lu (%lu)\n",
 		                           reader->cont[0],
