@@ -382,7 +382,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
-
 	*osz = 0;
 	*count = 0;
 	mx = cur->rdrs[r]->type != NOWDB_READER_KRANGE &&

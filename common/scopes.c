@@ -204,12 +204,22 @@ int execStmt(nowdb_scope_t *scope,
 
 nowdb_cursor_t *openCursor(nowdb_scope_t *scope, char *stmt) {
 	nowdb_qry_result_t res;
+	nowdb_err_t err;
 
 	if (handleStmt(scope, stmt, &res) != 0) return NULL;
 
 	switch(res.resType) {
 
-	case NOWDB_QRY_RESULT_CURSOR: return res.result;
+	case NOWDB_QRY_RESULT_CURSOR: 
+		if (res.result == NULL) return NULL;
+		err = nowdb_cursor_open(res.result);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot open cursor\n");
+			nowdb_err_print(err); nowdb_err_release(err);
+			nowdb_cursor_destroy(res.result); free(res.result);
+			return NULL;
+		}
+		return res.result;
 
 	default:
 		fprintf(stderr, "unexpected result :-(\n");
