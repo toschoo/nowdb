@@ -859,6 +859,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
                                    nowdb_time_t start,
                                    nowdb_time_t   end) {
 	nowdb_err_t err = NOWDB_OK;
+	// char found = 0;
 
 	/* no header loaded */
 	if (file->hdr.size == 0) err = compload(file, TRUE);
@@ -875,10 +876,13 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 	/* decompress using ZSTD */
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
+		// while(!found) {
+
 		/* decompress */
 		if (worthBlock(file, start, end)) {
 			err = zstddecomp(file);
 			if (err != NOWDB_OK) return err;
+			// found=1;
 		}
 
 		/* move on to next header */
@@ -897,6 +901,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
 		return err;
+		// }
 	}
 	/* unknown compression algorithm */
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,

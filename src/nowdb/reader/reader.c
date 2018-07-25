@@ -258,7 +258,8 @@ static inline nowdb_err_t nextpage(nowdb_reader_t *reader) {
 	err = nowdb_file_rewind(reader->current->cont);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_file_move(reader->current->cont);
+	err = nowdb_file_movePeriod(reader->current->cont,
+	                         reader->from, reader->to);
 	if (err != NOWDB_OK) return err;
 
 	reader->page = ((nowdb_file_t*)reader->current->cont)->bptr;
@@ -360,9 +361,19 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t moveFullscan(nowdb_reader_t *reader) {
+	nowdb_err_t err;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
 	                                           FALSE, OBJECT, NULL);
-	return nextpage(reader);
+	for(;;) {
+		err = nextpage(reader);
+		if (err == NOWDB_OK) break;
+		if (err->errcode == nowdb_err_key_not_found) {
+			fprintf(stderr, "ingored\n");
+			nowdb_err_release(err); continue;
+		}
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------

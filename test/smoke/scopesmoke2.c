@@ -257,6 +257,7 @@ int64_t countResult(nowdb_scope_t *scope,
 			}
 			more = 0;
 		}
+		// fprintf(stderr, "%u\n", cnt);
 		res += (int64_t)cnt;
 	}
 	free(buf);
@@ -464,6 +465,7 @@ int main() {
 	CHECKRESULT(5, 0, 0, 0);
 
 	COUNTRESULT("select edge, origin from sales");
+	// COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
 
 	// test fullscan

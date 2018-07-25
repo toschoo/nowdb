@@ -379,19 +379,19 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
 	uint32_t mx;
+	char more = 1;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
-	*osz = 0;
-	*count = 0;
 	mx = cur->rdrs[r]->type != NOWDB_READER_KRANGE &&
 	     cur->rdrs[r]->type != NOWDB_READER_CRANGE?
 	     NOWDB_IDX_PAGE:recsz;
 
-	// for(uint32_t z=0;z<sz;z+=recsz) {
-	while(*osz < sz) {
+	while(more && *osz < sz) {
+		// fprintf(stderr, "fetch %u %u\n", cur->off, *osz);
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
+			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
 			err = nowdb_reader_move(cur->rdrs[r]);
 			if (err != NOWDB_OK) return err;
 			src = nowdb_reader_page(cur->rdrs[r]);
@@ -400,7 +400,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 
 		/* we hit the nullrecord and pass on to the next page */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
-			cur->off = NOWDB_IDX_PAGE; continue;
+			cur->off = mx; continue;
 		}
 
 		/* check content
@@ -432,9 +432,10 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			                        &complete);
 			if (err != NOWDB_OK) return err;
 			if (complete) {
-				cur->off += recsz;
+				cur->off+=recsz;
 				(*count)+=cc;
 			}
+			if (cc == 0) more=0;
 		}
 	}
 	return NOWDB_OK;
@@ -455,7 +456,7 @@ static inline nowdb_err_t seqfetch(nowdb_cursor_t *cur,
 		err = simplefetch(cur, buf, sz, osz, cnt);
 		if (err == NOWDB_OK) return NOWDB_OK;
 		if (err->errcode == nowdb_err_eof) {
-			cur->cur++;
+			cur->cur++; cur->off=0;
 			if (cur->cur == cur->numr) {
 				cur->cur = 0; return err;
 			}
@@ -476,6 +477,9 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                                        uint32_t *osz,
                                        uint32_t *cnt)
 {
+	*osz = 0;
+	*cnt = 0;
+
 	if (cur->numr == 1) return simplefetch(cur, buf, sz, osz, cnt);
 	switch(cur->disc) {
 	case NOWDB_ITER_SEQ: return seqfetch(cur, buf, sz, osz, cnt);
