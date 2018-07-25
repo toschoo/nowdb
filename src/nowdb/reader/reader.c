@@ -331,14 +331,17 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 		err = nowdb_file_open(reader->file);
 		if (err != NOWDB_OK) return err;
 	}
+
 	err = nowdb_file_position(reader->file, pos);
 	if (err != NOWDB_OK) return err;
 
 	/* this is sloppy */
 	err = nowdb_file_worth(reader->file, reader->from, reader->to, &w);
 	if (err != NOWDB_OK) return err;
-	if (!w) return nowdb_err_get(nowdb_err_key_not_found,
+	if (!w) {
+		return nowdb_err_get(nowdb_err_key_not_found,
 	                                 FALSE, OBJECT, NULL);
+	}
 
 	err = nowdb_file_loadBlock(reader->file);
 	if (err != NOWDB_OK) return err;

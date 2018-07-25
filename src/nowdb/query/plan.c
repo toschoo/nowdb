@@ -1281,9 +1281,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		stp = malloc(sizeof(nowdb_plan_t));
 		if (stp == NULL) {
 			NOMEM("allocating plan");
-			if (filter != NULL) {
-				nowdb_filter_destroy(filter); free(filter);
-			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
 			}
@@ -1301,9 +1298,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	
 		if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 			NOMEM("list.append");
-			if (filter != NULL) {
-				nowdb_filter_destroy(filter); free(filter);
-			}
 			if (grp != NULL) {
 				destroyFieldList(grp); free(grp);
 			}
@@ -1319,12 +1313,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		stp = malloc(sizeof(nowdb_plan_t));
 		if (stp == NULL) {
 			NOMEM("allocating plan");
-			if (filter != NULL) {
-				nowdb_filter_destroy(filter); free(filter);
-			}
-			if (grp != NULL) {
-				destroyFieldList(grp); free(grp);
-			}
 			if (ord != NULL) {
 				destroyFieldList(ord); free(ord);
 			}
@@ -1339,12 +1327,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	
 		if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 			NOMEM("list.append");
-			if (filter != NULL) {
-				nowdb_filter_destroy(filter); free(filter);
-			}
-			if (grp != NULL) {
-				destroyFieldList(grp); free(grp);
-			}
 			if (ord != NULL) {
 				destroyFieldList(ord); free(ord);
 			}
@@ -1360,9 +1342,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	err = getFields(scope, trg, sel, &pj);
 	if (err != NOWDB_OK) {
-		if (filter != NULL) {
-			nowdb_filter_destroy(filter); free(filter);
-		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
@@ -1370,9 +1349,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		err = compareForGrouping(grp, pj);
 		if (err != NOWDB_OK) {
 			destroyFieldList(pj); free(pj);
-			if (filter != NULL) {
-				nowdb_filter_destroy(filter); free(filter);
-			}
 			nowdb_plan_destroy(plan, FALSE); return err;
 		}
 	}
@@ -1381,9 +1357,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	if (stp == NULL) {
 		NOMEM("allocating plan");
 		destroyFieldList(pj); free(pj);
-		if (filter != NULL) {
-			nowdb_filter_destroy(filter); free(filter);
-		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
 
@@ -1396,9 +1369,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	if (ts_algo_list_append(plan, stp) != TS_ALGO_OK) {
 		NOMEM("list.append");
 		destroyFieldList(pj); free(pj);
-		if (filter != NULL) {
-			nowdb_filter_destroy(filter); free(filter);
-		}
 		nowdb_plan_destroy(plan, FALSE);
 		free(stp); return err;
 	}
@@ -1417,17 +1387,23 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 	runner = plan->head;
 	while(runner!=NULL) {
 		node = runner->cont;
-		if (cont && node->ntype == NOWDB_PLAN_FILTER) {
-			nowdb_filter_destroy(node->load); free(node->load);
-		}
-		if (node->ntype == NOWDB_PLAN_PROJECTION) {
-			destroyFieldList(node->load); free(node->load);
-		}
-		if (node->ntype == NOWDB_PLAN_GROUPING) {
-			destroyFieldList(node->load); free(node->load);
-		}
-		if (node->ntype == NOWDB_PLAN_ORDERING) {
-			destroyFieldList(node->load); free(node->load);
+		if (node->load != NULL) {
+			if (cont && node->ntype == NOWDB_PLAN_FILTER) {
+				nowdb_filter_destroy(node->load);
+				free(node->load);
+			}
+			if (node->ntype == NOWDB_PLAN_PROJECTION) {
+				destroyFieldList(node->load);
+				free(node->load);
+			}
+			if (node->ntype == NOWDB_PLAN_GROUPING) {
+				destroyFieldList(node->load);
+				free(node->load);
+			}
+			if (node->ntype == NOWDB_PLAN_ORDERING) {
+				destroyFieldList(node->load);
+				free(node->load);
+			}
 		}
 		free(node); tmp = runner->nxt;
 		ts_algo_list_remove(plan, runner);

@@ -244,6 +244,8 @@ int processCursor(nowdb_cursor_t *cur) {
 	char eof=0;
 	nowdb_err_t err=NOWDB_OK;
 
+	struct timespec t1, t2;
+
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
@@ -255,6 +257,7 @@ int processCursor(nowdb_cursor_t *cur) {
 	}
 
 	for(;;) {
+		nowdb_timestamp(&t1);
 		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
@@ -264,6 +267,8 @@ int processCursor(nowdb_cursor_t *cur) {
 			}
 			if (cnt == 0) break;
 		}
+		nowdb_timestamp(&t2);
+		fprintf(stderr, "FETCH (%u): %ldus\n", cnt, nowdb_time_minus(&t2, &t1)/1000);
 		total += cnt;
 		// fprintf(stderr, "%lu\n", total);
 		if (cur->recsize == 32) {

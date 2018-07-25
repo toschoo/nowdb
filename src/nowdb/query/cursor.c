@@ -215,6 +215,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			(*cur)->filter = stp->load;
 			nowdb_filter_period(stp->load, &start, &end);
 			runner = runner->nxt;
+			stp->load = NULL;
 		}
 	}
 
@@ -372,7 +373,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
                                           uint32_t *count) 
 {
 	nowdb_err_t err;
-	uint32_t x = 0;
 	uint32_t r = cur->cur;
 	uint32_t recsz = cur->rdrs[r]->recsize;
 	nowdb_filter_t *filter = cur->rdrs[r]->filter;
@@ -388,7 +388,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	     cur->rdrs[r]->type != NOWDB_READER_CRANGE?
 	     NOWDB_IDX_PAGE:recsz;
 
-	for(uint32_t i=0;i<sz;i+=recsz) {
+	// for(uint32_t z=0;z<sz;z+=recsz) {
+	while(*osz < sz) {
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
 			err = nowdb_reader_move(cur->rdrs[r]);
@@ -419,15 +420,15 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 
 		/* copy the record to the output buffer */
 		if (cur->row == NULL || !cur->hasid) {
-			memcpy(buf+x, src+cur->off, recsz);
-			x += recsz; cur->off += recsz;
+			memcpy(buf+(*osz), src+cur->off, recsz);
+			*osz += recsz; cur->off += recsz;
 			(*count)++;
 
 		/* project ... */
 		} else {
 			err = nowdb_row_project(cur->row,
 			                        src+cur->off, recsz,
-			                        buf, sz, &x, &cc,
+			                        buf, sz, osz, &cc,
 			                        &complete);
 			if (err != NOWDB_OK) return err;
 			if (complete) {
@@ -436,7 +437,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			}
 		}
 	}
-	*osz = x;
 	return NOWDB_OK;
 }
 

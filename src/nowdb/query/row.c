@@ -94,7 +94,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 		i++;
 	}
 	if (err != NOWDB_OK) {
-		nowdb_row_destroy(row); free(row);
+		nowdb_row_destroy(row); 
 		return err;
 	}
 	return NOWDB_OK;
