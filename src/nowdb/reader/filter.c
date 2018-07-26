@@ -208,7 +208,8 @@ void nowdb_filter_period(nowdb_filter_t *filter,
 		switch(filter->op) {
 
 		case NOWDB_FILTER_EQ:
-			memcpy(start, filter->val, 8); return;
+			memcpy(start, filter->val, 8);
+			memcpy(end, filter->val, 8); return;
 
 		case NOWDB_FILTER_LE:
 			memcpy(end, filter->val, 8); return;

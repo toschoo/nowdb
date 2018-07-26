@@ -795,6 +795,10 @@ static inline char worthBlock(nowdb_file_t  *file,
 	tmp <<= 32;
 	to += tmp;
 
+	/* 
+	fprintf(stderr, "comparing %ld -- %ld and %ld -- %ld\n",
+	                         start, end, file->hdr.from, to);
+	*/
 	if (end < file->hdr.from || start > to) return 0;
 
 	return 1;
@@ -859,7 +863,6 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
                                    nowdb_time_t start,
                                    nowdb_time_t   end) {
 	nowdb_err_t err = NOWDB_OK;
-	// char found = 0;
 
 	/* no header loaded */
 	if (file->hdr.size == 0) err = compload(file, TRUE);
@@ -876,14 +879,9 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 	/* decompress using ZSTD */
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
-		// while(!found) {
-
 		/* decompress */
-		if (worthBlock(file, start, end)) {
-			err = zstddecomp(file);
-			if (err != NOWDB_OK) return err;
-			// found=1;
-		}
+		err = zstddecomp(file);
+		if (err != NOWDB_OK) return err;
 
 		/* move on to next header */
 		file->off += file->hdr.size;
@@ -901,7 +899,6 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
 		return err;
-		// }
 	}
 	/* unknown compression algorithm */
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
