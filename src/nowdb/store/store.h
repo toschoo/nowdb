@@ -60,13 +60,6 @@ typedef struct {
 #define NOWDB_STORE_OPEN   1
 
 /* ------------------------------------------------------------------------
- * Default compare for edges and vertices
- * ------------------------------------------------------------------------
- */
-nowdb_cmp_t nowdb_store_edge_compare(const void*, const void*, void*);
-nowdb_cmp_t nowdb_store_vertex_compare(const void*, const void*, void*);
-
-/* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
  */

@@ -251,9 +251,9 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
-                                char             *buf,
-                                uint32_t         *size,
+                                ts_algo_list_t   *files,
+                                nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
-                                nowdb_ordering_t *order,
+                                nowdb_ord_t        ord,
                                 void *start, void *end);
 #endif

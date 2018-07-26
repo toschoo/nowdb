@@ -217,7 +217,7 @@ nowdb_bool_t checkFile(nowdb_store_t *store) {
 }
 
 int main() {
-	nowdb_comprsc_t compare = &nowdb_store_edge_compare;
+	nowdb_comprsc_t compare = &nowdb_sort_edge_compare;
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store = NULL;
 	struct timespec t1, t2;

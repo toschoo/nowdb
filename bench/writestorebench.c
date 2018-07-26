@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	if (global_sort) {
-		compare = &nowdb_store_edge_compare;
+		compare = &nowdb_sort_edge_compare;
 	} else {
 		compare = NULL;
 	}

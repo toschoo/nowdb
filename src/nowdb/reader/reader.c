@@ -213,8 +213,11 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		return;
 
 	case NOWDB_READER_BUF:
-		fprintf(stderr, "not implemented\n");
+		if (reader->buf != NULL) {
+			free(reader->buf); reader->buf = NULL;
+		}
 		return;
+
 	default:
 		return;
 	}
@@ -822,13 +825,129 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: compute size of all files
+ * ------------------------------------------------------------------------
+ */
+static inline uint64_t countBytes(ts_algo_list_t *files) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t        *file;
+	uint64_t total=0;
+
+	for(runner=files->head; runner!=NULL; runner=runner->nxt) {
+		file = runner->cont;
+		total += file->size;
+	}
+	return total;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: scan all files
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_reader_t *full;
+	char *src;
+	uint32_t x=0;
+	char more = 1;
+
+	err = nowdb_reader_fullscan(&full, reader->files, reader->filter);
+	if (err == NOWDB_OK) return err;
+
+	while (more) {
+		err = nowdb_reader_move(full);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				more = 0; err = NOWDB_OK;
+			} else break;
+		}
+		src = nowdb_reader_page(full);
+		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+
+			/* we hit the nullrecord */
+			if (memcmp(src+i, nowdb_nullrec,
+			          reader->recsize) == 0)
+				break;
+
+			/* apply filter */
+			if (reader->filter != NULL &&
+			    !nowdb_filter_eval(reader->filter, src+i))
+				continue;
+
+			memcpy(reader->buf+x, src+i, reader->recsize);
+			x+=reader->recsize;
+		}
+	}
+	reader->size = x;
+	nowdb_reader_destroy(full); free(full);
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Buffer scan
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
-                                char             *buf,
-                                uint32_t         *size,
+                                ts_algo_list_t   *files,
+                                nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
-                                nowdb_ordering_t *order,
-                                void *start,void  *end);
+                                nowdb_ord_t        ord,
+                                void *start,void  *end) {
+	nowdb_sort_wrapper_t wrap;
+	nowdb_err_t err;
+	uint64_t sz;
 
+	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
+	        FALSE, OBJECT, "pointer to reader object is NULL");
+	if (files == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "files object is NULL");
+	if (files->head == NULL) return nowdb_err_get(nowdb_err_eof,
+	                                       FALSE, OBJECT, NULL);
+	if (files->head->cont == NULL) return nowdb_err_get(
+	     nowdb_err_invalid, FALSE, OBJECT, "empty list");
+
+	err = newReader(reader);
+	if (err != NOWDB_OK) return err;
+
+	(*reader)->type = NOWDB_READER_BUF;
+	(*reader)->filter = filter;
+	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->files = files;
+
+	(*reader)->start = start;
+	(*reader)->end = end;
+
+	/* count bytes */
+	sz = countBytes(files);
+	if (sz > NOWDB_GIGA) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                             "too many pending files");
+	}
+
+	/* alloc buffer */
+	(*reader)->buf = malloc(sz);
+	if ((*reader)->buf) {
+		NOMEM("allocating buffer");
+		return err;
+	}
+
+	/* fullscan files according to filter */
+	err = fillbuf(*reader);
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return err;
+	}
+
+	/* order buffer */
+	if (index != NULL) {
+		wrap.cmp = nowdb_index_getCompare(index);
+		wrap.rsc = nowdb_index_getResource(index);
+		nowdb_mem_sort((*reader)->buf,
+		               (*reader)->size,
+		               (*reader)->recsize,
+		               &nowdb_sort_wrapBeet, &wrap);
+	}
+	return NOWDB_OK;
+}
