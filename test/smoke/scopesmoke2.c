@@ -223,6 +223,70 @@ int writeVrtx(nowdb_path_t path, int type, int halves) {
 	return rc;
 }
 
+int testBuffer(nowdb_scope_t *scope) {
+	nowdb_err_t     err;
+	nowdb_index_t  *idx;
+	ts_algo_list_t  files;
+	nowdb_context_t *ctx;
+	nowdb_reader_t *reader;
+	struct timespec t1, t2;
+
+	timestamp(&t1);
+
+	// get context
+	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "context not found\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+
+	// get index
+	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "index not found\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+
+	// get pending files
+	ts_algo_list_init(&files);
+	err = nowdb_store_getAllWaiting(&ctx->store, &files);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "get waiting failed\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+
+	// count files
+	fprintf(stderr, "we have %u files\n", files.len);
+	
+	// create buffer
+	err = nowdb_reader_buffer(&reader, &files, idx, NULL,
+	                           NOWDB_ORD_ASC, NULL, NULL);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create buffer\n");
+		nowdb_store_destroyFiles(&ctx->store, &files);
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+
+	// count half
+	fprintf(stderr, "bufreader has: %u\n",
+	        reader->size/reader->recsize);
+
+	timestamp(&t2);
+	fprintf(stderr, "running time: %ldus\n", minus(&t2, &t1)/1000);
+
+	nowdb_reader_destroy(reader); free(reader);
+	nowdb_store_destroyFiles(&ctx->store, &files);
+	return 0;
+}
+
 int64_t countResult(nowdb_scope_t *scope,
                     char          *stmt) {
 	struct timespec t1, t2;
@@ -486,9 +550,16 @@ int main() {
 
 	// test order
 	fprintf(stderr, "ORDER\n");
-	for(int i=0; i<10; i++) {    /* RANGE SCAN */
+	for(int i=0; i<10; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
+	}
+
+	// test bufreader
+	fprintf(stderr, "BUFFER\n");
+	if (testBuffer(scope) != 0) {
+		fprintf(stderr, "testBuffer failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
 	}
 
 	// KRANGE

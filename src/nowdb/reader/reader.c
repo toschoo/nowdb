@@ -852,7 +852,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 	char more = 1;
 
 	err = nowdb_reader_fullscan(&full, reader->files, reader->filter);
-	if (err == NOWDB_OK) return err;
+	if (err != NOWDB_OK) return err;
 
 	while (more) {
 		err = nowdb_reader_move(full);
@@ -860,7 +860,8 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
 				more = 0; err = NOWDB_OK;
-			} else break;
+			}
+			break;
 		}
 		src = nowdb_reader_page(full);
 		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
@@ -928,7 +929,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 
 	/* alloc buffer */
 	(*reader)->buf = malloc(sz);
-	if ((*reader)->buf) {
+	if ((*reader)->buf == NULL) {
 		NOMEM("allocating buffer");
 		return err;
 	}
@@ -945,7 +946,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		wrap.cmp = nowdb_index_getCompare(index);
 		wrap.rsc = nowdb_index_getResource(index);
 		nowdb_mem_sort((*reader)->buf,
-		               (*reader)->size,
+		               (*reader)->size/(*reader)->recsize,
 		               (*reader)->recsize,
 		               &nowdb_sort_wrapBeet, &wrap);
 	}
