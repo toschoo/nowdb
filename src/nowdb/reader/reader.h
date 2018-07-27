@@ -19,8 +19,6 @@
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
 
-typedef char nowdb_ordering_t;  /* just for the moment */
-
 /* ------------------------------------------------------------------------
  * Reader Types
  * ------------------------------------------------------------------------
@@ -60,12 +58,11 @@ typedef struct {
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
 	nowdb_filter_t       *filter; /* filter                        */
-	nowdb_ordering_t      *order; /* ordering                      */
 	beet_iter_t             iter; /* iterator                      */
 	beet_state_t           state; /* query state                   */
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
-	uint32_t                 off; /* offset into win               */
+	int32_t                 off;  /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	void                    *key; /* current key                   */
@@ -241,10 +238,9 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
  * Instantiate a reader from a buffer.
  * Parameters:
  * - reader: out parameter
- * - buf   : the buffer to read
- * - size  : the size of the buffer in bytes
+ * - files : the datafiles
+ * - index : order the data according to this index
  * - filter: select only relevant elements
- * - order : ordering of the buffer (if any)
  * - start/end: range indicator; ignore if ordering is NULL.
  *              with ordering and range, the reader behaves
  *              like a range scanner.
@@ -254,6 +250,5 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
                                 nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
-                                nowdb_ord_t        ord,
                                 void *start, void *end);
 #endif

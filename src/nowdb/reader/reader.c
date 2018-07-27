@@ -48,7 +48,6 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->filter = NULL;
 	reader->iter  = NULL;
 	reader->state = NULL;
-	reader->order= NULL;
 	reader->current = NULL;
 	reader->file = NULL;
 	reader->cont = NULL;
@@ -152,6 +151,15 @@ static inline nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
  */
 static inline nowdb_err_t rewindRange(nowdb_reader_t *reader) {
 	return rewindSearch(reader);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: rewind buffer
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
+	reader->off = -1;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -477,6 +485,25 @@ static inline nowdb_err_t moveCRange(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: move for buffer
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t moveBuf(nowdb_reader_t *reader) {
+	if (reader->size == 0) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
+	if (reader->off < 0) {
+		reader->off = 0;
+		return NOWDB_OK;
+	}
+	if (reader->off + NOWDB_IDX_PAGE >= reader->size) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
+	reader->off += NOWDB_IDX_PAGE;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Move
  * ------------------------------------------------------------------------
  */
@@ -504,8 +531,8 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 		return moveCRange(reader);
 
 	case NOWDB_READER_BUF:
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
-		                                               "move");
+		return moveBuf(reader);
+
 	default:
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 		                      "unkown reader type in move");
@@ -528,9 +555,10 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
 		return rewindRange(reader);
+
 	case NOWDB_READER_BUF:
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
-		                                             "rewind");
+		return rewindBuffer(reader);
+
 	default:
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 		                    "unkown reader type in rewind");
@@ -559,6 +587,10 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 			off+=sz;
 		}
 		return reader->buf;
+
+	case NOWDB_READER_BUF:
+		if (reader->off >= reader->size) return NULL;
+		return reader->buf+reader->off;
 
 	default:
 		return NULL;
@@ -893,7 +925,6 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
                                 nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
-                                nowdb_ord_t        ord,
                                 void *start,void  *end) {
 	nowdb_sort_wrapper_t wrap;
 	nowdb_err_t err;
@@ -908,6 +939,19 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 	if (files->head->cont == NULL) return nowdb_err_get(
 	     nowdb_err_invalid, FALSE, OBJECT, "empty list");
 
+	/* count bytes */
+	sz = countBytes(files);
+	if (sz > NOWDB_GIGA) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                             "too many pending files");
+	} else if (sz == 0) {
+		sz = NOWDB_IDX_PAGE;
+	} else {
+		uint32_t tmp = sz / NOWDB_IDX_PAGE;
+		tmp *= NOWDB_IDX_PAGE;
+		if (tmp < sz) tmp += NOWDB_IDX_PAGE;
+	}
+
 	err = newReader(reader);
 	if (err != NOWDB_OK) return err;
 
@@ -919,17 +963,10 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 	(*reader)->start = start;
 	(*reader)->end = end;
 
-	/* count bytes */
-	sz = countBytes(files);
-	if (sz > NOWDB_GIGA) {
-		nowdb_reader_destroy(*reader); free(*reader);
-		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-		                             "too many pending files");
-	}
-
 	/* alloc buffer */
-	(*reader)->buf = malloc(sz);
+	(*reader)->buf = calloc(1,sz);
 	if ((*reader)->buf == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
 		NOMEM("allocating buffer");
 		return err;
 	}
@@ -950,5 +987,5 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		               (*reader)->recsize,
 		               &nowdb_sort_wrapBeet, &wrap);
 	}
-	return NOWDB_OK;
+	return nowdb_reader_rewind(*reader);
 }

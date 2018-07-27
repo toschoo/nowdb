@@ -1404,6 +1404,16 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 				destroyFieldList(node->load);
 				free(node->load);
 			}
+			if (node->ntype == NOWDB_PLAN_READER) {
+				if (node->stype == NOWDB_PLAN_SEARCH_ ||
+				    node->stype == NOWDB_PLAN_FRANGE_ ||
+				    node->stype == NOWDB_PLAN_KRANGE_ ||
+				    node->stype == NOWDB_PLAN_CRANGE_) 
+				{
+					nowdb_plan_idx_t *pidx = node->load;
+					free(pidx->keys); free(pidx);
+				}
+			}
 		}
 		free(node); tmp = runner->nxt;
 		ts_algo_list_remove(plan, runner);

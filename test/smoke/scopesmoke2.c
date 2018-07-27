@@ -224,6 +224,7 @@ int writeVrtx(nowdb_path_t path, int type, int halves) {
 }
 
 int testBuffer(nowdb_scope_t *scope) {
+	int rc = 0;
 	nowdb_err_t     err;
 	nowdb_index_t  *idx;
 	ts_algo_list_t  files;
@@ -265,8 +266,8 @@ int testBuffer(nowdb_scope_t *scope) {
 	fprintf(stderr, "we have %u files\n", files.len);
 	
 	// create buffer
-	err = nowdb_reader_buffer(&reader, &files, idx, NULL,
-	                           NOWDB_ORD_ASC, NULL, NULL);
+	err = nowdb_reader_buffer(&reader, &files, idx,
+	                             NULL, NULL, NULL);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create buffer\n");
 		nowdb_store_destroyFiles(&ctx->store, &files);
@@ -275,16 +276,21 @@ int testBuffer(nowdb_scope_t *scope) {
 		return -1;
 	}
 
+	timestamp(&t2);
+	fprintf(stderr, "running time: %ldus\n", minus(&t2, &t1)/1000);
+
 	// count half
 	fprintf(stderr, "bufreader has: %u\n",
 	        reader->size/reader->recsize);
 
-	timestamp(&t2);
-	fprintf(stderr, "running time: %ldus\n", minus(&t2, &t1)/1000);
+	if (reader->size/reader->recsize != HALFEDGE) {
+		fprintf(stderr, "wrong size in bufreader\n");
+		rc = -1;
+	}
 
 	nowdb_reader_destroy(reader); free(reader);
 	nowdb_store_destroyFiles(&ctx->store, &files);
-	return 0;
+	return rc;
 }
 
 int64_t countResult(nowdb_scope_t *scope,
@@ -549,11 +555,13 @@ int main() {
 	}
 
 	// test order
+	/*
 	fprintf(stderr, "ORDER\n");
 	for(int i=0; i<10; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
+	*/
 
 	// test bufreader
 	fprintf(stderr, "BUFFER\n");
