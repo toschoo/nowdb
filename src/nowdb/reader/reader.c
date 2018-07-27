@@ -39,6 +39,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->size = 0;
 	reader->off = 0;
 	reader->buf = NULL;
+	reader->tmp = NULL;
 	reader->plru = NULL;
 	reader->bplru = NULL;
 	reader->page = NULL;
@@ -159,6 +160,8 @@ static inline nowdb_err_t rewindRange(nowdb_reader_t *reader) {
  */
 static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
 	reader->off = -1;
+	reader->key = NULL;
+	reader->cont= NULL;
 	return NOWDB_OK;
 }
 
@@ -223,6 +226,9 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 	case NOWDB_READER_BUF:
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
+		}
+		if (reader->tmp != NULL) {
+			free(reader->tmp); reader->tmp = NULL;
 		}
 		return;
 
@@ -926,7 +932,6 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
                                 void *start,void  *end) {
-	nowdb_sort_wrapper_t wrap;
 	nowdb_err_t err;
 	uint64_t sz;
 
@@ -980,12 +985,20 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 
 	/* order buffer */
 	if (index != NULL) {
-		wrap.cmp = nowdb_index_getCompare(index);
-		wrap.rsc = nowdb_index_getResource(index);
+		(*reader)->ikeys = nowdb_index_getResource(index);
+		(*reader)->tmp = calloc((*reader)->ikeys->sz, 8);
+		if ((*reader)->tmp == NULL) {
+			nowdb_reader_destroy(*reader); free(*reader);
+			NOMEM("allocating key");
+			return err;
+		}
 		nowdb_mem_sort((*reader)->buf,
 		               (*reader)->size/(*reader)->recsize,
 		               (*reader)->recsize,
-		               &nowdb_sort_wrapBeet, &wrap);
+		               (*reader)->recsize == 64 ?
+		               &nowdb_sort_edge_keys_compare :
+		               &nowdb_sort_vertex_keys_compare,
+		               (*reader)->ikeys);
 	}
 	return nowdb_reader_rewind(*reader);
 }

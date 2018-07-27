@@ -57,6 +57,7 @@ typedef struct {
 	nowdb_pplru_t         *bplru; /* black list                    */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
+	char                    *tmp; /* buffer for keys in bufreader  */
 	nowdb_filter_t       *filter; /* filter                        */
 	beet_iter_t             iter; /* iterator                      */
 	beet_state_t           state; /* query state                   */

@@ -38,6 +38,38 @@ typedef nowdb_cmp_t (*nowdb_compare_t)(const void*, const void*);
 typedef nowdb_cmp_t (*nowdb_comprsc_t)(const void*,const void*, void*);
 
 /* ------------------------------------------------------------------------
+ * Generic edge compare using index keys (asc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_cmp_t nowdb_sort_edge_keys_compare(const void *left,
+                                         const void *right,
+                                         void       *keys);
+
+/* ------------------------------------------------------------------------
+ * Generic edge compare using index keys (desc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_cmp_t nowdb_sort_edge_keys_compareD(const void *left,
+                                          const void *right,
+                                          void       *keys);
+
+/* ------------------------------------------------------------------------
+ * Generic vertex compare using index keys (asc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_cmp_t nowdb_sort_vertex_keys_compare(const void *left,
+                                           const void *right,
+                                           void       *keys);
+
+/* ------------------------------------------------------------------------
+ * Generic vertex compare using index keys (desc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_cmp_t nowdb_sort_vertex_keys_compareD(const void *left,
+                                            const void *right,
+                                            void       *keys);
+
+/* ------------------------------------------------------------------------
  * Standard compare for edges (asc)
  * ------------------------------------------------------------------------
  */

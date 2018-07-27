@@ -230,6 +230,7 @@ int testBuffer(nowdb_scope_t *scope) {
 	ts_algo_list_t  files;
 	nowdb_context_t *ctx;
 	nowdb_reader_t *reader;
+	nowdb_edge_t   *last, *cur;
 	struct timespec t1, t2;
 
 	timestamp(&t1);
@@ -285,9 +286,25 @@ int testBuffer(nowdb_scope_t *scope) {
 
 	if (reader->size/reader->recsize != HALFEDGE) {
 		fprintf(stderr, "wrong size in bufreader\n");
-		rc = -1;
+		rc = -1; goto cleanup;
 	}
 
+	last = NULL;
+	for(int i=0; i<reader->size; i+=64) {
+		if (last == NULL) {
+			last = (nowdb_edge_t*)(reader->buf+i);
+			cur = (nowdb_edge_t*)(reader->buf+i);
+		} else {
+			cur = (nowdb_edge_t*)(reader->buf+i);
+			if (cur->origin < last->origin) {
+				fprintf(stderr, "buffer is not ordered\n");
+				rc = -1; break;
+			}
+		}
+		// fprintf(stderr, "%lu\n", cur->origin);
+	}
+
+cleanup:
 	nowdb_reader_destroy(reader); free(reader);
 	nowdb_store_destroyFiles(&ctx->store, &files);
 	return rc;
