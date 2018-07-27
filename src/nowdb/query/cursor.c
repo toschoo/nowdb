@@ -14,6 +14,9 @@
 #define INVALIDPLAN(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
+#define NOMEM(s) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
+
 static char *OBJECT = "cursor";
 
 /* ------------------------------------------------------------------------
@@ -150,6 +153,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	uint32_t rn=0;
 	nowdb_time_t start = NOWDB_TIME_DAWN;
 	nowdb_time_t end = NOWDB_TIME_DUSK;
+	nowdb_plan_idx_t *pidx=NULL;
 
 	/* point to head of plan */
 	runner=plan->head;
@@ -196,6 +200,15 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			(*cur)->disc = NOWDB_ITER_SEQ;
 		} else if (rstp->stype == NOWDB_PLAN_FRANGE_) {
 			(*cur)->disc = NOWDB_ITER_MERGE;
+			pidx = rstp->load;
+			(*cur)->cmp = nowdb_index_getCompare(pidx->idx);
+			(*cur)->k  = nowdb_index_getResource(pidx->idx);
+			(*cur)->key = NULL;
+			(*cur)->tmp = calloc((*cur)->k->sz, 8);
+			if ((*cur)->tmp == NULL) {
+				NOMEM("allocating keys");
+				return err;
+			}
 		}
 	}
 
@@ -239,7 +252,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			err = nowdb_reader_fullscan((*cur)->rdrs+i,
 			               &(*cur)->stf.pending, NULL);
 		} else {
-			nowdb_plan_idx_t *pidx = rstp->load;
 			err = nowdb_reader_buffer((*cur)->rdrs+i,
 			                    &(*cur)->stf.pending,
 			                               pidx->idx,
@@ -328,6 +340,12 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
 	}
+	if (cur->key != NULL) {
+		free(cur->key); cur->key = NULL;
+	}
+	if (cur->tmp != NULL) {
+		free(cur->tmp); cur->tmp = NULL;
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -349,6 +367,12 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 		}
 		if (err != NOWDB_OK) break;
 		x=1;
+		if (cur->rdrs[i]->type == NOWDB_READER_BUF) {
+			nowdb_index_grabEdgeKeys(cur->k, // or vertex
+			nowdb_reader_page(cur->rdrs[i]),
+			              cur->rdrs[i]->tmp);
+			cur->rdrs[i]->key = cur->rdrs[i]->tmp;
+		}
 	}
 	if (x==0) return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	return err;
@@ -387,6 +411,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
 	uint32_t mx;
+	void *p=NULL;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
@@ -408,6 +433,27 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* we hit the nullrecord and pass on to the next page */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = mx; continue;
+		}
+
+		/* help out buf reader */
+		if (cur->disc == NOWDB_ITER_MERGE &&
+		    cur->rdrs[r]->type == NOWDB_READER_BUF) {
+			if (p == NULL) {
+				p = src+cur->off;
+			} else if (nowdb_sort_edge_keys_compare( // or vertex
+			                p, src+cur->off, cur->k)
+			                    != NOWDB_SORT_EQUAL) {
+				/*
+				fprintf(stderr, "grabbing next key %u (%lu - %lu)\n", cur->off,
+	                	                *(uint64_t*)(p+8),
+	                	                *(uint64_t*)(src+cur->off+8));
+				*/
+				nowdb_index_grabEdgeKeys(cur->k, // or vertex
+				                   src+cur->off,
+				             cur->rdrs[r]->tmp);
+				cur->rdrs[r]->key = cur->rdrs[r]->tmp;
+				break;
+			}
 		}
 
 		/* check content
@@ -476,6 +522,75 @@ static inline nowdb_err_t seqfetch(nowdb_cursor_t *cur,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: find next key in reader
+ * ------------------------------------------------------------------------
+ */
+static inline void findOff(nowdb_cursor_t *cur) {
+	char *src = nowdb_reader_page(cur->rdrs[cur->cur]);
+	for(int i=0; i<NOWDB_IDX_PAGE; i+=cur->recsize) {
+		// compare cur->key with edge at idx
+		if (cur->recsize == 64) {
+			nowdb_index_grabEdgeKeys(cur->k,
+			                src+i,cur->tmp);
+		} else {
+			nowdb_index_grabVertexKeys(cur->k,
+			                  src+i,cur->tmp);
+		}
+		if (cur->cmp(cur->key, cur->tmp, cur->k)
+		                      == BEET_CMP_EQUAL) {
+			cur->off = i; break;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find next key
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t findNextKey(nowdb_cursor_t *cur) {
+	nowdb_err_t err;
+	char x;
+	char *src;
+	void *key=NULL;
+	cur->cur = 0;
+	cur->off = 0;
+	for(int i=0; i<cur->numr; i++) {
+		src = nowdb_reader_page(cur->rdrs[i]);
+		if (src == NULL) continue;
+		// if (cur->rdrs[i]->type != NOWDB_READER_BUF) continue; // DEBUGING
+		if (cur->key != NULL) {
+			x = cur->cmp(cur->rdrs[i]->key, cur->key, cur->k);
+			/*
+			fprintf(stderr, "comparing %u %lu and %lu: %d\n", i,
+			                *(uint64_t*)(cur->rdrs[i]->key),
+			                *(uint64_t*)(cur->key), x);
+			*/
+		}
+		if (cur->key == NULL || x != BEET_CMP_LESS) {
+			if (key == NULL) {
+				key = cur->rdrs[i]->key;
+				cur->cur = i;
+			} else if (cur->cmp(cur->rdrs[i]->key, key, cur->k)
+			                                  == BEET_CMP_LESS) {
+				key = cur->rdrs[i]->key;
+				cur->cur = i;
+			}
+		}
+	}
+	if (key == NULL) return nowdb_err_get(nowdb_err_eof,
+	                                FALSE, OBJECT, NULL);
+	if (cur->key == NULL) {
+		cur->key = calloc(cur->k->sz, 8);
+		if (cur->key == NULL) {
+			NOMEM("allocating keys");
+			return err;
+		}
+	}
+	memcpy(cur->key, key, cur->k->sz*8);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Multi reader: merge fetch
  * ------------------------------------------------------------------------
  */
@@ -484,8 +599,27 @@ static inline nowdb_err_t mergefetch(nowdb_cursor_t *cur,
                                            uint32_t *osz,
                                            uint32_t *cnt)
 {
-	fprintf(stderr, "I don't know how to merge\n");
-	return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	nowdb_err_t err;
+
+	// find minimal key greater than cur->key
+	err = findNextKey(cur);
+	if (err != NOWDB_OK) return err;
+
+	/*
+	fprintf(stderr, "we now have the keys %lu and %lu\n",
+	                ((uint64_t*)(cur->rdrs[cur->cur]->key))[0],
+	                ((uint64_t*)(cur->key))[0]);
+	*/
+
+	findOff(cur);
+
+	/*
+	fprintf(stderr, "%u.%u: %lu\n", cur->cur, cur->off,
+	                          ((uint64_t*)cur->key)[0]);
+	*/
+
+	// exhaust that key on that reader
+	return simplefetch(cur, buf, sz, osz, cnt);
 }
 
 /* ------------------------------------------------------------------------

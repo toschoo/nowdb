@@ -346,6 +346,7 @@ int64_t countResult(nowdb_scope_t *scope,
 		}
 		// fprintf(stderr, "%u\n", cnt);
 		res += (int64_t)cnt;
+		// nowdb_row_write(buf, 8192, stderr);
 	}
 	free(buf);
 	closeCursor(cur);
@@ -534,11 +535,13 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
+	/*
 	EXECSTMT("load 'rsc/products100.csv' into vertex \
 	           use header as product");
 
 	EXECSTMT("load 'rsc/clients100.csv' into vertex \
 	           use header as client");
+	*/
 
 	EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
 
@@ -547,6 +550,7 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
+	/*
 	// test fullscan
 	COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
@@ -571,28 +575,29 @@ int main() {
 		CHECKRESULT(5, o, d, tp);
 	}
 
-	// test order
-	/*
-	fprintf(stderr, "ORDER\n");
-	for(int i=0; i<10; i++) {    // RANGE SCAN
-		COUNTRESULT(SQLORD); res += HALFEDGE;
-		CHECKRESULT(5, 0, 0, 0);
-	}
-	*/
-
 	// test bufreader
 	fprintf(stderr, "BUFFER\n");
 	if (testBuffer(scope) != 0) {
 		fprintf(stderr, "testBuffer failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	*/
+
+	// test order
+	fprintf(stderr, "ORDER\n");
+	for(int i=0; i<10; i++) {    // RANGE SCAN
+		COUNTRESULT(SQLORD); res += HALFEDGE;
+		CHECKRESULT(5, 0, 0, 0);
+	}
 
 	// KRANGE
+	/*
 	fprintf(stderr, "KRANGE\n");
 	for(int i=0; i<10; i++) {    
 		COUNTRESULT(SQLGRP);
 		// COUNTDISTINCT(5);
 	}
+	*/
 
 cleanup:
 	if (sql != NULL) free(sql);

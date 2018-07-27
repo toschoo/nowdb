@@ -39,6 +39,10 @@ typedef struct {
 	uint32_t           cur; /* current reader                */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
+	char              *key; /* current key                   */
+	char              *tmp; /* helper buffer                 */
+	nowdb_index_keys_t  *k; /* keys descriptor               */
+	beet_compare_t     cmp; /* idx compare method            */
 	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 
