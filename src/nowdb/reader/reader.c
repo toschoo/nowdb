@@ -40,6 +40,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->off = 0;
 	reader->buf = NULL;
 	reader->tmp = NULL;
+	reader->tmp2 = NULL;
+	reader->page2 = NULL;
 	reader->plru = NULL;
 	reader->bplru = NULL;
 	reader->page = NULL;
@@ -162,6 +164,9 @@ static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
 	reader->off = -1;
 	reader->key = NULL;
 	reader->cont= NULL;
+	if (reader->page2 != NULL) {
+		memset(reader->page2, 0, NOWDB_IDX_PAGE);
+	}
 	return NOWDB_OK;
 }
 
@@ -224,11 +229,18 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		return;
 
 	case NOWDB_READER_BUF:
+	case NOWDB_READER_BUFIDX:
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
 		}
 		if (reader->tmp != NULL) {
 			free(reader->tmp); reader->tmp = NULL;
+		}
+		if (reader->tmp2 != NULL) {
+			free(reader->tmp2); reader->tmp2 = NULL;
+		}
+		if (reader->page2 != NULL) {
+			free(reader->page2); reader->page2 = NULL;
 		}
 		return;
 
@@ -510,6 +522,67 @@ static inline nowdb_err_t moveBuf(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: move for bufidx
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
+	char x;
+	char *p;
+
+	if (reader->size == 0) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
+	if (reader->off < 0) {
+		reader->off = 0;
+	} else if (reader->off >= reader->size) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
+	if (reader->key != NULL) {
+		if (reader->recsize == NOWDB_EDGE_SIZE) {
+			nowdb_index_grabEdgeKeys(reader->ikeys,
+		                       reader->buf+reader->off,
+			                         reader->tmp2);
+		        x = nowdb_index_edge_compare(reader->tmp,
+			                             reader->tmp2,
+			                             reader->ikeys);
+		} else {
+			nowdb_index_grabVertexKeys(reader->ikeys,
+		                         reader->buf+reader->off,
+			                           reader->tmp2);
+		        x = nowdb_index_edge_compare(reader->tmp,
+			                             reader->tmp2,
+			                             reader->ikeys);
+		}
+		if (x != BEET_CMP_EQUAL) {
+			memcpy(reader->tmp, reader->tmp2, reader->ikeys->sz);
+		}
+	} else {
+		if (reader->recsize == NOWDB_EDGE_SIZE) {
+			nowdb_index_grabEdgeKeys(reader->ikeys,
+		                       reader->buf+reader->off,
+			                           reader->tmp);
+		} else {
+			nowdb_index_grabVertexKeys(reader->ikeys,
+		                         reader->buf+reader->off,
+			                            reader->tmp);
+		}
+		reader->key = reader->tmp;
+	}
+	p = reader->buf+reader->off;
+	memset(reader->page2, 0, NOWDB_IDX_PAGE);
+	for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		if (nowdb_sort_edge_keys_compare(p,
+		          reader->buf+reader->off,
+		          reader->ikeys) != NOWDB_SORT_EQUAL)  break;
+		memcpy(reader->page2+i,
+		       reader->buf+reader->off,
+		       reader->recsize);
+		reader->off += reader->recsize;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Move
  * ------------------------------------------------------------------------
  */
@@ -539,6 +612,9 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 	case NOWDB_READER_BUF:
 		return moveBuf(reader);
 
+	case NOWDB_READER_BUFIDX:
+		return moveBufIdx(reader);
+
 	default:
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 		                      "unkown reader type in move");
@@ -563,6 +639,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 		return rewindRange(reader);
 
 	case NOWDB_READER_BUF:
+	case NOWDB_READER_BUFIDX:
 		return rewindBuffer(reader);
 
 	default:
@@ -597,6 +674,10 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	case NOWDB_READER_BUF:
 		if (reader->off >= reader->size) return NULL;
 		return reader->buf+reader->off;
+
+	case NOWDB_READER_BUFIDX:
+		// if (reader->off >= reader->size) return NULL;
+		return reader->page2;
 
 	default:
 		return NULL;
@@ -929,9 +1010,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
  */
 nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
-                                nowdb_index_t    *index,
-                                nowdb_filter_t   *filter,
-                                void *start,void  *end) {
+                                nowdb_filter_t   *filter) {
 	nowdb_err_t err;
 	uint64_t sz;
 
@@ -965,9 +1044,6 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
 	(*reader)->files = files;
 
-	(*reader)->start = start;
-	(*reader)->end = end;
-
 	/* alloc buffer */
 	(*reader)->buf = calloc(1,sz);
 	if ((*reader)->buf == NULL) {
@@ -982,23 +1058,58 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		nowdb_reader_destroy(*reader); free(*reader);
 		return err;
 	}
+	return nowdb_reader_rewind(*reader);
+}
 
-	/* order buffer */
-	if (index != NULL) {
-		(*reader)->ikeys = nowdb_index_getResource(index);
-		(*reader)->tmp = calloc((*reader)->ikeys->sz, 8);
-		if ((*reader)->tmp == NULL) {
-			nowdb_reader_destroy(*reader); free(*reader);
-			NOMEM("allocating key");
-			return err;
-		}
-		nowdb_mem_sort((*reader)->buf,
-		               (*reader)->size/(*reader)->recsize,
-		               (*reader)->recsize,
-		               (*reader)->recsize == 64 ?
+/* ------------------------------------------------------------------------
+ * Buffer simulating an index range scan
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
+                                ts_algo_list_t   *files,
+                                nowdb_index_t    *index,
+                                nowdb_filter_t   *filter,
+                                nowdb_ord_t        ord,
+                                void *start,void  *end) {
+	nowdb_err_t err;
+
+	if (index == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "index is NULL");
+
+	err = nowdb_reader_buffer(reader, files, filter);
+	if (err != NOWDB_OK) return err;
+
+	(*reader)->type = NOWDB_READER_BUFIDX;
+	(*reader)->start = start;
+	(*reader)->end = end;
+	(*reader)->ord = ord;
+
+	(*reader)->page2 = calloc(1, NOWDB_IDX_PAGE);
+	if ((*reader)->page2 == NULL) {
+		NOMEM("allocating secondary page");
+		return err;
+	}
+
+	(*reader)->ikeys = nowdb_index_getResource(index);
+	(*reader)->tmp = calloc((*reader)->ikeys->sz, 8);
+	if ((*reader)->tmp == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		NOMEM("allocating key");
+		return err;
+	}
+	(*reader)->tmp2 = calloc((*reader)->ikeys->sz, 8);
+	if ((*reader)->tmp2 == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		NOMEM("allocating key");
+		return err;
+	}
+	nowdb_mem_sort((*reader)->buf,
+		       (*reader)->size/(*reader)->recsize,
+		       (*reader)->recsize,
+		       (*reader)->recsize == NOWDB_EDGE_SIZE ?
 		               &nowdb_sort_edge_keys_compare :
 		               &nowdb_sort_vertex_keys_compare,
-		               (*reader)->ikeys);
-	}
+		       (*reader)->ikeys);
+
 	return nowdb_reader_rewind(*reader);
 }

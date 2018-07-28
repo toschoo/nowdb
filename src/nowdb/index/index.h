@@ -76,6 +76,22 @@ void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
 void nowdb_index_keys_destroy(nowdb_index_keys_t *keys);
 
 /* ------------------------------------------------------------------------
+ * Compare Edge Index Keys
+ * ------------------------------------------------------------------------
+ */
+char nowdb_index_edge_compare(const void *left,
+                              const void *right,
+                              nowdb_index_keys_t *keys);
+
+/* ------------------------------------------------------------------------
+ * Compare Vertex Index Keys
+ * ------------------------------------------------------------------------
+ */
+char nowdb_index_vertex_compare(const void *left,
+                                const void *right,
+                                nowdb_index_keys_t *keys);
+
+/* ------------------------------------------------------------------------
  * Index
  * TODO: consider to add callbacks, e.g.:
  *       - keySize

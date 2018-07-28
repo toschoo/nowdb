@@ -105,6 +105,8 @@ extern char nowdb_nullrec[64];
 
 int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
 
+#define NOWDB_VERTEX_SIZE 32
+
 /* ------------------------------------------------------------------------
  * Vertex Offsets
  * ------------------------------------------------------------------------
@@ -134,6 +136,8 @@ void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 int nowdb_vertex_offByName(char *field);
+
+#define NOWDB_EDGE_SIZE 64
 
 /* ------------------------------------------------------------------------
  * Edge Offsets

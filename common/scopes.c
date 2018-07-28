@@ -240,7 +240,7 @@ int waitscope(nowdb_scope_t *scope, char *context) {
 	nowdb_context_t *ctx;
 	nowdb_err_t err;
 	int rc = 0;
-	int mx = 100;
+	int mx = 400;
 	int len;
 
 	for(int m=0; m<mx; m++) {

@@ -225,6 +225,7 @@ int writeVrtx(nowdb_path_t path, int type, int halves) {
 
 int testBuffer(nowdb_scope_t *scope) {
 	int rc = 0;
+	int c = 0;
 	nowdb_err_t     err;
 	nowdb_index_t  *idx;
 	ts_algo_list_t  files;
@@ -267,8 +268,8 @@ int testBuffer(nowdb_scope_t *scope) {
 	fprintf(stderr, "we have %u files\n", files.len);
 	
 	// create buffer
-	err = nowdb_reader_buffer(&reader, &files, idx,
-	                             NULL, NULL, NULL);
+	err = nowdb_reader_bufidx(&reader, &files, idx, NULL,
+	                           NOWDB_ORD_ASC, NULL, NULL);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create buffer\n");
 		nowdb_store_destroyFiles(&ctx->store, &files);
@@ -285,7 +286,7 @@ int testBuffer(nowdb_scope_t *scope) {
 	        reader->size/reader->recsize);
 
 	if (reader->size/reader->recsize != HALFEDGE) {
-		fprintf(stderr, "wrong size in bufreader\n");
+		fprintf(stderr, "wrong size in bufreader: %u\n", reader->size);
 		rc = -1; goto cleanup;
 	}
 
@@ -302,6 +303,38 @@ int testBuffer(nowdb_scope_t *scope) {
 			}
 		}
 		// fprintf(stderr, "%lu\n", cur->origin);
+	}
+	if (rc != 0) goto cleanup;
+
+	c=0;
+	for(;;) {
+		err = nowdb_reader_move(reader);
+		if (err != NOWDB_OK) break;
+
+		char *src = nowdb_reader_page(reader);
+		if (src == NULL) {
+			fprintf(stderr, "page is NULL\n");
+			rc = -1; goto cleanup;
+		}
+		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+			if (memcmp(src+i, nowdb_nullrec,
+			          reader->recsize) == 0) break;
+			c++;
+		}
+	}
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err); err = NOWDB_OK;
+		} else {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			rc = -1; goto cleanup;
+		}
+	}
+	if (c != reader->size/reader->recsize) {
+		fprintf(stderr, "counted: %d, expected: %u\n",
+		                              c, reader->size);
+		rc = -1; goto cleanup;
 	}
 
 cleanup:
@@ -550,7 +583,6 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	/*
 	// test fullscan
 	COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
@@ -581,7 +613,6 @@ int main() {
 		fprintf(stderr, "testBuffer failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	*/
 
 	// test order
 	fprintf(stderr, "ORDER\n");
@@ -591,13 +622,11 @@ int main() {
 	}
 
 	// KRANGE
-	/*
 	fprintf(stderr, "KRANGE\n");
 	for(int i=0; i<10; i++) {    
 		COUNTRESULT(SQLGRP);
 		// COUNTDISTINCT(5);
 	}
-	*/
 
 cleanup:
 	if (sql != NULL) free(sql);

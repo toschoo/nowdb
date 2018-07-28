@@ -15,6 +15,7 @@
 #include <nowdb/reader/filter.h>
 #include <nowdb/index/index.h>
 #include <nowdb/mem/pplru.h>
+#include <nowdb/sort/sort.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -29,6 +30,12 @@
 #define NOWDB_READER_KRANGE   101
 #define NOWDB_READER_CRANGE   102
 #define NOWDB_READER_BUF      1000
+#define NOWDB_READER_BUFIDX   1001
+#define NOWDB_READER_BKRANGE  1002
+#define NOWDB_READER_BCRANGE  1003
+#define NOWDB_READER_SEQ      10001
+#define NOWDB_READER_MERGE    10002
+#define NOWDB_READER_JOIN     10003
 
 /* ------------------------------------------------------------------------
  * Reader   
@@ -58,6 +65,8 @@ typedef struct {
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
 	char                    *tmp; /* buffer for keys in bufreader  */
+	char                   *tmp2; /* buffer for keys in bufreader  */
+	char                  *page2; /* buffer for page in bufreader  */
 	nowdb_filter_t       *filter; /* filter                        */
 	beet_iter_t             iter; /* iterator                      */
 	beet_state_t           state; /* query state                   */
@@ -69,6 +78,7 @@ typedef struct {
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
+	nowdb_ord_t              ord; /* asc or desc                   */
 	nowdb_time_t            from; /* start of period               */
 	nowdb_time_t              to; /* end   of period               */
 } nowdb_reader_t;
@@ -240,16 +250,31 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
  * Parameters:
  * - reader: out parameter
  * - files : the datafiles
+ * - filter: select only relevant elements
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
+                                ts_algo_list_t   *files,
+                                nowdb_filter_t   *filter);
+
+/* ------------------------------------------------------------------------
+ * Buffer simulating an index range scan
+ * -------------------------------------
+ * Parameters:
+ * - reader: out parameter
+ * - files : the datafiles
  * - index : order the data according to this index
  * - filter: select only relevant elements
+ * - ord   : order of range
  * - start/end: range indicator; ignore if ordering is NULL.
  *              with ordering and range, the reader behaves
  *              like a range scanner.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
+nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
                                 nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
+                                nowdb_ord_t        ord,
                                 void *start, void *end);
 #endif

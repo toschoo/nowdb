@@ -174,8 +174,8 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	if (rstp->ntype != NOWDB_PLAN_READER) {
 		INVALIDPLAN("reader expected in plan");
 	}
-	if (rstp->stype == NOWDB_PLAN_SEARCH_ ||
-	    rstp->stype == NOWDB_PLAN_FRANGE_) rn++;
+	if (rstp->stype == NOWDB_PLAN_SEARCH_) rn++;
+	//    rstp->stype == NOWDB_PLAN_FRANGE_) rn++;
 
 	/* allocate the cursor */
 	*cur = calloc(1, sizeof(nowdb_cursor_t));
@@ -239,8 +239,8 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	}
 	i++;
 
-	if (rstp->stype == NOWDB_PLAN_SEARCH_ ||
-	    rstp->stype == NOWDB_PLAN_FRANGE_) {
+	if (rstp->stype == NOWDB_PLAN_SEARCH_) { // ||
+	//     rstp->stype == NOWDB_PLAN_FRANGE_) {
 		err = getPending(&(*cur)->stf.files,
 		                 &(*cur)->stf.pending);
 		if (err != NOWDB_OK) {
@@ -252,10 +252,11 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			err = nowdb_reader_fullscan((*cur)->rdrs+i,
 			               &(*cur)->stf.pending, NULL);
 		} else {
-			err = nowdb_reader_buffer((*cur)->rdrs+i,
+			err = nowdb_reader_bufidx((*cur)->rdrs+i,
 			                    &(*cur)->stf.pending,
-			                               pidx->idx,
-			                       NULL, NULL, NULL);
+			                         pidx->idx, NULL,
+			                           NOWDB_ORD_ASC,
+			                             NULL, NULL);
 		}
 		if (err != NOWDB_OK) {
 			ts_algo_list_destroy(&(*cur)->stf.pending);
@@ -411,7 +412,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	char *src = nowdb_reader_page(cur->rdrs[r]);
 	char complete=0, cc=0;
 	uint32_t mx;
-	void *p=NULL;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
@@ -433,27 +433,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* we hit the nullrecord and pass on to the next page */
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = mx; continue;
-		}
-
-		/* help out buf reader */
-		if (cur->disc == NOWDB_ITER_MERGE &&
-		    cur->rdrs[r]->type == NOWDB_READER_BUF) {
-			if (p == NULL) {
-				p = src+cur->off;
-			} else if (nowdb_sort_edge_keys_compare( // or vertex
-			                p, src+cur->off, cur->k)
-			                    != NOWDB_SORT_EQUAL) {
-				/*
-				fprintf(stderr, "grabbing next key %u (%lu - %lu)\n", cur->off,
-	                	                *(uint64_t*)(p+8),
-	                	                *(uint64_t*)(src+cur->off+8));
-				*/
-				nowdb_index_grabEdgeKeys(cur->k, // or vertex
-				                   src+cur->off,
-				             cur->rdrs[r]->tmp);
-				cur->rdrs[r]->key = cur->rdrs[r]->tmp;
-				break;
-			}
 		}
 
 		/* check content
