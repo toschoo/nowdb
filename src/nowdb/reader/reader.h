@@ -53,7 +53,7 @@
  *             when no index was selected)
  * ------------------------------------------------------------------------
  */
-typedef struct {
+typedef struct nowdb_reader_t {
 	uint32_t                type; /* reader type                   */
 	uint32_t             recsize; /* set according to first file   */
 	ts_algo_list_t        *files; /* list of relevant files        */
@@ -81,6 +81,9 @@ typedef struct {
 	nowdb_ord_t              ord; /* asc or desc                   */
 	nowdb_time_t            from; /* start of period               */
 	nowdb_time_t              to; /* end   of period               */
+	struct nowdb_reader_t  **sub; /* subreaders                    */
+	uint32_t                  nr; /* number of subreaders          */
+	uint32_t                 cur; /* current subreader             */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------
@@ -277,4 +280,16 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 nowdb_filter_t   *filter,
                                 nowdb_ord_t        ord,
                                 void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Merger reader
+ * -------------
+ * reader: the merge reader
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
+
+nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
+                             nowdb_reader_t *sub);
 #endif

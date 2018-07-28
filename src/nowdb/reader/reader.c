@@ -6,6 +6,8 @@
  */
 #include <nowdb/reader/reader.h>
 
+#include <stdarg.h>
+
 static char *OBJECT = "reader";
 
 /* ------------------------------------------------------------------------
@@ -164,8 +166,33 @@ static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
 	reader->off = -1;
 	reader->key = NULL;
 	reader->cont= NULL;
+	reader->page = NULL;
 	if (reader->page2 != NULL) {
 		memset(reader->page2, 0, NOWDB_IDX_PAGE);
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: rewind merge
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t rewindMerge(nowdb_reader_t *reader) {
+	nowdb_err_t    err;
+
+	reader->key = NULL;
+	reader->cont = NULL;
+	for(int i=0; i<reader->nr; i++) {
+		err = nowdb_reader_rewind(reader->sub[i]);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_reader_move(reader->sub[i]);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				continue;
+			}
+			return err;
+		}
 	}
 	return NOWDB_OK;
 }
@@ -243,6 +270,18 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			free(reader->page2); reader->page2 = NULL;
 		}
 		return;
+
+	case NOWDB_READER_MERGE:
+		if (reader->sub != NULL) {
+			for(int i=0; i<reader->nr; i++) {
+				if (reader->sub[i] != NULL) {
+					nowdb_reader_destroy(reader->sub[i]);
+					free(reader->sub[i]);
+					reader->sub[i] = NULL;
+				}
+			}
+			free(reader->sub); reader->sub = NULL;
+		}
 
 	default:
 		return;
@@ -583,6 +622,81 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: find next key
+ * ------------------------------------------------------------------------
+ */
+#define KEYCMP(k1, k2) \
+	reader->recsize == NOWDB_EDGE_SIZE ? \
+	                   nowdb_index_edge_compare(k1, k2, reader->ikeys): \
+	                   nowdb_index_vertex_compare(k1, k2, reader->ikeys)
+
+static inline nowdb_err_t findNext(nowdb_reader_t *reader) {
+	nowdb_err_t err;
+	char x;
+	char *src;
+	void *key=NULL;
+
+	reader->cur = 0;
+
+	for(int i=0; i<reader->nr; i++) {
+		src = nowdb_reader_page(reader->sub[i]);
+		if (src == NULL) {
+			// fprintf(stderr, "nopage in %d\n", i);
+			continue;
+		}
+		if (reader->key != NULL) {
+			x = KEYCMP(reader->sub[i]->key,
+			           reader->key);
+		}
+		if (reader->key == NULL || x != BEET_CMP_LESS) {
+			if (key == NULL) {
+				key = reader->sub[i]->key;
+				reader->cur = i;
+			} else if (KEYCMP(reader->sub[i]->key, key) 
+			                          == BEET_CMP_LESS) {
+				key = reader->sub[i]->key;
+				reader->cur = i;
+			}
+		}
+	}
+	if (key == NULL) return nowdb_err_get(nowdb_err_eof,
+	                                FALSE, OBJECT, NULL);
+	if (reader->key == NULL) {
+		reader->key = calloc(reader->ikeys->sz, 8);
+		if (reader->key == NULL) {
+			NOMEM("allocating keys");
+			return err;
+		}
+	}
+	memcpy(reader->key, key, reader->ikeys->sz*8);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: move merge
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t moveMerge(nowdb_reader_t *reader) {
+	nowdb_err_t err;
+
+	for(;;) {
+		err = findNext(reader);
+		if (err != NOWDB_OK) return err;
+
+		// fprintf(stderr, "FOUND: %d\n", reader->cur);
+
+		err = nowdb_reader_move(reader->sub[reader->cur]);
+		if (err == NOWDB_OK) break;
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			continue;
+		}
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Move
  * ------------------------------------------------------------------------
  */
@@ -615,6 +729,9 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 	case NOWDB_READER_BUFIDX:
 		return moveBufIdx(reader);
 
+	case NOWDB_READER_MERGE:
+		return moveMerge(reader);
+
 	default:
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 		                      "unkown reader type in move");
@@ -642,6 +759,9 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 	case NOWDB_READER_BUFIDX:
 		return rewindBuffer(reader);
 
+	case NOWDB_READER_MERGE:
+		return rewindMerge(reader);
+
 	default:
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 		                    "unkown reader type in rewind");
@@ -657,8 +777,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
 	case NOWDB_READER_SEARCH:
-	case NOWDB_READER_FRANGE:
-		return reader->page;
+	case NOWDB_READER_FRANGE: return reader->page;
 
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
@@ -676,8 +795,11 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 		return reader->buf+reader->off;
 
 	case NOWDB_READER_BUFIDX:
-		// if (reader->off >= reader->size) return NULL;
 		return reader->page2;
+
+	case NOWDB_READER_MERGE:
+		return nowdb_reader_page(
+		             reader->sub[reader->cur]);
 
 	default:
 		return NULL;
@@ -1112,4 +1234,50 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 		       (*reader)->ikeys);
 
 	return nowdb_reader_rewind(*reader);
+}
+
+/* ------------------------------------------------------------------------
+ * Merge Reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
+	nowdb_err_t err;
+	va_list args;
+
+	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
+	        FALSE, OBJECT, "pointer to reader object is NULL");
+
+	err = newReader(reader);
+	if (err != NOWDB_OK) return err;
+
+	(*reader)->type = NOWDB_READER_MERGE;
+	(*reader)->nr = nr;
+	(*reader)->cur = 0;
+	(*reader)->key = NULL;
+
+	(*reader)->sub = calloc(nr, sizeof(nowdb_reader_t*));
+	if ((*reader)->sub == NULL) {
+		NOMEM("allocating subreaders");
+		nowdb_reader_destroy(*reader); free(*reader);
+		return err;
+	}
+	
+	va_start(args,nr);
+	for(int i=0; i<nr; i++) {
+		(*reader)->sub[i] = (nowdb_reader_t*)va_arg(args,
+		                                 nowdb_reader_t*);
+		if ((*reader)->sub[i] == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid, FALSE,
+			                 OBJECT, "subreader is NULL");
+		}
+		if ((*reader)->sub[i]->ikeys == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid, FALSE,
+			                OBJECT, "not a range reader");
+		}
+	}
+	va_end(args);
+
+	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
+
+	return rewindMerge(*reader);
 }
