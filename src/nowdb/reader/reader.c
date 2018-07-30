@@ -21,8 +21,9 @@ static char *OBJECT = "reader";
 #define NOWDB_READER_CRANGE   102
 #define NOWDB_READER_BUF      1000
 
-#define BEETERR(x) \
+#define BEETERR(x,f) \
 	if (x == BEET_ERR_EOF) { \
+		if (f) reader->eof = 1; \
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); \
 	} else if (x != BEET_OK) { \
 		return makeBeetError(x); \
@@ -40,6 +41,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->recsize = 0;
 	reader->size = 0;
 	reader->off = 0;
+	reader->eof = 0;
 	reader->buf = NULL;
 	reader->tmp = NULL;
 	reader->tmp2 = NULL;
@@ -112,6 +114,7 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 	reader->page = NULL; 
 	reader->cont = NULL; 
 	reader->off = 0; 
+	reader->eof = 0; 
 
 	if (((nowdb_file_t*)reader->current->cont)->state ==
 	      nowdb_file_state_closed) {
@@ -142,6 +145,7 @@ static inline nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
 	reader->cont = NULL; 
 	reader->file = NULL;
 	reader->off = 0; 
+	reader->eof = 0; 
 
 	ber = beet_iter_reset(reader->iter);
 	if (ber != BEET_OK) {
@@ -164,6 +168,7 @@ static inline nowdb_err_t rewindRange(nowdb_reader_t *reader) {
  */
 static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
 	reader->off = -1;
+	reader->eof = 0; 
 	reader->key = NULL;
 	reader->cont= NULL;
 	reader->page = NULL;
@@ -182,6 +187,9 @@ static inline nowdb_err_t rewindMerge(nowdb_reader_t *reader) {
 
 	reader->key = NULL;
 	reader->cont = NULL;
+	reader->eof = 0; 
+	reader->moved = 0xffffffff;
+
 	for(int i=0; i<reader->nr; i++) {
 		err = nowdb_reader_rewind(reader->sub[i]);
 		if (err != NOWDB_OK) return err;
@@ -282,6 +290,10 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			}
 			free(reader->sub); reader->sub = NULL;
 		}
+		if (reader->tmp != NULL) {
+			free(reader->tmp); reader->tmp = NULL;
+		}
+		return;
 
 	default:
 		return;
@@ -430,10 +442,23 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t moveFullscan(nowdb_reader_t *reader) {
-	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
-	                                           FALSE, OBJECT, NULL);
+	nowdb_err_t err = NOWDB_OK;
+
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof,
+	                      FALSE, OBJECT, NULL);
+	}
+	if (reader->current == NULL) {
+		reader->eof = 1;
+		return nowdb_err_get(nowdb_err_eof,
+	                      FALSE, OBJECT, NULL);
+	}
 	/* test getpage for fullscan ! */
-	return nextpage(reader);
+	err = nextpage(reader);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) reader->eof = 1;
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -448,7 +473,7 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 	for(;;) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
-		BEETERR(ber);
+		BEETERR(ber,1);
 
 		/*
 		fprintf(stderr, "content: %lu|%lu (%lu)\n",
@@ -462,7 +487,8 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 		if (err->errcode == nowdb_err_key_not_found) {
 			nowdb_err_release(err); continue;
 		}
-		if (err != NOWDB_OK) return err;
+		if (err->errcode == nowdb_err_eof) reader->eof = 1;
+		return err;
 	}
 	return NOWDB_OK;
 }
@@ -476,13 +502,17 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	beet_err_t  ber;
 	nowdb_pageid_t *pge;
 
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof,
+	                       FALSE, OBJECT, NULL);
+	}
 	if (reader->key == NULL) {
 		/* we need to do this in a loop too! */
 		fprintf(stderr, "initial move\n");
 		ber = beet_iter_move(reader->iter, &reader->key, NULL);
-		BEETERR(ber);
+		BEETERR(ber,1);
 		ber = beet_iter_enter(reader->iter);
-		BEETERR(ber);
+		BEETERR(ber,0);
 	}
 	for(;;) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
@@ -490,26 +520,26 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		while (ber == BEET_ERR_EOF) {
 			// fprintf(stderr, "in inner loop\n");
 			ber = beet_iter_leave(reader->iter);
-			BEETERR(ber);
+			BEETERR(ber,0);
 			
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
-			BEETERR(ber);
+			BEETERR(ber,1);
 
-			// fprintf(stderr, "key[1]: %lu\n", *(uint64_t*)(reader->key+8));
+			// fprintf(stderr, "key[0]: %lu\n", *(uint64_t*)(reader->key));
 
 			ber = beet_iter_enter(reader->iter);
 			if (ber == BEET_ERR_EOF) continue;
-			BEETERR(ber);
+			BEETERR(ber,0);
 
 			ber = beet_iter_move(reader->iter,
 			                    (void**)&pge,
 			                    (void**)&reader->cont);
 			if (ber == BEET_ERR_EOF) continue;
-			BEETERR(ber);
+			BEETERR(ber,0);
 			break;
 		}
-		BEETERR(ber);
+		BEETERR(ber,0);
 
 		err = getpage(reader, *pge);
 		// fprintf(stderr, "%lu: %p\n", *pge, reader->page);
@@ -517,7 +547,7 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		if (err->errcode == nowdb_err_key_not_found) {
 			nowdb_err_release(err); continue;
 		}
-		if (err != NOWDB_OK) return err;
+		return err;
 	}
 	return NOWDB_OK;
 }
@@ -529,7 +559,7 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 static inline nowdb_err_t moveKRange(nowdb_reader_t *reader) {
 	beet_err_t  ber;
 	ber = beet_iter_move(reader->iter, &reader->key, NULL);
-	BEETERR(ber);
+	BEETERR(ber,1);
 	return NOWDB_OK;
 }
 
@@ -546,7 +576,11 @@ static inline nowdb_err_t moveCRange(nowdb_reader_t *reader) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t moveBuf(nowdb_reader_t *reader) {
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
 	if (reader->size == 0) {
+		reader->eof = 1;
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
 	if (reader->off < 0) {
@@ -554,6 +588,7 @@ static inline nowdb_err_t moveBuf(nowdb_reader_t *reader) {
 		return NOWDB_OK;
 	}
 	if (reader->off + NOWDB_IDX_PAGE >= reader->size) {
+		reader->eof = 1;
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
 	reader->off += NOWDB_IDX_PAGE;
@@ -568,12 +603,17 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	char x;
 	char *p;
 
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
 	if (reader->size == 0) {
+		reader->eof = 1;
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
 	if (reader->off < 0) {
 		reader->off = 0;
 	} else if (reader->off >= reader->size) {
+		reader->eof = 1;
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
 	if (reader->key != NULL) {
@@ -610,6 +650,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	p = reader->buf+reader->off;
 	memset(reader->page2, 0, NOWDB_IDX_PAGE);
 	for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		if (reader->off >= reader->size) break;
 		if (nowdb_sort_edge_keys_compare(p,
 		          reader->buf+reader->off,
 		          reader->ikeys) != NOWDB_SORT_EQUAL)  break;
@@ -633,17 +674,18 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 static inline nowdb_err_t findNext(nowdb_reader_t *reader) {
 	nowdb_err_t err;
 	char x;
-	char *src;
 	void *key=NULL;
+	char found = 0;
+
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
 
 	reader->cur = 0;
 
 	for(int i=0; i<reader->nr; i++) {
-		src = nowdb_reader_page(reader->sub[i]);
-		if (src == NULL) {
-			// fprintf(stderr, "nopage in %d\n", i);
-			continue;
-		}
+		if (reader->sub[i]->eof) continue;
+		found = 1;
 		if (reader->key != NULL) {
 			x = KEYCMP(reader->sub[i]->key,
 			           reader->key);
@@ -652,21 +694,33 @@ static inline nowdb_err_t findNext(nowdb_reader_t *reader) {
 			if (key == NULL) {
 				key = reader->sub[i]->key;
 				reader->cur = i;
-			} else if (KEYCMP(reader->sub[i]->key, key) 
-			                          == BEET_CMP_LESS) {
+			} else {
+				x = KEYCMP(reader->sub[i]->key, key);
+			        if (x == BEET_CMP_LESS) {
+				/*
+				fprintf(stderr, "%d: LESS: moving from %lu to %lu: %d (%u)\n", i,
+				                *(uint64_t*)key,
+				                *(uint64_t*)reader->sub[i]->key,
+				                x, reader->recsize);
+				*/
 				key = reader->sub[i]->key;
 				reader->cur = i;
+				}
 			}
 		}
 	}
-	if (key == NULL) return nowdb_err_get(nowdb_err_eof,
-	                                FALSE, OBJECT, NULL);
+	if (key == NULL || !found) {
+		reader->eof = 1;
+		return nowdb_err_get(nowdb_err_eof,
+	                       FALSE, OBJECT, NULL);
+	}
 	if (reader->key == NULL) {
-		reader->key = calloc(reader->ikeys->sz, 8);
-		if (reader->key == NULL) {
+		reader->tmp = calloc(reader->ikeys->sz, 8);
+		if (reader->tmp == NULL) {
 			NOMEM("allocating keys");
 			return err;
 		}
+		reader->key = reader->tmp;
 	}
 	memcpy(reader->key, key, reader->ikeys->sz*8);
 	return NOWDB_OK;
@@ -683,16 +737,33 @@ static inline nowdb_err_t moveMerge(nowdb_reader_t *reader) {
 		err = findNext(reader);
 		if (err != NOWDB_OK) return err;
 
-		// fprintf(stderr, "FOUND: %d\n", reader->cur);
-
-		err = nowdb_reader_move(reader->sub[reader->cur]);
-		if (err == NOWDB_OK) break;
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			continue;
+		if (reader->moved & (1 << reader->cur)) {
+			reader->moved ^= (1 << reader->cur);
+			break;
 		}
-		return err;
+		reader->moved |= (1 << reader->cur);
+		err = nowdb_reader_move(reader->sub[reader->cur]);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				continue;
+			}
+			return err;
+		}
 	}
+
+	/*
+	fprintf(stderr, "FOUND    : %lu %d: %u (%lu / %lu) -- %p\n",
+	                                    *(uint64_t*)reader->key,
+	                                 reader->cur, reader->moved,
+		             reader->sub[reader->cur]->cont == NULL?
+	                        0:reader->sub[reader->cur]->cont[0],
+		             reader->sub[reader->cur]->cont == NULL?
+	                        0:reader->sub[reader->cur]->cont[1],
+	                nowdb_reader_page(reader->sub[reader->cur]));
+	*/
+
+	reader->cont = reader->sub[reader->cur]->cont;
 	return NOWDB_OK;
 }
 
@@ -963,6 +1034,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
 	(*reader)->files = files;
 	(*reader)->ikeys = nowdb_index_getResource(index);
+	(*reader)->eof = 0;
 
 	if (rtype == NOWDB_READER_FRANGE) {
 		(*reader)->plru = calloc(1, sizeof(nowdb_pplru_t));
@@ -1205,6 +1277,7 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 	(*reader)->start = start;
 	(*reader)->end = end;
 	(*reader)->ord = ord;
+	(*reader)->eof = 0;
 
 	(*reader)->page2 = calloc(1, NOWDB_IDX_PAGE);
 	if ((*reader)->page2 == NULL) {
@@ -1254,6 +1327,7 @@ nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
 	(*reader)->nr = nr;
 	(*reader)->cur = 0;
 	(*reader)->key = NULL;
+	(*reader)->eof = 0;
 
 	(*reader)->sub = calloc(nr, sizeof(nowdb_reader_t*));
 	if ((*reader)->sub == NULL) {
@@ -1278,6 +1352,7 @@ nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
 	va_end(args);
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
+	(*reader)->recsize = (*reader)->sub[0]->recsize;
 
 	return rewindMerge(*reader);
 }

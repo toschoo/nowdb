@@ -368,12 +368,6 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 		}
 		if (err != NOWDB_OK) break;
 		x=1;
-		if (cur->rdrs[i]->type == NOWDB_READER_BUF) {
-			nowdb_index_grabEdgeKeys(cur->k, // or vertex
-			nowdb_reader_page(cur->rdrs[i]),
-			              cur->rdrs[i]->tmp);
-			cur->rdrs[i]->key = cur->rdrs[i]->tmp;
-		}
 	}
 	if (x==0) return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	return err;

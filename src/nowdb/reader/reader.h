@@ -72,7 +72,7 @@ typedef struct nowdb_reader_t {
 	beet_state_t           state; /* query state                   */
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
-	int32_t                 off;  /* offset into win               */
+	int32_t                  off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	void                    *key; /* current key                   */
@@ -84,6 +84,8 @@ typedef struct nowdb_reader_t {
 	struct nowdb_reader_t  **sub; /* subreaders                    */
 	uint32_t                  nr; /* number of subreaders          */
 	uint32_t                 cur; /* current subreader             */
+	char                     eof; /* reached eof                   */
+	nowdb_bitmap32_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------

@@ -237,7 +237,7 @@ int64_t countResult(nowdb_scope_t *scope,
 	timestamp(&t1);
 	cur = openCursor(scope, stmt);
 	if (cur == NULL) {
-		fprintf(stderr, "cannot open cursor\n");
+		fprintf(stderr, "cannot open cursor: \n");
 		return -1;
 	}
 
@@ -386,6 +386,7 @@ int main() {
 	int o, d;
 	nowdb_time_t tp;
 	char *sql=NULL;
+	char exists = 0;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
 
@@ -413,54 +414,54 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
-	EXECSTMT("create index vidx_ropo on vertex (role, property)");
+	if (!exists) {
+		EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
+		EXECSTMT("create index vidx_ropo on vertex (role, property)");
 
-	EXECSTMT("create tiny table sales set stress=constant");
+		EXECSTMT("create tiny table sales set stress=constant");
 
-	EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
-	EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
+		EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
+		EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
 
-	EXECSTMT("create type product (\
-	            prod_key uint primary key, \
-	            prod_desc text)");
+		EXECSTMT("create type product (\
+		            prod_key uint primary key, \
+		            prod_desc text)");
 
-	EXECSTMT("create type client (\
-	            client_id uint primary key, \
-	            client_name text)");
+		EXECSTMT("create type client (\
+		            client_id uint primary key, \
+		            client_name text)");
 
-	EXECSTMT("create edge buys (\
-	            origin client, \
-	            destination product, \
-	            weight float, \
-	            weight2 float)");
+		EXECSTMT("create edge buys (\
+		            origin client, \
+		            destination product, \
+		            weight float, \
+		            weight2 float)");
 
-	if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
-		fprintf(stderr, "cannot write products\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	if (writeVrtx(CLIENTS, CLIENT, 2) != 0) {
-		fprintf(stderr, "cannot write clients\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	if (writeEdges(EDGES, 5, 1, 2) != 0) {
-		fprintf(stderr, "cannot write edges\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
+		if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
+			fprintf(stderr, "cannot write products\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (writeVrtx(CLIENTS, CLIENT, 2) != 0) {
+			fprintf(stderr, "cannot write clients\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (writeEdges(EDGES, 5, 1, 2) != 0) {
+			fprintf(stderr, "cannot write edges\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 
-	/*
-	EXECSTMT("load 'rsc/products100.csv' into vertex \
-	           use header as product");
+		EXECSTMT("load 'rsc/products100.csv' into vertex \
+		           use header as product");
 
-	EXECSTMT("load 'rsc/clients100.csv' into vertex \
-	           use header as client");
-	*/
+		EXECSTMT("load 'rsc/clients100.csv' into vertex \
+		           use header as client");
 
-	EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
+		EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
 
-	if (waitscope(scope, "sales") != 0) {
-		fprintf(stderr, "cannot wait for scope\n");
-		rc = EXIT_FAILURE; goto cleanup;
+		if (waitscope(scope, "sales") != 0) {
+			fprintf(stderr, "cannot wait for scope\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 	}
 
 	// test fullscan
