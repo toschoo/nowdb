@@ -56,6 +56,63 @@ static inline nowdb_err_t getPending(ts_algo_list_t *files,
 }
 
 /* ------------------------------------------------------------------------
+ * Create sequence reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
+                                    int               type,
+                                    nowdb_plan_idx_t *pidx) {
+	nowdb_err_t err;
+	nowdb_reader_t *full;
+	nowdb_reader_t *search;
+	ts_algo_list_t pfiles;
+
+	ts_algo_list_init(&pfiles);
+	err = getPending(&cur->stf.files, &pfiles);
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&pfiles);
+		return err;
+	}
+	
+	switch(type) {
+	case NOWDB_PLAN_SEARCH_:
+		err = nowdb_reader_fullscan(&full, &pfiles, NULL);
+		break;
+	default:
+		ts_algo_list_destroy(&pfiles);
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+		                                    "unknown seq type");
+	}
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&pfiles);
+		return err;
+	}
+
+	switch(type) {
+	case NOWDB_PLAN_SEARCH_:
+		err = nowdb_reader_search(&search, &cur->stf.files,
+		                       pidx->idx, pidx->keys, NULL);
+		break;
+	default:
+		ts_algo_list_destroy(&pfiles);
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+		                                    "unknown seq type");
+	}
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(full);
+		return err;
+	}
+
+	err = nowdb_reader_seq(cur->rdrs, 2, search, full);
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(full);
+		nowdb_reader_destroy(search);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Create merge reader
  * ------------------------------------------------------------------------
  */
@@ -123,7 +180,6 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
  */
 static inline nowdb_err_t initReader(nowdb_scope_t *scope,
                                      nowdb_cursor_t  *cur,
-                                     int              idx,
                                      nowdb_time_t   start,
                                      nowdb_time_t     end,
                                      nowdb_plan_t  *rplan) {
@@ -156,10 +212,13 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		fprintf(stderr, "SEARCH\n");
 		pidx = rplan->load;
+		err = createSeq(cur, rplan->stype, pidx);
+		/*
 		err = nowdb_reader_search(cur->rdrs+idx,
 		                         &cur->stf.files,
 		                          pidx->idx,
 		                          pidx->keys,NULL);
+		*/
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
 		fprintf(stderr, "FRANGE\n");
@@ -170,7 +229,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		fprintf(stderr, "KRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
-		err = nowdb_reader_krange(cur->rdrs+idx,
+		err = nowdb_reader_krange(cur->rdrs,
 		                        &cur->stf.files,
 		                        pidx->idx, NULL,
 		                        NULL, NULL); /* range ! */
@@ -179,22 +238,22 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		fprintf(stderr, "CRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
-		err = nowdb_reader_crange(cur->rdrs+idx,
+		err = nowdb_reader_crange(cur->rdrs,
 		                        &cur->stf.files,
 		                        pidx->idx, NULL,
 		                        NULL, NULL); /* range ! */
 	
 	/* create a fullscan reader */
 	} else {
-		err = nowdb_reader_fullscan(cur->rdrs+idx,
-		                    &cur->stf.files, NULL);
+		err = nowdb_reader_fullscan(cur->rdrs,
+		                &cur->stf.files, NULL);
 	}
 	if (err != NOWDB_OK) {
 		nowdb_store_destroyFiles(store, &cur->stf.files);
 		return err;
 	}
 
-	nowdb_reader_setPeriod(cur->rdrs[idx], start, end);
+	nowdb_reader_setPeriod(cur->rdrs[0], start, end);
 
 	/* remember where the files came from */
 	cur->stf.store = store;
@@ -236,8 +295,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	if (rstp->ntype != NOWDB_PLAN_READER) {
 		INVALIDPLAN("reader expected in plan");
 	}
-	if (rstp->stype == NOWDB_PLAN_SEARCH_) rn++;
-	//    rstp->stype == NOWDB_PLAN_FRANGE_) rn++;
 
 	/* allocate the cursor */
 	*cur = calloc(1, sizeof(nowdb_cursor_t));
@@ -250,7 +307,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	*/
 
 	/* allocate the readers */
-	(*cur)->rdrs = calloc(rn, sizeof(nowdb_reader_t));
+	(*cur)->rdrs = calloc(1, sizeof(nowdb_reader_t));
 	if ((*cur)->rdrs == NULL) {
 		free(*cur); *cur = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -293,7 +350,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 	}
 
-	err = initReader(scope, *cur, i, start, end, rstp);
+	err = initReader(scope, *cur, start, end, rstp);
 	if (err != NOWDB_OK) {
 		free((*cur)->rdrs); (*cur)->rdrs = NULL;
 		free(*cur); *cur = NULL;
@@ -301,6 +358,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	}
 	i++;
 
+	/*
 	if (rstp->stype == NOWDB_PLAN_SEARCH_) { // ||
 	//     rstp->stype == NOWDB_PLAN_FRANGE_) {
 		err = getPending(&(*cur)->stf.files,
@@ -326,14 +384,12 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			free(*cur); *cur = NULL;
 		}
 	}
+	*/
 	if ((*cur)->filter != NULL) {
 		for(i=0;i<rn;i++) {
 			(*cur)->rdrs[i]->filter = (*cur)->filter;
 		}
 	}
-
-	/* In case of range:
-	 * create a bufscanner */
 
 	/* pass on to projection or order by or group by */
 	if (runner == NULL) return NOWDB_OK;
@@ -431,6 +487,7 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 		if (err != NOWDB_OK) break;
 		x=1;
 	}
+	if (err != NOWDB_OK) return err;
 	if (x==0) return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	return err;
 }

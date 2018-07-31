@@ -284,9 +284,20 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------
+ * Sequence reader
+ * ---------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...); 
+
+/* ------------------------------------------------------------------------
  * Merger reader
  * -------------
  * reader: the merge reader
+ * nr    : number of subreaders
  * ...   : the readers
  * ------------------------------------------------------------------------
  */
