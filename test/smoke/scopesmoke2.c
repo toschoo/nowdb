@@ -491,7 +491,7 @@ int main() {
 	// test order
 	fprintf(stderr, "ORDER\n");
 	for(int i=0; i<10; i++) {    // RANGE SCAN
-		COUNTRESULT(SQLORD); res += HALFEDGE;
+		COUNTRESULT(SQLORD); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
 

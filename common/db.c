@@ -38,7 +38,7 @@ static int edgecompr(const void *lft, const void *rig) {
 	return 0;
 }
 
-static int edgecount(int h) {
+int edgecount(int h) {
 	int mx = h*HALFEDGE;
 	int x = 1;
 	int origin = edges[0].origin;
@@ -216,7 +216,7 @@ static int writeVrtx(nowdb_path_t path, int type, int halves) {
 		rc = -1; goto cleanup; \
 	}
 
-int createDB() {
+int createDB(int hedges, int hprods, int hclients) {
 	int rc = 0;
 	nowdb_scope_t *scope;
 
@@ -256,15 +256,15 @@ int createDB() {
 	            weight float, \
 	            weight2 float)");
 
-	if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
+	if (writeVrtx(PRODS, PRODUCT, hprods) != 0) {
 		fprintf(stderr, "cannot write products\n");
 		rc = -1; goto cleanup;
 	}
-	if (writeVrtx(CLIENTS, CLIENT, 2) != 0) {
+	if (writeVrtx(CLIENTS, CLIENT, hclients) != 0) {
 		fprintf(stderr, "cannot write clients\n");
 		rc = -1; goto cleanup;
 	}
-	if (writeEdges(EDGES, 5, 1, 2) != 0) {
+	if (writeEdges(EDGES, hedges, hprods, hclients) != 0) {
 		fprintf(stderr, "cannot write edges\n");
 		rc = -1; goto cleanup;
 	}

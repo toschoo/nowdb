@@ -34,6 +34,90 @@ static inline char hasId(nowdb_plan_idx_t *pidx) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: filter pending files from list of files
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getPending(ts_algo_list_t *files,
+                                     ts_algo_list_t *pending) {
+	ts_algo_list_node_t *runner;
+	nowdb_file_t *file;
+
+	for(runner=files->head;runner!=NULL;runner=runner->nxt) {
+		file = runner->cont;
+		if (!(file->ctrl & NOWDB_FILE_SORT)) {
+			if (ts_algo_list_append(pending, file) != TS_ALGO_OK)
+			{
+				return nowdb_err_get(nowdb_err_no_mem,
+				        FALSE, OBJECT, "list.append");
+			}
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Create merge reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
+                                      int               type,
+                                      nowdb_plan_idx_t *pidx) {
+	nowdb_err_t err;
+	nowdb_reader_t *buf;
+	nowdb_reader_t *range;
+	ts_algo_list_t pfiles;
+
+	ts_algo_list_init(&pfiles);
+	err = getPending(&cur->stf.files, &pfiles);
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&pfiles);
+		return err;
+	}
+	
+	switch(type) {
+	case NOWDB_PLAN_FRANGE_:
+		err = nowdb_reader_bufidx(&buf, &pfiles, pidx->idx, NULL,
+		                               NOWDB_ORD_ASC, NULL, NULL);
+		break;
+	case NOWDB_PLAN_KRANGE_:
+	case NOWDB_PLAN_CRANGE_:
+	default:
+		ts_algo_list_destroy(&pfiles);
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+		                                    "KRANGE or CRANGE");
+	}
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&pfiles);
+		return err;
+	}
+
+	switch(type) {
+	case NOWDB_PLAN_FRANGE_:
+		err = nowdb_reader_frange(&range, &cur->stf.files, pidx->idx,
+		                                            NULL, NULL, NULL);
+		break;
+	case NOWDB_PLAN_KRANGE_:
+	case NOWDB_PLAN_CRANGE_:
+	default:
+		ts_algo_list_destroy(&pfiles);
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+		                                    "KRANGE or CRANGE");
+	}
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(buf);
+		return err;
+	}
+
+	err = nowdb_reader_merge(cur->rdrs, 2, range, buf);
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(buf);
+		nowdb_reader_destroy(range);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Init Reader 
  * ------------------------------------------------------------------------
  */
@@ -64,7 +148,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	cur->hasid = TRUE;
 
-	/* we still need to get the period from the filter */
+	/* get files */
 	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
 
@@ -78,13 +162,12 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                          pidx->keys,NULL);
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
+		fprintf(stderr, "FRANGE\n");
 		pidx = rplan->load;
-		err = nowdb_reader_frange(cur->rdrs+idx,
-		                        &cur->stf.files,
-		                         pidx->idx, NULL,
-		                         NULL, NULL); /* range ! */
+		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
+		fprintf(stderr, "KRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_krange(cur->rdrs+idx,
@@ -93,6 +176,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                        NULL, NULL); /* range ! */
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
+		fprintf(stderr, "CRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(cur->rdrs+idx,
@@ -114,28 +198,6 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	/* remember where the files came from */
 	cur->stf.store = store;
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: filter pending files from list of files
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t getPending(ts_algo_list_t *files,
-                                     ts_algo_list_t *pending) {
-	ts_algo_list_node_t *runner;
-	nowdb_file_t *file;
-
-	for(runner=files->head;runner!=NULL;runner=runner->nxt) {
-		file = runner->cont;
-		if (!(file->ctrl & NOWDB_FILE_SORT)) {
-			if (ts_algo_list_append(pending, file) != TS_ALGO_OK)
-			{
-				return nowdb_err_get(nowdb_err_no_mem,
-				        FALSE, OBJECT, "list.append");
-			}
-		}
-	}
 	return NOWDB_OK;
 }
 

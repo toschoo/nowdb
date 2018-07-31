@@ -508,7 +508,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	}
 	if (reader->key == NULL) {
 		/* we need to do this in a loop too! */
-		fprintf(stderr, "initial move\n");
 		ber = beet_iter_move(reader->iter, &reader->key, NULL);
 		BEETERR(ber,1);
 		ber = beet_iter_enter(reader->iter);

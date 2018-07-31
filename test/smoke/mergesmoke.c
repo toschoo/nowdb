@@ -15,6 +15,10 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#define NEDGES   5
+#define NPRODS   2
+#define NCLIENTS 1
+
 int testBuffer(nowdb_scope_t *scope, int h) {
 	int rc = 0;
 	int c = 0;
@@ -439,7 +443,7 @@ int main() {
 		fprintf(stderr, "cannot init scopes\n");
 		return EXIT_FAILURE;
 	}
-	if (createDB() != 0) {
+	if (createDB(NEDGES, NPRODS, NCLIENTS) != 0) {
 		fprintf(stderr, "cannot init scopes\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -457,14 +461,14 @@ int main() {
 	}
 	// range
 	fprintf(stderr, "RANGE\n");
-	if (testRange(scope, 4) != 0) {
+	if (testRange(scope, NEDGES-1) != 0) {
 		fprintf(stderr, "testRange failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
 	// test mergereader
 	fprintf(stderr, "MERGE\n");
-	if (testMerge(scope, 5) != 0) {
+	if (testMerge(scope, NEDGES) != 0) {
 		fprintf(stderr, "testMerge failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

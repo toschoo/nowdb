@@ -21,13 +21,15 @@
 
 #define CTXNAME "sales"
 
-int createDB();
+int createDB(int edges, int clients, int products);
 int dropDB();
 nowdb_scope_t *openDB();
 void closeDB(nowdb_scope_t *scope);
 
 int64_t countResults(nowdb_scope_t *scope,
                      const char    *stmt);
+
+int edgecount(int h);
 
 int checkEdgeResult(nowdb_scope_t *scope,
                     int origin, int destin,

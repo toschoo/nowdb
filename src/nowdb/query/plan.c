@@ -1096,7 +1096,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	 * to order or to group without indices.
 	 * At the end, when we have such means,
 	 * the precedence should be the contrary:
-	 * whenever we can use and index for filtering,
+	 * whenever we can use an index for filtering,
 	 * do so! It is better to sort some 1000 data points,
 	 * then to scan the whole database -- even when it is
 	 * by means of an index.
