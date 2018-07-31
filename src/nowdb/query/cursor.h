@@ -36,6 +36,7 @@ typedef struct {
 	nowdb_row_t       *row; /* projection                    */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
+	char              *tmp; /* temporary buffer              */
 	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 

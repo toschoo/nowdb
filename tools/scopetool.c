@@ -268,7 +268,10 @@ int processCursor(nowdb_cursor_t *cur) {
 			} else break;
 		}
 		nowdb_timestamp(&t2);
-		fprintf(stderr, "FETCH (%u): %ldus\n", cnt, nowdb_time_minus(&t2, &t1)/1000);
+		/*
+		fprintf(stderr, "FETCH (%u): %ldus\n",
+		 cnt, nowdb_time_minus(&t2, &t1)/1000);
+		*/
 		total += cnt;
 		// fprintf(stderr, "%lu\n", total);
 		if (cur->recsize == 32) {

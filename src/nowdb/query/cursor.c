@@ -126,7 +126,13 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		                                  pidx->idx, NULL,
 		                        NOWDB_ORD_ASC, NULL, NULL);
 		break;
+
 	case NOWDB_PLAN_KRANGE_:
+		err = nowdb_reader_bkrange(&buf, &cur->stf.pending,
+		                                   pidx->idx, NULL,
+		                         NOWDB_ORD_ASC, NULL, NULL);
+		break;
+
 	case NOWDB_PLAN_CRANGE_:
 	default:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -139,7 +145,21 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		err = nowdb_reader_frange(&range, &cur->stf.files, pidx->idx,
 		                                            NULL, NULL, NULL);
 		break;
+
 	case NOWDB_PLAN_KRANGE_:
+		err = nowdb_reader_krange(&range, &cur->stf.files, pidx->idx,
+		                                            NULL, NULL, NULL);
+		if (range->ikeys != NULL) {
+			cur->tmp = calloc(1, cur->recsize);
+			if (cur->tmp == NULL) {
+				NOMEM("allocating temporary buffer");
+				nowdb_reader_destroy(buf);
+				nowdb_reader_destroy(range);
+				return err;
+			}
+		}
+		break;
+
 	case NOWDB_PLAN_CRANGE_:
 	default:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -208,10 +228,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		fprintf(stderr, "KRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
-		err = nowdb_reader_krange(&cur->rdr,
-		                          &cur->stf.files,
-		                          pidx->idx, NULL,
-		                          NULL, NULL); /* range ! */
+		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
 		fprintf(stderr, "CRANGE\n");
@@ -220,7 +237,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		err = nowdb_reader_crange(&cur->rdr,
 		                          &cur->stf.files,
 		                          pidx->idx, NULL,
-		                          NULL, NULL); /* range ! */
+		                          NULL, NULL); // range !
 	
 	/* create a fullscan reader */
 	} else {
@@ -278,6 +295,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	} 
 
 	(*cur)->rdr = NULL;
+	(*cur)->tmp = NULL;
 	(*cur)->stf.store = NULL;
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
@@ -371,6 +389,9 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
 	}
+	if (cur->tmp != NULL) {
+		free(cur->tmp); cur->tmp = NULL;
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -416,16 +437,15 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	nowdb_filter_t *filter = cur->rdr->filter;
 	char *src = nowdb_reader_page(cur->rdr);
 	char complete=0, cc=0;
+	nowdb_cmp_t x;
 	uint32_t mx;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
-	mx = cur->rdr->type != NOWDB_READER_KRANGE &&
-	     cur->rdr->type != NOWDB_READER_CRANGE?
-	     NOWDB_IDX_PAGE:recsz;
+
+	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE;
 
 	while(*osz < sz) {
-		// fprintf(stderr, "fetch %u %u\n", cur->off, *osz);
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
 			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
@@ -442,7 +462,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 
 		/* check content
 		 * -------------
-		 * here's potential for imporvement:
+		 * here's potential for improvement:
 		 * 1) we can immediately advance to the next marked record
 		 * 2) if we have read all records, we can leave */
 		if (!checkpos(cur->rdr, cur->off/recsz)) {
@@ -453,6 +473,29 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		if (filter != NULL &&
 		    !nowdb_filter_eval(filter, src+cur->off)) {
 			cur->off += recsz; continue;
+		}
+
+		/* if keys-only: keep unique
+		 * but watch out for CRANGE --
+		 * there we have to process
+		 * all duplicates */
+		if (cur->rdr->ko && cur->tmp != NULL) {
+			if (memcmp(cur->tmp, nowdb_nullrec,
+			                cur->recsize) == 0) {
+				memcpy(cur->tmp, src+cur->off, cur->recsize);
+			} else {
+				x = cur->recsize == NOWDB_EDGE_SIZE?
+				    nowdb_sort_edge_keys_compare(cur->tmp,
+				                             src+cur->off,
+				                          cur->rdr->ikeys):
+				    nowdb_sort_vertex_keys_compare(cur->tmp,
+				                               src+cur->off,
+				                            cur->rdr->ikeys);
+				if (x == NOWDB_SORT_EQUAL) {
+					cur->off += recsz; continue;
+				}
+				memcpy(cur->tmp, src+cur->off, cur->recsize);
+			}
 		}
 
 		/* copy the record to the output buffer */
@@ -471,6 +514,13 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			if (complete) {
 				cur->off+=recsz;
 				(*count)+=cc;
+
+			/* this is an awful hack to force
+			 * a krange reader to present us
+			 * the same record once again */
+			} else if (cur->tmp != 0) {
+				memcpy(cur->tmp, nowdb_nullrec,
+				       cur->recsize);
 			}
 			if (cc == 0) break;
 		}

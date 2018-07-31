@@ -42,6 +42,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->size = 0;
 	reader->off = 0;
 	reader->eof = 0;
+	reader->ko  = 0;
 	reader->buf = NULL;
 	reader->tmp = NULL;
 	reader->tmp2 = NULL;
@@ -284,6 +285,8 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 
 	case NOWDB_READER_BUF:
 	case NOWDB_READER_BUFIDX:
+	case NOWDB_READER_BKRANGE:
+	case NOWDB_READER_BCRANGE:
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
 		}
@@ -673,9 +676,13 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 		if (nowdb_sort_edge_keys_compare(p,
 		          reader->buf+reader->off,
 		          reader->ikeys) != NOWDB_SORT_EQUAL)  break;
-		memcpy(reader->page2+i,
-		       reader->buf+reader->off,
-		       reader->recsize);
+
+		if (reader->type == NOWDB_READER_BUFIDX  ||
+		   (reader->type == NOWDB_READER_BKRANGE && i == 0)) {
+			memcpy(reader->page2+i,
+			       reader->buf+reader->off,
+			       reader->recsize);
+		}
 		reader->off += reader->recsize;
 	}
 	return NOWDB_OK;
@@ -716,14 +723,8 @@ static inline nowdb_err_t findNext(nowdb_reader_t *reader) {
 			} else {
 				x = KEYCMP(reader->sub[i]->key, key);
 			        if (x == BEET_CMP_LESS) {
-				/*
-				fprintf(stderr, "%d: LESS: moving from %lu to %lu: %d (%u)\n", i,
-				                *(uint64_t*)key,
-				                *(uint64_t*)reader->sub[i]->key,
-				                x, reader->recsize);
-				*/
-				key = reader->sub[i]->key;
-				reader->cur = i;
+					key = reader->sub[i]->key;
+					reader->cur = i;
 				}
 			}
 		}
@@ -847,6 +848,7 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 		return moveBuf(reader);
 
 	case NOWDB_READER_BUFIDX:
+	case NOWDB_READER_BKRANGE:
 		return moveBufIdx(reader);
 
 	case NOWDB_READER_SEQ:
@@ -882,6 +884,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 
 	case NOWDB_READER_BUF:
 	case NOWDB_READER_BUFIDX:
+	case NOWDB_READER_BKRANGE:
 		return rewindBuffer(reader);
 
 	case NOWDB_READER_SEQ:
@@ -923,6 +926,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 		return reader->buf+reader->off;
 
 	case NOWDB_READER_BUFIDX:
+	case NOWDB_READER_BKRANGE:
 		return reader->page2;
 
 	case NOWDB_READER_SEQ:
@@ -1094,6 +1098,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->files = files;
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
+	(*reader)->ko  = rtype == NOWDB_READER_KRANGE;
 
 	if (rtype == NOWDB_READER_FRANGE) {
 		(*reader)->plru = calloc(1, sizeof(nowdb_pplru_t));
@@ -1369,6 +1374,28 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 }
 
 /* ------------------------------------------------------------------------
+ * KBuffer simulating an index range scan (keys only)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
+                                 ts_algo_list_t   *files,
+                                 nowdb_index_t    *index,
+                                 nowdb_filter_t   *filter,
+                                 nowdb_ord_t        ord,
+                                 void *start,void  *end) {
+	nowdb_err_t err;
+
+	err = nowdb_reader_bufidx(reader, files, index,
+	                       filter, ord, start, end);
+	if (err != NOWDB_OK) return err;
+
+	(*reader)->type = NOWDB_READER_BKRANGE;
+	(*reader)->ko  = 1;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: create higher-order reader
  * ------------------------------------------------------------------------
  */
@@ -1413,6 +1440,7 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
 	(*reader)->recsize = (*reader)->sub[0]->recsize;
+	(*reader)->ko = (*reader)->sub[0]->ko;
 
 	return nowdb_reader_rewind(*reader);
 }

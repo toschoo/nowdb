@@ -253,11 +253,12 @@ int64_t countResult(nowdb_scope_t *scope,
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err); err = NOWDB_OK;
-				if (osz == 0) break;
-			}
+				if (cnt == 0) break;
+			} else break;
 			more = 0;
 		}
 		res += (int64_t)cnt;
+		// nowdb_row_write(buf, osz, stderr);
 	}
 	free(buf);
 	closeCursor(cur);
@@ -351,7 +352,7 @@ char *getRandom(int       halves,
 	// fprintf(stderr, "%s\n", *sql);
 
 #define COUNTDISTINCT(h) \
-	if (edgecount(h) != res) {\
+	if ((uint64_t)edgecount(h) != res) {\
 		fprintf(stderr, "result differs\n"); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
@@ -461,13 +462,11 @@ int main() {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 	}
-
 	// test fullscan
 	COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
 
 	COUNTRESULT("select edge, origin from sales");
-	// COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
 
 	// test fullscan
@@ -495,10 +494,8 @@ int main() {
 
 	// KRANGE
 	fprintf(stderr, "KRANGE\n");
-	for(int i=0; i<10; i++) {    
-		COUNTRESULT(SQLGRP);
-		// COUNTDISTINCT(5);
-	}
+	COUNTRESULT(SQLGRP);
+	COUNTDISTINCT(5);
 
 cleanup:
 	if (sql != NULL) free(sql);

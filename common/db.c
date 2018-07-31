@@ -125,6 +125,13 @@ static int writeEdges(nowdb_path_t path, int halves,
 	return 0;
 }
 
+/*
+static int loadEdges(nowdb_path_t path, int halves,
+                          int hprods, int hclients) {
+	return -1;
+}
+*/
+
 static void randomString(char *str, int max) {
 	int x;
 
