@@ -770,6 +770,8 @@ static inline nowdb_err_t moveSeq(nowdb_reader_t *reader) {
 		}
 		return err;
 	}
+	reader->cont = reader->sub[reader->cur]->cont;
+	reader->key  = reader->sub[reader->cur]->key;
 	return NOWDB_OK;
 }
 

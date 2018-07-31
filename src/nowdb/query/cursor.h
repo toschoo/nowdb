@@ -29,20 +29,13 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t          disc; /* iter discipline               */
-	uint32_t          numr; /* number of readers             */
-	nowdb_model_t   *model; /* model                         */
-	nowdb_reader_t  **rdrs; /* array of pointers to readers  */
+	nowdb_reader_t    *rdr; /* the reader                    */
 	nowdb_storefile_t  stf; /* should be a list of stf!      */
+	nowdb_model_t   *model; /* model                         */
 	nowdb_filter_t *filter; /* main filter                   */
 	nowdb_row_t       *row; /* projection                    */
-	uint32_t           cur; /* current reader                */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
-	char              *key; /* current key                   */
-	char              *tmp; /* helper buffer                 */
-	nowdb_index_keys_t  *k; /* keys descriptor               */
-	beet_compare_t     cmp; /* idx compare method            */
 	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 

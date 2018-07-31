@@ -65,28 +65,21 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 	nowdb_err_t err;
 	nowdb_reader_t *full;
 	nowdb_reader_t *search;
-	ts_algo_list_t pfiles;
 
-	ts_algo_list_init(&pfiles);
-	err = getPending(&cur->stf.files, &pfiles);
+	err = getPending(&cur->stf.files, &cur->stf.pending);
 	if (err != NOWDB_OK) {
-		ts_algo_list_destroy(&pfiles);
 		return err;
 	}
 	
 	switch(type) {
 	case NOWDB_PLAN_SEARCH_:
-		err = nowdb_reader_fullscan(&full, &pfiles, NULL);
+		err = nowdb_reader_fullscan(&full, &cur->stf.pending, NULL);
 		break;
 	default:
-		ts_algo_list_destroy(&pfiles);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "unknown seq type");
 	}
-	if (err != NOWDB_OK) {
-		ts_algo_list_destroy(&pfiles);
-		return err;
-	}
+	if (err != NOWDB_OK) return err;
 
 	switch(type) {
 	case NOWDB_PLAN_SEARCH_:
@@ -94,7 +87,6 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 		                       pidx->idx, pidx->keys, NULL);
 		break;
 	default:
-		ts_algo_list_destroy(&pfiles);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "unknown seq type");
 	}
@@ -103,7 +95,7 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 		return err;
 	}
 
-	err = nowdb_reader_seq(cur->rdrs, 2, search, full);
+	err = nowdb_reader_seq(&cur->rdr, 2, search, full);
 	if (err != NOWDB_OK) {
 		nowdb_reader_destroy(full);
 		nowdb_reader_destroy(search);
@@ -122,31 +114,25 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	nowdb_err_t err;
 	nowdb_reader_t *buf;
 	nowdb_reader_t *range;
-	ts_algo_list_t pfiles;
 
-	ts_algo_list_init(&pfiles);
-	err = getPending(&cur->stf.files, &pfiles);
+	err = getPending(&cur->stf.files, &cur->stf.pending);
 	if (err != NOWDB_OK) {
-		ts_algo_list_destroy(&pfiles);
 		return err;
 	}
 	
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
-		err = nowdb_reader_bufidx(&buf, &pfiles, pidx->idx, NULL,
-		                               NOWDB_ORD_ASC, NULL, NULL);
+		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
+		                                  pidx->idx, NULL,
+		                        NOWDB_ORD_ASC, NULL, NULL);
 		break;
 	case NOWDB_PLAN_KRANGE_:
 	case NOWDB_PLAN_CRANGE_:
 	default:
-		ts_algo_list_destroy(&pfiles);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "KRANGE or CRANGE");
 	}
-	if (err != NOWDB_OK) {
-		ts_algo_list_destroy(&pfiles);
-		return err;
-	}
+	if (err != NOWDB_OK) return err;
 
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
@@ -156,7 +142,6 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	case NOWDB_PLAN_KRANGE_:
 	case NOWDB_PLAN_CRANGE_:
 	default:
-		ts_algo_list_destroy(&pfiles);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "KRANGE or CRANGE");
 	}
@@ -165,7 +150,7 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		return err;
 	}
 
-	err = nowdb_reader_merge(cur->rdrs, 2, range, buf);
+	err = nowdb_reader_merge(&cur->rdr, 2, range, buf);
 	if (err != NOWDB_OK) {
 		nowdb_reader_destroy(buf);
 		nowdb_reader_destroy(range);
@@ -213,12 +198,6 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		fprintf(stderr, "SEARCH\n");
 		pidx = rplan->load;
 		err = createSeq(cur, rplan->stype, pidx);
-		/*
-		err = nowdb_reader_search(cur->rdrs+idx,
-		                         &cur->stf.files,
-		                          pidx->idx,
-		                          pidx->keys,NULL);
-		*/
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
 		fprintf(stderr, "FRANGE\n");
@@ -229,23 +208,23 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		fprintf(stderr, "KRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
-		err = nowdb_reader_krange(cur->rdrs,
-		                        &cur->stf.files,
-		                        pidx->idx, NULL,
-		                        NULL, NULL); /* range ! */
+		err = nowdb_reader_krange(&cur->rdr,
+		                          &cur->stf.files,
+		                          pidx->idx, NULL,
+		                          NULL, NULL); /* range ! */
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
 		fprintf(stderr, "CRANGE\n");
 		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
-		err = nowdb_reader_crange(cur->rdrs,
-		                        &cur->stf.files,
-		                        pidx->idx, NULL,
-		                        NULL, NULL); /* range ! */
+		err = nowdb_reader_crange(&cur->rdr,
+		                          &cur->stf.files,
+		                          pidx->idx, NULL,
+		                          NULL, NULL); /* range ! */
 	
 	/* create a fullscan reader */
 	} else {
-		err = nowdb_reader_fullscan(cur->rdrs,
+		err = nowdb_reader_fullscan(&cur->rdr,
 		                &cur->stf.files, NULL);
 	}
 	if (err != NOWDB_OK) {
@@ -253,7 +232,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		return err;
 	}
 
-	nowdb_reader_setPeriod(cur->rdrs[0], start, end);
+	nowdb_reader_setPeriod(cur->rdr, start, end);
 
 	/* remember where the files came from */
 	cur->stf.store = store;
@@ -267,14 +246,11 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
                              ts_algo_list_t  *plan,
                              nowdb_cursor_t  **cur) {
-	int i=0;
 	ts_algo_list_node_t *runner;
 	nowdb_plan_t *stp=NULL, *rstp=NULL;
 	nowdb_err_t   err;
-	uint32_t rn=0;
 	nowdb_time_t start = NOWDB_TIME_DAWN;
 	nowdb_time_t end = NOWDB_TIME_DUSK;
-	nowdb_plan_idx_t *pidx=NULL;
 
 	/* point to head of plan */
 	runner=plan->head;
@@ -284,9 +260,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	if (stp->ntype != NOWDB_PLAN_SUMMARY) 
 		INVALIDPLAN("no summary in plan");
 
-	rn = stp->helper;
-
-	/* get first reader node (this should be a loop!) */
+	/* get reader node */
 	runner = runner->nxt;
 	if (runner == NULL) INVALIDPLAN("no reader");
 	rstp = runner->cont;
@@ -298,47 +272,18 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 
 	/* allocate the cursor */
 	*cur = calloc(1, sizeof(nowdb_cursor_t));
-	if (*cur == NULL) 
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                                 "allocating cusor");
+	if (*cur == NULL) {
+		NOMEM("allocating cursor");
+		return err;
+	} 
 
-	/*
-	fprintf(stderr, "[CURSOR] Targets: %d\n", stp->helper);
-	*/
-
-	/* allocate the readers */
-	(*cur)->rdrs = calloc(1, sizeof(nowdb_reader_t));
-	if ((*cur)->rdrs == NULL) {
-		free(*cur); *cur = NULL;
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                               "allocating readers");
-	}
-	(*cur)->numr = rn;
-	if (rn > 1) {
-		if (rstp->stype == NOWDB_PLAN_SEARCH_) {
-			(*cur)->disc = NOWDB_ITER_SEQ;
-		} else if (rstp->stype == NOWDB_PLAN_FRANGE_) {
-			(*cur)->disc = NOWDB_ITER_MERGE;
-			pidx = rstp->load;
-			(*cur)->cmp = nowdb_index_getCompare(pidx->idx);
-			(*cur)->k  = nowdb_index_getResource(pidx->idx);
-			(*cur)->key = NULL;
-			(*cur)->tmp = calloc((*cur)->k->sz, 8);
-			if ((*cur)->tmp == NULL) {
-				NOMEM("allocating keys");
-				return err;
-			}
-		}
-	}
-
-	/* we should check how many readers are on the same store 
-	 * and create a list for that store!!! */
+	(*cur)->rdr = NULL;
 	(*cur)->stf.store = NULL;
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
 
 	/* pass on to the filter (in fact, there should/may be,
-	 * one filter per reader */
+	 * one filter per subreader */
 	runner = runner->nxt;
 	if (runner!=NULL) {
 		stp = runner->cont;
@@ -352,43 +297,12 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 
 	err = initReader(scope, *cur, start, end, rstp);
 	if (err != NOWDB_OK) {
-		free((*cur)->rdrs); (*cur)->rdrs = NULL;
+		free((*cur)->rdr); (*cur)->rdr = NULL;
 		free(*cur); *cur = NULL;
 		return err;
 	}
-	i++;
-
-	/*
-	if (rstp->stype == NOWDB_PLAN_SEARCH_) { // ||
-	//     rstp->stype == NOWDB_PLAN_FRANGE_) {
-		err = getPending(&(*cur)->stf.files,
-		                 &(*cur)->stf.pending);
-		if (err != NOWDB_OK) {
-			ts_algo_list_destroy(&(*cur)->stf.pending);
-			free((*cur)->rdrs); (*cur)->rdrs = NULL;
-			free(*cur); *cur = NULL;
-		}
-		if (rstp->stype == NOWDB_PLAN_SEARCH_) {
-			err = nowdb_reader_fullscan((*cur)->rdrs+i,
-			               &(*cur)->stf.pending, NULL);
-		} else {
-			err = nowdb_reader_bufidx((*cur)->rdrs+i,
-			                    &(*cur)->stf.pending,
-			                         pidx->idx, NULL,
-			                           NOWDB_ORD_ASC,
-			                             NULL, NULL);
-		}
-		if (err != NOWDB_OK) {
-			ts_algo_list_destroy(&(*cur)->stf.pending);
-			free((*cur)->rdrs); (*cur)->rdrs = NULL;
-			free(*cur); *cur = NULL;
-		}
-	}
-	*/
 	if ((*cur)->filter != NULL) {
-		for(i=0;i<rn;i++) {
-			(*cur)->rdrs[i]->filter = (*cur)->filter;
-		}
+		(*cur)->rdr->filter = (*cur)->filter;
 	}
 
 	/* pass on to projection or order by or group by */
@@ -410,7 +324,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		if (runner == NULL) {
 			if (stp->stype == NOWDB_PLAN_GROUPING) {
 				nowdb_cursor_destroy(*cur); free(*cur);
-				INVALIDPLAN("grouping without projection");	
+				INVALIDPLAN("grouping without projection");
 			}
 			return NOWDB_OK;
 		}
@@ -438,12 +352,10 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
  * ------------------------------------------------------------------------
  */
 void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
-	if (cur->rdrs != NULL) {
-		for(int i=0; i<cur->numr; i++) {
-			nowdb_reader_destroy(cur->rdrs[i]);
-			free(cur->rdrs[i]); cur->rdrs[i] = NULL;
-		}
-		free(cur->rdrs); cur->rdrs = NULL;
+	if (cur == NULL) return;
+	if (cur->rdr != NULL) {
+		nowdb_reader_destroy(cur->rdr);
+		free(cur->rdr); cur->rdr = NULL;
 	}
 	if (cur->filter != NULL) {
 		nowdb_filter_destroy(cur->filter);
@@ -459,12 +371,6 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
 	}
-	if (cur->key != NULL) {
-		free(cur->key); cur->key = NULL;
-	}
-	if (cur->tmp != NULL) {
-		free(cur->tmp); cur->tmp = NULL;
-	}
 }
 
 /* ------------------------------------------------------------------------
@@ -472,24 +378,11 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
-	char x = 0;
-	nowdb_err_t err = NOWDB_OK;
 
-	cur->cur = 0;
 	cur->off = 0;
 
 	/* initialise readers */
-	for (int i=0; i<cur->numr; i++) {
-		err = nowdb_reader_move(cur->rdrs[i]);
-		if (nowdb_err_contains(err, nowdb_err_eof)) {
-			nowdb_err_release(err); continue;
-		}
-		if (err != NOWDB_OK) break;
-		x=1;
-	}
-	if (err != NOWDB_OK) return err;
-	if (x==0) return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
-	return err;
+	return nowdb_reader_move(cur->rdr);
 }
 
 /* ------------------------------------------------------------------------
@@ -519,17 +412,16 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
                                           uint32_t *count) 
 {
 	nowdb_err_t err;
-	uint32_t r = cur->cur;
-	uint32_t recsz = cur->rdrs[r]->recsize;
-	nowdb_filter_t *filter = cur->rdrs[r]->filter;
-	char *src = nowdb_reader_page(cur->rdrs[r]);
+	uint32_t recsz = cur->rdr->recsize;
+	nowdb_filter_t *filter = cur->rdr->filter;
+	char *src = nowdb_reader_page(cur->rdr);
 	char complete=0, cc=0;
 	uint32_t mx;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
-	mx = cur->rdrs[r]->type != NOWDB_READER_KRANGE &&
-	     cur->rdrs[r]->type != NOWDB_READER_CRANGE?
+	mx = cur->rdr->type != NOWDB_READER_KRANGE &&
+	     cur->rdr->type != NOWDB_READER_CRANGE?
 	     NOWDB_IDX_PAGE:recsz;
 
 	while(*osz < sz) {
@@ -537,9 +429,9 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
 			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
-			err = nowdb_reader_move(cur->rdrs[r]);
+			err = nowdb_reader_move(cur->rdr);
 			if (err != NOWDB_OK) return err;
-			src = nowdb_reader_page(cur->rdrs[r]);
+			src = nowdb_reader_page(cur->rdr);
 			cur->off = 0;
 		}
 
@@ -553,7 +445,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		 * here's potential for imporvement:
 		 * 1) we can immediately advance to the next marked record
 		 * 2) if we have read all records, we can leave */
-		if (!checkpos(cur->rdrs[r], cur->off/recsz)) {
+		if (!checkpos(cur->rdr, cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
 
@@ -587,134 +479,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 }
 
 /* ------------------------------------------------------------------------
- * Multi reader: sequence fetch
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t seqfetch(nowdb_cursor_t *cur,
-                                char *buf, uint32_t sz,
-                                         uint32_t *osz,
-                                         uint32_t *cnt) 
-{
-	nowdb_err_t err;
-
-	for(;;) {
-		err = simplefetch(cur, buf, sz, osz, cnt);
-		if (err == NOWDB_OK) return NOWDB_OK;
-		if (err->errcode == nowdb_err_eof) {
-			cur->cur++; cur->off=0;
-			if (cur->cur == cur->numr) {
-				cur->cur = 0; return err;
-			}
-			nowdb_err_release(err);
-			continue;
-		}
-		if (err != NOWDB_OK) return err;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: find next key in reader
- * ------------------------------------------------------------------------
- */
-static inline void findOff(nowdb_cursor_t *cur) {
-	char *src = nowdb_reader_page(cur->rdrs[cur->cur]);
-	for(int i=0; i<NOWDB_IDX_PAGE; i+=cur->recsize) {
-		// compare cur->key with edge at idx
-		if (cur->recsize == 64) {
-			nowdb_index_grabEdgeKeys(cur->k,
-			                src+i,cur->tmp);
-		} else {
-			nowdb_index_grabVertexKeys(cur->k,
-			                  src+i,cur->tmp);
-		}
-		if (cur->cmp(cur->key, cur->tmp, cur->k)
-		                      == BEET_CMP_EQUAL) {
-			cur->off = i; break;
-		}
-	}
-}
-
-/* ------------------------------------------------------------------------
- * Helper: find next key
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t findNextKey(nowdb_cursor_t *cur) {
-	nowdb_err_t err;
-	char x;
-	char *src;
-	void *key=NULL;
-	cur->cur = 0;
-	cur->off = 0;
-	for(int i=0; i<cur->numr; i++) {
-		src = nowdb_reader_page(cur->rdrs[i]);
-		if (src == NULL) continue;
-		// if (cur->rdrs[i]->type != NOWDB_READER_BUF) continue; // DEBUGING
-		if (cur->key != NULL) {
-			x = cur->cmp(cur->rdrs[i]->key, cur->key, cur->k);
-			/*
-			fprintf(stderr, "comparing %u %lu and %lu: %d\n", i,
-			                *(uint64_t*)(cur->rdrs[i]->key),
-			                *(uint64_t*)(cur->key), x);
-			*/
-		}
-		if (cur->key == NULL || x != BEET_CMP_LESS) {
-			if (key == NULL) {
-				key = cur->rdrs[i]->key;
-				cur->cur = i;
-			} else if (cur->cmp(cur->rdrs[i]->key, key, cur->k)
-			                                  == BEET_CMP_LESS) {
-				key = cur->rdrs[i]->key;
-				cur->cur = i;
-			}
-		}
-	}
-	if (key == NULL) return nowdb_err_get(nowdb_err_eof,
-	                                FALSE, OBJECT, NULL);
-	if (cur->key == NULL) {
-		cur->key = calloc(cur->k->sz, 8);
-		if (cur->key == NULL) {
-			NOMEM("allocating keys");
-			return err;
-		}
-	}
-	memcpy(cur->key, key, cur->k->sz*8);
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Multi reader: merge fetch
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t mergefetch(nowdb_cursor_t *cur,
-                                  char *buf, uint32_t sz,
-                                           uint32_t *osz,
-                                           uint32_t *cnt)
-{
-	nowdb_err_t err;
-
-	// find minimal key greater than cur->key
-	err = findNextKey(cur);
-	if (err != NOWDB_OK) return err;
-
-	/*
-	fprintf(stderr, "we now have the keys %lu and %lu\n",
-	                ((uint64_t*)(cur->rdrs[cur->cur]->key))[0],
-	                ((uint64_t*)(cur->key))[0]);
-	*/
-
-	findOff(cur);
-
-	/*
-	fprintf(stderr, "%u.%u: %lu\n", cur->cur, cur->off,
-	                          ((uint64_t*)cur->key)[0]);
-	*/
-
-	// exhaust that key on that reader
-	return simplefetch(cur, buf, sz, osz, cnt);
-}
-
-/* ------------------------------------------------------------------------
  * Fetch
  * ------------------------------------------------------------------------
  */
@@ -726,16 +490,7 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
 	*osz = 0;
 	*cnt = 0;
 
-	if (cur->numr == 1) return simplefetch(cur, buf, sz, osz, cnt);
-	switch(cur->disc) {
-	case NOWDB_ITER_SEQ: return seqfetch(cur, buf, sz, osz, cnt);
-	case NOWDB_ITER_MERGE: return mergefetch(cur, buf, sz, osz, cnt);
-
-	case NOWDB_ITER_JOIN:
-	default:
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
-	              "only simple and seq fetch is implemented :-(\n");
-	}
+	return simplefetch(cur, buf, sz, osz, cnt);
 }
 
 /* ------------------------------------------------------------------------

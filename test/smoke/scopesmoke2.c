@@ -257,9 +257,7 @@ int64_t countResult(nowdb_scope_t *scope,
 			}
 			more = 0;
 		}
-		// fprintf(stderr, "%u\n", cnt);
 		res += (int64_t)cnt;
-		// nowdb_row_write(buf, 8192, stderr);
 	}
 	free(buf);
 	closeCursor(cur);
