@@ -47,6 +47,7 @@ typedef struct {
 	nowdb_value_t         hlp; /* helper field                  */
 	nowdb_blist_t      *flist; /* free block list               */
 	uint32_t              off; /* current offset into block     */
+	char                first; /* first round                   */
 	/* key tree    */          /* tree to find values quickly   */
 } nowdb_fun_t;
 
@@ -60,7 +61,7 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
                            uint16_t            field,
                            uint16_t            fsize,
                            nowdb_type_t        dtype,
-                           nowdb_value_t        init);
+                           nowdb_value_t       *init);
 
 /* -----------------------------------------------------------------------
  * Destroy

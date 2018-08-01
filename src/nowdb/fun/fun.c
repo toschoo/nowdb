@@ -123,7 +123,7 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
                            uint16_t            field,
                            uint16_t            fsize,
                            nowdb_type_t        dtype,
-                           nowdb_value_t        init) {
+                           nowdb_value_t       *init) {
 	nowdb_err_t err;
 
 	if (fun == NULL) INVALID("fun pointer is NULL");
@@ -140,8 +140,12 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 	fun->value = 0;
 	fun->hlp   = 0;
 	fun->off   = 0;
+	fun->first = 1;
 
-	memcpy(&fun->value, &fun->init, fun->fsize);
+	if (init != NULL) {
+		memcpy(&fun->init, init, fun->fsize);
+		memcpy(&fun->value, &fun->init, fun->fsize);
+	}
 
 	if (fun->ftype < 0) INVALID("unknown function type");
 
@@ -204,7 +208,7 @@ static inline nowdb_err_t collect(nowdb_fun_t *fun, char *record) {
 static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
 	switch(fun->fun) {
 	case NOWDB_FUN_COUNT: fun->value++; break;
-	default: INVALID("function cannot be applied in context");
+	default: INVALID("function cannot be applied here");
 	}
 	return NOWDB_OK;
 }
@@ -219,8 +223,20 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun, char *record) {
 		return add(&fun->value, record+fun->field, fun->dtype);
 	case NOWDB_FUN_PROD:
 		return mul(&fun->value, record+fun->field, fun->dtype);
+	case NOWDB_FUN_MIN:
+		if (fun->first) {
+			memcpy(&fun->value, record+fun->field, fun->fsize);
+			return NOWDB_OK;
+		}
+		return min(&fun->value, record+fun->field, fun->dtype);
+	case NOWDB_FUN_MAX:
+		if (fun->first) {
+			memcpy(&fun->value, record+fun->field, fun->fsize);
+			return NOWDB_OK;
+		}
+		return max(&fun->value, record+fun->field, fun->dtype);
 	
-	default: INVALID("function cannot be applied in context");
+	default: INVALID("function cannot be applied here");
 	}
 }
 
@@ -229,14 +245,19 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun, char *record) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_fun_map(nowdb_fun_t *fun, void *record) {
+	nowdb_err_t err;
 	switch(fun->ftype) {
-	case NOWDB_FUN_ZERO: return apply_(fun);
-	case NOWDB_FUN_ONE: return apply(fun, record);
-	case NOWDB_FUN_MANY: return collect(fun, record);
-	case NOWDB_FUN_TREE: return nowdb_err_get(nowdb_err_not_supp,
-	             FALSE, OBJECT, "tree functions not implemented");
+	case NOWDB_FUN_ZERO: err = apply_(fun); break;
+	case NOWDB_FUN_ONE: err = apply(fun, record); break;
+	case NOWDB_FUN_MANY: err = collect(fun, record); break;
+	case NOWDB_FUN_TREE:
+		err = nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+		                     "tree functions not implemented");
+		break;
 	default: INVALID("unknown function type");
 	}
+	fun->first = 0;
+	return err;
 }
 
 /* -----------------------------------------------------------------------
