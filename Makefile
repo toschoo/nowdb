@@ -52,6 +52,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/lru.o        \
       $(SRC)/mem/ptlru.o      \
       $(SRC)/mem/pplru.o      \
+      $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
@@ -66,6 +67,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/reader/filter.o  \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
+      $(SRC)/fun/fun.o        \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
       $(SRC)/query/plan.o     \
@@ -90,6 +92,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/mem/lru.h        \
       $(SRC)/mem/ptlru.h      \
       $(SRC)/mem/pplru.h      \
+      $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
@@ -104,6 +107,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
+      $(SRC)/fun/fun.h        \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -146,6 +150,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
+	$(SMK)/funsmoke                \
 	$(SMK)/scopesmoke              \
 	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
@@ -299,6 +304,11 @@ $(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
 				         $(libs) -lnowdb
 
 $(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/funsmoke:	$(LIB) $(DEP) $(SMK)/funsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -547,6 +557,7 @@ clean:
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/filtersmoke
+	rm -f $(SMK)/funsmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/scopesmoke2
