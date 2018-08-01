@@ -24,7 +24,6 @@
  */
 #define NOWDB_PLAN_SUMMARY    1
 #define NOWDB_PLAN_READER     2
-#define NOWDB_PLAN_ITER       3
 #define NOWDB_PLAN_FILTER     4
 #define NOWDB_PLAN_GROUPING   5
 #define NOWDB_PLAN_ORDERING   6
@@ -53,18 +52,6 @@
 #define NOWDB_PLAN_CRANGE_  51
 
 /* ------------------------------------------------------------------------
- * Iterator Types:
- * ---------------
- * - sequential
- * - merge
- * - join
- * ------------------------------------------------------------------------
- */
-#define NOWDB_ITER_SEQ   1
-#define NOWDB_ITER_MERGE 2
-#define NOWDB_ITER_JOIN  3
-
-/* ------------------------------------------------------------------------
  * Plan node
  * ------------------------------------------------------------------------
  */
@@ -76,6 +63,10 @@ typedef struct {
 	void     *load; /* pointer to some structure */
 } nowdb_plan_t;
 
+/* ------------------------------------------------------------------------
+ * Simplified index descriptor
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_index_t *idx;
 	char          *keys;

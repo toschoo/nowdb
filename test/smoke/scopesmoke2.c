@@ -223,126 +223,6 @@ int writeVrtx(nowdb_path_t path, int type, int halves) {
 	return rc;
 }
 
-int testBuffer(nowdb_scope_t *scope) {
-	int rc = 0;
-	int c = 0;
-	nowdb_err_t     err;
-	nowdb_index_t  *idx;
-	ts_algo_list_t  files;
-	nowdb_context_t *ctx;
-	nowdb_reader_t *reader;
-	nowdb_edge_t   *last, *cur;
-	struct timespec t1, t2;
-
-	timestamp(&t1);
-
-	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "context not found\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return -1;
-	}
-
-	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "index not found\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return -1;
-	}
-
-	// get pending files
-	ts_algo_list_init(&files);
-	err = nowdb_store_getAllWaiting(&ctx->store, &files);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "get waiting failed\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return -1;
-	}
-
-	// count files
-	fprintf(stderr, "we have %u files\n", files.len);
-	
-	// create buffer
-	err = nowdb_reader_bufidx(&reader, &files, idx, NULL,
-	                           NOWDB_ORD_ASC, NULL, NULL);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot create buffer\n");
-		nowdb_store_destroyFiles(&ctx->store, &files);
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return -1;
-	}
-
-	timestamp(&t2);
-	fprintf(stderr, "running time: %ldus\n", minus(&t2, &t1)/1000);
-
-	// count half
-	fprintf(stderr, "bufreader has: %u\n",
-	        reader->size/reader->recsize);
-
-	if (reader->size/reader->recsize != HALFEDGE) {
-		fprintf(stderr, "wrong size in bufreader: %u\n", reader->size);
-		rc = -1; goto cleanup;
-	}
-
-	last = NULL;
-	for(int i=0; i<reader->size; i+=64) {
-		if (last == NULL) {
-			last = (nowdb_edge_t*)(reader->buf+i);
-			cur = (nowdb_edge_t*)(reader->buf+i);
-		} else {
-			cur = (nowdb_edge_t*)(reader->buf+i);
-			if (cur->origin < last->origin) {
-				fprintf(stderr, "buffer is not ordered\n");
-				rc = -1; break;
-			}
-		}
-		// fprintf(stderr, "%lu\n", cur->origin);
-	}
-	if (rc != 0) goto cleanup;
-
-	c=0;
-	for(;;) {
-		err = nowdb_reader_move(reader);
-		if (err != NOWDB_OK) break;
-
-		char *src = nowdb_reader_page(reader);
-		if (src == NULL) {
-			fprintf(stderr, "page is NULL\n");
-			rc = -1; goto cleanup;
-		}
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
-			if (memcmp(src+i, nowdb_nullrec,
-			          reader->recsize) == 0) break;
-			c++;
-		}
-	}
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err); err = NOWDB_OK;
-		} else {
-			nowdb_err_print(err);
-			nowdb_err_release(err);
-			rc = -1; goto cleanup;
-		}
-	}
-	if (c != reader->size/reader->recsize) {
-		fprintf(stderr, "counted: %d, expected: %u\n",
-		                              c, reader->size);
-		rc = -1; goto cleanup;
-	}
-
-cleanup:
-	nowdb_reader_destroy(reader); free(reader);
-	nowdb_store_destroyFiles(&ctx->store, &files);
-	return rc;
-}
-
 int64_t countResult(nowdb_scope_t *scope,
                     char          *stmt) {
 	struct timespec t1, t2;
@@ -357,7 +237,7 @@ int64_t countResult(nowdb_scope_t *scope,
 	timestamp(&t1);
 	cur = openCursor(scope, stmt);
 	if (cur == NULL) {
-		fprintf(stderr, "cannot open cursor\n");
+		fprintf(stderr, "cannot open cursor: \n");
 		return -1;
 	}
 
@@ -373,13 +253,12 @@ int64_t countResult(nowdb_scope_t *scope,
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err); err = NOWDB_OK;
-				if (osz == 0) break;
-			}
+				if (cnt == 0) break;
+			} else break;
 			more = 0;
 		}
-		// fprintf(stderr, "%u\n", cnt);
 		res += (int64_t)cnt;
-		// nowdb_row_write(buf, 8192, stderr);
+		// nowdb_row_write(buf, osz, stderr);
 	}
 	free(buf);
 	closeCursor(cur);
@@ -473,7 +352,7 @@ char *getRandom(int       halves,
 	// fprintf(stderr, "%s\n", *sql);
 
 #define COUNTDISTINCT(h) \
-	if (edgecount(h) != res) {\
+	if ((uint64_t)edgecount(h) != res) {\
 		fprintf(stderr, "result differs\n"); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
@@ -506,6 +385,7 @@ int main() {
 	int o, d;
 	nowdb_time_t tp;
 	char *sql=NULL;
+	char exists = 0;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
 
@@ -533,62 +413,60 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
-	EXECSTMT("create index vidx_ropo on vertex (role, property)");
+	if (!exists) {
+		EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
+		EXECSTMT("create index vidx_ropo on vertex (role, property)");
 
-	EXECSTMT("create tiny table sales set stress=constant");
+		EXECSTMT("create tiny table sales set stress=constant");
 
-	EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
-	EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
+		EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
+		EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
 
-	EXECSTMT("create type product (\
-	            prod_key uint primary key, \
-	            prod_desc text)");
+		EXECSTMT("create type product (\
+		            prod_key uint primary key, \
+		            prod_desc text)");
 
-	EXECSTMT("create type client (\
-	            client_id uint primary key, \
-	            client_name text)");
+		EXECSTMT("create type client (\
+		            client_id uint primary key, \
+		            client_name text)");
 
-	EXECSTMT("create edge buys (\
-	            origin client, \
-	            destination product, \
-	            weight float, \
-	            weight2 float)");
+		EXECSTMT("create edge buys (\
+		            origin client, \
+		            destination product, \
+		            weight float, \
+		            weight2 float)");
 
-	if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
-		fprintf(stderr, "cannot write products\n");
-		rc = EXIT_FAILURE; goto cleanup;
+		if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
+			fprintf(stderr, "cannot write products\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (writeVrtx(CLIENTS, CLIENT, 2) != 0) {
+			fprintf(stderr, "cannot write clients\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (writeEdges(EDGES, 5, 1, 2) != 0) {
+			fprintf(stderr, "cannot write edges\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+
+		EXECSTMT("load 'rsc/products100.csv' into vertex \
+		           use header as product");
+
+		EXECSTMT("load 'rsc/clients100.csv' into vertex \
+		           use header as client");
+
+		EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
+
+		if (waitscope(scope, "sales") != 0) {
+			fprintf(stderr, "cannot wait for scope\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 	}
-	if (writeVrtx(CLIENTS, CLIENT, 2) != 0) {
-		fprintf(stderr, "cannot write clients\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	if (writeEdges(EDGES, 5, 1, 2) != 0) {
-		fprintf(stderr, "cannot write edges\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-
-	/*
-	EXECSTMT("load 'rsc/products100.csv' into vertex \
-	           use header as product");
-
-	EXECSTMT("load 'rsc/clients100.csv' into vertex \
-	           use header as client");
-	*/
-
-	EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
-
-	if (waitscope(scope, "sales") != 0) {
-		fprintf(stderr, "cannot wait for scope\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-
 	// test fullscan
 	COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
 
 	COUNTRESULT("select edge, origin from sales");
-	// COUNTRESULT("select * from sales");
 	CHECKRESULT(5, 0, 0, 0);
 
 	// test fullscan
@@ -607,26 +485,17 @@ int main() {
 		CHECKRESULT(5, o, d, tp);
 	}
 
-	// test bufreader
-	fprintf(stderr, "BUFFER\n");
-	if (testBuffer(scope) != 0) {
-		fprintf(stderr, "testBuffer failed\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-
 	// test order
 	fprintf(stderr, "ORDER\n");
 	for(int i=0; i<10; i++) {    // RANGE SCAN
-		COUNTRESULT(SQLORD); res += HALFEDGE;
+		COUNTRESULT(SQLORD); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
 
 	// KRANGE
 	fprintf(stderr, "KRANGE\n");
-	for(int i=0; i<10; i++) {    
-		COUNTRESULT(SQLGRP);
-		// COUNTDISTINCT(5);
-	}
+	COUNTRESULT(SQLGRP);
+	COUNTDISTINCT(5);
 
 cleanup:
 	if (sql != NULL) free(sql);

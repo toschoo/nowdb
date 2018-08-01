@@ -81,7 +81,7 @@ void nowdb_index_keys_destroy(nowdb_index_keys_t *keys);
  */
 char nowdb_index_edge_compare(const void *left,
                               const void *right,
-                              nowdb_index_keys_t *keys);
+                              void       *keys);
 
 /* ------------------------------------------------------------------------
  * Compare Vertex Index Keys
@@ -89,7 +89,7 @@ char nowdb_index_edge_compare(const void *left,
  */
 char nowdb_index_vertex_compare(const void *left,
                                 const void *right,
-                                nowdb_index_keys_t *keys);
+                                void       *keys);
 
 /* ------------------------------------------------------------------------
  * Index

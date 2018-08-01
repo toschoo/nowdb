@@ -53,7 +53,7 @@
  *             when no index was selected)
  * ------------------------------------------------------------------------
  */
-typedef struct {
+typedef struct nowdb_reader_t {
 	uint32_t                type; /* reader type                   */
 	uint32_t             recsize; /* set according to first file   */
 	ts_algo_list_t        *files; /* list of relevant files        */
@@ -72,7 +72,7 @@ typedef struct {
 	beet_state_t           state; /* query state                   */
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
-	int32_t                 off;  /* offset into win               */
+	int32_t                  off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	void                    *key; /* current key                   */
@@ -81,6 +81,12 @@ typedef struct {
 	nowdb_ord_t              ord; /* asc or desc                   */
 	nowdb_time_t            from; /* start of period               */
 	nowdb_time_t              to; /* end   of period               */
+	struct nowdb_reader_t  **sub; /* subreaders                    */
+	uint32_t                  nr; /* number of subreaders          */
+	uint32_t                 cur; /* current subreader             */
+	char                     eof; /* reached eof                   */
+	char                      ko; /* key-onle reader               */
+	nowdb_bitmap32_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------
@@ -277,4 +283,48 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 nowdb_filter_t   *filter,
                                 nowdb_ord_t        ord,
                                 void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Buffer simulating an index range scan (keys only)
+ * -------------------------------------
+ * Parameters:
+ * - reader: out parameter
+ * - files : the datafiles
+ * - index : order the data according to this index
+ * - filter: select only relevant elements
+ * - ord   : order of range
+ * - start/end: range indicator; ignore if ordering is NULL.
+ *              with ordering and range, the reader behaves
+ *              like a range scanner.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
+                                 ts_algo_list_t   *files,
+                                 nowdb_index_t    *index,
+                                 nowdb_filter_t   *filter,
+                                 nowdb_ord_t        ord,
+                                 void *start,void  *end);
+
+/* ------------------------------------------------------------------------
+ * Sequence reader
+ * ---------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...); 
+
+/* ------------------------------------------------------------------------
+ * Merge reader
+ * ------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
+
+nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
+                             nowdb_reader_t *sub);
 #endif

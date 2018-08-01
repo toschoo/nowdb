@@ -153,6 +153,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/indexersmoke            \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
+	$(SMK)/mergesmoke              \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -350,6 +351,17 @@ $(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/mergesmoke:	$(LIB) $(DEP) $(SMK)/mergesmoke.o \
+			$(COM)/scopes.o \
+			$(COM)/db.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(COM)/scopes.o \
+			                 $(COM)/db.o     \
+			                 $(COM)/bench.o  \
+			                 $(libs) -lnowdb
+
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
 			$(CMPMSG)
 			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
@@ -520,6 +532,7 @@ clean:
 	rm -rf $(RSC)/iman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
+	rm -rf $(RSC)/db??
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
@@ -542,6 +555,7 @@ clean:
 	rm -f $(SMK)/indexersmoke
 	rm -f $(SMK)/modelsmoke
 	rm -f $(SMK)/textsmoke
+	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
