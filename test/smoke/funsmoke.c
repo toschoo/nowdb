@@ -268,7 +268,7 @@ int testFun(uint32_t ftype,
 
 	/* check value */
 	if (checkResult(ftype, dtype, off,
-	    &fun->value, &fun->init, mx) != 0) {
+	    &fun->r1, &fun->init, mx) != 0) {
 		fprintf(stderr, "results differ\n");
 		rc = -1; goto cleanup;
 	}

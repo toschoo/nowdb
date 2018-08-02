@@ -43,8 +43,10 @@ typedef struct {
 	nowdb_type_t        dtype; /* field type                    */
 	ts_algo_list_t       many; /* list of blocks                */
 	nowdb_value_t        init; /* initial value                 */
-	nowdb_value_t       value; /* the running value and result  */
-	nowdb_value_t         hlp; /* helper field                  */
+	nowdb_value_t          r1; /* first register and result     */
+	nowdb_value_t          r2; /* second register               */
+	nowdb_value_t          r3; /* third register                */
+	nowdb_value_t          r4; /* fourth register               */
 	nowdb_blist_t      *flist; /* free block list               */
 	uint32_t              off; /* current offset into block     */
 	char                first; /* first round                   */

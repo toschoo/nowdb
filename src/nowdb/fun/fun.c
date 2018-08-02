@@ -41,9 +41,6 @@ static char *OBJECT  = "fun";
 #define QUOT(v1,v2) \
 	v1 /= v2;
 
-#define TOFLOAT(v1,v2) \
-	v1 = (double)v2;
-
 /* CAUTION: this one needs one more variable! */
 #define DIV(v1,v2) \
 	*r = (double)v1 / (double)v2;
@@ -63,6 +60,20 @@ static char *OBJECT  = "fun";
 		return NOWDB_OK; \
 	default: return nowdb_err_get(nowdb_err_not_supp, \
 	                             FALSE, OBJECT, NULL); \
+	}
+
+#define TOFLOAT() \
+	switch(t) { \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_UINT: \
+		x = (double)(*(uint64_t*)v2); \
+		memcpy(v1, &x, 8); break; \
+	case NOWDB_TYP_INT: \
+		x = (double)(*(int64_t*)v2); \
+		memcpy(v1, &x, 8); break; \
+	default: \
+		memcpy(v1, v2, 8); break; \
 	}
 	
 /* -----------------------------------------------------------------------
@@ -94,8 +105,9 @@ static inline nowdb_err_t nowmax(void *v1, void *v2, nowdb_type_t t) {
 static inline nowdb_err_t nowmin(void *v1, void *v2, nowdb_type_t t) {
 	PERFM(MIN);
 }
-static inline nowdb_err_t now2float(void *v1, void *v2, nowdb_type_t t) {
-	PERFM(TOFLOAT);
+static inline void now2float(void *v1, void *v2, nowdb_type_t t) {
+	double x;
+	TOFLOAT();
 }
 
 /* -----------------------------------------------------------------------
@@ -171,14 +183,14 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 	fun->fsize = fsize;
 	fun->dtype = dtype;
 	fun->flist = NULL;
-	fun->value = 0;
-	fun->hlp   = 0;
+	fun->r1 = 0;
+	fun->r2   = 0;
 	fun->off   = 0;
 	fun->first = 1;
 
 	if (init != NULL) {
 		memcpy(&fun->init, init, fun->fsize);
-		memcpy(&fun->value, &fun->init, fun->fsize);
+		memcpy(&fun->r1, &fun->init, fun->fsize);
 	}
 
 	if (fun->ftype < 0) INVALID("unknown function type");
@@ -260,7 +272,7 @@ static inline nowdb_err_t collect(nowdb_fun_t *fun, char *record) {
  */
 static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
 	switch(fun->fun) {
-	case NOWDB_FUN_COUNT: fun->value++; break;
+	case NOWDB_FUN_COUNT: fun->r1++; break;
 	default: INVALID("function cannot be applied here");
 	}
 	return NOWDB_OK;
@@ -276,42 +288,43 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun,  int ftype,
 
 	switch(ftype) {
 	case NOWDB_FUN_SUM:
-		return nowadd(&fun->value, record+field, fun->dtype);
+		return nowadd(&fun->r1, record+field, fun->dtype);
 	case NOWDB_FUN_PROD:
-		return nowmul(&fun->value, record+field, fun->dtype);
+		return nowmul(&fun->r1, record+field, fun->dtype);
 	case NOWDB_FUN_MIN:
 		if (fun->first) {
-			memcpy(&fun->value, record+field, fun->fsize);
+			memcpy(&fun->r1, record+field, fun->fsize);
 			return NOWDB_OK;
 		}
-		return nowmin(&fun->value, record+field, fun->dtype);
+		return nowmin(&fun->r1, record+field, fun->dtype);
 	case NOWDB_FUN_MAX:
 		if (fun->first) {
-			memcpy(&fun->value, record+field, fun->fsize);
+			memcpy(&fun->r1, record+field, fun->fsize);
 			return NOWDB_OK;
 		}
-		return nowmax(&fun->value, record+field, fun->dtype);
+		return nowmax(&fun->r1, record+field, fun->dtype);
 
 	case NOWDB_FUN_SPREAD:
 		if (fun->first) {
-			memcpy(&fun->value, record+field, fun->fsize);
-			memcpy(&fun->hlp, record+field, fun->fsize);
+			memcpy(&fun->r1, record+field, fun->fsize);
+			memcpy(&fun->r2, record+field, fun->fsize);
 			return NOWDB_OK;
 		}
-		err = nowmax(&fun->value, record+field, fun->dtype);
+		err = nowmax(&fun->r1, record+field, fun->dtype);
 		if (err != NOWDB_OK) return err;
-		return nowmin(&fun->hlp, record+field, fun->dtype);
+		return nowmin(&fun->r2, record+field, fun->dtype);
 
 	case NOWDB_FUN_AVG:
-		fun->hlp++;
-		return nowadd(&fun->value, record+field, fun->dtype);
+		fun->r2++;
+		return nowadd(&fun->r1, record+field, fun->dtype);
 
 	case NOWDB_FUN_STDDEV:
-		err = now2float(record+field, record+field, fun->dtype);
+		now2float(record+field, record+field, fun->dtype);
+		fprintf(stderr, "%.4f\n", *(double*)(record+field));
+		err = nowsub(record+field, &fun->r1, NOWDB_TYP_FLOAT);
+		// fprintf(stderr, "%.4f\n", *(double*)(record+field));
 		if (err != NOWDB_OK) return err;
-		err = nowsub(record+field, &fun->value, NOWDB_TYP_FLOAT);
-		if (err != NOWDB_OK) return err;
-		return nowsquare(record+field, record+field, NOWDB_TYP_FLOAT);
+		return nowmul(record+field, record+field, NOWDB_TYP_FLOAT);
 	
 	default: INVALID("function cannot be applied here");
 	}
@@ -381,20 +394,20 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 	case NOWDB_FUN_MAX: return NOWDB_OK;
 
 	case NOWDB_FUN_SPREAD:
-		return nowsub(&fun->value, &fun->hlp, fun->dtype);
+		return nowsub(&fun->r1, &fun->r2, fun->dtype);
 
 	case NOWDB_FUN_AVG:
-		if (fun->hlp == 0) {
-			fun->value = 0;
+		if (fun->r2 == 0) {
+			fun->r1 = 0;
 			return NOWDB_OK;
 		}
 		if (fun->dtype == NOWDB_TYP_FLOAT) {
-			x = (double)(*(uint64_t*)&fun->hlp);
-			memcpy(&fun->hlp, &x, 8);
+			x = (double)(*(uint64_t*)&fun->r2);
+			memcpy(&fun->r2, &x, 8);
 		}
-		err = nowdiv(&x, &fun->value, &fun->hlp, fun->dtype);
+		err = nowdiv(&x, &fun->r1, &fun->r2, fun->dtype);
 		if (err != NOWDB_OK) return err;
-		memcpy(&fun->value, &x, fun->fsize);
+		memcpy(&fun->r1, &x, fun->fsize);
 		return NOWDB_OK;
 
 	case NOWDB_FUN_MEDIAN:
@@ -406,33 +419,38 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 		err = map2(fun, NOWDB_FUN_AVG);
 		if (err != NOWDB_OK) return err;
 
-		x = (double)fun->hlp;
+		x = (double)fun->r2;
 		fprintf(stderr, "COUNT: %.4f\n", x);
 
 		if (x < 2) return NOWDB_OK;
 
+		memcpy(&fun->r3, &x, 8);
+
 		err = reduce(fun, NOWDB_FUN_AVG);
 		if (err != NOWDB_OK) return err;
 
-		memcpy(&fun->hlp, &x, 8);
+		memcpy(&fun->r2, &fun->r3, 8);
+
 		err = map2(fun, NOWDB_FUN_STDDEV);
 		if (err != NOWDB_OK) return err;
 
-		memcpy(&x, &fun->value, 8);
+		memcpy(&x, &fun->r1, 8);
 		fprintf(stderr, "%.4f\n", x);
 
 		nowdb_type_t tmp = fun->dtype;
+		x = NOWDB_UNITY_FADD;
 		fun->dtype = NOWDB_TYP_FLOAT;
+		memcpy(&fun->r1, &x, 8);
 		err = map2(fun, NOWDB_FUN_SUM);
 		fun->dtype = tmp;
 		if (err != NOWDB_OK) return err;
 
-		memcpy(&n, &fun->hlp, 8);
-		memcpy(&x, &fun->value, 8);
+		memcpy(&n, &fun->r3, 8);
+		memcpy(&x, &fun->r1, 8);
 		z = sqrt(x/(n-1));
 		fprintf(stderr, "sqrt(%.4f/(%.4f-1)) = %.4f\n", x, n, z);
 
-		memcpy(&fun->value, &z, 8);
+		memcpy(&fun->r1, &z, 8);
 		return NOWDB_OK;
 	
 	default: return NOWDB_OK;
