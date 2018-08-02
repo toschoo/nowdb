@@ -35,11 +35,14 @@ nowdb_err_t nowdb_blist_init(nowdb_blist_t *blist, uint32_t sz) {
  */
 static void destroyList(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner, *tmp;
+	nowdb_block_t *block;
 	runner = list->head;
 	while(runner != NULL) {
 		tmp = runner->nxt;
 		if (runner->cont != NULL) {
-			free(runner->cont); runner->cont = NULL;
+			block = runner->cont;
+			free(block->block);
+			free(block); runner->cont = NULL;
 		}
 		ts_algo_list_remove(list, runner);
 		free(runner); runner = tmp;
@@ -83,19 +86,24 @@ void nowdb_blist_destroy(nowdb_blist_t *blist) {
  */
 nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
                       ts_algo_list_node_t **block) {
-	nowdb_err_t err;
-	char *tmp;
+	nowdb_err_t  err;
+	nowdb_block_t *b;
 
 	if (blist == NULL) INVALID("no blist object");
 	if (block == NULL) INVALID("no block pointer");
 
 	if (blist->flist.len == 0) {
-		tmp = malloc(blist->sz);
-		if (tmp == NULL) {
+		b = calloc(1, sizeof(nowdb_block_t));
+		if (b == NULL) {
 			NOMEM("allocating block");
 			return err;
 		}
-		if (ts_algo_list_insert(&blist->flist, tmp) != TS_ALGO_OK) {
+		b->block = malloc(blist->sz);
+		if (b->block == NULL) {
+			NOMEM("allocating block");
+			return err;
+		}
+		if (ts_algo_list_insert(&blist->flist, b) != TS_ALGO_OK) {
 			NOMEM("list.insert");
 			return err;
 		}
@@ -103,7 +111,6 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
 	*block = blist->flist.head;
 	ts_algo_list_remove(&blist->flist, blist->flist.head);
 	return NOWDB_OK;
-	
 }
 
 /* -----------------------------------------------------------------------
@@ -178,4 +185,3 @@ nowdb_err_t nowdb_blist_freeAll(nowdb_blist_t *blist,
 	}
 	return NOWDB_OK;
 }
-

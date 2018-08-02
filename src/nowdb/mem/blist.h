@@ -16,6 +16,11 @@
 #include <tsalgo/list.h>
 
 typedef struct {
+	uint32_t sz; /* effective block size */
+	char *block; /* bytes                */
+} nowdb_block_t;
+
+typedef struct {
 	uint32_t          sz; /* block size */
 	ts_algo_list_t flist; /* free list  */
 } nowdb_blist_t;
@@ -47,7 +52,7 @@ nowdb_err_t nowdb_blist_give(nowdb_blist_t  *blist,
                              ts_algo_list_t *blocks);
 
 /* -----------------------------------------------------------------------
- * Take a block from my list 'blocks'
+ * Take back a block from my list 'blocks' 
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_blist_take(nowdb_blist_t  *blist,

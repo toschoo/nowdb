@@ -17,7 +17,7 @@
 #include <limits.h>
 #include <float.h>
 
-#define ITER 100
+#define ITER 10
 
 nowdb_edge_t *edges;
 
@@ -57,9 +57,16 @@ void getValue(void *v, nowdb_type_t type) {
 	}
 }
 
+void getTime(int64_t *tm) {
+	int64_t d = rand()%100000000;
+	char x = rand()%2;
+	NOWDB_IGNORE(nowdb_time_now(tm));
+	if (x) *tm += d; else *tm -= d;
+}
+
 int prepare(nowdb_type_t type, char calm) {
 	int x;
-	do x = calm?rand()%10:rand()%1000; while (x==0);
+	do x = rand()%10; while(x==0); // calm?rand()%10:rand()%1000; while (x==0);
 	edges = calloc(x, sizeof(nowdb_edge_t));
 	if (edges == NULL) {
 		fprintf(stderr, "out-of-mem\n");
@@ -67,7 +74,9 @@ int prepare(nowdb_type_t type, char calm) {
 	}
 	for(int i=0; i<x; i++) {
 		getValue(&edges[i].weight, type);
+		fprintf(stderr, "%lu\n", edges[i].weight);
 		getValue(&edges[i].weight2, type);
+		getTime(&edges[i].timestamp);
 	}
 	return x;
 }
@@ -78,17 +87,40 @@ int prepare(nowdb_type_t type, char calm) {
 	case NOWDB_FUN_PROD:x*=v; break; \
 	case NOWDB_FUN_MIN: x=x>v?v:x; break; \
 	case NOWDB_FUN_MAX: x=x<v?v:x; break; \
+	case           SUB: x-=v; break; \
+	case           DIV: x/=v; break; \
 	default: \
 		return; \
 	}
-	
 
-void op(uint32_t ftype, void *x, void *v, nowdb_type_t type) {
+void doAvg(nowdb_type_t t, uint64_t *u, uint64_t *h, double *r) {
+	double a, b;
+
+	switch(t) {
+	case NOWDB_TYP_FLOAT:
+		a = (double)(*(double*)u); break;
+	case NOWDB_TYP_UINT: 
+	case NOWDB_TYP_TIME:
+		a = (double)(*(uint64_t*)u); break;
+	case NOWDB_TYP_INT:
+		a = (double)(*(int64_t*)u); break;
+	default:
+		a=1;
+	}
+	b = (double)(*(uint64_t*)h);
+	*r = a/b;
+}
+
+#define SUB -100
+#define DIV -200
+
+void op(int ftype, void *x, void *v, nowdb_type_t type) {
 	switch(type) {
 	case NOWDB_TYP_FLOAT:
 		// fprintf(stderr, "%.4f x %.4f\n", *(double*)x, *(double*)v);
 		OP(ftype, *(double*)x, *(double*)v); break;
 	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_TIME:
 		// fprintf(stderr, "%lu x %lu\n", *(uint64_t*)x, *(uint64_t*)v);
 		OP(ftype, *(uint64_t*)x, *(uint64_t*)v); break;
 	case NOWDB_TYP_INT:
@@ -105,6 +137,7 @@ int eval(void *x, void *v, nowdb_type_t t) {
 		fprintf(stderr, "%.4f / %.4f\n", *(double*)x, *(double*)v);
 		r = (*(double*)x == *(double*)v); break;
 	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_TIME:
 		fprintf(stderr, "%lu / %lu\n", *(uint64_t*)x, *(uint64_t*)v);
 		r = (*(uint64_t*)x == *(uint64_t*)v); break;
 	case NOWDB_TYP_INT:
@@ -120,30 +153,68 @@ int checkResult(uint32_t ftype,
                      void *res,
            nowdb_value_t *init,
                        int  mx) {
+	nowdb_type_t mytype = dtype;
+	double   r;
 	uint64_t u;
+	uint64_t h;
 
 	memcpy(&u, init, 8);
+	memcpy(&h, init, 8);
 	for(int i=0; i<mx; i++) {
 		switch(ftype) {
 		case NOWDB_FUN_COUNT:
 			u++; break;
 
 		case NOWDB_FUN_SUM:
-			op(ftype, &u, &edges[i].weight, dtype); break;
+			op(ftype, &u, (char*)(edges+i)+off, dtype); break;
 
 		case NOWDB_FUN_PROD:
-			op(ftype, &u, &edges[i].weight, dtype); break;
+			op(ftype, &u, (char*)(edges+i)+off, dtype); break;
 
 		case NOWDB_FUN_MAX:
 		case NOWDB_FUN_MIN:
-			op(ftype, &u, &edges[i].weight, dtype); break;
+			if (i == 0) {
+				memcpy(&u, (char*)(edges+i)+off, 8); break;
+			}
+			op(ftype, &u, (char*)(edges+i)+off, dtype); break;
+
+		case NOWDB_FUN_SPREAD:
+			if (i == 0) {
+				memcpy(&u, (char*)(edges+i)+off, 8);
+				memcpy(&h, (char*)(edges+i)+off, 8); break;
+			}
+			op(NOWDB_FUN_MAX, &u, (char*)(edges+i)+off, dtype); 
+			op(NOWDB_FUN_MIN, &h, (char*)(edges+i)+off, dtype); 
+			break;
+
+		case NOWDB_FUN_AVG:
+			op(NOWDB_FUN_SUM, &u, (char*)(edges+i)+off, dtype); 
+			h++; break;
+
+		case NOWDB_FUN_MEDIAN: break;
+		case NOWDB_FUN_STDDEV: break;
 
 		default:
 			fprintf(stderr, "unknown funtion\n");
 			return -1;
 		}
 	}
-	return eval(&u, res, dtype);
+	switch(ftype) {
+	case NOWDB_FUN_SPREAD:
+		op(SUB, &u, &h, dtype); break;
+
+	case NOWDB_FUN_AVG:
+		doAvg(dtype, &u, &h, &r);
+		memcpy(&u, &r, 8);
+		mytype = NOWDB_TYP_FLOAT;
+		break;
+
+	case NOWDB_FUN_MEDIAN: return 0;
+	case NOWDB_FUN_STDDEV: return 0;
+
+	default: break;
+	}
+	return eval(&u, res, mytype);
 }
 
 int testFun(uint32_t ftype,
@@ -262,7 +333,7 @@ int main() {
 	for(int i=0; i<ITER; i++) {
 		if (testFun(NOWDB_FUN_MIN,
 		            NOWDB_TYP_UINT,
-		            NOWDB_OFF_WEIGHT,&uinfty) != 0) {
+		            NOWDB_OFF_WEIGHT,&umin) != 0) {
 			fprintf(stderr, "testFun MIN, UINT, WEIGHT failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
@@ -271,7 +342,7 @@ int main() {
 	for(int i=0; i<ITER; i++) {
 		if (testFun(NOWDB_FUN_MIN,
 		            NOWDB_TYP_FLOAT,
-		            NOWDB_OFF_WEIGHT,&finfty) != 0) {
+		            NOWDB_OFF_WEIGHT,&umin) != 0) {
 			fprintf(stderr, "testFun MIN, FLOAT, WEIGHT failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
@@ -289,8 +360,62 @@ int main() {
 	for(int i=0; i<ITER; i++) {
 		if (testFun(NOWDB_FUN_MAX,
 		            NOWDB_TYP_FLOAT,
-		            NOWDB_OFF_WEIGHT,&ffmin) != 0) {
+		            NOWDB_OFF_WEIGHT,&umin) != 0) {
 			fprintf(stderr, "testFun MIN, FLOAT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING SPREAD, UINT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_SPREAD,
+		            NOWDB_TYP_UINT,
+		            NOWDB_OFF_WEIGHT,&umin) != 0) {
+			fprintf(stderr, "testFun SPREAD, UINT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING SPREAD, TIME, TIMESTAMP\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_SPREAD,
+		            NOWDB_TYP_TIME,
+		            NOWDB_OFF_TMSTMP,&umin) != 0) {
+			fprintf(stderr, "testFun SPREAD, TIME, TIMESTAMP, failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING SPREAD, FLOAT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_SPREAD,
+		            NOWDB_TYP_FLOAT,
+		            NOWDB_OFF_WEIGHT,&umin) != 0) {
+			fprintf(stderr, "testFun SPREAD, FLOAT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING AVG, UINT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_AVG,
+		            NOWDB_TYP_UINT,
+		            NOWDB_OFF_WEIGHT,&aunity) != 0) {
+			fprintf(stderr, "testFun AVG, UINT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING AVG, FLOAT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_AVG,
+		            NOWDB_TYP_FLOAT,
+		            NOWDB_OFF_WEIGHT,&afunity) != 0) {
+			fprintf(stderr, "testFun AVG, FLOAT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING STDDEV, UINT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_STDDEV,
+		            NOWDB_TYP_UINT,
+		            NOWDB_OFF_WEIGHT,&aunity) != 0) {
+			fprintf(stderr, "testFun STDDEV, UINT, WEIGHT failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 	}
