@@ -111,6 +111,15 @@
 %type field_list {nowdb_ast_t*}
 %destructor field_list {nowdb_ast_destroyAndFree($$);}
 
+%type pj_list {nowdb_ast_t*}
+%destructor pj_list {nowdb_ast_destroyAndFree($$);}
+
+%type pj {nowdb_ast_t*}
+%destructor pj {nowdb_ast_destroyAndFree($$);}
+
+%type fun {nowdb_ast_t*}
+%destructor fun {nowdb_ast_destroyAndFree($$);}
+
 %type table_list {nowdb_ast_t*}
 %destructor table_list {nowdb_ast_destroyAndFree($$);}
 
@@ -579,7 +588,7 @@ projection_clause(P) ::= SELECT STAR. {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
 }
 
-projection_clause(P) ::= SELECT field_list(F). {
+projection_clause(P) ::= SELECT pj_list(F). {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
 	NOWDB_SQL_ADDKID(P,F);
 }
@@ -609,6 +618,51 @@ group_clause(G) ::= GROUP BY field_list(F). {
 order_clause(O) ::= ORDER BY field_list(F). {
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_ORDER, 0);
 	NOWDB_SQL_ADDKID(O,F);
+}
+
+/* ------------------------------------------------------------------------
+ * projectable
+ * ------------------------------------------------------------------------
+ */
+pj_list(L) ::= pj(F). {
+	NOWDB_SQL_CHECKSTATE();
+	L = F;
+}
+ 
+pj_list(L) ::= pj(F) COMMA pj_list(PL). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(F,PL);
+	L = F;
+}
+
+pj(P) ::= field(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
+}
+
+pj(P) ::= fun(F). {
+	P = F;
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+	nowdb_ast_t *a;
+	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, NOWDB_AST_PARAM);
+	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, L);
+	NOWDB_SQL_ADDKID(F,a);
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR RPAR. {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
 /* ------------------------------------------------------------------------

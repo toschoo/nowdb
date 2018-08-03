@@ -338,8 +338,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	/* group by */
 	if (stp->ntype == NOWDB_PLAN_GROUPING) {
 
-		/* create group */
-		/* ... */
+		/* create tmporary variable for groupswitch */
 		(*cur)->tmp2 = calloc(1, (*cur)->recsize);
 		if ((*cur)->tmp2 == NULL) {
 			NOMEM("allocating temporary buffer");
@@ -349,13 +348,22 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 
 		runner = runner->nxt;
 		if (runner == NULL) {
-			if (stp->stype == NOWDB_PLAN_GROUPING) {
+			nowdb_cursor_destroy(*cur); free(*cur);
+			INVALIDPLAN("grouping without projection");
+		}
+
+		stp = runner->cont;
+		if (stp->ntype == NOWDB_PLAN_AGGREGATES) {
+
+			/* create group
+			 */
+			
+			runner = runner->nxt;
+			if (runner == NULL) {
 				nowdb_cursor_destroy(*cur); free(*cur);
 				INVALIDPLAN("grouping without projection");
 			}
-			return NOWDB_OK;
 		}
-		stp = runner->cont;
 	}
 
 	if (stp->ntype == NOWDB_PLAN_PROJECTION) {
@@ -469,6 +477,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		return NOWDB_OK;
 	}
 	if (cur->group != NULL) {
+		/* pass the group processing step to projection ! */
 		memcpy(cur->tmp2, cur->tmp, cur->recsize);
 		err = nowdb_group_results(cur->group, ctype, cur->tmp2);
 		if (err != NOWDB_OK) return err;

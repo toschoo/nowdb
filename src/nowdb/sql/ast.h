@@ -177,6 +177,7 @@
  * - value list, e.g. insert into ... (a, b, c, ...)
  * - field, also field list, e.g. create index xyz on ctx (a,b,c)
  * - decl, e.g. create type (a text, b int, ...)
+ * - fun, e.g. select count(*)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_DATA     10300
@@ -185,6 +186,8 @@
 #define NOWDB_AST_FIELD    10303
 #define NOWDB_AST_DECL     10305
 #define NOWDB_AST_OFF      10306
+#define NOWDB_AST_FUN      10307
+#define NOWDB_AST_PARAM    10308
 
 /* -----------------------------------------------------------------------
  * Values
@@ -372,6 +375,12 @@ nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *node);
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get field list from fun
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get 'from' from the current AST node (DQL only)

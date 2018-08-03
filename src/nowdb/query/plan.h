@@ -26,8 +26,9 @@
 #define NOWDB_PLAN_READER     2
 #define NOWDB_PLAN_FILTER     4
 #define NOWDB_PLAN_GROUPING   5
-#define NOWDB_PLAN_ORDERING   6
-#define NOWDB_PLAN_PROJECTION 7
+#define NOWDB_PLAN_AGGREGATES 6
+#define NOWDB_PLAN_ORDERING   7
+#define NOWDB_PLAN_PROJECTION 8
 
 /* ------------------------------------------------------------------------
  * Reader Types:
