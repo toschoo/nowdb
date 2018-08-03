@@ -482,12 +482,29 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
-                                    nowdb_err_t     old) {
-	/* if group and project
-	 * project last one
-	 * if project completes
-	 * return old, else return OK */
-	return old;
+                                    nowdb_err_t     old,
+                                 char *buf, uint32_t sz,
+                                          uint32_t *osz,
+                                        uint32_t *count) { 
+	nowdb_err_t err;
+	char complete=0, cc=0;
+	
+	if (cur->group == NULL) return old;
+
+	err = nowdb_row_project(cur->row, cur->tmp2,
+	                          cur->rdr->recsize,
+		                  buf, sz, osz, &cc,
+			                 &complete);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(old);
+		return err;
+	}
+	if (complete) {
+		(*count)+=cc;
+		return old;
+	}
+	nowdb_err_release(old);
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -523,7 +540,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			err = nowdb_reader_move(cur->rdr);
 			if (err != NOWDB_OK) {
 				if (err->errcode == nowdb_err_eof) {
-					return handleEOF(cur, err);
+					return handleEOF(cur, err, buf, sz,
+					                        osz, count);
 				}
 				return err;
 			}
