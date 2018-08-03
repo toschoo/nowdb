@@ -68,6 +68,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
+      $(SRC)/fun/group.o      \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
       $(SRC)/query/plan.o     \
@@ -108,6 +109,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
       $(SRC)/fun/fun.h        \
+      $(SRC)/fun/group.h      \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
