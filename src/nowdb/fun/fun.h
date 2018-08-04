@@ -41,6 +41,7 @@ typedef struct {
 	uint16_t            field; /* identifies the field          */
 	uint16_t            fsize; /* field size                    */
 	nowdb_type_t        dtype; /* field type                    */
+	nowdb_type_t        otype; /* output type of that function  */
 	ts_algo_list_t       many; /* list of blocks                */
 	nowdb_value_t        init; /* initial value                 */
 	nowdb_value_t          r1; /* first register and result     */
@@ -88,5 +89,11 @@ nowdb_err_t nowdb_fun_map(nowdb_fun_t *fun, void *record);
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_fun_reduce(nowdb_fun_t *fun);
+
+/* -----------------------------------------------------------------------
+ * Function type from name
+ * -----------------------------------------------------------------------
+ */
+uint32_t nowdb_fun_fromName(const char *name);
 
 #endif

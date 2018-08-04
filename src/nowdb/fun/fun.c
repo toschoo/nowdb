@@ -58,8 +58,7 @@ static char *OBJECT  = "fun";
 	case NOWDB_TYP_FLOAT: \
 		o(*(double*)v1, *(double*)v2); \
 		return NOWDB_OK; \
-	default: return nowdb_err_get(nowdb_err_not_supp, \
-	                             FALSE, OBJECT, NULL); \
+	default: return NOWDB_OK; \
 	}
 
 #define TOFLOAT() \
@@ -137,6 +136,33 @@ static inline int getType(uint32_t fun) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: fun to output type
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_type_t getOType(nowdb_fun_t *fun) {
+	switch(fun->fun) {
+	case NOWDB_FUN_COUNT:
+		return NOWDB_TYP_UINT;
+
+	case NOWDB_FUN_SUM:
+	case NOWDB_FUN_PROD:
+	case NOWDB_FUN_MAX:
+	case NOWDB_FUN_MIN:
+	case NOWDB_FUN_SPREAD:
+	case NOWDB_FUN_MODE:
+		return fun->dtype;
+
+	case NOWDB_FUN_AVG:
+	case NOWDB_FUN_MEDIAN:
+	case NOWDB_FUN_STDDEV:
+	case NOWDB_FUN_INTEGRAL:
+		return NOWDB_TYP_FLOAT;
+
+	default: return fun->dtype;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Helper: Init free list
  * -----------------------------------------------------------------------
  */
@@ -196,6 +222,18 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 	fun->fsize = fsize;
 	fun->dtype = dtype;
 	fun->flist = NULL;
+
+	if (dtype == NOWDB_TYP_NOTHING) {
+		switch(field) {
+		case NOWDB_OFF_TMSTMP:
+			fun->dtype = NOWDB_TYP_TIME; break;
+		case NOWDB_OFF_WEIGHT:
+		case NOWDB_OFF_WEIGHT2:
+		default:
+			fun->dtype = NOWDB_TYP_NOTHING;
+		}
+	}
+	fun->otype = getOType(fun);
 
 	if (init != NULL) {
 		memcpy(&fun->init, init, fun->fsize);
@@ -293,12 +331,40 @@ static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: type correction
+ * -----------------------------------------------------------------------
+ */
+static inline void correcttype(nowdb_fun_t     *fun,
+                               uint16_t       field,
+                               char         *record,
+                               nowdb_type_t *mytype) 
+{
+	if (fun->ctype == NOWDB_CONT_EDGE) {
+		if (field == NOWDB_OFF_WEIGHT) {
+			memcpy(mytype, record+NOWDB_OFF_WTYPE,
+				         sizeof(nowdb_type_t));
+		} else {
+			memcpy(mytype, record+NOWDB_OFF_WTYPE2,
+				          sizeof(nowdb_type_t));
+		}
+	} else {
+		memcpy(mytype, record+NOWDB_OFF_VTYPE,
+				sizeof(nowdb_type_t));
+	}
+	fun->otype = getOType(fun);
+}
+
+/* -----------------------------------------------------------------------
  * Helper: apply function
  * -----------------------------------------------------------------------
  */
 static inline nowdb_err_t apply(nowdb_fun_t *fun,  int ftype,
                                 uint16_t field, char *record) {
 	nowdb_err_t err;
+
+	if (fun->dtype == NOWDB_TYP_NOTHING) {
+		correcttype(fun, field, record, &fun->dtype);
+	}
 
 	switch(ftype) {
 	case NOWDB_FUN_SUM:
@@ -483,4 +549,25 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
  */
 nowdb_err_t nowdb_fun_reduce(nowdb_fun_t *fun) {
 	return reduce(fun, fun->fun);
+}
+
+/* -----------------------------------------------------------------------
+ * Function type from name
+ * -----------------------------------------------------------------------
+ */
+uint32_t nowdb_fun_fromName(const char *name) {
+	if (strcasecmp(name, "COUNT") == 0) return NOWDB_FUN_COUNT;
+	if (strcasecmp(name, "SUM") == 0) return NOWDB_FUN_SUM;
+	if (strcasecmp(name, "PROD") == 0) return NOWDB_FUN_PROD;
+	if (strcasecmp(name, "PRODUCT") == 0) return NOWDB_FUN_PROD;
+	if (strcasecmp(name, "MAX") == 0) return NOWDB_FUN_MAX;
+	if (strcasecmp(name, "MIN") == 0) return NOWDB_FUN_MIN;
+	if (strcasecmp(name, "SPREAD") == 0) return NOWDB_FUN_SPREAD;
+	if (strcasecmp(name, "AVG") == 0) return NOWDB_FUN_AVG;
+	if (strcasecmp(name, "AVERAGE") == 0) return NOWDB_FUN_AVG;
+	if (strcasecmp(name, "MEDIAN") == 0) return NOWDB_FUN_MEDIAN;
+	if (strcasecmp(name, "MODE") == 0) return NOWDB_FUN_MODE;
+	if (strcasecmp(name, "STDDEV") == 0) return NOWDB_FUN_STDDEV;
+	if (strcasecmp(name, "INTEGRAL") == 0) return NOWDB_FUN_INTEGRAL;
+	return -1;
 }

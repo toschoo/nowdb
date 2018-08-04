@@ -44,6 +44,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->o = NULL;
 	row->d = NULL;
 	row->cur = 0;
+	row->fur = 0;
 	row->vcur = 0;
 	row->dirty = 0;
 	row->vrtx = NULL;
@@ -170,6 +171,40 @@ static inline nowdb_err_t getText(nowdb_row_t *row,
 	} \
 	memcpy(buf+*osz, &t, 1); (*osz)++; \
 	memcpy(buf+*osz, what, 8); (*osz)+=8;
+
+/* ------------------------------------------------------------------------
+ * Helper: function projection
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t projectFun(nowdb_row_t *row,
+                                     nowdb_group_t *group,
+                                     char *buf, uint32_t sz,
+                                     uint32_t *osz, char *nsp) {
+	nowdb_err_t err;
+	nowdb_type_t s;
+	char t;
+
+	*nsp = 0;
+
+	err = nowdb_group_getType(group, row->fur, &s);
+	if (err != NOWDB_OK) return err;
+	if ((*osz)+8+1 >= sz) {
+		*nsp = 1; return NOWDB_OK;
+	}
+	t = (char)s;
+	memcpy(buf+*osz, &t, 1); (*osz)++;
+	err = nowdb_group_result(group, row->fur, buf+*osz);
+	if (err != NOWDB_OK) return err;
+	(*osz)+=8; row->fur++;
+
+	// fprintf(stderr, "%d, %0.4f\n", t, *(double*)(buf+*osz-8));
+
+	if (row->fur >= group->lst) {
+		nowdb_group_reset(group);
+		row->fur = 0;
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Helper: edge projection
@@ -346,6 +381,7 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
+                              nowdb_group_t *group,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
                               uint32_t *osz,
@@ -368,8 +404,14 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	}
 	for(int i=row->cur; i<row->sz; i++) {
 		if (row->fields[i].target == NOWDB_TARGET_EDGE) {
-			err = projectEdgeField(row, (nowdb_edge_t*)src, i,
-			                              buf, sz, osz, &nsp);
+			if (row->fields[i].flags & NOWDB_FIELD_AGG) {
+				err = projectFun(row, group, buf, sz,
+				                          osz, &nsp);
+			} else {
+				err = projectEdgeField(row,
+				     (nowdb_edge_t*)src, i,
+			               buf, sz, osz, &nsp);
+			}
 			if (err != NOWDB_OK) return err;
 			if (nsp) return NOWDB_OK;
 

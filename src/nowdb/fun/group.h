@@ -14,10 +14,13 @@
 
 #include <stdint.h>
 
+#include <tsalgo/list.h>
+
 typedef struct {
-	uint32_t       sz; /* size of the array     */
-	uint32_t      lst; /* used in init          */
-	nowdb_fun_t **fun; /* array of fun pointers */
+	uint32_t       sz; /* size of the array       */
+	uint32_t      lst; /* used in init            */
+	nowdb_fun_t **fun; /* array of fun pointers   */
+	char       mapped; /* we map before we reduce */
 } nowdb_group_t;
 
 /* -----------------------------------------------------------------------
@@ -28,11 +31,18 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
                              uint32_t          sz);
 
 /* -----------------------------------------------------------------------
- * Allocated and initialise new group
+ * Allocate and initialise new group
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_group_new(nowdb_group_t **group,
                             uint32_t           sz);
+
+/* -----------------------------------------------------------------------
+ * Allocate and initialise from list of fields
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_fromList(nowdb_group_t  **group,
+                                 ts_algo_list_t *fields);
 
 /* -----------------------------------------------------------------------
  * Add fun to group
@@ -53,18 +63,31 @@ void nowdb_group_destroy(nowdb_group_t *group);
 void nowdb_group_reset(nowdb_group_t *group);
 
 /* -----------------------------------------------------------------------
- * Apply
+ * Map
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_group_apply(nowdb_group_t *group,
-                              nowdb_content_t type,
-                              char         *record);
+nowdb_err_t nowdb_group_map(nowdb_group_t *group,
+                            nowdb_content_t type,
+                            char         *record);
 
 /* -----------------------------------------------------------------------
- * Write values into record
+ * Reduce
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_group_results(nowdb_group_t *group,
-                                nowdb_content_t type,
-                                char         *record);
+nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
+                               nowdb_content_t type);
+
+/* -----------------------------------------------------------------------
+ * Write value of nth fun into row
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_result(nowdb_group_t *group,
+                               int n,    char *row);
+
+/* -----------------------------------------------------------------------
+ * Get type of nth fun
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_getType(nowdb_group_t   *group,
+                                int n, nowdb_type_t *t);
 #endif

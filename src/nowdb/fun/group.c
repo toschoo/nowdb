@@ -28,6 +28,7 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
 	if (group == NULL) INVALID("group is NULL");
 	group->sz = sz;
 	group->lst = 0;
+	group->mapped = 0;
 
 	group->fun = calloc(sz, sizeof(nowdb_fun_t*));
 	if (group->fun == NULL) {
@@ -41,7 +42,7 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
 }
 
 /* -----------------------------------------------------------------------
- * Allocated and initialise new group
+ * Allocate and initialise new group
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_group_new(nowdb_group_t **group,
@@ -56,6 +57,32 @@ nowdb_err_t nowdb_group_new(nowdb_group_t **group,
 		return err;
 	}
 	return nowdb_group_init(*group, sz);
+}
+
+/* -----------------------------------------------------------------------
+ * Allocate and initialise group from list
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_fromList(nowdb_group_t  **group,
+                                 ts_algo_list_t *fields) 
+{
+	nowdb_err_t err;
+	ts_algo_list_node_t *runner;
+
+	if (fields == NULL) INVALID("fields list is NULL");
+	if (fields->len == 0) INVALID("no fields");
+
+	err = nowdb_group_new(group, fields->len);
+	if (err != NOWDB_OK) return err;
+
+	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
+		err = nowdb_group_add(*group, runner->cont);
+		if (err != NOWDB_OK) {
+			nowdb_group_destroy(*group);
+			free(*group); return err;
+		}
+	}
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -99,15 +126,16 @@ void nowdb_group_reset(nowdb_group_t *group) {
 	for(int i=0; i<group->lst; i++) {
 		nowdb_fun_reset(group->fun[i]);
 	}
+	group->mapped = 0;
 }
 
 /* -----------------------------------------------------------------------
- * Apply
+ * Map
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_group_apply(nowdb_group_t *group,
-                              nowdb_content_t type,
-                              char         *record) {
+nowdb_err_t nowdb_group_map(nowdb_group_t *group,
+                            nowdb_content_t type,
+                            char         *record) {
 	nowdb_err_t err;
 
 	for(int i=0; i<group->lst; i++) {
@@ -116,6 +144,36 @@ nowdb_err_t nowdb_group_apply(nowdb_group_t *group,
 			if (err != NOWDB_OK) return err;
 		}
 	}
+	group->mapped = 1;
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Reduce
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
+                               nowdb_content_t type) {
+	nowdb_err_t err;
+
+	for(int i=0; i<group->lst; i++) {
+		if (group->fun[i]->ctype == type) {
+			err = nowdb_fun_reduce(group->fun[i]);
+			if (err != NOWDB_OK) return err;
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Get result type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_group_getType(nowdb_group_t   *group,
+                                int n, nowdb_type_t *t) 
+{
+	if (n >= group->lst) INVALID("index out of range");
+	*t = group->fun[n]->otype;
 	return NOWDB_OK;
 }
 
@@ -123,20 +181,11 @@ nowdb_err_t nowdb_group_apply(nowdb_group_t *group,
  * Write values into record
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_group_results(nowdb_group_t *group,
-                                nowdb_content_t type,
-                                char         *record) {
-	nowdb_err_t err;
-
-	for(int i=0; i<group->lst; i++) {
-		if (group->fun[i]->ctype == type) {
-			err = nowdb_fun_reduce(group->fun[i]);
-			if (err != NOWDB_OK) return err;
-
-			memcpy(record+group->fun[i]->field,
-			             &group->fun[i]->r1,
-			              group->fun[i]->fsize);
-		}
-	}
+nowdb_err_t nowdb_group_result(nowdb_group_t *group,
+                               int n,     char *row) 
+{
+	if (n >= group->lst) INVALID("index out of range");
+	memcpy(row, &group->fun[n]->r1,
+		     group->fun[n]->fsize);
 	return NOWDB_OK;
 }
