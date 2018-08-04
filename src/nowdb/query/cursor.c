@@ -653,6 +653,13 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			}
 			if (cc == 0) break;
 		}
+		/*
+		if (cur->group != NULL && !cur->group->mapped) {
+			err = nowdb_group_map(cur->group, ctype,
+			                              cur->tmp);
+			if (err != NOWDB_OK) return err;
+		}
+		*/
 	}
 	return NOWDB_OK;
 }
