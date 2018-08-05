@@ -472,7 +472,11 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 
 	if (memcmp(cur->tmp, nowdb_nullrec, cur->recsize) == 0) {
 		memcpy(cur->tmp, src+cur->off, cur->recsize);
-		if (cur->group != NULL) *x=0;
+		if (cur->group != NULL) {
+			*x=0;
+			memcpy(cur->tmp2, cur->tmp, cur->recsize);
+			cur->off+=cur->recsize;
+		}
 		return NOWDB_OK;
 	}
 	cmp = cur->recsize == NOWDB_EDGE_SIZE?
@@ -492,15 +496,13 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		return NOWDB_OK;
 	}
 	if (cur->group != NULL) {
-		if (!cur->group->mapped) {
-			err = nowdb_group_map(cur->group, ctype,
-			                           src+cur->off);
-			if (err != NOWDB_OK) return err;
-		}
+		err = nowdb_group_map(cur->group, ctype,
+			                      cur->tmp2);
+		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 		if (err != NOWDB_OK) return err;
+
 		memcpy(cur->tmp2, cur->tmp, cur->recsize);
-		/* set type of all funs per group */
 	}
 	memcpy(cur->tmp, src+cur->off, cur->recsize);
 	return NOWDB_OK;
