@@ -655,7 +655,8 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 			                             reader->ikeys);
 		}
 		if (x != BEET_CMP_EQUAL) {
-			memcpy(reader->tmp, reader->tmp2, reader->ikeys->sz);
+			memcpy(reader->tmp, reader->tmp2,
+			             reader->ikeys->sz*8);
 		}
 	} else {
 		if (reader->recsize == NOWDB_EDGE_SIZE) {

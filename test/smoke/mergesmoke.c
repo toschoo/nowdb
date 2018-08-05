@@ -615,30 +615,38 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 			}
 
 			/* krange */
-			if (type == 'k') {
-				if (memcmp(&tmp, nowdb_nullrec,
-				    merge->recsize) == 0) {
-					memcpy(&tmp, src+i,
-					merge->recsize);
-					c++;
-				} else {
-					if (memcmp(&tmp.origin,
-					    src+i+NOWDB_OFF_ORIGIN,
-					    8) != 0) {
-						memcpy(&tmp, src+i,
-						merge->recsize);
-						c++;
-					}
+			if (memcmp(&tmp, nowdb_nullrec,
+			          merge->recsize) == 0) 
+			{
+				memcpy(&tmp, src+i, merge->recsize);
+				if (type == 'k') c++;
+
+			} else {
+				if (tmp.origin < *(uint64_t*)(src+i+
+						   NOWDB_OFF_ORIGIN)) 
+				{
+					memcpy(&tmp, src+i, merge->recsize);
+					if (type == 'k') c++;
+
+				} else if (tmp.origin > *(uint64_t*)(src+i+
+						         NOWDB_OFF_ORIGIN)) {
+					fprintf(stderr,
+						"not in order: %lu > %lu\n",
+						tmp.origin, *(uint64_t*)(src+i+
+						            NOWDB_OFF_ORIGIN)); 
+					return -1;
 				}
-			} else c++;
+			} 
+			if (type != 'k') c++;
 
 			if (merge->cur == 0) c0++;
 			if (merge->cur == 1) c1++;
 
 			/*
-			fprintf(stderr, "MERGE: %lu (%d)\n",
+			fprintf(stderr, "%cMERGE [%05d]: %lu (%d)\n", type, c,
 			 *(uint64_t*)(src+i+8), merge->cur);
 			*/
+
 		}
 	}
 	if (err != NOWDB_OK) {
