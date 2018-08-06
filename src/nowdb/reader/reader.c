@@ -530,7 +530,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	                       FALSE, OBJECT, NULL);
 	}
 	if (reader->key == NULL) {
-		/* we need to do this in a loop too! */
 		ber = beet_iter_move(reader->iter, &reader->key, NULL);
 		BEETERR(ber,1);
 		ber = beet_iter_enter(reader->iter);
@@ -548,7 +547,7 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			               &reader->key, NULL);
 			BEETERR(ber,1);
 
-			// fprintf(stderr, "key[0]: %lu\n", *(uint64_t*)(reader->key));
+			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
 			ber = beet_iter_enter(reader->iter);
 			if (ber == BEET_ERR_EOF) continue;

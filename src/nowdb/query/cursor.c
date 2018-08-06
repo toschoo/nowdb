@@ -347,6 +347,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	(*cur)->tmp = NULL;
 	(*cur)->row   = NULL;
 	(*cur)->group = NULL;
+	(*cur)->nogrp = NULL;
 	(*cur)->stf.store = NULL;
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
@@ -434,10 +435,16 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			}
 
 			/* create group */
-			err = nowdb_group_fromList(&(*cur)->group, stp->load);
+			if ((*cur)->rdr->type == NOWDB_READER_MERGE) {
+				err = nowdb_group_fromList(&(*cur)->group,
+				                               stp->load);
+			} else {
+				err = nowdb_group_fromList(&(*cur)->nogrp,
+				                               stp->load);
+			}
 			if (err != NOWDB_OK) {
-				nowdb_cursor_destroy(*cur); free(*cur);
-				return err;
+				nowdb_cursor_destroy(*cur);
+				free(*cur); return err;
 			}
 			stp->load = NULL;
 		}
@@ -513,6 +520,26 @@ static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
 }
 
 /* ------------------------------------------------------------------------
+ * Ungrouped aggregates
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
+                                  nowdb_content_t ctype,
+                                  uint32_t        recsz,
+                                  char           *src) {
+	nowdb_err_t err;
+
+	if (memcmp(cur->tmp, nowdb_nullrec, recsz) == 0) {
+		memcpy(cur->tmp, src+cur->off, recsz);
+		memcpy(cur->tmp2, cur->tmp, recsz);
+	}
+	err = nowdb_group_map(cur->nogrp, ctype, src+cur->off);
+	if (err != NOWDB_OK) return err;
+	cur->off += recsz;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Group switch
  * ------------------------------------------------------------------------
  */
@@ -574,20 +601,28 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
                                  char *buf, uint32_t sz,
                                           uint32_t *osz,
                                         uint32_t *count) {
-	nowdb_err_t err;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_group_t *g;
 	char complete=0, cc=0;
 	char x;
 	
-	if (cur->group == NULL) return old;
+	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
+	if (cur->group == NULL && cur->nogrp == NULL) return old;
 
-	err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+	if (cur->nogrp != NULL) {
+		g = cur->nogrp;
+		// err = nogroup(cur, ctype, recsz, cur->tmp2);
+	} else {
+		g = cur->group;
+		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+	}
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_row_project(cur->row, cur->group,
-	                                   cur->tmp2,
-	                           cur->rdr->recsize,
-		                   buf, sz, osz, &cc,
-			                  &complete);
+	err = nowdb_row_project(cur->row, g,
+	                          cur->tmp2,
+	                  cur->rdr->recsize,
+		          buf, sz, osz, &cc,
+			          &complete);
 	if (err != NOWDB_OK) {
 		nowdb_err_release(old);
 		return err;
@@ -596,6 +631,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 		(*count)+=cc;
 		return old;
 	}
+	memcpy(cur->tmp, nowdb_nullrec, recsz);
 	nowdb_err_release(old);
 	return NOWDB_OK;
 }
@@ -632,13 +668,10 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
 			err = nowdb_reader_move(cur->rdr);
 			if (err != NOWDB_OK) {
-				if (err->errcode == nowdb_err_eof) {
-					return handleEOF(cur, err,
-					             ctype, recsz,
-					                  buf, sz,
-					               osz, count);
-				}
-				return err;
+				return handleEOF(cur, err,
+				             ctype, recsz,
+				                  buf, sz,
+				               osz, count);
 			}
 			src = nowdb_reader_page(cur->rdr);
 			cur->off = 0;
@@ -664,17 +697,19 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* if keys-only: keep unique
-		 * but watch out for CRANGE --
-		 * there we have to process
-		 * all duplicates */
-		if (cur->tmp != NULL   &&
-		   (cur->group != NULL ||
-		    cur->rdr->ko))
-		{
-			err = groupswitch(cur, ctype, recsz, src, &x);
-			if (err != NOWDB_OK) return err;
-			if (!x) continue;
+		/* if keys-only, group or no-group aggregates */
+		if (cur->tmp != NULL) {
+			if (cur->nogrp != NULL) {
+				err = nogroup(cur, ctype, recsz, src);
+				if (err != NOWDB_OK) return err;
+				continue;
+			}
+
+			if (cur->group != NULL || cur->rdr->ko) {
+				err = groupswitch(cur, ctype, recsz, src, &x);
+				if (err != NOWDB_OK) return err;
+				if (!x) continue;
+			}
 		}
 
 		/* copy the record to the output buffer */
@@ -710,13 +745,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			}
 			if (cc == 0) break;
 		}
-		/*
-		if (cur->group != NULL && !cur->group->mapped) {
-			err = nowdb_group_map(cur->group, ctype,
-			                              cur->tmp);
-			if (err != NOWDB_OK) return err;
-		}
-		*/
 	}
 	return NOWDB_OK;
 }

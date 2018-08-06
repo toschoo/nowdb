@@ -1281,27 +1281,6 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		}
 	}
 
-	/* Currently, we need an index to handle aggregates */
-	if (idxes.len == 0 && hasAgg) {
-		if (filter != NULL) {
-			nowdb_filter_destroy(filter); free(filter);
-		}
-		if (grp != NULL) {
-			destroyFieldList(grp); free(grp);
-		}
-		if (ord != NULL) {
-			destroyFieldList(ord); free(ord);
-		}
-		nowdb_plan_destroy(plan, FALSE);
-		INVALIDAST("aggregate without index");
-	}
-
-	/* if we have aggregates, but no group,
-	 * then the index where shall become the group */
-	if (hasAgg && group == NULL) {
-		// find fields for index
-	}
-
 	/* create reader from target or index */
 	stp = malloc(sizeof(nowdb_plan_t));
 	if (stp == NULL) {

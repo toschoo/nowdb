@@ -36,6 +36,7 @@ typedef struct {
 	nowdb_filter_t *filter; /* main filter                   */
 	nowdb_row_t       *row; /* projection                    */
 	nowdb_group_t   *group; /* grouping                      */
+	nowdb_group_t   *nogrp; /* appy aggs without grouping    */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
 	char              *tmp; /* temporary buffer              */
