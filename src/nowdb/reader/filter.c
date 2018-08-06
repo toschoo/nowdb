@@ -187,7 +187,6 @@ nowdb_bool_t nowdb_filter_eval(nowdb_filter_t *filter, void *data) {
 void nowdb_filter_period(nowdb_filter_t *filter,
                          nowdb_time_t   *start,
                          nowdb_time_t   *end) {
-
 	if (filter == NULL) return;
 	if (filter->ntype == NOWDB_FILTER_BOOL) {
 		switch(filter->op) {
@@ -230,6 +229,88 @@ void nowdb_filter_period(nowdb_filter_t *filter,
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: find filter offset in key offsets
+ * ------------------------------------------------------------------------
+ */
+static inline int getOff(nowdb_filter_t *filter,
+                         uint16_t sz, uint16_t *off) {
+	for(int i=0; i<sz; i++) {
+		if (off[i] == filter->off) return i;
+	}
+	return -1;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: recursively extract key range from filter
+ * ------------------------------------------------------------------------
+ */
+static void findRange(nowdb_filter_t     *filter,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart,   char *rend,
+                      nowdb_bitmap32_t      *map) {
+	int o;
+
+	if (filter == NULL) return;
+	if (filter->ntype == NOWDB_FILTER_BOOL) {
+		switch(filter->op) {
+		case NOWDB_FILTER_AND:
+			findRange(filter->left, sz, off,
+			              rstart, rend, map);
+			findRange(filter->right, sz, off,
+			              rstart, rend, map);
+
+		case NOWDB_FILTER_JUST:
+			findRange(filter->left, sz, off,
+			              rstart, rend, map);
+		default: return;
+		}
+	} else {
+		o = getOff(filter, sz, off);
+		if (o < 0) return;
+
+		switch(filter->op) {
+		case NOWDB_FILTER_EQ:
+			memcpy(rstart+o*8, filter->val, filter->size);
+			memcpy(rend+o*8, filter->val, filter->size);
+			*map |= (1<<o);
+			*map |= (65536<<o);
+			return; 
+
+		case NOWDB_FILTER_GE:
+		case NOWDB_FILTER_GT:
+			memcpy(rstart+o*8, filter->val, filter->size);
+			*map |= (1<<o);
+			return;
+
+		case NOWDB_FILTER_LE:
+		case NOWDB_FILTER_LT:
+			memcpy(rend+o*8, filter->val, filter->size);
+			*map |= (65536<<o);
+			return;
+
+		default: return;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Extract key range from filter
+ * ------------------------------------------------------------------------
+ */
+char nowdb_filter_range(nowdb_filter_t *filter,
+                        uint16_t sz, uint16_t *off,
+                        char *rstart, char *rend) {
+	nowdb_bitmap32_t map = 0;
+
+	findRange(filter, sz, off, rstart, rend, &map);
+	return (popcount32(map) == 2*sz);
+}
+
+/* ------------------------------------------------------------------------
+ * Print filter to 'stream'
+ * ------------------------------------------------------------------------
+ */
 void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 	if (filter == NULL) return;
 	if (filter->ntype == NOWDB_FILTER_BOOL) {

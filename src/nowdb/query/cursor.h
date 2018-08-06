@@ -40,6 +40,8 @@ typedef struct {
 	uint32_t       recsize; /* record size                   */
 	char              *tmp; /* temporary buffer              */
 	char             *tmp2; /* temporary buffer              */
+	char          *fromkey; /* range: fromkey                */
+	char            *tokey; /* range:   tokey                */
 	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 

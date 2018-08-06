@@ -56,6 +56,46 @@ static inline nowdb_err_t getPending(ts_algo_list_t *files,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get range for range reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getRange(nowdb_filter_t *filter,
+                                   nowdb_plan_idx_t *pidx,
+                                   char         **fromkey,
+                                   char           **tokey) {
+	char x = 0;
+	nowdb_index_keys_t *keys;
+	nowdb_err_t err;
+
+	if (pidx->keys != NULL) {
+		*fromkey = pidx->keys;
+		*tokey = pidx->keys;
+		return NOWDB_OK;
+	}
+	keys = nowdb_index_getResource(pidx->idx);
+	if (keys == NULL) return NOWDB_OK;
+
+	*fromkey = calloc(1,keys->sz*8);
+	if (*fromkey == NULL) {
+		NOMEM("allocating keys");
+		return err;
+	}
+	*tokey = calloc(1,keys->sz*8);
+	if (*tokey == NULL) {
+		free(*fromkey);
+		NOMEM("allocating keys");
+		return err;
+	}
+	x = nowdb_filter_range(filter, keys->sz, keys->off,
+	                                 *fromkey, *tokey);
+	if (!x) {
+		free(*fromkey); *fromkey = NULL;
+		free(*tokey); *tokey = NULL;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Create sequence reader
  * ------------------------------------------------------------------------
  */
@@ -119,18 +159,29 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	if (err != NOWDB_OK) {
 		return err;
 	}
+
+	if (pidx == NULL) {
+		INVALIDPLAN("no index for merge scan");
+	}
+
+	err = getRange(cur->filter, pidx,
+	              &cur->fromkey,
+	              &cur->tokey);
+	if (err != NOWDB_OK) return err;
 	
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
 		                                  pidx->idx, NULL,
-		                        NOWDB_ORD_ASC, NULL, NULL);
+		                                    NOWDB_ORD_ASC,
+		                         cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_bkrange(&buf, &cur->stf.pending,
 		                                   pidx->idx, NULL,
-		                         NOWDB_ORD_ASC, NULL, NULL);
+		                                     NOWDB_ORD_ASC,
+		                         cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_CRANGE_:
@@ -143,12 +194,12 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_frange(&range, &cur->stf.files, pidx->idx,
-		                                            NULL, NULL, NULL);
+		                              NULL, cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_krange(&range, &cur->stf.files, pidx->idx,
-		                                            NULL, NULL, NULL);
+		                              NULL, cur->fromkey, cur->tokey);
 		if (range->ikeys != NULL) {
 			cur->tmp = calloc(1, cur->recsize);
 			if (cur->tmp == NULL) {
@@ -213,31 +264,29 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
 
+	pidx = rplan->load;
+
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		fprintf(stderr, "SEARCH\n");
-		pidx = rplan->load;
 		err = createSeq(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
 		fprintf(stderr, "FRANGE\n");
-		pidx = rplan->load;
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
 		fprintf(stderr, "KRANGE\n");
-		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
 		fprintf(stderr, "CRANGE\n");
-		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(&cur->rdr,
 		                          &cur->stf.files,
 		                          pidx->idx, NULL,
-		                          NULL, NULL); // range !
+		                               NULL, NULL); // range !
 	
 	/* create a fullscan reader */
 	} else {
@@ -302,7 +351,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
 
-	/* pass on to the filter (in fact, there should/may be,
+	/* pass on to the filter (in fact, there should/may be
 	 * one filter per subreader */
 	runner = runner->nxt;
 	if (runner!=NULL) {
@@ -425,6 +474,12 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	}
 	if (cur->tmp2 != NULL) {
 		free(cur->tmp2); cur->tmp2 = NULL;
+	}
+	if (cur->fromkey != NULL) {
+		free(cur->fromkey); cur->fromkey = NULL;
+	}
+	if (cur->tokey != NULL) {
+		free(cur->tokey); cur->tokey = NULL;
 	}
 }
 
