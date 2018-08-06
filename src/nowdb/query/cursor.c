@@ -424,7 +424,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 				nowdb_cursor_destroy(*cur); free(*cur);
 				return err;
 			}
-
 			if ((*cur)->tmp == NULL) {
 				(*cur)->tmp = calloc(1, (*cur)->recsize);
 			}
@@ -446,6 +445,8 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 				nowdb_cursor_destroy(*cur);
 				free(*cur); return err;
 			}
+			ts_algo_list_destroy(stp->load);
+			free(stp->load);
 			stp->load = NULL;
 		}
 	}
@@ -471,6 +472,14 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
 		ts_algo_list_destroy(&cur->stf.pending);
 		cur->stf.store = NULL;
+	}
+	if (cur->group != NULL) {
+		nowdb_group_destroy(cur->group);
+		free(cur->group); cur->group = NULL;
+	}
+	if (cur->nogrp != NULL) {
+		nowdb_group_destroy(cur->nogrp);
+		free(cur->nogrp); cur->nogrp = NULL;
 	}
 	if (cur->row != NULL) {
 		nowdb_row_destroy(cur->row);
@@ -611,7 +620,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 
 	if (cur->nogrp != NULL) {
 		g = cur->nogrp;
-		// err = nogroup(cur, ctype, recsz, cur->tmp2);
+		err = nowdb_group_reduce(cur->nogrp, ctype);
 	} else {
 		g = cur->group;
 		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);

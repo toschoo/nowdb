@@ -21,6 +21,7 @@ typedef struct {
 	uint32_t      lst; /* used in init            */
 	nowdb_fun_t **fun; /* array of fun pointers   */
 	char       mapped; /* we map before we reduce */
+	char      reduced; /* we reduce only once     */
 } nowdb_group_t;
 
 /* -----------------------------------------------------------------------

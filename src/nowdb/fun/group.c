@@ -29,6 +29,7 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
 	group->sz = sz;
 	group->lst = 0;
 	group->mapped = 0;
+	group->reduced = 0;
 
 	group->fun = calloc(sz, sizeof(nowdb_fun_t*));
 	if (group->fun == NULL) {
@@ -109,7 +110,7 @@ void nowdb_group_destroy(nowdb_group_t *group) {
 	if (group == NULL) return;
 	if (group->fun == NULL) return;
 	for(int i=0; i<group->lst; i++) {
-		if (group->fun[i] == NULL) {
+		if (group->fun[i] != NULL) {
 			nowdb_fun_destroy(group->fun[i]);
 			free(group->fun[i]);
 			group->fun[i] = NULL;
@@ -127,6 +128,7 @@ void nowdb_group_reset(nowdb_group_t *group) {
 		nowdb_fun_reset(group->fun[i]);
 	}
 	group->mapped = 0;
+	group->reduced= 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -156,12 +158,14 @@ nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
                                nowdb_content_t type) {
 	nowdb_err_t err;
 
+	if (group->reduced) return NOWDB_OK;
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
 			err = nowdb_fun_reduce(group->fun[i]);
 			if (err != NOWDB_OK) return err;
 		}
 	}
+	group->reduced = 1;
 	return NOWDB_OK;
 }
 
