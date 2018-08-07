@@ -102,4 +102,18 @@ nowdb_err_t nowdb_row_toString(char  *buf,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream);
+
+/* ------------------------------------------------------------------------
+ * Extract a row from the buffer
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
+                                 uint32_t row, uint32_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Extract a field from the buffer
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
+                                   uint32_t field, uint32_t *idx);
 #endif

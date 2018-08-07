@@ -274,6 +274,73 @@ int64_t countResult(nowdb_scope_t *scope,
 	return res;
 }
 
+int64_t readResult(nowdb_scope_t *scope,
+                   char          *stmt,
+                   uint32_t      field) {
+	struct timespec t1, t2;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_cursor_t *cur;
+	int64_t res=0;
+	char *buf;
+	uint32_t osz = 0;
+	uint32_t cnt = 0;
+	char more = 1;
+
+	timestamp(&t1);
+	cur = openCursor(scope, stmt);
+	if (cur == NULL) {
+		fprintf(stderr, "cannot open cursor: \n");
+		return -1;
+	}
+
+	buf = malloc(8192);
+	if (buf == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		closeCursor(cur);
+		return -1;
+	}
+
+	while(more) {
+		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err); err = NOWDB_OK;
+				if (cnt == 0) break;
+			} else break;
+			more = 0;
+		}
+		for(uint32_t r=0; r<cnt; r++) {
+			uint32_t i, f;
+			err = nowdb_row_extractRow(buf, osz, r, &i);
+			if (err != NOWDB_OK) {
+				fprintf(stderr, "error extracting row %d\n", r);
+				nowdb_err_print(err); nowdb_err_release(err);
+				break;
+			}
+			err = nowdb_row_extractField(buf+i, osz-i, field, &f);
+			if (err != NOWDB_OK) {
+				fprintf(stderr, "error extracting field\n");
+				nowdb_err_print(err); nowdb_err_release(err);
+				break;
+			}
+			res += (int64_t)*(uint64_t*)(buf+i+f);
+		}
+		// nowdb_row_write(buf, osz, stderr);
+	}
+	free(buf);
+	closeCursor(cur);
+	timestamp(&t2);
+
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot fetch\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	fprintf(stderr, "running time: %ldus\n", minus(&t2, &t1)/1000);
+	return res;
+}
+
 int checkResult(int       h,
                 int  origin,
                 int  destin,
@@ -338,6 +405,17 @@ char *getRandom(int       halves,
 	} \
 	fprintf(stderr, "result: %ld\n", res);
 
+#define READRESULT(stmt, f) \
+	res = readResult(scope, stmt, f); \
+	if (res < 0) { \
+		fprintf(stderr, "cannot read result %s\n", stmt); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (sql != NULL) {\
+		free(sql); sql = NULL; \
+	} \
+	fprintf(stderr, "result: %ld\n", res);
+
 #define CHECKRESULT(h,o,d,t) \
 	if (checkResult(h, o, d, t, res) != 0) { \
 		rc = EXIT_FAILURE; goto cleanup; \
@@ -364,6 +442,13 @@ select edge, origin, destin, timestamp from sales \
    and destin = %d \
    and timestamp = %ld"
 
+#define SQLCIDX "\
+select count(*) from sales \
+ where edge = 'buys' \
+   and origin = %d \
+   and destin = %d \
+   and timestamp = %ld"
+
 #define SQLFULL "\
 select edge, origin, destin, timestamp from sales \
  where origin = %d \
@@ -376,6 +461,10 @@ select edge, origin, destin, timestamp from sales \
 
 #define SQLGRP "\
 select origin, edge from sales \
+ group by origin, edge"
+
+#define SQLCOUNT "\
+select origin, edge, count(*) from sales \
  group by origin, edge"
 	
 int main() {
@@ -477,6 +566,13 @@ int main() {
 		CHECKRESULT(5, o, d, tp);
 	}
 
+	// test count with fullscan
+	fprintf(stderr, "COUNT W FULLSCAN\n");
+	for(int i=0; i<1; i++) {
+		READRESULT("select count(*) from sales", 0);
+		CHECKRESULT(5, 0, 0, 0);
+	}
+
 	// test index
 	fprintf(stderr, "INDEX SEARCH\n");
 	for(int i=0; i<10; i++) {
@@ -490,6 +586,21 @@ int main() {
 	for(int i=0; i<10; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
+	}
+
+	// test count with group
+	fprintf(stderr, "COUNT with GROUP\n");
+	for(int i=0; i<1; i++) {    // RANGE SCAN
+		READRESULT(SQLCOUNT, 2); // res += HALFEDGE;
+		CHECKRESULT(5, 0, 0, 0);
+	}
+
+	// test count without group
+	fprintf(stderr, "COUNT W/O GROUP\n");
+	for(int i=0; i<10; i++) {
+		GETRANDOM(5, &o, &d, &tp, SQLCIDX, &sql);
+		READRESULT(sql, 0);
+		CHECKRESULT(5, o, d, tp);
 	}
 
 	// KRANGE

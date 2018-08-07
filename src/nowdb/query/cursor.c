@@ -67,11 +67,6 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
 	nowdb_index_keys_t *keys;
 	nowdb_err_t err;
 
-	if (pidx->keys != NULL) {
-		*fromkey = pidx->keys;
-		*tokey = pidx->keys;
-		return NOWDB_OK;
-	}
 	keys = nowdb_index_getResource(pidx->idx);
 	if (keys == NULL) return NOWDB_OK;
 
@@ -172,14 +167,14 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
-		                                  pidx->idx, NULL,
+		                           pidx->idx, cur->filter,
 		                                    NOWDB_ORD_ASC,
 		                         cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_bkrange(&buf, &cur->stf.pending,
-		                                   pidx->idx, NULL,
+		                            pidx->idx, cur->filter,
 		                                     NOWDB_ORD_ASC,
 		                         cur->fromkey, cur->tokey);
 		break;
@@ -287,7 +282,6 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                          &cur->stf.files,
 		                          pidx->idx, NULL,
 		                               NULL, NULL); // range !
-	
 	/* create a fullscan reader */
 	} else {
 		err = nowdb_reader_fullscan(&cur->rdr,
