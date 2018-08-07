@@ -244,7 +244,7 @@ static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
 	if (err != NOWDB_OK) return NOWDB_OK;
 
 	err = nowdb_store_configSort(&scope->vertices,
-	                  &nowdb_store_vertex_compare);
+	                  &nowdb_sort_vertex_compare);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&scope->vertices);
 		return err;
@@ -553,7 +553,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
-	err = nowdb_store_configSort(&(*ctx)->store, &nowdb_store_edge_compare);
+	err = nowdb_store_configSort(&(*ctx)->store, &nowdb_sort_edge_compare);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx);

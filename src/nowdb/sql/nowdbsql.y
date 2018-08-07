@@ -34,7 +34,7 @@
 #include <string.h>
 
 #include <nowdb/scope/context.h>
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/sql/nowdbsql.h>
 #include <nowdb/sql/state.h>
 }
@@ -96,6 +96,12 @@
 %type where_clause {nowdb_ast_t*}
 %destructor where_clause {nowdb_ast_destroyAndFree($$);}
 
+%type group_clause {nowdb_ast_t*}
+%destructor group_clause {nowdb_ast_destroyAndFree($$);}
+
+%type order_clause {nowdb_ast_t*}
+%destructor order_clause {nowdb_ast_destroyAndFree($$);}
+
 %type stress_spec {nowdb_ast_t*}
 %destructor stress_spec {nowdb_ast_destroyAndFree($$);}
 
@@ -104,6 +110,15 @@
 
 %type field_list {nowdb_ast_t*}
 %destructor field_list {nowdb_ast_destroyAndFree($$);}
+
+%type pj_list {nowdb_ast_t*}
+%destructor pj_list {nowdb_ast_destroyAndFree($$);}
+
+%type pj {nowdb_ast_t*}
+%destructor pj {nowdb_ast_destroyAndFree($$);}
+
+%type fun {nowdb_ast_t*}
+%destructor fun {nowdb_ast_destroyAndFree($$);}
 
 %type table_list {nowdb_ast_t*}
 %destructor table_list {nowdb_ast_destroyAndFree($$);}
@@ -217,6 +232,30 @@ dql ::= projection_clause(P) from_clause(F). {
 
 dql ::= projection_clause(P) from_clause(F) where_clause(W). {
 	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(G). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,G,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,NULL,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) where_clause(W) group_clause(G) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,W,G,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) group_clause(G). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,G,NULL);
+}
+
+dql ::= projection_clause(P) from_clause(F) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,NULL,O);
+}
+
+dql ::= projection_clause(P) from_clause(F) group_clause(G) order_clause(O). {
+	NOWDB_SQL_MAKE_DQL(P,F,NULL,G,O);
 }
 
 /* ------------------------------------------------------------------------
@@ -549,6 +588,11 @@ projection_clause(P) ::= SELECT STAR. {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
 }
 
+projection_clause(P) ::= SELECT pj_list(F). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
+	NOWDB_SQL_ADDKID(P,F);
+}
+
 /* ------------------------------------------------------------------------
  * from clause 
  * ------------------------------------------------------------------------
@@ -556,6 +600,69 @@ projection_clause(P) ::= SELECT STAR. {
 from_clause(F) ::= FROM table_list(T). {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FROM, 0);
 	NOWDB_SQL_ADDKID(F, T);
+}
+
+/* ------------------------------------------------------------------------
+ * group clause
+ * ------------------------------------------------------------------------
+ */
+group_clause(G) ::= GROUP BY field_list(F). {
+	NOWDB_SQL_CREATEAST(&G, NOWDB_AST_GROUP, 0);
+	NOWDB_SQL_ADDKID(G,F);
+}
+
+/* ------------------------------------------------------------------------
+ * order clause
+ * ------------------------------------------------------------------------
+ */
+order_clause(O) ::= ORDER BY field_list(F). {
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_ORDER, 0);
+	NOWDB_SQL_ADDKID(O,F);
+}
+
+/* ------------------------------------------------------------------------
+ * projectable
+ * ------------------------------------------------------------------------
+ */
+pj_list(L) ::= pj(F). {
+	NOWDB_SQL_CHECKSTATE();
+	L = F;
+}
+ 
+pj_list(L) ::= pj(F) COMMA pj_list(PL). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(F,PL);
+	L = F;
+}
+
+pj(P) ::= field(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
+}
+
+pj(P) ::= fun(F). {
+	P = F;
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+	nowdb_ast_t *a;
+	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, NOWDB_AST_PARAM);
+	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, L);
+	NOWDB_SQL_ADDKID(F,a);
+}
+
+fun(F) ::= IDENTIFIER(I) LPAR RPAR. {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
 /* ------------------------------------------------------------------------
@@ -580,8 +687,10 @@ table_spec(T) ::= IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-table_spec ::= VERTEX AS IDENTIFIER.
-table_spec ::= IDENTIFIER AS IDENTIFIER. 
+table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_TYPE);
+	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+}
 
 /* ------------------------------------------------------------------------
  * where clause and expr
@@ -701,11 +810,17 @@ field(F) ::= LABEL(L). {
 field(F) ::= TIMESTAMP(T). {
 	F=T;
 }
+field(F) ::= WEIGHT(T). {
+	F=T;
+}
+field(F) ::= WEIGHT2(T). {
+	F=T;
+}
 
 value(V) ::= STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);
-	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, S);
+	NOWDB_SQL_SETSTRING(V, S);
 }
 value(V) ::= UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();

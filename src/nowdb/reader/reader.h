@@ -14,11 +14,28 @@
 #include <nowdb/io/file.h>
 #include <nowdb/reader/filter.h>
 #include <nowdb/index/index.h>
+#include <nowdb/mem/pplru.h>
+#include <nowdb/sort/sort.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
 
-typedef char nowdb_ordering_t;  /* just for the moment */
+/* ------------------------------------------------------------------------
+ * Reader Types
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_READER_FULLSCAN 1
+#define NOWDB_READER_SEARCH   10
+#define NOWDB_READER_FRANGE   100
+#define NOWDB_READER_KRANGE   101
+#define NOWDB_READER_CRANGE   102
+#define NOWDB_READER_BUF      1000
+#define NOWDB_READER_BUFIDX   1001
+#define NOWDB_READER_BKRANGE  1002
+#define NOWDB_READER_BCRANGE  1003
+#define NOWDB_READER_SEQ      10001
+#define NOWDB_READER_MERGE    10002
+#define NOWDB_READER_JOIN     10003
 
 /* ------------------------------------------------------------------------
  * Reader   
@@ -36,26 +53,40 @@ typedef char nowdb_ordering_t;  /* just for the moment */
  *             when no index was selected)
  * ------------------------------------------------------------------------
  */
-typedef struct {
+typedef struct nowdb_reader_t {
 	uint32_t                type; /* reader type                   */
 	uint32_t             recsize; /* set according to first file   */
 	ts_algo_list_t        *files; /* list of relevant files        */
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	nowdb_file_t           *file; /* current file (search)         */
 	ts_algo_tree_t       readers; /* files for index-based readers */
+	nowdb_pplru_t          *plru; /* LRU cache for range reader    */
+	nowdb_pplru_t         *bplru; /* black list                    */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
+	char                    *tmp; /* buffer for keys in bufreader  */
+	char                   *tmp2; /* buffer for keys in bufreader  */
+	char                  *page2; /* buffer for page in bufreader  */
 	nowdb_filter_t       *filter; /* filter                        */
-	nowdb_ordering_t      *order; /* ordering                      */
 	beet_iter_t             iter; /* iterator                      */
 	beet_state_t           state; /* query state                   */
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
-	uint32_t                 off; /* offset into win               */
+	int32_t                  off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
+	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
+	nowdb_ord_t              ord; /* asc or desc                   */
+	nowdb_time_t            from; /* start of period               */
+	nowdb_time_t              to; /* end   of period               */
+	struct nowdb_reader_t  **sub; /* subreaders                    */
+	uint32_t                  nr; /* number of subreaders          */
+	uint32_t                 cur; /* current subreader             */
+	char                     eof; /* reached eof                   */
+	char                      ko; /* key-onle reader               */
+	nowdb_bitmap32_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------
@@ -134,6 +165,14 @@ nowdb_err_t nowdb_reader_read(nowdb_reader_t *reader,
                               uint32_t       *osize);
 
 /* ------------------------------------------------------------------------
+ * Set Period
+ * ------------------------------------------------------------------------
+ */
+void nowdb_reader_setPeriod(nowdb_reader_t *reader,
+                            nowdb_time_t     start,
+                            nowdb_time_t       end);
+
+/* ------------------------------------------------------------------------
  * Fullscan
  * --------
  * Instantiate a reader as fullscan.
@@ -165,9 +204,11 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
                                 nowdb_filter_t  *filter);
 
 /* ------------------------------------------------------------------------
- * Index Range scan
- * ----------------
- * Instantiate a reader as index range scan.
+ * Index Full Range scan
+ * ---------------------
+ * Instantiate a reader as full index range scan,
+ * reading all pages of all keys in range.
+ *
  * Parameters:
  * - Reader: out parameter
  * - files : list of relevant files
@@ -176,11 +217,37 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
  * - start/end: indicate the range in terms of keys of that index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
-                               ts_algo_list_t  *files,
-                               nowdb_index_t   *index,
-                               nowdb_filter_t  *filter,
-                               void *start, void *end);
+nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Index Key Range scan
+ * --------------------
+ * Instantiate a reader as key index range scan,
+ * reading all keys in range, but not their pages.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Index Count Range scan
+ * ----------------------
+ * Instantiate a reader as count index range scan,
+ * reading all keys in range and their bitmap, but not the pages.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_filter_t  *filter,
+                                void *start, void *end);
 
 /* ------------------------------------------------------------------------
  * Buffer scan
@@ -188,19 +255,76 @@ nowdb_err_t nowdb_reader_range(nowdb_reader_t **reader,
  * Instantiate a reader from a buffer.
  * Parameters:
  * - reader: out parameter
- * - buf   : the buffer to read
- * - size  : the size of the buffer in bytes
+ * - files : the datafiles
  * - filter: select only relevant elements
- * - order : ordering of the buffer (if any)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
+                                ts_algo_list_t   *files,
+                                nowdb_filter_t   *filter);
+
+/* ------------------------------------------------------------------------
+ * Buffer simulating an index range scan
+ * -------------------------------------
+ * Parameters:
+ * - reader: out parameter
+ * - files : the datafiles
+ * - index : order the data according to this index
+ * - filter: select only relevant elements
+ * - ord   : order of range
  * - start/end: range indicator; ignore if ordering is NULL.
  *              with ordering and range, the reader behaves
  *              like a range scanner.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
-                                char             *buf,
-                                uint32_t         *size,
+nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
+                                ts_algo_list_t   *files,
+                                nowdb_index_t    *index,
                                 nowdb_filter_t   *filter,
-                                nowdb_ordering_t *order,
+                                nowdb_ord_t        ord,
                                 void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Buffer simulating an index range scan (keys only)
+ * -------------------------------------
+ * Parameters:
+ * - reader: out parameter
+ * - files : the datafiles
+ * - index : order the data according to this index
+ * - filter: select only relevant elements
+ * - ord   : order of range
+ * - start/end: range indicator; ignore if ordering is NULL.
+ *              with ordering and range, the reader behaves
+ *              like a range scanner.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
+                                 ts_algo_list_t   *files,
+                                 nowdb_index_t    *index,
+                                 nowdb_filter_t   *filter,
+                                 nowdb_ord_t        ord,
+                                 void *start,void  *end);
+
+/* ------------------------------------------------------------------------
+ * Sequence reader
+ * ---------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...); 
+
+/* ------------------------------------------------------------------------
+ * Merge reader
+ * ------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * ...   : the readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
+
+nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
+                             nowdb_reader_t *sub);
 #endif

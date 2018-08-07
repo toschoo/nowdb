@@ -151,68 +151,6 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 }
 
 /* ------------------------------------------------------------------------
- * Standard sort for edges
- * ------------------------------------------------------------------------
- */
-nowdb_cmp_t nowdb_store_edge_compare(const void *left,
-                                     const void *right,
-                                     void      *ignore)
-{
-	if (((nowdb_edge_t*)left)->origin <  
-	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->origin >
-	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_edge_t*)left)->edge   <
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->edge   >
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_edge_t*)left)->destin <
-	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->destin >
-	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_edge_t*)left)->label  <
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->label >
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_edge_t*)left)->timestamp <
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->timestamp >
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_GREATER;
-
-	return NOWDB_SORT_EQUAL;
-}
-
-/* ------------------------------------------------------------------------
- * Standard sort for vertices
- * ------------------------------------------------------------------------
- */
-nowdb_cmp_t nowdb_store_vertex_compare(const void *left,
-                                       const void *right,
-                                       void      *ignore)
-{
-	if (((nowdb_vertex_t*)left)->role <
-	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->role >
-	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_vertex_t*)left)->vertex <
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->vertex >
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_GREATER;
-
-	if (((nowdb_vertex_t*)left)->property <
-	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->property >
-	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_GREATER;
-
-	return NOWDB_SORT_EQUAL;
-}
-
-/* ------------------------------------------------------------------------
  * Find minmax (edges only)
  * ------------------------------------------------------------------------
  */

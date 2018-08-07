@@ -177,6 +177,7 @@
  * - value list, e.g. insert into ... (a, b, c, ...)
  * - field, also field list, e.g. create index xyz on ctx (a,b,c)
  * - decl, e.g. create type (a text, b int, ...)
+ * - fun, e.g. select count(*)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_DATA     10300
@@ -185,6 +186,8 @@
 #define NOWDB_AST_FIELD    10303
 #define NOWDB_AST_DECL     10305
 #define NOWDB_AST_OFF      10306
+#define NOWDB_AST_FUN      10307
+#define NOWDB_AST_PARAM    10308
 
 /* -----------------------------------------------------------------------
  * Values
@@ -235,6 +238,7 @@ typedef struct nowdb_ast_st {
 	int                  ntype; /* node type                       */
 	int                  stype; /* subtype                         */
 	int                  vtype; /* value type                      */
+        char                 isstr; /* value represents a string       */
 	void                *value; /* value stored by the node        */
 	int                  nKids; /* number of kids                  */
 	struct nowdb_ast_st **kids; /* array of pointers to the kids   */
@@ -268,7 +272,13 @@ void nowdb_ast_destroyAndFree(nowdb_ast_t *n);
  * Set value of that AST node
  * -----------------------------------------------------------------------
  */
-int nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
+void nowdb_ast_setValue(nowdb_ast_t *n, int vtype, void *val);
+
+/* -----------------------------------------------------------------------
+ * Set value of that AST node, set string indicator
+ * -----------------------------------------------------------------------
+ */
+void nowdb_ast_setValueAsString(nowdb_ast_t *n, int vtype, void *val);
 
 /* -----------------------------------------------------------------------
  * Add a kid to this AST node
@@ -349,10 +359,28 @@ nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
+ * Get the group clause from the current AST node (DQL only)
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_group(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get the order clause from the current AST node (DQL only)
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
  * Get field list from the current AST node
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get field list from fun
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get 'from' from the current AST node (DQL only)

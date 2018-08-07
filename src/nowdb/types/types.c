@@ -83,6 +83,28 @@ static inline void setWeight(nowdb_edge_t *e, nowdb_type_t typ,
 	}
 }
 
+static inline void getWeight(nowdb_edge_t *e, nowdb_type_t typ,
+                                       void *value, char what) 
+{
+	switch(typ) {
+	case NOWDB_TYP_FLOAT:
+	case NOWDB_TYP_INT:
+	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_TEXT:
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_LONGTEXT:
+		if (what == 0) memcpy(&e->weight, value, 8);
+		else memcpy(&e->weight2, value, 8);
+		break;
+
+	case NOWDB_TYP_COMPLEX:
+	case NOWDB_TYP_NOTHING:
+	default:
+		if (what == 0) e->weight = 0;  else e->weight2 = 0;
+	}
+}
+
 static inline void setValue(nowdb_vertex_t *v, nowdb_type_t typ,
                                                     void *value) {
 	switch(typ) {
@@ -209,9 +231,11 @@ void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value) {
 }
 
 void nowdb_edge_readWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value) {
+	getWeight(e, typ, value, 0);
 }
 
 void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value) {
+	getWeight(e, typ, value, 1);
 }
 
 int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value) {
@@ -271,3 +295,19 @@ int nowdb_edge_offByName(char *fld) {
 	return -1;
 }
 
+int nowdb_sizeByOff(uint32_t recsize, uint16_t off) {
+	if (recsize == 32) {
+		switch(off) {
+		case NOWDB_OFF_VTYPE:
+		case NOWDB_OFF_ROLE: return 4;
+		default: return 8;
+		
+		}
+	} else {
+		switch(off) {
+		case NOWDB_OFF_WTYPE:
+		case NOWDB_OFF_WTYPE2: return 4;
+		default: return 8;
+		}
+	}
+}

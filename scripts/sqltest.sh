@@ -18,7 +18,7 @@
 # ========================================================================
 if [ $# -lt 1 ]
 then
-	mx=100
+	mx=10
 else
 	mx=$1
 fi
@@ -140,7 +140,8 @@ do
 		exit 1
 	fi
 	csvres=$(echo $csvout | awk -F" " '{print $2}')
-	nowout=$(echo $nowdbsql | bin/scopetool $base 2>&1 >/dev/null)
+	nowout=$(echo $nowdbsql | bin/scopetool $base 2>&1 >/dev/null |\
+		grep Read)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in scopetool '%s':\n" "$nowdbsql"
@@ -151,6 +152,7 @@ do
 	if [ $csvres -ne $nowres ]
 	then
 		printf "FAILED in '%s': %d != %d\n" $csvsql $csvres $nowres
+		echo "$nowout"
 		exit 1
 	fi
 	printf "%d = %d (%s)\n" $csvres $nowres "$csvsql"

@@ -1,4 +1,4 @@
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/sql/parser.h>
 #include <common/bench.h>
 

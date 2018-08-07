@@ -196,10 +196,20 @@ const char *nowdbsql_parser_errmsg(nowdbsql_parser_t *p) {
 }
 
 /* -----------------------------------------------------------------------
- * Get error message
+ * Parse buffers
  * -----------------------------------------------------------------------
  */
-int nowdbsql_parser_buffer(nowdbsql_parser_t *p, char *buf, int size,
-                           nowdb_ast_t **ast);
+int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
+                           char *buf,  int size,
+                           nowdb_ast_t   **ast) {
+	int rc;
+	YY_BUFFER_STATE pst;
 
+	pst = yy_scan_bytes(buf, size, p->sc);
+	if (pst == NULL) return NOWDB_SQL_ERR_NO_MEM;
 
+	rc = nowdbsql_parser_run(p, ast);
+
+	yy_delete_buffer(pst, p->sc);
+	return rc;
+}

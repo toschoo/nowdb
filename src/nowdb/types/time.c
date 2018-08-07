@@ -160,6 +160,7 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
 	struct timespec tv;
 
 	memset(&tm, 0, sizeof(struct tm));
+	memset(&tv, 0, sizeof(struct timespec));
 
 	nsecs = strptime(buf, frm, &tm);
 	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
@@ -198,7 +199,35 @@ nowdb_err_t nowdb_time_fromString(const char *buf,
  */
 nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
                                 const char *frm,
-                                      char *buf);
+                                      char *buf,
+                                     size_t max) {
+	nowdb_err_t err;
+	struct tm tm;
+	struct timespec tv;
+	size_t sz;
+
+	memset(&tv, 0, sizeof(struct timespec));
+
+	err = toSystem(t, &tv);
+	if (err != NOWDB_OK) return err;
+
+	if (gmtime_r(&tv.tv_sec, &tm) == NULL) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		                                   "gmtime failed");
+	}
+	sz = strftime(buf, max, frm, &tm);
+	if (sz == 0) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		                                "buffer too small");
+	}
+	if (tv.tv_nsec > 0 && sz+11<max) {
+		sprintf(buf+sz, ".%09ld", tv.tv_nsec);
+	} else if (tv.tv_nsec > 0) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		            "buffer too small to hold nanoseconds");
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Nanoseconds according to unit

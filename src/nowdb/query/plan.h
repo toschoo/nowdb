@@ -13,7 +13,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/reader/reader.h>
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/scope/scope.h>
 
 #include <tsalgo/list.h>
@@ -24,11 +24,11 @@
  */
 #define NOWDB_PLAN_SUMMARY    1
 #define NOWDB_PLAN_READER     2
-#define NOWDB_PLAN_ITER       3
 #define NOWDB_PLAN_FILTER     4
 #define NOWDB_PLAN_GROUPING   5
-#define NOWDB_PLAN_ORDERING   6
-#define NOWDB_PLAN_PROJECTION 7
+#define NOWDB_PLAN_AGGREGATES 6
+#define NOWDB_PLAN_ORDERING   7
+#define NOWDB_PLAN_PROJECTION 8
 
 /* ------------------------------------------------------------------------
  * Reader Types:
@@ -41,31 +41,16 @@
  * - range+
  * ------------------------------------------------------------------------
  */
-#define NOWDB_READER_FS       10 
-#define NOWDB_READER_FS_      11  
-#define NOWDB_READER_SEARCH   20
-#define NOWDB_READER_SEARCH_  21
-#define NOWDB_READER_RANGE    30
-#define NOWDB_READER_RANGE_   31
-
-/* ------------------------------------------------------------------------
- * Iterator Types:
- * ---------------
- * - sequential
- * - merge
- * - join
- * ------------------------------------------------------------------------
- */
-#define NOWDB_ITER_SEQ   1
-#define NOWDB_ITER_MERGE 2
-#define NOWDB_ITER_JOIN  3
-
-/* ------------------------------------------------------------------------
- * ascending/descending
- * ------------------------------------------------------------------------
- */
-#define NOWDB_ORD_ASC   1
-#define NOWDB_ORD_DESC  2
+#define NOWDB_PLAN_FS       10 
+#define NOWDB_PLAN_FS_      11  
+#define NOWDB_PLAN_SEARCH   20
+#define NOWDB_PLAN_SEARCH_  21
+#define NOWDB_PLAN_FRANGE   30
+#define NOWDB_PLAN_FRANGE_  31
+#define NOWDB_PLAN_KRANGE   40
+#define NOWDB_PLAN_KRANGE_  41
+#define NOWDB_PLAN_CRANGE   50
+#define NOWDB_PLAN_CRANGE_  51
 
 /* ------------------------------------------------------------------------
  * Plan node
@@ -79,6 +64,10 @@ typedef struct {
 	void     *load; /* pointer to some structure */
 } nowdb_plan_t;
 
+/* ------------------------------------------------------------------------
+ * Simplified index descriptor
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_index_t *idx;
 	char          *keys;

@@ -13,7 +13,7 @@
 #ifndef nowdb_sql_state_decl
 #define nowdb_sql_state_decl
 
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 #include <nowdb/scope/context.h>
 
 /* ------------------------------------------------------------------------
@@ -84,6 +84,28 @@ typedef struct {
 	if (nowdb_ast_add(n,k) != 0) { \
 		nowdbres->errcode = NOWDB_SQL_ERR_NO_MEM; \
 		return; \
+	}
+
+/* ------------------------------------------------------------------------
+ * Macro to set a string, removing '
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_SETSTRING(n, s) \
+	size_t x; \
+	char *z; \
+	if (s != NULL) { \
+		x = strnlen(s, 255); \
+		if (x > 2) { \
+			z = malloc(x-1); \
+			if (z == NULL) { \
+				nowdbres->errcode = NOWDB_SQL_ERR_NO_MEM; \
+				return; \
+			} \
+			for(int i=0;i<x-1; i++) z[i] = s[i+1]; \
+			z[x-2] = 0; \
+			nowdb_ast_setValueAsString(n,NOWDB_AST_V_STRING,z); \
+			free(s); \
+		} \
 	}
 
 /* ------------------------------------------------------------------------

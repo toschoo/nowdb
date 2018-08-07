@@ -12,6 +12,8 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/reader/reader.h>
 #include <nowdb/query/plan.h>
+#include <nowdb/query/row.h>
+#include <nowdb/fun/group.h>
 
 /* ------------------------------------------------------------------------
  * Pair of (store, files obtained from that store)
@@ -28,17 +30,20 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t          disc; /* iter discipline               */
-	uint32_t          numr; /* number of readers             */
-	nowdb_reader_t  **rdrs; /* array of pointers to readers  */
+	nowdb_reader_t    *rdr; /* the reader                    */
 	nowdb_storefile_t  stf; /* should be a list of stf!      */
+	nowdb_model_t   *model; /* model                         */
 	nowdb_filter_t *filter; /* main filter                   */
-	uint32_t           cur; /* current reader                */
+	nowdb_row_t       *row; /* projection                    */
+	nowdb_group_t   *group; /* grouping                      */
+	nowdb_group_t   *nogrp; /* appy aggs without grouping    */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
-	/* projection !             */
-	/* grouping, ordering, etc. */
-	/* sub-queries?             */
+	char              *tmp; /* temporary buffer              */
+	char             *tmp2; /* temporary buffer              */
+	char          *fromkey; /* range: fromkey                */
+	char            *tokey; /* range:   tokey                */
+	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 
 /* ------------------------------------------------------------------------
@@ -74,7 +79,8 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur);
  */
 nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                               char *buf, uint32_t sz,
-                                      uint32_t *osz);
+                                       uint32_t *osz,
+                                     uint32_t *count);
 
 /* ------------------------------------------------------------------------
  * Reset cursor to start position

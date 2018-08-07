@@ -4,7 +4,7 @@
  * AST: Abstract Syntax Tree
  * ========================================================================
  */
-#include <nowdb/query/ast.h>
+#include <nowdb/sql/ast.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -91,7 +91,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_NOT:    
 	case NOWDB_AST_JUST: ASTCALLOC(1);
 	case NOWDB_AST_GROUP:  
-	case NOWDB_AST_ORDER: ASTCALLOC(2); 
+	case NOWDB_AST_ORDER: ASTCALLOC(1); 
 	case NOWDB_AST_JOIN: UNDEFINED(ntype); 
 
 	case NOWDB_AST_COMPARE: ASTCALLOC(2);
@@ -100,6 +100,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
 	case NOWDB_AST_DECL: ASTCALLOC(3);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
+	case NOWDB_AST_FUN: ASTCALLOC(2);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
@@ -151,7 +152,14 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_ORDER:  return "order";
 	case NOWDB_AST_JOIN: return "join";
 
-	case NOWDB_AST_FIELD: return "field"; 
+	case NOWDB_AST_FIELD: 
+		if (stype == NOWDB_AST_PARAM) {
+			return "field parameter";
+		} else {
+			return "field"; 
+		}
+
+	case NOWDB_AST_FUN: return "function"; 
 	case NOWDB_AST_VALUE:
 		switch(stype) {
 		case NOWDB_AST_TEXT: return "text value"; 
@@ -295,7 +303,7 @@ void nowdb_ast_destroyAndFree(nowdb_ast_t *n) {
  * Set the value
  * -----------------------------------------------------------------------
  */
-int nowdb_ast_setValue(nowdb_ast_t *n,
+void nowdb_ast_setValue(nowdb_ast_t *n,
                   int vtype, void *val) 
 {
 	n->vtype = vtype;
@@ -303,7 +311,18 @@ int nowdb_ast_setValue(nowdb_ast_t *n,
 	                 * this pointer, since it is used
 	                 * in an action, so we can just
 	                 * take it over and free it later! */
-	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Set the value
+ * -----------------------------------------------------------------------
+ */
+void nowdb_ast_setValueAsString(nowdb_ast_t *n,
+                          int vtype, void *val) 
+{
+	n->isstr = 1;
+	n->vtype = vtype;
+	n->value = val;
 }
 
 /* -----------------------------------------------------------------------
@@ -476,6 +495,31 @@ static inline int addsel(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to a group node
+ * -----------------------------------------------------------------------
+ */
+static inline int addgroup(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to a order node
+ * -----------------------------------------------------------------------
+ */
+static inline int addorder(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -585,6 +629,25 @@ static inline int addfield(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to fun
+ * -----------------------------------------------------------------------
+ */
+static inline int addfun(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+		if (k->stype == NOWDB_AST_PARAM) {
+			ADDKID(0);
+		} else {
+			ADDKID(1);
+		}
+	case NOWDB_AST_FUN: ADDKID(1);
 	default: return -1;
 	}
 }
@@ -618,8 +681,8 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_OR:  return addbool(n,k);
 	case NOWDB_AST_NOT: 
 	case NOWDB_AST_JUST: return addnot(n,k);
-	case NOWDB_AST_GROUP:   return -1;
-	case NOWDB_AST_ORDER:   return -1;
+	case NOWDB_AST_GROUP: return addgroup(n,k);
+	case NOWDB_AST_ORDER: return addorder(n,k);
 	case NOWDB_AST_JOIN:  return -1;
 
 	case NOWDB_AST_COMPARE: return addcompare(n,k);
@@ -633,6 +696,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_FIELD: return addfield(n,k);
 	case NOWDB_AST_DECL: return ad3ecl(n,k);
+	case NOWDB_AST_FUN: return addfun(n,k);
 
 	default: return -1;
 	}
@@ -764,8 +828,23 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 	                           nowdb_ast_operation(ast));
 
 	case NOWDB_AST_CREATE: return ast->kids[3];
+	case NOWDB_AST_SELECT: return ast->kids[0];
+	case NOWDB_AST_GROUP: return ast->kids[0];
+	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
+	case NOWDB_AST_FUN: return ast->kids[1];
+	default: return NULL;
+	}
+}
 
+/* -----------------------------------------------------------------------
+ * Get param
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_FUN: return ast->kids[0];
 	default: return NULL;
 	}
 }
@@ -777,6 +856,24 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 nowdb_ast_t *nowdb_ast_select(nowdb_ast_t *ast) {
 	if (ast->ntype != NOWDB_AST_DQL) return NULL;
 	return ast->kids[1];
+}
+
+/* -----------------------------------------------------------------------
+ * Get group
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_group(nowdb_ast_t *ast) {
+	if (ast->ntype != NOWDB_AST_DQL) return NULL;
+	return ast->kids[3];
+}
+
+/* -----------------------------------------------------------------------
+ * Get order
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *ast) {
+	if (ast->ntype != NOWDB_AST_DQL) return NULL;
+	return ast->kids[4];
 }
 
 /* -----------------------------------------------------------------------

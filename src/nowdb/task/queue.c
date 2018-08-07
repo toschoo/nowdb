@@ -254,6 +254,10 @@ nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q,
 	if (err != NOWDB_OK) return err;
 
 	node = q->list.head;
+	if (node == NULL) {
+		*message = NULL;
+		return nowdb_unlock(&q->lock);
+	}
 	*message = node->cont;
 	ts_algo_list_remove(&q->list, node);
 	free(node);

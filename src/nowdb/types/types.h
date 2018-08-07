@@ -33,6 +33,8 @@
 #define NOWDB_MAX_PATH 4096
 #define NOWDB_MAX_NAME  256
 
+#define NOWDB_BLACK_PAGE (void*)0x1
+
 #define NOWDB_KILO 1024
 #define NOWDB_MEGA 1048576
 #define NOWDB_GIGA 1073741824
@@ -76,6 +78,12 @@ typedef uint8_t nowdb_content_t;
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
 
+/* context or vertex */
+typedef char nowdb_target_t;
+
+#define NOWDB_TARGET_EDGE    1
+#define NOWDB_TARGET_VERTEX  2
+
 /* possible types of value */
 typedef uint32_t nowdb_type_t;
 
@@ -89,11 +97,23 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 
+#define NOWDB_UMAX ULLONG_MAX
+#define NOWDB_IMAX LLONG_MAX
+#define NOWDB_FMAX 9007199254740992ll
+
+#define NOWDB_UMIN 0
+#define NOWDB_IMIN LLONG_MIN;
+#define NOWDB_FMIN -9007199254740992ll
+
 typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
 
 extern char nowdb_nullrec[64];
+
+int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
+
+#define NOWDB_VERTEX_SIZE 32
 
 /* ------------------------------------------------------------------------
  * Vertex Offsets
@@ -124,6 +144,8 @@ void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 int nowdb_vertex_offByName(char *field);
+
+#define NOWDB_EDGE_SIZE 64
 
 /* ------------------------------------------------------------------------
  * Edge Offsets

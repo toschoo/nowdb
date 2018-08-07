@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 		nowdb_err_release(err);
 		return EXIT_FAILURE;
 	}
-	err = nowdb_store_configSort(&store, &nowdb_store_edge_compare);
+	err = nowdb_store_configSort(&store, &nowdb_sort_edge_compare);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot config store (sort)\n");
 		nowdb_err_print(err);

@@ -50,6 +50,9 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/task/worker.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/mem/lru.o        \
+      $(SRC)/mem/ptlru.o      \
+      $(SRC)/mem/pplru.o      \
+      $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
@@ -64,10 +67,13 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/reader/filter.o  \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
-      $(SRC)/query/ast.o      \
+      $(SRC)/fun/fun.o        \
+      $(SRC)/fun/group.o      \
       $(SRC)/query/stmt.o     \
+      $(SRC)/query/row.o      \
       $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
+      $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
@@ -85,6 +91,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/task/worker.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/mem/lru.h        \
+      $(SRC)/mem/ptlru.h      \
+      $(SRC)/mem/pplru.h      \
+      $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
@@ -99,10 +108,13 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
-      $(SRC)/query/ast.h      \
+      $(SRC)/fun/fun.h        \
+      $(SRC)/fun/group.h      \
+      $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
       $(SRC)/query/cursor.h   \
+      $(SRC)/sql/ast.h        \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
@@ -140,12 +152,15 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
+	$(SMK)/funsmoke                \
 	$(SMK)/scopesmoke              \
+	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
+	$(SMK)/mergesmoke              \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -295,6 +310,11 @@ $(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/funsmoke:	$(LIB) $(DEP) $(SMK)/funsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			        $(COM)/stores.o \
 			        $(COM)/bench.o
@@ -307,6 +327,15 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 $(SMK)/scopesmoke:	$(LIB) $(DEP) $(SMK)/scopesmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/scopesmoke2:	$(LIB) $(DEP) $(SMK)/scopesmoke2.o \
+			$(COM)/scopes.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(COM)/scopes.o \
+			                 $(COM)/bench.o  \
 			                 $(libs) -lnowdb
 
 $(SMK)/imansmoke: 	$(LIB) $(DEP) $(SMK)/imansmoke.o
@@ -332,6 +361,17 @@ $(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
 $(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/mergesmoke:	$(LIB) $(DEP) $(SMK)/mergesmoke.o \
+			$(COM)/scopes.o \
+			$(COM)/db.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(COM)/scopes.o \
+			                 $(COM)/db.o     \
+			                 $(COM)/bench.o  \
 			                 $(libs) -lnowdb
 
 $(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
@@ -407,12 +447,12 @@ $(BIN)/qstress:		$(LIB) $(DEP) $(BENCH)/qstress.o \
 			                 $(libs) -lnowdb
 
 $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
-			$(SRC)/query/ast.o $(SQL)/state.o $(SQL)/parser.o \
+			$(SRC)/sql/ast.o $(SQL)/state.o $(SQL)/parser.o \
 			$(BENCH)/parserbench.o $(COM)/bench.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $(BIN)/parserbench  \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
-			         $(SRC)/query/ast.o $(SQL)/state.o \
+			         $(SRC)/sql/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
 			         $(BENCH)/parserbench.o -lnowdb
 		
@@ -469,6 +509,7 @@ $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
+
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -499,9 +540,11 @@ clean:
 	rm -rf $(RSC)/testscope
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
+	rm -rf $(RSC)/scope???
 	rm -rf $(RSC)/iman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
+	rm -rf $(RSC)/db??
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
@@ -516,13 +559,16 @@ clean:
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/filtersmoke
+	rm -f $(SMK)/funsmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
+	rm -f $(SMK)/scopesmoke2
 	rm -f $(SMK)/imansmoke
 	rm -f $(SMK)/indexsmoke
 	rm -f $(SMK)/indexersmoke
 	rm -f $(SMK)/modelsmoke
 	rm -f $(SMK)/textsmoke
+	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
