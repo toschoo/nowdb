@@ -285,8 +285,10 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 	char *mn;
 	int i, j;
 
+	/*
 	fprintf(stderr, "merging %d %d-blocks from %p to %p\n",
 	                src->len/n, n, src, trg);
+	*/
 	memset(off, 0, n*sizeof(int));
 	while(src->len > 0) {
 		if (tb == NULL || idx >= flist->sz) {

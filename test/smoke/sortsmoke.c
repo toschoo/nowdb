@@ -70,7 +70,7 @@ int testBlistSort() {
 		memcpy(b->block+j, buf+i, sizeof(int));
 		j+=sizeof(int); b->sz += sizeof(int);
 	}
-	fprintf(stderr, "blocks in input set: %d\n", blocks.len);
+	// fprintf(stderr, "blocks in input set: %d\n", blocks.len);
 
 	// sort buf
 	nowdb_mem_sort((char*)buf, e, sizeof(int), &intcmp, NULL);
@@ -83,7 +83,7 @@ int testBlistSort() {
 		nowdb_err_release(err);
 		rc = -1; goto cleanup;
 	}
-	fprintf(stderr, "blocks in result set: %d\n", blocks.len);
+	// fprintf(stderr, "blocks in result set: %d\n", blocks.len);
 
 	// check no of elements
 	for(runner=blocks.head; runner!=NULL; runner=runner->nxt) {
