@@ -17,6 +17,6 @@ uint64_t median(uint64_t *buf, int size);
 
 int compare(const void *left, const void *right);
 
-void sort(char *buf, int size);
+void sort(void *buf, int size);
 
 

@@ -1,0 +1,91 @@
+/* ========================================================================
+ * (c) Tobias Schoofs, 2018
+ * ========================================================================
+ * Cursor: DQL executor
+ * ========================================================================
+ */
+#ifndef nowdb_cursor_decl
+#define nowdb_cursor_decl
+
+#include <nowdb/types/types.h>
+#include <nowdb/types/error.h>
+#include <nowdb/scope/scope.h>
+#include <nowdb/reader/reader.h>
+#include <nowdb/query/plan.h>
+#include <nowdb/query/row.h>
+#include <nowdb/fun/group.h>
+
+/* ------------------------------------------------------------------------
+ * Pair of (store, files obtained from that store)
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_store_t   *store;
+	ts_algo_list_t   files;
+	ts_algo_list_t pending;
+} nowdb_storefile_t;
+
+/* ------------------------------------------------------------------------
+ * Cursor 
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_reader_t    *rdr; /* the reader                    */
+	nowdb_storefile_t  stf; /* should be a list of stf!      */
+	nowdb_model_t   *model; /* model                         */
+	nowdb_filter_t *filter; /* main filter                   */
+	nowdb_row_t       *row; /* projection                    */
+	nowdb_group_t   *group; /* grouping                      */
+	nowdb_group_t   *nogrp; /* appy aggs without grouping    */
+	uint32_t           off; /* offset in the current reader  */
+	uint32_t       recsize; /* record size                   */
+	char              *tmp; /* temporary buffer              */
+	char             *tmp2; /* temporary buffer              */
+	char          *fromkey; /* range: fromkey                */
+	char            *tokey; /* range:   tokey                */
+	char             hasid; /* has id to identify model      */
+} nowdb_cursor_t;
+
+/* ------------------------------------------------------------------------
+ * Create a new cursor 
+ * -------------------
+ * Expecting a scope and an execution plan.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
+                             ts_algo_list_t  *plan,
+                             nowdb_cursor_t **cur);
+
+/* ------------------------------------------------------------------------
+ * Destroy a new cursor 
+ * ------------------------------------------------------------------------
+ */
+void nowdb_cursor_destroy(nowdb_cursor_t *cur);
+
+/* ------------------------------------------------------------------------
+ * Open cursor 
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur);
+
+/* ------------------------------------------------------------------------
+ * Fetch from cursor
+ * -----------------
+ * Copy records corresponding to the query into the user-provided buffer
+ * of size sz (in bytes). The number of bytes written to the buffer is
+ * communicated back through osz.
+ * When the cursor is exhausted, fetch will return the error 'eof'.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
+                              char *buf, uint32_t sz,
+                                       uint32_t *osz,
+                                     uint32_t *count);
+
+/* ------------------------------------------------------------------------
+ * Reset cursor to start position
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_cursor_rewind(nowdb_cursor_t *cur);
+
+#endif

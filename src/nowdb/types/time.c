@@ -149,6 +149,87 @@ nowdb_err_t nowdb_time_now(nowdb_time_t *time) {
 }
 
 /* ------------------------------------------------------------------------
+ * Get time from string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_fromString(const char *buf,
+                                  const char *frm,
+                                  nowdb_time_t *t) {
+	struct tm tm;
+	char  *nsecs, *hlp;
+	struct timespec tv;
+
+	memset(&tm, 0, sizeof(struct tm));
+	memset(&tv, 0, sizeof(struct timespec));
+
+	nsecs = strptime(buf, frm, &tm);
+	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
+		return nowdb_err_get(nowdb_err_time,
+		          FALSE, OBJECT, "strptime");
+	}
+
+	tv.tv_sec = timegm(&tm);
+
+	if (nsecs != NULL && *nsecs != 0) {
+		nsecs++;
+
+		tv.tv_nsec = strtol(nsecs, &hlp, 10);
+		if (hlp == NULL || *hlp != 0) {
+			return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+			                             "nanoseconds invalid");
+		}
+		switch(strlen(nsecs)) {
+		case 1: tv.tv_nsec *= 100000000; break;
+		case 2: tv.tv_nsec *= 10000000; break;
+		case 3: tv.tv_nsec *= 1000000; break;
+		case 4: tv.tv_nsec *= 100000; break;
+		case 5: tv.tv_nsec *= 10000; break;
+		case 6: tv.tv_nsec *= 1000; break;
+		case 7: tv.tv_nsec *= 100; break;
+		case 8: tv.tv_nsec *= 10; break;
+		}
+	}
+	fromSystem(&tv, t);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Write time to string
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
+                                const char *frm,
+                                      char *buf,
+                                     size_t max) {
+	nowdb_err_t err;
+	struct tm tm;
+	struct timespec tv;
+	size_t sz;
+
+	memset(&tv, 0, sizeof(struct timespec));
+
+	err = toSystem(t, &tv);
+	if (err != NOWDB_OK) return err;
+
+	if (gmtime_r(&tv.tv_sec, &tm) == NULL) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		                                   "gmtime failed");
+	}
+	sz = strftime(buf, max, frm, &tm);
+	if (sz == 0) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		                                "buffer too small");
+	}
+	if (tv.tv_nsec > 0 && sz+11<max) {
+		sprintf(buf+sz, ".%09ld", tv.tv_nsec);
+	} else if (tv.tv_nsec > 0) {
+		return nowdb_err_get(nowdb_err_time, FALSE, OBJECT,
+		            "buffer too small to hold nanoseconds");
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Nanoseconds according to unit
  * ------------------------------------------------------------------------
  */
@@ -210,4 +291,29 @@ nowdb_time_t nowdb_time_day() {
  */
 nowdb_time_t nowdb_time_week() {
 	return (7*24*3600*nowdb_time_sec());
+}
+
+/* ------------------------------------------------------------------------
+ * Benchmarking: get monotonic timestamp
+ * ------------------------------------------------------------------------
+ */
+void nowdb_timestamp(struct timespec *t) {
+	clock_gettime(CLOCK_MONOTONIC, t);
+}
+
+/* ------------------------------------------------------------------------
+ * Benchmarking: subtract two timespecs
+ * ------------------------------------------------------------------------
+ */
+#define NPERSEC 1000000000
+uint64_t nowdb_time_minus(struct timespec *t1,
+                          struct timespec *t2) {
+	uint64_t d;
+	if (t2->tv_nsec > t1->tv_nsec) {
+		t1->tv_nsec += NPERSEC;
+		t1->tv_sec  -= 1;
+	}
+	d = NPERSEC * (t1->tv_sec - t2->tv_sec);
+	d += t1->tv_nsec - t2->tv_nsec;
+	return d;
 }

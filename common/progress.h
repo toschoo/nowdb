@@ -3,6 +3,8 @@
  * (c) Tobias Schoofs, 2016
  * ------------------------------------------------------------------------------
  */
+#ifndef COMMON_TS_PROGRESS_DECL
+#define COMMON_TS_PROGRESS_DECL
 #include <stdio.h>
 
 /* -------------------------------------------------------------------------------
@@ -33,3 +35,4 @@ void update_progress(progress_t *p, int i);
  * -------------------------------------------------------------------------------
  */
 void close_progress(progress_t *p); 
+#endif

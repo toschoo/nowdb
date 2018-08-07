@@ -3,8 +3,6 @@
  * ========================================================================
  * File Abstraction
  * ========================================================================
- *
- * ========================================================================
  */
 #include <nowdb/io/file.h>
 #include <stdio.h>
@@ -13,7 +11,11 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#include <pthread.h> // debug!!!
+
 static char *OBJECT = "file";
+
+#define MAX32 2147483647
 
 /* ------------------------------------------------------------------------
  * Allocate and initialise a new file descriptor
@@ -23,6 +25,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
                            uint32_t          id,
                            nowdb_path_t    path,
                            uint32_t         cap,
+                           uint32_t        size,
                            uint32_t   blocksize,
                            uint32_t  recordsize,
                            nowdb_bitmap8_t ctrl,
@@ -40,7 +43,8 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, NULL);
 	}
 	nowdb_err_t r = nowdb_file_init(*file,id,path,
-	                                cap,blocksize,recordsize,
+	                                cap,size,
+	                                blocksize,recordsize,
 	                                ctrl,comp,encp,
 	                                grain,oldest,newest);
 	if (r != NOWDB_OK) {
@@ -57,6 +61,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             uint32_t          id,
                             nowdb_path_t    path,
                             uint32_t         cap,
+                            uint32_t        size,
                             uint32_t   blocksize,
                             uint32_t  recordsize,
                             nowdb_bitmap8_t ctrl,
@@ -75,21 +80,23 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->mptr     = NULL;
 	file->bptr     = NULL;
 	file->tmp      = NULL;
-	file->dict     = NULL;
+	file->cdict    = NULL;
+	file->ddict    = NULL;
 	file->cctx     = NULL;
 	file->dctx     = NULL;
 	file->off      = 0;
-	file->size     = 0;
+	file->size     = size;
 	file->capacity = cap;
 	file->tmpsize  = 0;
 	file->pos      = 0;
 	file->dirty    = FALSE;
+	file->used     = FALSE;
 	file->fd       = -1;
 	file->state    = nowdb_file_state_closed;
 	file->order    = 0;
 	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
 
-	if (cap == 0) {
+	if ((ctrl & NOWDB_FILE_WRITER) && cap == 0) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                     "capacity is 0");
 	}
@@ -175,6 +182,10 @@ nowdb_err_t nowdb_file_makeWriter(nowdb_file_t *file) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                 "file descriptor is in wrong state");
 	}
+	if (file->capacity == 0) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                     "capacity is 0");
+	}
 	file->bufsize  = NOWDB_FILE_MAPSIZE > file->capacity ?
 	                                      file->capacity :
 		                           NOWDB_FILE_MAPSIZE;
@@ -185,7 +196,7 @@ nowdb_err_t nowdb_file_makeWriter(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
- * Change file from to spare
+ * Change file to spare
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_makeSpare(nowdb_file_t *file) {
@@ -204,7 +215,7 @@ void nowdb_file_destroy(nowdb_file_t *file) {
 	if (file->state == nowdb_file_state_mapped) {
 		NOWDB_IGNORE(nowdb_file_umap(file));
 	}
-	if (file->state == nowdb_file_state_closed) {
+	if (file->state != nowdb_file_state_closed) {
 		NOWDB_IGNORE(nowdb_file_close(file));
 	}
 	if (file->bptr != NULL) {
@@ -223,6 +234,8 @@ void nowdb_file_destroy(nowdb_file_t *file) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
+	nowdb_err_t err;
+
 	if (source == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                         "source descriptor is NULL");
@@ -231,18 +244,55 @@ nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                         "target descriptor is NULL");
 	}
-	return nowdb_file_init(target,
-	                       source->id,
-	                       source->path,
-	                       source->capacity,
-	                       source->blocksize,
-	                       source->recordsize,
-	                       source->ctrl,
-	                       source->comp,
-	                       source->encp,
-	                       source->grain,
-	                       source->oldest,
-	                       source->newest);
+	err = nowdb_file_init(target,
+	                      source->id,
+	                      source->path,
+	                      source->capacity,
+	                      source->size,
+	                      source->blocksize,
+	                      source->recordsize,
+	                      source->ctrl,
+	                      source->comp,
+	                      source->encp,
+	                      source->grain,
+	                      source->oldest,
+	                      source->newest);
+	if (err != NOWDB_OK) return err;
+	if (target->comp == NOWDB_COMP_ZSTD) {
+		target->cdict = source->cdict;
+		target->ddict = source->ddict;
+		target->cctx  = source->cctx;
+		target->dctx  = source->dctx;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Update file descriptor
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_update(nowdb_file_t *source, nowdb_file_t *target) {
+	if (source == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                         "source descriptor is NULL");
+	}
+	if (target == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                         "target descriptor is NULL");
+	}
+	target->order = source->order;
+	target->size = source->size;
+	target->capacity = source->capacity;
+	target->blocksize = source->blocksize;
+	target->recordsize = source->recordsize;
+	target->ctrl = source->ctrl;
+	target->used = source->used;
+	target->comp = source->comp;
+	target->encp = source->encp;
+	target->grain = source->grain;
+	target->oldest = source->oldest;
+	target->newest = source->newest;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -314,6 +364,61 @@ nowdb_err_t nowdb_file_remove(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Erase file content
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
+	nowdb_err_t err;
+	ssize_t x;
+
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, NULL);
+	}
+	if (file->path == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                      "path is NULL");
+	}
+	if (file->state != nowdb_file_state_closed) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                    "file descriptor in wrong state");
+	}
+	err = nowdb_file_open(file);
+	if (err != NOWDB_OK) return err;
+	memset(file->bptr, 0, file->bufsize);
+	for(int i=0; i<file->size; i+=file->bufsize) {
+		x = write(file->fd, file->bptr, file->bufsize);
+		if (x != file->bufsize) return nowdb_err_get(nowdb_err_write,
+		                                   TRUE, OBJECT, file->path);
+		
+	}
+	file->size = 0;
+	return nowdb_file_close(file);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper function to compute time deltas
+ * ------------------------------------------------------------------------
+ */
+static inline void deltas(char *buf, uint32_t size,
+                      nowdb_time_t *t, uint32_t *d) {
+	nowdb_time_t to   = NOWDB_TIME_DAWN;
+	nowdb_time_t from = NOWDB_TIME_DUSK;
+	nowdb_time_t delta;
+	nowdb_time_t *tmp;
+
+	for(int i=0; i<size; i+=64) {
+		tmp = (nowdb_time_t*)(buf+i+NOWDB_OFF_TMSTMP);
+		if (*tmp > to) to = *tmp;
+		if (*tmp < from) from = *tmp;
+	}
+	delta = to - from;
+	*d = (uint32_t)(delta >> 32);
+	(*d)++;
+	// fprintf(stderr, "%lu - %lu = %lu (%u,%lu)\n", to, from, delta, x,y);
+	*t = from;
+}
+
+/* ------------------------------------------------------------------------
  * Helper function to compress a block using ZSTD and write to the file
  * ------------------------------------------------------------------------
  */
@@ -321,26 +426,34 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
                              char *buf, uint32_t size) {
 	ssize_t x;
 	size_t sz;
+	nowdb_time_t from=0;
+	uint32_t d=0;
 
-	if (file->dict != NULL) {
+	if (file->cdict != NULL) {
+		/*
+		fprintf(stderr, "[%lu] pointers: %p, %p, %p, %p\n", pthread_self(),
+				file->cctx, file->tmp, buf, file->cdict);
+		*/
 		sz = ZSTD_compress_usingCDict(file->cctx,
 		                              file->tmp, file->bufsize,
 		                              buf, size,
-		                              file->dict);
+		                              file->cdict);
 	} else {
 		sz = ZSTD_compress(file->tmp, file->bufsize,
-		                   buf, size, 10);
+		               buf, size, NOWDB_ZSTD_LEVEL);
 	}
 	if (ZSTD_isError(sz)) {
 		return nowdb_err_get(nowdb_err_comp, FALSE, OBJECT,
 			              (char*)ZSTD_getErrorName(sz));
 	}
 
+	if (file->recordsize == 64) deltas(buf, size, &from, &d);
+
 	file->hdr.set[0] = NOWDB_BITMAP64_ALL;
 	file->hdr.set[1] = NOWDB_BITMAP64_ALL;
 	file->hdr.size = (uint32_t)sz;
-	file->hdr.reserve4 = 0;
-	file->hdr.reserve8 = 0;
+	file->hdr.delta = d;
+	file->hdr.from = from;
 
 	x = write(file->fd, &file->hdr, NOWDB_HDR_SIZE);
 	if (x != NOWDB_HDR_SIZE) {
@@ -377,6 +490,7 @@ static inline nowdb_err_t flatwrite(nowdb_file_t *file,
  */
 nowdb_err_t nowdb_file_writeBuf(nowdb_file_t *file,
                           char *buf, uint32_t size) {
+	nowdb_err_t err = NOWDB_OK;
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                            "file descriptor is NULL");
@@ -385,10 +499,14 @@ nowdb_err_t nowdb_file_writeBuf(nowdb_file_t *file,
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                 "file descriptor is in wrong state");
 	}
-	if (file->comp == NOWDB_COMP_FLAT) return flatwrite(file, buf, size);
-	if (file->comp == NOWDB_COMP_ZSTD) return zstdcomp(file, buf, size);
-	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	if (file->comp == NOWDB_COMP_FLAT) {
+		err = flatwrite(file, buf, size);
+	} else if (file->comp == NOWDB_COMP_ZSTD) {
+		err = zstdcomp(file, buf, size);
+	} else return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                       "unknown compression");
+	if (file->capacity < file->size) file->capacity = file->size;
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -619,26 +737,71 @@ static inline nowdb_err_t plainload(nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
+ * Debug function to show contents of the tmp buffer
+ * ------------------------------------------------------------------------
+ */
+static inline void showtmp(nowdb_file_t *file) {
+	for(int i=0;i<file->hdr.size;i++) {
+		fprintf(stderr, "%x ",
+		       (unsigned char)(file->tmp+file->off)[i]);
+	}
+	fprintf(stderr, "\n");
+}
+
+/* ------------------------------------------------------------------------
  * Helper function to decompress a block using ZSTD
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 	size_t sz;
-	if (file->dict != NULL) {
+	if (file->ddict != NULL) {
 		sz = ZSTD_decompress_usingDDict(file->dctx,
 		                                file->bptr, file->bufsize,
-		                                file->tmp, file->hdr.size,
-		                                file->dict);
+		                                file->tmp+file->off,
+		                                file->hdr.size,
+		                                file->ddict);
 	} else {
 		sz = ZSTD_decompress(file->bptr, file->bufsize,
 		                     file->tmp+file->off,
 		                     file->hdr.size);
 	}
+	/*
+	showtmp(file);
+	*/
 	if (ZSTD_isError(sz)) {
 		return nowdb_err_get(nowdb_err_decomp, FALSE, OBJECT,
 			               (char*)ZSTD_getErrorName(sz));
 	}
 	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: check header - worth decompressing the block?
+ * -----------------------------------------------------------------------
+ */
+static inline char worthBlock(nowdb_file_t  *file,
+                              nowdb_time_t  start,
+                              nowdb_time_t    end) {
+	nowdb_time_t to;
+	nowdb_time_t tmp;
+
+	if (start == NOWDB_TIME_DAWN &&
+	    end   == NOWDB_TIME_DUSK) return 1;
+
+	if (file->hdr.delta == 0 && file->hdr.from == 0) return 1;
+
+	to = file->hdr.from;
+	tmp = (nowdb_time_t)file->hdr.delta;
+	tmp <<= 32;
+	to += tmp;
+
+	/* 
+	fprintf(stderr, "comparing %ld -- %ld and %ld -- %ld\n",
+	                         start, end, file->hdr.from, to);
+	*/
+	if (end < file->hdr.from || start > to) return 0;
+
+	return 1;
 }
 
 /* ------------------------------------------------------------------------
@@ -648,21 +811,41 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 static inline nowdb_err_t compload(nowdb_file_t *file,
                                    nowdb_bool_t  hdr) {
 	ssize_t x;
+
+	/* if we are behind file end: set header.size 0 */
+	if (file->pos >= file->size) {
+		memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+		return NOWDB_OK;
+	}
+
+	/* if we have already something loaded
+	 * preserve non-processed data */
 	if (file->hdr.size != 0) {
 		uint32_t sz = file->tmpsize - file->off;
 		memcpy(file->tmp, file->tmp+file->off, sz);
+		file->tmpsize = sz;
 		x = read(file->fd, file->tmp+sz, file->bufsize-sz);
 		if (x == 0) return nowdb_err_get(
 		                   nowdb_err_bad_block,
 		            FALSE, OBJECT, file->path);
+
+	/* nothing loaded yet */
 	} else {
+		file->tmpsize = 0;
 		x = read(file->fd, file->tmp, file->bufsize);
 		if (x == 0) return nowdb_err_get(nowdb_err_eof,
 		                    FALSE, OBJECT, file->path);
 	}
+
+	/* check for error */
 	if (x < 0) return nowdb_err_get(nowdb_err_read,
 	                     TRUE, OBJECT, file->path);
-	file->tmpsize = (uint32_t)x;
+
+	/* remember file position and tmp size */
+	file->pos += (uint32_t)x;
+	file->tmpsize += (uint32_t)x;
+
+	/* load header */
 	if (hdr) {
 		file->off = NOWDB_HDR_SIZE;
 		memcpy(&file->hdr, file->tmp, NOWDB_HDR_SIZE);
@@ -676,7 +859,9 @@ static inline nowdb_err_t compload(nowdb_file_t *file,
  * Helper function to move through a compressed file
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t compmove(nowdb_file_t *file) {
+static inline nowdb_err_t compmove(nowdb_file_t *file,
+                                   nowdb_time_t start,
+                                   nowdb_time_t   end) {
 	nowdb_err_t err = NOWDB_OK;
 
 	/* no header loaded */
@@ -684,12 +869,13 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 	/* data missing from block for this header */
 	if (file->tmpsize <
 	    file->hdr.size + file->off) err = compload(file, FALSE);
+
+	/* check for error */
 	if (err != NOWDB_OK) return err;
 
 	/* no header found: EOF */
 	if (file->hdr.size == 0) return nowdb_err_get(nowdb_err_eof,
 		                         FALSE, OBJECT, file->path);
-
 	/* decompress using ZSTD */
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
@@ -706,11 +892,15 @@ static inline nowdb_err_t compmove(nowdb_file_t *file) {
 			if (err != NOWDB_OK) return err;
 			file->off = 0;
 		}
+		/* that was the last block */
+		if (file->hdr.size == 0) return NOWDB_OK;
+
 		/* load header */
 		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
 		file->off += NOWDB_HDR_SIZE;
 		return err;
 	}
+	/* unknown compression algorithm */
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                      "unknown compression algorithm");
 }
@@ -730,7 +920,9 @@ static inline nowdb_err_t plainmove(nowdb_file_t *file) {
  * Move file one block forward
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
+nowdb_err_t filemove(nowdb_file_t *file,
+                     nowdb_time_t start,
+                     nowdb_time_t   end) {
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                            "file descriptor is NULL");
@@ -742,7 +934,25 @@ nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
 	}
 	if (file->state == nowdb_file_state_mapped) return remap(file);
 	if (file->comp == NOWDB_COMP_FLAT) return plainmove(file);
-	return compmove(file);
+	return compmove(file, start, end);
+}
+
+/* ------------------------------------------------------------------------
+ * Move file one block forward
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_move(nowdb_file_t *file) {
+	return filemove(file, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
+}
+
+/* ------------------------------------------------------------------------
+ * Move file to next relevant block according to period
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_movePeriod(nowdb_file_t *file,
+                                  nowdb_time_t start,
+                                  nowdb_time_t   end) {
+	return filemove(file, start, end);
 }
 
 /* ------------------------------------------------------------------------
@@ -773,11 +983,75 @@ nowdb_err_t nowdb_file_position(nowdb_file_t *file, uint32_t pos) {
  * Load the current block into memory
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file);
+nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file) {
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                            "file descriptor is NULL");
+	}
+	if (file->state != nowdb_file_state_open) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                 "file descriptor is in wrong state");
+	}
+	if (file->comp == NOWDB_COMP_FLAT) return plainload(file);
+	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+	return compmove(file, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
+}
 
 /* ------------------------------------------------------------------------
  * Load only the current header into memory
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file);
+nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file) {
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                            "file descriptor is NULL");
+	}
+	if (file->state != nowdb_file_state_open) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                 "file descriptor is in wrong state");
+	}
+	if (file->comp == NOWDB_COMP_FLAT) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                "file has no headers");
+	}
+	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+	if (read(file->fd, &file->hdr, NOWDB_HDR_SIZE) != NOWDB_HDR_SIZE) {
+		return nowdb_err_get(nowdb_err_read,
+		           TRUE, OBJECT, file->path);
+	}
+	if (lseek(file->fd, -NOWDB_HDR_SIZE, SEEK_CUR) < 0) {
+		return nowdb_err_get(nowdb_err_seek,
+		           TRUE, OBJECT, file->path);
+	}
+	return NOWDB_OK;
+}
 
+/* -----------------------------------------------------------------------
+ * Is it worth to load this block?
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_file_worth(nowdb_file_t *file,
+                             nowdb_time_t  start,
+                             nowdb_time_t    end,
+                             char         *worth) {
+	nowdb_err_t err;
+
+	if (file == NULL) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                            "file descriptor is NULL");
+	}
+	if (file->state != nowdb_file_state_open) {
+		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                 "file descriptor is in wrong state");
+	}
+
+	*worth = 1;
+
+	if (file->comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+
+	err = nowdb_file_loadHeader(file);
+	if (err != NOWDB_OK) return err;
+
+	*worth = worthBlock(file, start, end);
+	return NOWDB_OK;
+}

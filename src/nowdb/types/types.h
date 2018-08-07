@@ -25,11 +25,15 @@
 
 #define NOWDB_MAGIC 0x450099db
 
+#define NOWDB_VERSION 1
+
 #define NOWDB_OS_PAGE  4096
 #define NOWDB_IDX_PAGE 8192
 #define NOWDB_CMP_PAGE 8192
 #define NOWDB_MAX_PATH 4096
-#define NOWDB_MAX_NAME 4096
+#define NOWDB_MAX_NAME  256
+
+#define NOWDB_BLACK_PAGE (void*)0x1
 
 #define NOWDB_KILO 1024
 #define NOWDB_MEGA 1048576
@@ -39,6 +43,11 @@ typedef char nowdb_bool_t;
 
 #define TRUE 1
 #define FALSE 0
+
+nowdb_bool_t nowdb_init();
+void nowdb_close();
+
+void *nowdb_lib();
 
 typedef uint8_t  nowdb_bitmap8_t;
 typedef uint16_t nowdb_bitmap16_t;
@@ -58,8 +67,22 @@ typedef int64_t nowdb_time_t;
 
 typedef uint32_t nowdb_version_t;
 
+typedef uint32_t nowdb_roleid_t;
+
+typedef uint8_t nowdb_content_t;
+
+#define NOWDB_CONT_UNKNOWN 0
+#define NOWDB_CONT_VERTEX  1
+#define NOWDB_CONT_EDGE    2
+
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
+
+/* context or vertex */
+typedef char nowdb_target_t;
+
+#define NOWDB_TARGET_EDGE    1
+#define NOWDB_TARGET_VERTEX  2
 
 /* possible types of value */
 typedef uint32_t nowdb_type_t;
@@ -74,9 +97,33 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 
+#define NOWDB_UMAX ULLONG_MAX
+#define NOWDB_IMAX LLONG_MAX
+#define NOWDB_FMAX 9007199254740992ll
+
+#define NOWDB_UMIN 0
+#define NOWDB_IMIN LLONG_MIN;
+#define NOWDB_FMIN -9007199254740992ll
+
 typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
+
+extern char nowdb_nullrec[64];
+
+int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
+
+#define NOWDB_VERTEX_SIZE 32
+
+/* ------------------------------------------------------------------------
+ * Vertex Offsets
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_OFF_VERTEX 0
+#define NOWDB_OFF_PROP   8
+#define NOWDB_OFF_VALUE 16
+#define NOWDB_OFF_VTYPE 24
+#define NOWDB_OFF_ROLE  28
 
 /* ------------------------------------------------------------------------
  * Vertex Property
@@ -85,12 +132,34 @@ typedef uint64_t nowdb_rowid_t;
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_key_t   origin; /* id of the vertex          */
+	nowdb_key_t   vertex; /* id of the vertex          */
 	nowdb_key_t property; /* id of the vertex property */
 	nowdb_value_t  value; /* property value            */
 	nowdb_type_t   vtype; /* type of the value         */
-	char     reserved[4]; /* reservered for future use */
-} nowdb_property_t;
+	nowdb_roleid_t  role; /* role identifier           */
+} nowdb_vertex_t;
+
+void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
+int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
+
+int nowdb_vertex_offByName(char *field);
+
+#define NOWDB_EDGE_SIZE 64
+
+/* ------------------------------------------------------------------------
+ * Edge Offsets
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_OFF_EDGE     0
+#define NOWDB_OFF_ORIGIN   8
+#define NOWDB_OFF_DESTIN  16
+#define NOWDB_OFF_LABEL   24
+#define NOWDB_OFF_TMSTMP  32
+#define NOWDB_OFF_WEIGHT  40
+#define NOWDB_OFF_WEIGHT2 48
+#define NOWDB_OFF_WTYPE   56
+#define NOWDB_OFF_WTYPE2  60
 
 /* ------------------------------------------------------------------------
  * Edge
@@ -99,8 +168,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_key_t      origin; /* id of the left  vertex  */
 	nowdb_key_t        edge; /* id of the edge          */
+	nowdb_key_t      origin; /* id of the left  vertex  */
 	nowdb_key_t      destin; /* id of the right vertex  */
 	nowdb_key_t       label; /* id of the primary label */
 	nowdb_time_t  timestamp; /* timestamp               */
@@ -109,8 +178,15 @@ typedef struct {
 	nowdb_type_t   wtype[2]; /* type of the weights     */
 } nowdb_edge_t;
 
-void nowdb_edge_writeValue(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_readValue(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+
+void nowdb_edge_readWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
+
+int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+
+int nowdb_edge_offByName(char *field);
 
 #endif
-

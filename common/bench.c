@@ -1,24 +1,16 @@
+#include <nowdb/types/time.h>
 #include <common/bench.h>
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
 
 void timestamp(struct timespec *tp) {
-	clock_gettime(CLOCK_MONOTONIC, tp);
+	return nowdb_timestamp(tp);
 }
 
-#define NPERSEC 1000000000
-
-uint64_t minus(struct timespec *t1,
-               struct timespec *t2) {
-	uint64_t d;
-	if (t2->tv_nsec > t1->tv_nsec) {
-		t1->tv_nsec += NPERSEC;
-		t1->tv_sec  -= 1;
-	}
-	d = NPERSEC * (t1->tv_sec - t2->tv_sec);
-	d += t1->tv_nsec - t2->tv_nsec;
-	return d;
+uint64_t minus (struct timespec *t1,
+                struct timespec *t2) {
+	return nowdb_time_minus(t1, t2);
 }
 
 uint64_t percentile(uint64_t *buf, int size, uint32_t p) {
@@ -40,7 +32,7 @@ int compare(const void *left, const void *right) {
 	return (*(uint64_t*)left - *(uint64_t*)right);
 }
 
-void sort(char *buf, int size) {
+void sort(void *buf, int size) {
 	qsort(buf, size, sizeof(uint64_t), &compare);
 }
 

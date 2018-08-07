@@ -37,20 +37,20 @@ void nowdb_err_destroy() {
 }
 
 /* ------------------------------------------------------------------------
- * Get and fill error descriptor
+ * Helper: get and fill error descriptor
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
-                          nowdb_bool_t   getOsErr,
-                          char            *object,
-                          char             *info)
+static inline nowdb_err_t errget(nowdb_errcode_t errcode,
+                                 int               osErr,
+                                 char            *object,
+                                 char              *info)
 {
 	nowdb_err_t err = nowdb_errman_get();
 	if (err == NULL) return NULL;
 
 	err->info = NULL;
 	err->cause = NULL;
-	err->oserr = 0;
+	err->oserr = osErr;
 	strcpy(err->object, "unknown");
 
 	err->errcode = errcode;
@@ -62,10 +62,45 @@ nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
 			nowdb_errman_release(err);
 			return NULL;
 		}
-		strcpy(err->info, info);
+		strcpy(err->info, info); err->info[l] = 0;
 	}
-	if (getOsErr) err->oserr = errno;
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Get and fill error descriptor
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_get(nowdb_errcode_t errcode,
+                          nowdb_bool_t   getOsErr,
+                          char            *object,
+                          char             *info) {
+	return errget(errcode, getOsErr?errno:0, object, info);
+}
+
+/* ------------------------------------------------------------------------
+ * Get and fill error descriptor with explicit OS error code
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_getRC(nowdb_errcode_t errcode,
+                            int               osErr,
+                            char            *object,
+                            char             *info) {
+	return errget(errcode, osErr, object, info);
+}
+
+/* ------------------------------------------------------------------------
+ * Cascade error
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_err_cascade(nowdb_err_t error,
+                              nowdb_err_t cause) {
+	if (error == NOWDB_OK) {
+		nowdb_err_release(cause);
+		return NOWDB_OK;
+	}
+	error->cause = cause;
+	return error;
 }
 
 /* ------------------------------------------------------------------------
@@ -80,6 +115,16 @@ void nowdb_err_release(nowdb_err_t err) {
 	}
 	if (err->cause != NULL) nowdb_err_release(err->cause);
 	nowdb_errman_release(err);
+}
+
+/* ------------------------------------------------------------------------
+ * Error does contain a certain error code 
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc) {
+	if (err == NULL) return FALSE;
+	if (err->errcode == rc) return TRUE;
+	return nowdb_err_contains(err->cause, rc);
 }
 
 /* ------------------------------------------------------------------------
@@ -184,7 +229,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	switch(rc) {
 	case nowdb_err_no_mem: return "out of memory";
 	case nowdb_err_invalid: return "invalid parameter";
-	case nowdb_err_no_rsc: return "out of resources";
+	case nowdb_err_no_rsc: return "resource not available";
 	case nowdb_err_busy: return "resource busy";          
 	case nowdb_err_too_big: return "you request too much";
 	case nowdb_err_lock: return "lock operation failed";
@@ -227,12 +272,20 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_version: return "cannot read version";
 	case nowdb_err_comp: return "compression failed";
 	case nowdb_err_decomp: return "decompression failed";
+	case nowdb_err_compdict: return "error creating compression dictionary";
 	case nowdb_err_store: return "operation on store failed";
 	case nowdb_err_context: return "operation on context failed";
 	case nowdb_err_scope: return "operation on scope failed";
 	case nowdb_err_stat: return "stat operation failed";
 	case nowdb_err_create: return "create operation failed";
+	case nowdb_err_drop: return "drop operation failed";
 	case nowdb_err_magic: return "wrong magic number in catalog";
+	case nowdb_err_loader: return "loader failed";
+	case nowdb_err_trunc: return "truncate operation failed";
+	case nowdb_err_flush: return "flush operation failed";
+	case nowdb_err_beet: return "beet library error";
+	case nowdb_err_fun: return "unknown function";
+	case nowdb_err_not_found: return "resource not found";
 	default: return "unknown";
 	}
 }
