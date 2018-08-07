@@ -13,6 +13,7 @@
 #include <nowdb/text/text.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/mem/ptlru.h>
+#include <nowdb/fun/group.h>
 
 #include <stdint.h>
 
@@ -36,6 +37,7 @@ typedef struct {
 typedef struct {
 	uint32_t             sz; /* number of fields                  */
 	uint32_t            cur; /* current field                     */
+	uint32_t            fur; /* current function field            */
 	uint32_t           vcur; /* current vertex field              */
 	uint32_t          dirty; /* we are in the middle of something */
 	nowdb_field_t   *fields; /* the fields                        */
@@ -75,6 +77,7 @@ void nowdb_row_destroy(nowdb_row_t *row);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
+                              nowdb_group_t *group,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
                               uint32_t *osz,
@@ -99,4 +102,18 @@ nowdb_err_t nowdb_row_toString(char  *buf,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream);
+
+/* ------------------------------------------------------------------------
+ * Extract a row from the buffer
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
+                                 uint32_t row, uint32_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Extract a field from the buffer
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
+                                   uint32_t field, uint32_t *idx);
 #endif

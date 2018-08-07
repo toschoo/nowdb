@@ -100,6 +100,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_VALUE: ASTCALLOC(0);
 	case NOWDB_AST_DECL: ASTCALLOC(3);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
+	case NOWDB_AST_FUN: ASTCALLOC(2);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 
@@ -151,7 +152,14 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_ORDER:  return "order";
 	case NOWDB_AST_JOIN: return "join";
 
-	case NOWDB_AST_FIELD: return "field"; 
+	case NOWDB_AST_FIELD: 
+		if (stype == NOWDB_AST_PARAM) {
+			return "field parameter";
+		} else {
+			return "field"; 
+		}
+
+	case NOWDB_AST_FUN: return "function"; 
 	case NOWDB_AST_VALUE:
 		switch(stype) {
 		case NOWDB_AST_TEXT: return "text value"; 
@@ -487,6 +495,7 @@ static inline int addsel(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -620,6 +629,25 @@ static inline int addfield(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to fun
+ * -----------------------------------------------------------------------
+ */
+static inline int addfun(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+		if (k->stype == NOWDB_AST_PARAM) {
+			ADDKID(0);
+		} else {
+			ADDKID(1);
+		}
+	case NOWDB_AST_FUN: ADDKID(1);
 	default: return -1;
 	}
 }
@@ -668,6 +696,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_FIELD: return addfield(n,k);
 	case NOWDB_AST_DECL: return ad3ecl(n,k);
+	case NOWDB_AST_FUN: return addfun(n,k);
 
 	default: return -1;
 	}
@@ -803,7 +832,19 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 	case NOWDB_AST_GROUP: return ast->kids[0];
 	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
+	case NOWDB_AST_FUN: return ast->kids[1];
+	default: return NULL;
+	}
+}
 
+/* -----------------------------------------------------------------------
+ * Get param
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_FUN: return ast->kids[0];
 	default: return NULL;
 	}
 }

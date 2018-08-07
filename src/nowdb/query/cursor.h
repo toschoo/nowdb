@@ -13,6 +13,7 @@
 #include <nowdb/reader/reader.h>
 #include <nowdb/query/plan.h>
 #include <nowdb/query/row.h>
+#include <nowdb/fun/group.h>
 
 /* ------------------------------------------------------------------------
  * Pair of (store, files obtained from that store)
@@ -34,9 +35,14 @@ typedef struct {
 	nowdb_model_t   *model; /* model                         */
 	nowdb_filter_t *filter; /* main filter                   */
 	nowdb_row_t       *row; /* projection                    */
+	nowdb_group_t   *group; /* grouping                      */
+	nowdb_group_t   *nogrp; /* appy aggs without grouping    */
 	uint32_t           off; /* offset in the current reader  */
 	uint32_t       recsize; /* record size                   */
 	char              *tmp; /* temporary buffer              */
+	char             *tmp2; /* temporary buffer              */
+	char          *fromkey; /* range: fromkey                */
+	char            *tokey; /* range:   tokey                */
 	char             hasid; /* has id to identify model      */
 } nowdb_cursor_t;
 

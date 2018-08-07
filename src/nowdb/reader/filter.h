@@ -106,6 +106,14 @@ void nowdb_filter_period(nowdb_filter_t *filter,
                          nowdb_time_t   *end);
 
 /* ------------------------------------------------------------------------
+ * Extract range from filter
+ * ------------------------------------------------------------------------
+ */
+char nowdb_filter_range(nowdb_filter_t *filter,
+                        uint16_t sz, uint16_t *off,
+                        char *rstart, char *rend);
+
+/* ------------------------------------------------------------------------
  * Print filter to stream
  * ------------------------------------------------------------------------
  */

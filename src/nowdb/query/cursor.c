@@ -8,7 +8,7 @@
 #include <nowdb/query/cursor.h>
 
 /* ------------------------------------------------------------------------
- * Macro for the frequent error "invalid plan"
+ * Macros for the frequent error "invalid plan" and "no memory"
  * ------------------------------------------------------------------------
  */
 #define INVALIDPLAN(s) \
@@ -51,6 +51,41 @@ static inline nowdb_err_t getPending(ts_algo_list_t *files,
 				        FALSE, OBJECT, "list.append");
 			}
 		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: get range for range reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getRange(nowdb_filter_t *filter,
+                                   nowdb_plan_idx_t *pidx,
+                                   char         **fromkey,
+                                   char           **tokey) {
+	char x = 0;
+	nowdb_index_keys_t *keys;
+	nowdb_err_t err;
+
+	keys = nowdb_index_getResource(pidx->idx);
+	if (keys == NULL) return NOWDB_OK;
+
+	*fromkey = calloc(1,keys->sz*8);
+	if (*fromkey == NULL) {
+		NOMEM("allocating keys");
+		return err;
+	}
+	*tokey = calloc(1,keys->sz*8);
+	if (*tokey == NULL) {
+		free(*fromkey);
+		NOMEM("allocating keys");
+		return err;
+	}
+	x = nowdb_filter_range(filter, keys->sz, keys->off,
+	                                 *fromkey, *tokey);
+	if (!x) {
+		free(*fromkey); *fromkey = NULL;
+		free(*tokey); *tokey = NULL;
 	}
 	return NOWDB_OK;
 }
@@ -119,18 +154,29 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	if (err != NOWDB_OK) {
 		return err;
 	}
+
+	if (pidx == NULL) {
+		INVALIDPLAN("no index for merge scan");
+	}
+
+	err = getRange(cur->filter, pidx,
+	              &cur->fromkey,
+	              &cur->tokey);
+	if (err != NOWDB_OK) return err;
 	
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
-		                                  pidx->idx, NULL,
-		                        NOWDB_ORD_ASC, NULL, NULL);
+		                           pidx->idx, cur->filter,
+		                                    NOWDB_ORD_ASC,
+		                         cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_bkrange(&buf, &cur->stf.pending,
-		                                   pidx->idx, NULL,
-		                         NOWDB_ORD_ASC, NULL, NULL);
+		                            pidx->idx, cur->filter,
+		                                     NOWDB_ORD_ASC,
+		                         cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_CRANGE_:
@@ -143,12 +189,12 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_frange(&range, &cur->stf.files, pidx->idx,
-		                                            NULL, NULL, NULL);
+		                              NULL, cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_krange(&range, &cur->stf.files, pidx->idx,
-		                                            NULL, NULL, NULL);
+		                              NULL, cur->fromkey, cur->tokey);
 		if (range->ikeys != NULL) {
 			cur->tmp = calloc(1, cur->recsize);
 			if (cur->tmp == NULL) {
@@ -213,32 +259,29 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
 
+	pidx = rplan->load;
+
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		fprintf(stderr, "SEARCH\n");
-		pidx = rplan->load;
 		err = createSeq(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
 		fprintf(stderr, "FRANGE\n");
-		pidx = rplan->load;
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
 		fprintf(stderr, "KRANGE\n");
-		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
 		fprintf(stderr, "CRANGE\n");
-		pidx = rplan->load;
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(&cur->rdr,
 		                          &cur->stf.files,
 		                          pidx->idx, NULL,
-		                          NULL, NULL); // range !
-	
+		                               NULL, NULL); // range !
 	/* create a fullscan reader */
 	} else {
 		err = nowdb_reader_fullscan(&cur->rdr,
@@ -296,11 +339,14 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 
 	(*cur)->rdr = NULL;
 	(*cur)->tmp = NULL;
+	(*cur)->row   = NULL;
+	(*cur)->group = NULL;
+	(*cur)->nogrp = NULL;
 	(*cur)->stf.store = NULL;
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
 
-	/* pass on to the filter (in fact, there should/may be,
+	/* pass on to the filter (in fact, there should/may be
 	 * one filter per subreader */
 	runner = runner->nxt;
 	if (runner!=NULL) {
@@ -336,17 +382,13 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	/* group by */
 	if (stp->ntype == NOWDB_PLAN_GROUPING) {
 
-		/* what do we need for grouping? */
-
 		runner = runner->nxt;
 		if (runner == NULL) {
-			if (stp->stype == NOWDB_PLAN_GROUPING) {
-				nowdb_cursor_destroy(*cur); free(*cur);
-				INVALIDPLAN("grouping without projection");
-			}
-			return NOWDB_OK;
+			nowdb_cursor_destroy(*cur); free(*cur);
+			INVALIDPLAN("grouping without projection");
 		}
 		stp = runner->cont;
+
 	}
 
 	if (stp->ntype == NOWDB_PLAN_PROJECTION) {
@@ -360,6 +402,46 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			free((*cur)->row); (*cur)->row = NULL;
 			nowdb_cursor_destroy(*cur); free(*cur);
 			return err;
+		}
+	}
+
+	/* aggregates */
+	runner = runner->nxt;
+	if (runner != NULL) {
+		stp = runner->cont;
+		if (stp->ntype == NOWDB_PLAN_AGGREGATES) {
+
+			/* create temporary variable for groupswitch */
+			(*cur)->tmp2 = calloc(1, (*cur)->recsize);
+			if ((*cur)->tmp2 == NULL) {
+				NOMEM("allocating temporary buffer");
+				nowdb_cursor_destroy(*cur); free(*cur);
+				return err;
+			}
+			if ((*cur)->tmp == NULL) {
+				(*cur)->tmp = calloc(1, (*cur)->recsize);
+			}
+			if ((*cur)->tmp == NULL) {
+				NOMEM("allocating temporary buffer");
+				nowdb_cursor_destroy(*cur); free(*cur);
+				return err;
+			}
+
+			/* create group */
+			if ((*cur)->rdr->type == NOWDB_READER_MERGE) {
+				err = nowdb_group_fromList(&(*cur)->group,
+				                               stp->load);
+			} else {
+				err = nowdb_group_fromList(&(*cur)->nogrp,
+				                               stp->load);
+			}
+			if (err != NOWDB_OK) {
+				nowdb_cursor_destroy(*cur);
+				free(*cur); return err;
+			}
+			ts_algo_list_destroy(stp->load);
+			free(stp->load);
+			stp->load = NULL;
 		}
 	}
 	return NOWDB_OK;
@@ -385,12 +467,29 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		ts_algo_list_destroy(&cur->stf.pending);
 		cur->stf.store = NULL;
 	}
+	if (cur->group != NULL) {
+		nowdb_group_destroy(cur->group);
+		free(cur->group); cur->group = NULL;
+	}
+	if (cur->nogrp != NULL) {
+		nowdb_group_destroy(cur->nogrp);
+		free(cur->nogrp); cur->nogrp = NULL;
+	}
 	if (cur->row != NULL) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
 	}
 	if (cur->tmp != NULL) {
 		free(cur->tmp); cur->tmp = NULL;
+	}
+	if (cur->tmp2 != NULL) {
+		free(cur->tmp2); cur->tmp2 = NULL;
+	}
+	if (cur->fromkey != NULL) {
+		free(cur->fromkey); cur->fromkey = NULL;
+	}
+	if (cur->tokey != NULL) {
+		free(cur->tokey); cur->tokey = NULL;
 	}
 }
 
@@ -424,6 +523,123 @@ static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
 }
 
 /* ------------------------------------------------------------------------
+ * Ungrouped aggregates
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
+                                  nowdb_content_t ctype,
+                                  uint32_t        recsz,
+                                  char           *src) {
+	nowdb_err_t err;
+
+	if (memcmp(cur->tmp, nowdb_nullrec, recsz) == 0) {
+		memcpy(cur->tmp, src+cur->off, recsz);
+		memcpy(cur->tmp2, cur->tmp, recsz);
+	}
+	err = nowdb_group_map(cur->nogrp, ctype, src+cur->off);
+	if (err != NOWDB_OK) return err;
+	cur->off += recsz;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Group switch
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
+                                      nowdb_content_t ctype,
+                                      uint32_t        recsz,
+                                      char *src,    char *x) {
+	nowdb_err_t err;
+	nowdb_cmp_t cmp;
+
+	*x = 1;
+
+	if (memcmp(cur->tmp, nowdb_nullrec, cur->recsize) == 0) {
+		memcpy(cur->tmp, src+cur->off, cur->recsize);
+		if (cur->group != NULL) {
+			*x=0;
+			memcpy(cur->tmp2, cur->tmp, cur->recsize);
+			cur->off+=cur->recsize;
+		}
+		return NOWDB_OK;
+	}
+	cmp = cur->recsize == NOWDB_EDGE_SIZE?
+	      nowdb_sort_edge_keys_compare(cur->tmp,
+		                       src+cur->off,
+		                    cur->rdr->ikeys):
+	      nowdb_sort_vertex_keys_compare(cur->tmp,
+		                         src+cur->off,
+		                      cur->rdr->ikeys);
+	if (cmp == NOWDB_SORT_EQUAL) {
+		if (cur->group != NULL) {
+			err = nowdb_group_map(cur->group, ctype,
+			                          src+cur->off);
+			if (err != NOWDB_OK) return err;
+		}
+		cur->off += recsz; *x=0;
+		return NOWDB_OK;
+	}
+	if (cur->group != NULL) {
+		err = nowdb_group_map(cur->group, ctype,
+			                      cur->tmp2);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_group_reduce(cur->group, ctype);
+		if (err != NOWDB_OK) return err;
+
+		memcpy(cur->tmp2, cur->tmp, cur->recsize);
+	}
+	memcpy(cur->tmp, src+cur->off, cur->recsize);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * The last turn
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
+                                    nowdb_err_t     old,
+                                  nowdb_content_t ctype,
+                                         uint32_t recsz,
+                                 char *buf, uint32_t sz,
+                                          uint32_t *osz,
+                                        uint32_t *count) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_group_t *g;
+	char complete=0, cc=0;
+	char x;
+	
+	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
+	if (cur->group == NULL && cur->nogrp == NULL) return old;
+
+	if (cur->nogrp != NULL) {
+		g = cur->nogrp;
+		err = nowdb_group_reduce(cur->nogrp, ctype);
+	} else {
+		g = cur->group;
+		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+	}
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_row_project(cur->row, g,
+	                          cur->tmp2,
+	                  cur->rdr->recsize,
+		          buf, sz, osz, &cc,
+			          &complete);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(old);
+		return err;
+	}
+	if (complete) {
+		(*count)+=cc;
+		return old;
+	}
+	memcpy(cur->tmp, nowdb_nullrec, recsz);
+	nowdb_err_release(old);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Single reader fetch (no iterator!)
  * ------------------------------------------------------------------------
  */
@@ -436,9 +652,13 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t recsz = cur->rdr->recsize;
 	nowdb_filter_t *filter = cur->rdr->filter;
 	char *src = nowdb_reader_page(cur->rdr);
-	char complete=0, cc=0;
-	nowdb_cmp_t x;
+	char complete=0, cc=0, x=1;
 	uint32_t mx;
+
+	/* the reader should store the content type */
+	nowdb_content_t ctype = recsz == NOWDB_EDGE_SIZE?
+	                                 NOWDB_CONT_EDGE:
+	                                 NOWDB_CONT_VERTEX;
 
 	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
 		                        FALSE, OBJECT, NULL);
@@ -450,7 +670,12 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		if (cur->off >= mx) {
 			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
 			err = nowdb_reader_move(cur->rdr);
-			if (err != NOWDB_OK) return err;
+			if (err != NOWDB_OK) {
+				return handleEOF(cur, err,
+				             ctype, recsz,
+				                  buf, sz,
+				               osz, count);
+			}
 			src = nowdb_reader_page(cur->rdr);
 			cur->off = 0;
 		}
@@ -475,26 +700,18 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* if keys-only: keep unique
-		 * but watch out for CRANGE --
-		 * there we have to process
-		 * all duplicates */
-		if (cur->rdr->ko && cur->tmp != NULL) {
-			if (memcmp(cur->tmp, nowdb_nullrec,
-			                cur->recsize) == 0) {
-				memcpy(cur->tmp, src+cur->off, cur->recsize);
-			} else {
-				x = cur->recsize == NOWDB_EDGE_SIZE?
-				    nowdb_sort_edge_keys_compare(cur->tmp,
-				                             src+cur->off,
-				                          cur->rdr->ikeys):
-				    nowdb_sort_vertex_keys_compare(cur->tmp,
-				                               src+cur->off,
-				                            cur->rdr->ikeys);
-				if (x == NOWDB_SORT_EQUAL) {
-					cur->off += recsz; continue;
-				}
-				memcpy(cur->tmp, src+cur->off, cur->recsize);
+		/* if keys-only, group or no-group aggregates */
+		if (cur->tmp != NULL) {
+			if (cur->nogrp != NULL) {
+				err = nogroup(cur, ctype, recsz, src);
+				if (err != NOWDB_OK) return err;
+				continue;
+			}
+
+			if (cur->group != NULL || cur->rdr->ko) {
+				err = groupswitch(cur, ctype, recsz, src, &x);
+				if (err != NOWDB_OK) return err;
+				if (!x) continue;
 			}
 		}
 
@@ -506,10 +723,18 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 
 		/* project ... */
 		} else {
-			err = nowdb_row_project(cur->row,
-			                        src+cur->off, recsz,
-			                        buf, sz, osz, &cc,
-			                        &complete);
+			if (cur->group == NULL) {
+				err = nowdb_row_project(cur->row, NULL,
+				                   src+cur->off, recsz,
+				                     buf, sz, osz, &cc,
+				                            &complete);
+			} else {
+				err = nowdb_row_project(cur->row,
+				                      cur->group,
+				                cur->tmp2, recsz,
+				               buf, sz, osz, &cc,
+				                      &complete);
+			}
 			if (err != NOWDB_OK) return err;
 			if (complete) {
 				cur->off+=recsz;
@@ -519,8 +744,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			 * a krange reader to present us
 			 * the same record once again */
 			} else if (cur->tmp != 0) {
-				memcpy(cur->tmp, nowdb_nullrec,
-				       cur->recsize);
+				memcpy(cur->tmp, nowdb_nullrec, cur->recsize);
 			}
 			if (cc == 0) break;
 		}

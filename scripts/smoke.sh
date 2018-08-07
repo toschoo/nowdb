@@ -151,6 +151,14 @@ then
 	exit 1
 fi
 
+echo "running funsmoke" >> log/test.log
+test/smoke/funsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: funsmoke failed"
+	exit 1
+fi
+
 echo "running mergesmoke" >> log/test.log
 test/smoke/mergesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]

@@ -97,6 +97,14 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 
+#define NOWDB_UMAX ULLONG_MAX
+#define NOWDB_IMAX LLONG_MAX
+#define NOWDB_FMAX 9007199254740992ll
+
+#define NOWDB_UMIN 0
+#define NOWDB_IMIN LLONG_MIN;
+#define NOWDB_FMIN -9007199254740992ll
+
 typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;

@@ -806,6 +806,138 @@ int testGTFloat() {
 	return 1;
 }
 
+#define BOOL(f,x) \
+	f = mkBool(x); \
+	if (f == NULL) { \
+		fprintf(stderr, "out-of-mem\n"); \
+		return 0; \
+	}
+
+#define COMPARE(f,o,x,t,v) \
+	f = mkCompare(o, x, 8, t, &v); \
+	if (f == NULL) { \
+		fprintf(stderr, "out-of-mem\n"); \
+		return 0; \
+	}
+
+#define TESTRANGE(fl,o,s,e,a,b,x) \
+	r = nowdb_filter_range(fl, 2, o, \
+	            (char*)s, (char*)e); \
+	nowdb_filter_destroy(fl); free(fl); \
+	if ((x && !r) || (!x && r)) { \
+		fprintf(stderr, "result not expected\n"); \
+		return 0; \
+	} \
+	if (x) {\
+		if (s[0] != a || s[1] != a || \
+		    e[0] != b || e[1] != b) { \
+			fprintf(stderr, \
+			"start/end not v: %lu.%lu & %lu.%lu\n", \
+			                s[0], s[1], e[0], e[1]); \
+			return 0; \
+		} \
+	}
+	
+
+int testRange() {
+	uint16_t off[2];
+	uint64_t start[2], end[2];
+	nowdb_filter_t *f, *f2;
+	uint64_t v1=1, v2=2;
+	uint64_t va, vb;
+	char x, r;
+	
+	off[0] = NOWDB_OFF_EDGE;
+	off[1] = NOWDB_OFF_ORIGIN;
+	
+	for(int i=0; i<4; i++) {
+		memset(start, 0, 16);
+		memset(end, 0, 16);
+		switch(i) {
+		case 0:
+			fprintf(stderr, "RANGE with EQ (success)\n");
+			x = 1;
+			va = v1;
+			vb = v1;
+
+			BOOL(f, NOWDB_FILTER_AND);
+			COMPARE(f->left, NOWDB_FILTER_EQ,
+			                 NOWDB_OFF_EDGE,
+			                 NOWDB_TYP_UINT, v1);
+			COMPARE(f->right, NOWDB_FILTER_EQ,
+			                  NOWDB_OFF_ORIGIN,
+			                  NOWDB_TYP_UINT, v1);
+			break;
+		case 1:
+			fprintf(stderr, "RANGE with EQ (fails)\n");
+			x = 0;
+			va = v1;
+			vb = v1;
+
+			BOOL(f, NOWDB_FILTER_AND);
+			COMPARE(f->left, NOWDB_FILTER_NE,
+			                 NOWDB_OFF_EDGE,
+			                 NOWDB_TYP_UINT, v1);
+			COMPARE(f->right, NOWDB_FILTER_EQ,
+			                  NOWDB_OFF_ORIGIN,
+			                  NOWDB_TYP_UINT, v1);
+			break;
+		case 2:
+			fprintf(stderr, "RANGE with GE/LE (success)\n");
+			x = 1;
+			va = v1;
+			vb = v2;
+
+			BOOL(f, NOWDB_FILTER_AND);
+			BOOL(f2, NOWDB_FILTER_AND);
+			COMPARE(f2->left, NOWDB_FILTER_LE,
+			                  NOWDB_OFF_EDGE,
+			                  NOWDB_TYP_UINT, v2);
+			COMPARE(f2->right, NOWDB_FILTER_LE,
+			                   NOWDB_OFF_ORIGIN,
+			                   NOWDB_TYP_UINT, v2);
+			f->left = f2;
+
+			BOOL(f2, NOWDB_FILTER_AND);
+			COMPARE(f2->left, NOWDB_FILTER_GE,
+			                  NOWDB_OFF_EDGE,
+			                  NOWDB_TYP_UINT, v1);
+			COMPARE(f2->right, NOWDB_FILTER_GE,
+			                   NOWDB_OFF_ORIGIN,
+			                   NOWDB_TYP_UINT, v1);
+			f->right = f2;
+			break;
+		case 3:
+			fprintf(stderr, "RANGE with GE/LE (fails)\n");
+			x = 0;
+			va = v1;
+			vb = v2;
+
+			BOOL(f, NOWDB_FILTER_AND);
+			BOOL(f2, NOWDB_FILTER_AND);
+			COMPARE(f2->left, NOWDB_FILTER_LE,
+			                  NOWDB_OFF_EDGE,
+			                  NOWDB_TYP_UINT, v2);
+			COMPARE(f2->right, NOWDB_FILTER_LE,
+			                   NOWDB_OFF_ORIGIN,
+			                   NOWDB_TYP_UINT, v2);
+			f->left = f2;
+
+			BOOL(f2, NOWDB_FILTER_AND);
+			COMPARE(f2->left, NOWDB_FILTER_LE,
+			                  NOWDB_OFF_EDGE,
+			                  NOWDB_TYP_UINT, v1);
+			COMPARE(f2->right, NOWDB_FILTER_LE,
+			                   NOWDB_OFF_ORIGIN,
+			                   NOWDB_TYP_UINT, v1);
+			f->right = f2;
+			break;
+		}
+		TESTRANGE(f, off, start, end, va, vb, x);
+	}
+	return 1;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 
@@ -907,6 +1039,10 @@ int main() {
 	}
 	if (!testGTFloat()) {
 		fprintf(stderr, "testGTFloat() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testRange()) {
+		fprintf(stderr, "testRange() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
