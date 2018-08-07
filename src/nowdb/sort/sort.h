@@ -11,6 +11,7 @@
 
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
+#include <nowdb/mem/blist.h>
 
 #include <beet/types.h>
 
@@ -136,4 +137,13 @@ void nowdb_mem_sort_edge(nowdb_edge_t *buf,
 void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
                            uint32_t        num,
                            nowdb_ord_t     ord);
+
+/* ------------------------------------------------------------------------
+ * Sorting list of blocks
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_block_sort(ts_algo_list_t  *blocks,
+                             nowdb_blist_t    *flist,
+                             uint32_t        recsize,
+                             nowdb_comprsc_t compare);
 #endif

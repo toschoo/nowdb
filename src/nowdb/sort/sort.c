@@ -8,6 +8,8 @@
 #include <nowdb/sort/sort.h>
 #include <nowdb/index/index.h>
 
+static char *OBJECT = "sort";
+
 /* ------------------------------------------------------------------------
  * Generic sorting
  * ------------------------------------------------------------------------
@@ -248,4 +250,152 @@ nowdb_cmp_t nowdb_sort_vertex_compareD(const void *left,
 {
 	return nowdb_sort_vertex_compare(right, left, ignore);
 }
+
+/* ------------------------------------------------------------------------
+ * Helper: sorting blocks
+ * ------------------------------------------------------------------------
+ */
+static void sortBlocks(ts_algo_list_t  *blocks,
+                       uint32_t        recsize,
+                       nowdb_comprsc_t compare) {
+	ts_algo_list_node_t *runner;
+	nowdb_block_t *b;
+
+	for (runner = blocks->head; runner!=NULL; runner=runner->nxt) {
+		b = runner->cont;
+		nowdb_mem_sort(b->block, b->sz/recsize,
+		               recsize, compare, NULL);
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: merging blocks
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
+                                 ts_algo_list_t     *trg,
+                                 int                *off,
+                                 nowdb_blist_t    *flist,
+                                 int n, uint32_t recsize,
+                                 nowdb_comprsc_t compare) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_node_t *runner;
+	int idx = 0;
+	nowdb_block_t *cb, *sb, *tb=NULL;
+	char *mn;
+	int i, j;
+
+	fprintf(stderr, "merging %d %d-blocks from %p to %p\n",
+	                src->len/n, n, src, trg);
+	memset(off, 0, n*sizeof(int));
+	while(src->len > 0) {
+		if (tb == NULL || idx >= flist->sz) {
+			// fprintf(stderr, "getting one (%d)\n",n);
+			err = nowdb_blist_giva(flist, trg);
+			if (err != NOWDB_OK) break;
+			tb = trg->last->cont;
+			idx = 0;
+		}
+		i = -1; j=0;
+		cb = NULL;
+		for(runner=src->head; runner!=NULL; runner=runner->nxt) {
+			i++; if (i >= n) break;
+			sb = runner->cont;
+			if (off[i] >= sb->sz) {
+				// fprintf(stderr, "%d exhausted: %d/%d\n", i, off[i], sb->sz);
+				continue;
+			}
+			if (cb == NULL || compare(sb->block+off[i],
+			              mn, NULL) == NOWDB_SORT_LESS) {
+				cb = sb;
+				mn = cb->block+off[i];
+				j=i;
+			}
+		}
+		if (cb != NULL) {
+			// fprintf(stderr, "\tcopying %d.%d to %d\n", j, off[j], idx);
+			memcpy(tb->block+idx, cb->block+off[j], recsize);
+			idx+=recsize; off[j]+=recsize;
+			tb->sz+=recsize; continue;
+		}
+		// fprintf(stderr, "\tfreeing %d blocks\n", n);
+		for(i=0; i<n; i++) {
+			// fprintf(stderr, "off %d: %d\n", i, off[i]);
+			if (src->head == NULL) break;
+			err = nowdb_blist_take(flist, src);
+			if (err != NOWDB_OK) break;
+		}
+		if (err != NOWDB_OK) break;
+		idx = flist->sz;
+		memset(off, 0, n*sizeof(int));
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: how many rounds
+ * ------------------------------------------------------------------------
+ */
+static inline int crounds(int n) {
+	int l=1;
+	for(int i=n; i>0; i>>=1) l++;
+	return l;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: merging blocks
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
+                               nowdb_blist_t    *flist,
+                               uint32_t        recsize,
+                               nowdb_comprsc_t compare)  {
+	nowdb_err_t err;
+	ts_algo_list_t tmp;
+	ts_algo_list_t *src=NULL, *trg=NULL;
+	int *hlp;
+	int k = 2;
+	int rounds = crounds((blocks->len)/recsize)+1;
+
+	ts_algo_list_init(&tmp);
+
+	hlp = calloc(2 << rounds, sizeof(int));
+	if (hlp == NULL) {
+		return nowdb_err_get(nowdb_err_no_mem,
+		                        FALSE, OBJECT,
+		           "allocating helper buffer");
+	}
+	for(int i=0; i<rounds; i++) {
+		if (i%2 == 0) {
+			src = blocks; trg = &tmp;
+		} else {
+			src = &tmp; trg = blocks;
+		}
+		err = mergeN(src, trg, hlp, flist, k, recsize, compare);
+		if (err != NOWDB_OK) break;
+		k <<= 1;
+	}
+	free(hlp);
+	nowdb_blist_destroyBlockList(src, flist);
+	if (trg == &tmp) {
+		blocks->head = tmp.head;
+		blocks->last = tmp.last;
+		blocks->len  = tmp.len;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Sorting list of blocks
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_block_sort(ts_algo_list_t  *blocks,
+                             nowdb_blist_t    *flist,
+                             uint32_t        recsize,
+                             nowdb_comprsc_t compare) 
+{
+	sortBlocks(blocks, recsize, compare);
+	return mergeBlocks(blocks, flist, recsize, compare);
+}
+
 
