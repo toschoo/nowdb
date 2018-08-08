@@ -456,20 +456,11 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
 	nowdb_err_t err;
 	ts_algo_list_t tmp;
 	ts_algo_list_t *src=NULL, *trg=NULL;
-	// int *hlp;
 	int k = 1;
 	int rounds = crounds((blocks->len)/recsize)+1;
 
 	ts_algo_list_init(&tmp);
 
-	/*
-	hlp = calloc(2 << rounds, sizeof(int));
-	if (hlp == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem,
-		                        FALSE, OBJECT,
-		           "allocating helper buffer");
-	}
-	*/
 	for(int i=0; i<rounds; i++) {
 		if (i%2 == 0) {
 			src = blocks; trg = &tmp;
@@ -481,7 +472,6 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
 		if (err != NOWDB_OK) break;
 		k <<= 1;
 	}
-	// free(hlp);
 	nowdb_blist_destroyBlockList(src, flist);
 	if (trg == &tmp) {
 		blocks->head = tmp.head;
