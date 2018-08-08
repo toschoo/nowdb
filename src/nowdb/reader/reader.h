@@ -85,6 +85,7 @@ typedef struct nowdb_reader_t {
 	uint32_t                  nr; /* number of subreaders          */
 	uint32_t                 cur; /* current subreader             */
 	char                     eof; /* reached eof                   */
+	char                  nodata; /* reader has not data           */
 	char                      ko; /* key-onle reader               */
 	nowdb_bitmap32_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
