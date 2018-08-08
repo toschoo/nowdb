@@ -347,11 +347,11 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 	nowdb_block_t *cb, *sb, *tb=NULL;
 	char *mn;
 	int i, j;
+	int m = n>>1;
+	int c1=0, c2=0;
 
-	/*
 	fprintf(stderr, "merging %d %d-blocks from %p to %p\n",
 	                src->len/n, n, src, trg);
-	*/
 	memset(off, 0, n*sizeof(int));
 	while(src->len > 0) {
 		if (tb == NULL || idx >= flist->sz) {
@@ -361,15 +361,19 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 			tb = trg->last->cont;
 			idx = 0;
 		}
-		i = -1; j=0;
+		i = -m; j=0;
 		cb = NULL;
 		for(runner=src->head; runner!=NULL; runner=runner->nxt) {
-			i++; if (i >= n) break;
+			i+=m; if (i >= n) break;
 			sb = runner->cont;
 			if (off[i] >= sb->sz) {
-				// fprintf(stderr, "%d exhausted: %d/%d\n", i, off[i], sb->sz);
+				/*
+				fprintf(stderr, "\t%d exhausted: %d/%d\n",
+				                       i, off[i], sb->sz);
+				*/
 				continue;
 			}
+			c1++;
 			if (cb == NULL || compare(sb->block+off[i],
 			              mn, NULL) == NOWDB_SORT_LESS) {
 				cb = sb;
@@ -378,6 +382,7 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 			}
 		}
 		if (cb != NULL) {
+			c2++;
 			// fprintf(stderr, "\tcopying %d.%d to %d\n", j, off[j], idx);
 			memcpy(tb->block+idx, cb->block+off[j], recsize);
 			idx+=recsize; off[j]+=recsize;
@@ -391,9 +396,16 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 			if (err != NOWDB_OK) break;
 		}
 		if (err != NOWDB_OK) break;
-		idx = flist->sz;
+		while(src->head != NULL) {
+			if (((nowdb_block_t*)src->head->cont)->sz != 0) break;
+			err = nowdb_blist_take(flist, src);
+			if (err != NOWDB_OK) break;
+		}
+		if (err != NOWDB_OK) break;
+		if (idx != 0) idx = flist->sz;
 		memset(off, 0, n*sizeof(int));
 	}
+	fprintf(stderr, "comparisons: %07d / copies: %07d\n", c1, c2);
 	return err;
 }
 
@@ -440,6 +452,7 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
 		if (err != NOWDB_OK) break;
 		k <<= 1;
 	}
+	fprintf(stderr, "all merged\n");
 	free(hlp);
 	nowdb_blist_destroyBlockList(src, flist);
 	if (trg == &tmp) {
