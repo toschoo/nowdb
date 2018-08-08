@@ -33,6 +33,69 @@ nowdb_cmp_t nowdb_sort_wrapBeet(const void *left,
 	                    WRAP(wrapper)->rsc);
 }
 
+#define UINT(x) \
+	(*((uint64_t*)x))
+
+#define INT(x) \
+	(*((int64_t*)x))
+
+#define FLOAT(x) \
+	(*((double*)x))
+
+nowdb_cmp_t nowdb_cmp_uint(const void *left,
+                           const void *right,
+                           void      *ignore) {
+	if (UINT(left) < UINT(right)) return NOWDB_SORT_LESS;
+	if (UINT(left) > UINT(right)) return NOWDB_SORT_GREATER;
+	return NOWDB_SORT_EQUAL;
+}
+
+nowdb_cmp_t nowdb_cmp_int(const void *left,
+                          const void *right,
+                          void      *ignore) {
+	if (INT(left) < INT(right)) return NOWDB_SORT_LESS;
+	if (INT(left) > INT(right)) return NOWDB_SORT_GREATER;
+	return NOWDB_SORT_EQUAL;
+}
+
+nowdb_cmp_t nowdb_cmp_float(const void *left,
+                            const void *right,
+                            void      *ignore) {
+	if (FLOAT(left) < FLOAT(right)) return NOWDB_SORT_LESS;
+	if (FLOAT(left) > FLOAT(right)) return NOWDB_SORT_GREATER;
+	return NOWDB_SORT_EQUAL;
+}
+
+/* ------------------------------------------------------------------------
+ * Get generic base type compare (asc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_comprsc_t nowdb_sort_getCompare(nowdb_type_t t) {
+	switch(t) {
+	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_DATE:
+		return &nowdb_cmp_uint;
+
+	case NOWDB_TYP_INT:
+		return &nowdb_cmp_int;
+
+	case NOWDB_TYP_FLOAT:
+		return &nowdb_cmp_float;
+
+	/* for text there are two ways to proceed,
+	 * grouping: use the key (the order does not matter)
+	 * ordering: use the string (order matters!) */
+	case NOWDB_TYP_TEXT:
+	default:
+		return &nowdb_cmp_uint;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Generic edge/vertex type compare 
+ * ------------------------------------------------------------------------
+ */
 #define KEYS(x) \
 	((nowdb_index_keys_t*)x)
 

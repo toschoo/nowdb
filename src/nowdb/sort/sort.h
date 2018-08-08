@@ -39,6 +39,12 @@ typedef nowdb_cmp_t (*nowdb_compare_t)(const void*, const void*);
 typedef nowdb_cmp_t (*nowdb_comprsc_t)(const void*,const void*, void*);
 
 /* ------------------------------------------------------------------------
+ * Get generic base type compare (asc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_comprsc_t nowdb_sort_getCompare(nowdb_type_t t);
+
+/* ------------------------------------------------------------------------
  * Generic edge compare using index keys (asc)
  * ------------------------------------------------------------------------
  */
