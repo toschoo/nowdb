@@ -475,7 +475,8 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 static inline nowdb_err_t median(nowdb_fun_t *fun) {
 	nowdb_err_t err;
 	ts_algo_list_node_t *runner;
-	uint64_t k=0, c=0, i=0, f;
+	uint64_t k=0, c=0, i=0, j=0;
+	uint64_t f;
 	double x=2;
 	char two=0;
 
@@ -505,26 +506,28 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 
 	// go to centre
 	for(runner=fun->many.head; runner!=NULL; runner=runner->nxt) {
-		if (i + BLOCK(runner->cont)->sz > c) break;
+		if (i + BLOCK(runner->cont)->sz >= c) break;
 		i+=BLOCK(runner->cont)->sz;
 	}
-	while(i<c) i++;
+	while(i<c) {
+		i++; j++;
+	}
 
 	// round to fsize and convert to float
-	f = i/fun->fsize; f *= fun->fsize;
+	f = j/fun->fsize; f *= fun->fsize;
 	now2float(&fun->r1, BLOCK(runner->cont)->block+f, fun->fsize);
 
 	// odd, we're done
 	if (!two) return NOWDB_OK;
 
 	// even: get n/2+1
-	i+=fun->fsize;
-	if (i>=BLOCK(runner->cont)->sz) {
-		runner=runner->nxt; i=0;
+	j+=fun->fsize;
+	if (j>=BLOCK(runner->cont)->sz) {
+		runner=runner->nxt; j=0;
 	}
 
 	// round to fsize and convert to float
-	f = i/fun->fsize; f *= fun->fsize;
+	f = j/fun->fsize; f *= fun->fsize;
 	now2float(&fun->r2, BLOCK(runner->cont)->block+f, fun->fsize);
 
 	// add n/2 and n/2+1

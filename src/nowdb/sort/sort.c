@@ -355,7 +355,8 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
 	// position
 	r1 = src->head;
 	for(r2=r1; r2!=NULL; r2=r2->nxt) {
-		if (m==n) break; m++;
+		if (m==n) break;
+		m++;
 	}
 	while(r1 != NULL || r2 != NULL) {
 		if (tb == NULL || tb->sz >= flist->sz) {
