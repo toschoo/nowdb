@@ -141,6 +141,12 @@ int main() {
 		}
 	}
 
+	// test edge cases:
+	// 0 elements
+	// 1 element
+	// 1 block
+	// 2 blocks
+
 cleanup:
 	if (rc == EXIT_SUCCESS) {
 		fprintf(stderr, "PASSED.\n");
