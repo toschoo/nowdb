@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <limits.h>
 
-#define NELEMENTS 4096
+#define NELEMENTS 4097
 
 nowdb_cmp_t intcmp(const void *one, const void *two, void *ignore) {
 	if (*(int*)one < *(int*)two) return NOWDB_SORT_LESS;
@@ -22,7 +22,7 @@ nowdb_cmp_t intcmp(const void *one, const void *two, void *ignore) {
 	return NOWDB_SORT_EQUAL;
 }
 
-int testBlistSort() {
+int testBlistSort(int n) {
 	int rc = 0;
 	nowdb_err_t err;
 	nowdb_blist_t  flist;
@@ -35,10 +35,9 @@ int testBlistSort() {
 	int j=0;
 	int t=0;
 
-	rem = rand()%100;
-	if (rem%2 == 0) rem++;
+	rem = popcount32((uint32_t)n) < 2 ? 0 : rand()%100;
 
-	e = NELEMENTS+rem;
+	e = n+rem;
 	
 	buf = malloc(sizeof(int)*e);
 	if (buf == NULL) {
@@ -99,6 +98,7 @@ int testBlistSort() {
 	// compare
 	runner = blocks.head;
 	if (runner == NULL) {
+		if (e == 0) goto cleanup;
 		fprintf(stderr, "head of result is NULL\n");
 		rc = -1; goto cleanup;
 	}
@@ -131,21 +131,24 @@ cleanup:
 
 int main() {
 	int rc = EXIT_SUCCESS;
+	int n;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
 
 	for(int i=0; i<100; i++) {
-		if (testBlistSort() != 0) {
+		switch(i) {
+		case 0: n=0; break;
+		case 1: n=1; break;
+		case 2: n=64; break;
+		case 3: n=128; break;
+		case 5: n=256; break;
+		default: n=NELEMENTS;
+		}
+		if (testBlistSort(n) != 0) {
 			fprintf(stderr, "testBlistSort failed\n");
 			rc = -1; goto cleanup;
 		}
 	}
-
-	// test edge cases:
-	// 0 elements
-	// 1 element
-	// 1 block
-	// 2 blocks
 
 cleanup:
 	if (rc == EXIT_SUCCESS) {

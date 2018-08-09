@@ -500,9 +500,7 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 	c = k/2;
 
 	// even or odd?
-	if ((k/fun->fsize)%2==0) {
-		c -= fun->fsize; two=1;
-	}
+	two = (k/fun->fsize)%2==0;
 
 	// go to centre
 	for(runner=fun->many.head; runner!=NULL; runner=runner->nxt) {
