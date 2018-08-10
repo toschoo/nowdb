@@ -6,6 +6,9 @@
  */
 #include <nowdb/ifc/nowdb.h>
 
+#include <signal.h>
+#include <pthread.h>
+
 static char *OBJECT = "lib";
 
 #define INVALID(s) \
@@ -50,17 +53,10 @@ static ts_algo_rc_t noupdate(void *rsc, void *o, void *n) {
 	return TS_ALGO_OK;
 }
 
-static nowdb_err_t createSession(nowdb_t *lib, nowdb_session_t **ses) {
-	nowdb_err_t err;
-
-	err = nowdb_session_create(ses, lib, -1, -1, -1);
-	if (err != NOWDB_OK) return err;
-
-	return NOWDB_OK;
-}
-
 nowdb_err_t nowdb_library_init(nowdb_t **lib, int nthreads) {
 	nowdb_err_t err;
+
+	nowdb_init();
 
 	if (lib == NULL) INVALID("library pointer is NULL");
 	if (nthreads < 0) INVALID("negative number of threads not supported");
@@ -128,7 +124,7 @@ void destroySessionList(ts_algo_list_t *list) {
 }
 
 void nowdb_library_close(nowdb_t *lib) {
-	if (lib != NULL) return;
+	if (lib == NULL) return;
 
 	if (lib->uthreads != NULL) {
 		destroySessionList(lib->uthreads);
@@ -149,6 +145,7 @@ void nowdb_library_close(nowdb_t *lib) {
 		nowdb_rwlock_destroy(lib->lock);
 		free(lib->lock); lib->lock = NULL;
 	}
+	free(lib);
 	nowdb_close();
 }
 
@@ -178,6 +175,20 @@ nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
 	return err;
 }
 
+void nowdb_session_init(nowdb_session_t *ses,
+                        int           istream,
+                        int           ostream,
+                        int           estream) 
+{
+	ses->err     = NOWDB_OK;
+	ses->scope   = NULL;
+	ses->istream = istream;
+	ses->ostream = ostream;
+	ses->estream = estream;
+	ses->running = 0;
+	ses->stop    = 0;
+}
+
 // run a session everything is done internally
 nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
                                  nowdb_t          *lib,
@@ -192,21 +203,24 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 		return err;
 	}
 	(*ses)->lib = lib;
-	(*ses)->istream = istream;
-	(*ses)->ostream = ostream;
-	(*ses)->estream = estream;
-	(*ses)->running = 0;
+	(*ses)->node = NULL;
 
+	nowdb_session_init(*ses, istream, ostream, estream);
+
+	/* CAUTION:
+	 * file must be set on each turn !!! */
 	(*ses)->ifile = fdopen(istream, "r");
 	if ((*ses)->ifile == NULL) {
 		err = nowdb_err_get(nowdb_err_open, TRUE, OBJECT,
 		                             "fdopen on istream");
+		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		return err;
 	}
 
 	(*ses)->parser = calloc(1,sizeof(nowdbsql_parser_t));
 	if ((*ses)->parser == NULL) {
+		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		NOMEM("allocating parser");
 		return err;
@@ -214,30 +228,35 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 	if (nowdbsql_parser_init((*ses)->parser, (*ses)->ifile) != 0) {
 		err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT,
 		                              "cannot init parser");
+		free((*ses)->parser); (*ses)->parser = NULL;
+		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		return err;
 	}
 
 	err = nowdb_task_create(&(*ses)->task, &nowdb_session_entry, *ses);
 	if (err != NOWDB_OK) {
+		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		return err;
 	}
-	// set signal handlers!
 	return NOWDB_OK;
 }
 
-void nowdb_session_init(nowdb_session_t *ses,
-                        int           istream,
-                        int           ostream,
-                        int           estream) 
-{
-	ses->istream = istream;
-	ses->ostream = ostream;
-	ses->estream = estream;
+static void addNode(ts_algo_list_t      *list,
+                    ts_algo_list_node_t *node) {
+
+	node->nxt = list->head;
+	if (node->nxt != NULL) node->nxt->prv = node;
+	list->head = node;
+	list->len++;
 }
 
-nowdb_err_t nowdb_getSession(nowdb_t *lib, nowdb_session_t **ses) {
+nowdb_err_t nowdb_getSession(nowdb_t *lib,
+                    nowdb_session_t **ses,
+                              int istream,
+                              int ostream,
+                              int estream) {
 	ts_algo_list_node_t *n;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
@@ -252,25 +271,29 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib, nowdb_session_t **ses) {
 			  FALSE, OBJECT, "empty thread pool");
 			goto unlock;
 		}
-		err = createSession(lib, ses);
+		err = nowdb_session_create(ses, lib,
+		          istream, ostream, estream);
 		if (err != NOWDB_OK) goto unlock;
 
-		if (ts_algo_list_append(lib->uthreads, *ses) != TS_ALGO_OK) {
+		n = malloc(sizeof(ts_algo_list_node_t));
+		if (n == NULL) {
+			NOMEM("allocating list node");
 			nowdb_session_destroy(*ses);
-			NOMEM("list.append");
+			free(*ses); *ses = NULL;
 			goto unlock;
 		}
+		n->cont = *ses;
+		(*ses)->node = n;
+		addNode(lib->uthreads, n);
 		goto unlock;
 	}
 	n = lib->fthreads->head;
 	ts_algo_list_remove(lib->fthreads, n);
-
-	n->nxt = lib->uthreads->head;
-	if (n->nxt != NULL) n->nxt->prv = n->nxt;
-	lib->uthreads->head = n;
-	lib->uthreads->len++;
 	
 	*ses = n->cont;
+	nowdb_session_init(*ses, istream, ostream, estream);
+
+	addNode(lib->uthreads, n);
 
 unlock:
 	err2 = nowdb_unlock_write(lib->lock);
@@ -282,13 +305,104 @@ unlock:
 }
 
 // run a session everything is done internally
-nowdb_err_t nowdb_session_run(nowdb_session_t *ses);
+nowdb_err_t nowdb_session_run(nowdb_session_t *ses) {
+	int x;
+
+	x = pthread_kill(ses->task, SIGUSR1);
+	if (x != 0) {
+		return nowdb_err_getRC(nowdb_err_signal, x, OBJECT, NULL);
+	}
+	return NOWDB_OK;
+}
 
 // destroy session
 void nowdb_session_destroy(nowdb_session_t *ses) {
+	nowdb_err_t err;
+
+	if (ses == NULL) return;
+
 	// tell thread to stop
+	ses->stop = 1;
+	/*
+	err = nowdb_session_run(ses);
+	if (err != NOWDB_OK) { // what to do?
+		fprintf(stderr, "cannot stop session!\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return;
+	}
+
 	NOWDB_IGNORE(nowdb_task_join(ses->task));
-	// close ifile
-	// destroy parser
+	*/
+
+	if (ses->parser != NULL) {
+		nowdbsql_parser_destroy(ses->parser);
+		free(ses->parser); ses->parser = NULL;
+	}
+	if (ses->ifile != NULL) {
+		fclose(ses->ifile); ses->ifile = NULL;
+	}
+}
+
+static void runSession(nowdb_session_t *ses) {
+	if (ses->err != NOWDB_OK) return;
+	fprintf(stderr, "running session\n");
+}
+
+#define LIB(x) \
+	((nowdb_t*)x)
+
+static void leaveSession(nowdb_session_t *ses) {
+	nowdb_err_t err;
+	nowdb_err_t err2;
+
+	err2 = ses->err;
+
+	err = nowdb_lock_write(ses->lib);
+	if (err != NOWDB_OK) {
+		err->cause = err2;
+		ses->err = err;
+		return;
+	}
+
+	ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
+	addNode(LIB(ses->lib)->fthreads, ses->node);
+
+	err = nowdb_unlock_write(ses->lib);
+	if (err != NOWDB_OK) {
+		err->cause = err2;
+		ses->err = err;
+		return;
+	}
+}
+
+// session entry point
+void *nowdb_session_entry(void *session) {
+	nowdb_session_t *ses = session;
+	sigset_t s;
+	int sig, x;
+
+	sigemptyset(&s);
+        sigaddset(&s, SIGUSR1);
+
+	for(;;) {
+		ses->running = 0;
+
+		x = sigwait(&s, &sig);
+		if (x != 0) {
+			ses->err = nowdb_err_getRC(nowdb_err_sigwait,
+			                             x, OBJECT, NULL);
+			break;
+		}
+
+		if (ses->stop) break;
 	
+		ses->running = 1;
+
+		runSession(ses);
+		leaveSession(ses);
+
+		if (ses->err != NOWDB_OK) break;
+	}
+	return NULL;
 }

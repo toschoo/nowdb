@@ -287,6 +287,8 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_fun: return "unknown function";
 	case nowdb_err_not_found: return "resource not found";
 	case nowdb_err_parser: return "parser error";
+	case nowdb_err_sigwait: return "operation sigwait failed";
+	case nowdb_err_signal: return "operation pthread_kill failed";
 	default: return "unknown";
 	}
 }
