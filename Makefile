@@ -77,7 +77,9 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
-      $(SRC)/sql/parser.o
+      $(SRC)/sql/parser.o     \
+      $(SRC)/ifc/nowdb.o      \
+      $(SRC)/ifc/session.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
@@ -118,7 +120,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
-      $(SRC)/sql/parser.h
+      $(SRC)/sql/parser.h     \
+      $(SRC)/ifc/nowdb.h      \
+      $(SRC)/ifc/session.h
 
 default:	lib 
 
@@ -131,7 +135,8 @@ tools:	bin/randomfile    \
 	bin/waitstore     \
 	bin/waitscope     \
 	bin/writecsv      \
-	bin/scopetool
+	bin/scopetool     \
+	bin/scopetool2    \
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -516,6 +521,16 @@ $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
 
+$(BIN)/scopetool2:	$(LIB) $(TOOLS)/scopetool2.o \
+			       $(COM)/bench.o      \
+			       $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool2.o \
+			              	       $(COM)/bench.o      \
+			              	       $(COM)/cmd.o        \
+			                 $(libs) -lnowdb
+
+
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -591,6 +606,7 @@ clean:
 	rm -f $(BIN)/waitscope
 	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/scopetool
+	rm -f $(BIN)/scopetool2
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 

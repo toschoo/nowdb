@@ -207,7 +207,6 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 
 			}
 		}
-
 		fprintf(stdout, "\n");
 	}
 }
