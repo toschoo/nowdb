@@ -8,6 +8,8 @@
 #include <nowdb/types/error.h>
 #include <nowdb/mem/blist.h>
 
+#include <stdio.h>
+
 static char *OBJECT = "blist";
 
 #define INVALID(s) \
@@ -54,7 +56,9 @@ static void destroyList(ts_algo_list_t *list) {
  *         (should go to tsalgo)
  * -----------------------------------------------------------------------
  */
-static void addNode(ts_algo_list_t *list, ts_algo_list_node_t *node) {
+static void addNode(ts_algo_list_t      *list,
+                    ts_algo_list_node_t *node,
+                    char                where) {
 	if (list->head == NULL) {
 		list->head = node;
 		list->last = node;
@@ -63,9 +67,17 @@ static void addNode(ts_algo_list_t *list, ts_algo_list_node_t *node) {
 		list->len++;
 		return;
 	}
-	node->nxt = list->head;
-	node->prv = NULL;
-	list->head->prv = node;
+	if (where == 0) {
+		node->nxt = list->head;
+		node->prv = NULL;
+		list->head->prv = node;
+		list->head = node;
+	} else {
+		node->nxt = NULL;
+		list->last->nxt = node;
+		node->prv = list->last;
+		list->last = node;
+	}
 	list->len++;
 }
 
@@ -78,6 +90,33 @@ void nowdb_blist_destroy(nowdb_blist_t *blist) {
 	if (blist->sz == 0) return;
 	destroyList(&blist->flist);
 	blist->sz = 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Destroy block list using blist free list
+ * ------------------------------------------------------------------------
+ */
+void nowdb_blist_destroyBlockList(ts_algo_list_t *list,
+                                  nowdb_blist_t *flist) {
+	ts_algo_list_node_t *tmp;
+	nowdb_err_t err;
+	nowdb_block_t *b;
+
+	if (list == NULL) return;
+	while(list->len > 0) {
+		// fprintf(stderr, "len: %d\n", list->len);
+		err = nowdb_blist_take(flist, list);
+		if (err != NOWDB_OK) {
+			nowdb_err_release(err);
+			tmp = list->head;
+			ts_algo_list_remove(list, tmp);
+			b = tmp->cont;
+			if (b->block != NULL) {
+				free(b->block);
+			}
+			free(b); free(tmp);
+		}
+	}
 }
 
 /* -----------------------------------------------------------------------
@@ -110,11 +149,12 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
 	}
 	*block = blist->flist.head;
 	ts_algo_list_remove(&blist->flist, blist->flist.head);
+	b = (*block)->cont; b->sz = 0;
 	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
- * Get block from blist and add it to my list
+ * Get block from blist and add it as head to my list
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_blist_give(nowdb_blist_t   *blist,
@@ -125,7 +165,24 @@ nowdb_err_t nowdb_blist_give(nowdb_blist_t   *blist,
 	err = nowdb_blist_get(blist, &tmp);
 	if (err != NOWDB_OK) return err;
 
-	addNode(blocks, tmp);
+	addNode(blocks, tmp, 0);
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Get block from blist and add it as last to my list
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_blist_giva(nowdb_blist_t   *blist,
+                             ts_algo_list_t *blocks) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *tmp;
+
+	err = nowdb_blist_get(blist, &tmp);
+	if (err != NOWDB_OK) return err;
+
+	addNode(blocks, tmp, 1);
 
 	return NOWDB_OK;
 }
@@ -140,7 +197,7 @@ nowdb_err_t nowdb_blist_free(nowdb_blist_t *blist,
 	if (blist == NULL) INVALID("no blist object");
 	if (block == NULL) INVALID("no block pointer");
 
-	addNode(&blist->flist, block);
+	addNode(&blist->flist, block, 0);
 
 	return NOWDB_OK;
 }
@@ -159,7 +216,7 @@ nowdb_err_t nowdb_blist_take(nowdb_blist_t   *blist,
 
 	tmp = blocks->head;
 	ts_algo_list_remove(blocks, tmp);
-	addNode(&blist->flist, tmp);
+	addNode(&blist->flist, tmp, 0);
 
 	return NOWDB_OK;
 }
@@ -180,7 +237,7 @@ nowdb_err_t nowdb_blist_freeAll(nowdb_blist_t *blist,
 	while(runner != NULL) {
 		tmp = runner->nxt;
 		ts_algo_list_remove(blocks, runner);
-		addNode(&blist->flist, runner);
+		addNode(&blist->flist, runner, 0);
 		runner = tmp;
 	}
 	return NOWDB_OK;

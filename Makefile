@@ -161,6 +161,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
 	$(SMK)/mergesmoke              \
+	$(SMK)/sortsmoke               \
 	$(SMK)/sqlsmoke
 
 stress:	$(STRESS)/deepscope
@@ -359,6 +360,11 @@ $(SMK)/modelsmoke: 	$(LIB) $(DEP) $(SMK)/modelsmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/textsmoke: 	$(LIB) $(DEP) $(SMK)/textsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/sortsmoke: 	$(LIB) $(DEP) $(SMK)/sortsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -569,6 +575,7 @@ clean:
 	rm -f $(SMK)/modelsmoke
 	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/mergesmoke
+	rm -f $(SMK)/sortsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme

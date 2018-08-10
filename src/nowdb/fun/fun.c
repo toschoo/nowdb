@@ -110,7 +110,7 @@ static inline void now2float(void *v1, void *v2, nowdb_type_t t) {
  * Helper: fun to type
  * -----------------------------------------------------------------------
  */
-static inline int getType(uint32_t fun) {
+static inline int getFType(uint32_t fun) {
 	switch(fun) {
 	case NOWDB_FUN_COUNT:
 		return NOWDB_FUN_ZERO;
@@ -215,7 +215,7 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 
 	ts_algo_list_init(&fun->many);
 
-	fun->ftype = getType(type);
+	fun->ftype = getFType(type);
 	fun->fun   = type;
 	fun->ctype = ctype;
 	fun->field = field;
@@ -299,6 +299,30 @@ void nowdb_fun_reset(nowdb_fun_t *fun) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: type correction
+ * -----------------------------------------------------------------------
+ */
+static inline void correcttype(nowdb_fun_t     *fun,
+                               uint16_t       field,
+                               char         *record,
+                               nowdb_type_t *mytype) 
+{
+	if (fun->ctype == NOWDB_CONT_EDGE) {
+		if (field == NOWDB_OFF_WEIGHT) {
+			memcpy(mytype, record+NOWDB_OFF_WTYPE,
+				         sizeof(nowdb_type_t));
+		} else {
+			memcpy(mytype, record+NOWDB_OFF_WTYPE2,
+				          sizeof(nowdb_type_t));
+		}
+	} else {
+		memcpy(mytype, record+NOWDB_OFF_VTYPE,
+				sizeof(nowdb_type_t));
+	}
+	fun->otype = getOType(fun);
+}
+
+/* -----------------------------------------------------------------------
  * Helper: collect values
  * -----------------------------------------------------------------------
  */
@@ -306,6 +330,9 @@ static inline nowdb_err_t collect(nowdb_fun_t *fun, char *record) {
 	nowdb_err_t err;
 	nowdb_block_t *b;
 
+	if (fun->dtype == NOWDB_TYP_NOTHING) {
+		correcttype(fun, fun->field, record, &fun->dtype);
+	}
 	if (fun->many.len == 0 || fun->off >= BLOCKSIZE) {
 		err = nowdb_blist_give(fun->flist, &fun->many);
 		if (err != NOWDB_OK) return err;
@@ -328,30 +355,6 @@ static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
 	default: INVALID("function cannot be applied here");
 	}
 	return NOWDB_OK;
-}
-
-/* -----------------------------------------------------------------------
- * Helper: type correction
- * -----------------------------------------------------------------------
- */
-static inline void correcttype(nowdb_fun_t     *fun,
-                               uint16_t       field,
-                               char         *record,
-                               nowdb_type_t *mytype) 
-{
-	if (fun->ctype == NOWDB_CONT_EDGE) {
-		if (field == NOWDB_OFF_WEIGHT) {
-			memcpy(mytype, record+NOWDB_OFF_WTYPE,
-				         sizeof(nowdb_type_t));
-		} else {
-			memcpy(mytype, record+NOWDB_OFF_WTYPE2,
-				          sizeof(nowdb_type_t));
-		}
-	} else {
-		memcpy(mytype, record+NOWDB_OFF_VTYPE,
-				sizeof(nowdb_type_t));
-	}
-	fun->otype = getOType(fun);
 }
 
 /* -----------------------------------------------------------------------
@@ -445,6 +448,7 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 	int off=0;
 	nowdb_err_t err;
 
+
 	runner = fun->many.head;
 	if (runner != NULL) b=runner->cont; else return NOWDB_OK;
 	for(;;) {
@@ -458,6 +462,82 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 		if (err != NOWDB_OK) return err;
 		off += fun->fsize;
 	}
+	return NOWDB_OK;
+}
+
+#define BLOCK(x) \
+	((nowdb_block_t*)x)
+
+/* -----------------------------------------------------------------------
+ * Helper: find median
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t median(nowdb_fun_t *fun) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *runner;
+	uint64_t k=0, c=0, i=0, j=0;
+	uint64_t f;
+	double x=2;
+	char two=0;
+
+	// count number of bytes
+	for(runner=fun->many.head; runner!=NULL; runner=runner->nxt) {
+		k+=BLOCK(runner->cont)->sz;
+	}
+
+	// edge cases: 0 or 1
+	if (k < fun->fsize) {
+		x = 0;
+		MOV(&fun->r1, &x);
+		return NOWDB_OK;
+
+	} else if (k == fun->fsize) {
+		now2float(&fun->r1, BLOCK(runner->cont)->block, fun->dtype);
+		return NOWDB_OK;
+	}
+
+	// compute centre
+	c = k/2;
+
+	// even or odd?
+	two = (k/fun->fsize)%2==0;
+
+	// go to centre
+	for(runner=fun->many.head; runner!=NULL; runner=runner->nxt) {
+		if (i + BLOCK(runner->cont)->sz >= c) break;
+		i+=BLOCK(runner->cont)->sz;
+	}
+	while(i<c) {
+		i++; j++;
+	}
+
+	// round to fsize and convert to float
+	f = j/fun->fsize; f *= fun->fsize;
+	now2float(&fun->r1, BLOCK(runner->cont)->block+f, fun->fsize);
+
+	// odd, we're done
+	if (!two) return NOWDB_OK;
+
+	// even: get n/2+1
+	j+=fun->fsize;
+	if (j>=BLOCK(runner->cont)->sz) {
+		runner=runner->nxt; j=0;
+	}
+
+	// round to fsize and convert to float
+	f = j/fun->fsize; f *= fun->fsize;
+	now2float(&fun->r2, BLOCK(runner->cont)->block+f, fun->fsize);
+
+	// add n/2 and n/2+1
+	err = nowadd(&fun->r1, &fun->r2, NOWDB_TYP_FLOAT);
+	if (err != NOWDB_OK) return err;
+
+	// divide by 2
+	err = nowdiv(&x, &fun->r1, &x, NOWDB_TYP_FLOAT);
+	if (err != NOWDB_OK) return err;
+
+	MOV(&fun->r1, &x);
+
 	return NOWDB_OK;
 }
 
@@ -495,7 +575,14 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 
 	case NOWDB_FUN_MEDIAN:
 		fprintf(stderr, "computing median\n");
-		return NOWDB_OK;
+
+		err = nowdb_block_sort(&fun->many,
+		                        fun->flist,
+		                        fun->fsize,
+		  nowdb_sort_getCompare(fun->dtype));
+		if (err != NOWDB_OK) return err;
+
+		return median(fun);
 
 	case NOWDB_FUN_STDDEV:
 		fprintf(stderr, "computing stddev\n");
@@ -532,7 +619,7 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 		MOV(&x, &fun->r1);
 		z = sqrt(x/(n-1));
 
-		fprintf(stderr, "sqrt(%.4f/(%.4f-1)) = %.4f\n", x, n, z);
+		// fprintf(stderr, "sqrt(%.4f/(%.4f-1)) = %.4f\n", x, n, z);
 
 		/* store the result */
 		MOV(&fun->r1, &z);

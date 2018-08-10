@@ -11,6 +11,7 @@
 
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
+#include <nowdb/mem/blist.h>
 
 #include <beet/types.h>
 
@@ -36,6 +37,12 @@ typedef char nowdb_ord_t;
  */
 typedef nowdb_cmp_t (*nowdb_compare_t)(const void*, const void*);
 typedef nowdb_cmp_t (*nowdb_comprsc_t)(const void*,const void*, void*);
+
+/* ------------------------------------------------------------------------
+ * Get generic base type compare (asc)
+ * ------------------------------------------------------------------------
+ */
+nowdb_comprsc_t nowdb_sort_getCompare(nowdb_type_t t);
 
 /* ------------------------------------------------------------------------
  * Generic edge compare using index keys (asc)
@@ -136,4 +143,13 @@ void nowdb_mem_sort_edge(nowdb_edge_t *buf,
 void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
                            uint32_t        num,
                            nowdb_ord_t     ord);
+
+/* ------------------------------------------------------------------------
+ * Sorting list of blocks
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_block_sort(ts_algo_list_t  *blocks,
+                             nowdb_blist_t    *flist,
+                             uint32_t        recsize,
+                             nowdb_comprsc_t compare);
 #endif
