@@ -38,6 +38,13 @@ nowdb_err_t nowdb_blist_init(nowdb_blist_t *blist, uint32_t sz);
 void nowdb_blist_destroy(nowdb_blist_t *blist);
 
 /* -----------------------------------------------------------------------
+ * Destroy a list using a blist free list
+ * -----------------------------------------------------------------------
+ */
+void nowdb_blist_destroyBlockList(ts_algo_list_t *blocks,
+                                  nowdb_blist_t  *blist);
+
+/* -----------------------------------------------------------------------
  * Get block
  * -----------------------------------------------------------------------
  */
@@ -45,10 +52,17 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t        *blist,
                             ts_algo_list_node_t **block);
 
 /* -----------------------------------------------------------------------
- * Give me a block (i.e. add it to my list 'blocks')
+ * Give me a block (i.e. add it to my list 'blocks' as head)
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_blist_give(nowdb_blist_t  *blist,
+                             ts_algo_list_t *blocks);
+
+/* -----------------------------------------------------------------------
+ * Give me a block (i.e. add it to my list 'blocks' as last)
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_blist_giva(nowdb_blist_t  *blist,
                              ts_algo_list_t *blocks);
 
 /* -----------------------------------------------------------------------

@@ -41,6 +41,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->recsize = 0;
 	reader->size = 0;
 	reader->off = 0;
+	reader->nodata = 0;
 	reader->eof = 0;
 	reader->ko  = 0;
 	reader->buf = NULL;
@@ -493,6 +494,9 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 	nowdb_pageid_t *pge;
 	beet_err_t      ber;
 
+	if (reader->eof) return nowdb_err_get(nowdb_err_eof,
+	                                FALSE, OBJECT, NULL);
+
 	for(;;) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
@@ -870,6 +874,9 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                    FALSE, OBJECT, "reader object is NULL");
+
+	if (reader->nodata) return NOWDB_OK;
+
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
 		return rewindFullscan(reader);
@@ -1051,7 +1058,12 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 
 	ber = beet_index_getIter(index->idx, (*reader)->state, key,
 	                                     (*reader)->iter);
-	if (ber != BEET_OK && ber != BEET_ERR_KEYNOF) {
+	if (ber == BEET_ERR_KEYNOF) {
+		(*reader)->eof = 1;
+		(*reader)->nodata = 1;
+		return NOWDB_OK;
+
+	} else if (ber != BEET_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);
 		return makeBeetError(ber);
 	}
@@ -1144,7 +1156,12 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 
 	ber = beet_index_range(index->idx, rptr, dir,
 	                             (*reader)->iter);
-	if (ber != BEET_OK) {
+	if (ber == BEET_ERR_KEYNOF) {
+		(*reader)->eof = 1;
+		(*reader)->nodata = 1;
+		return NOWDB_OK;
+
+	} else if (ber != BEET_OK) {
 		nowdb_reader_destroy(*reader); free(*reader);
 		return makeBeetError(ber);
 	}

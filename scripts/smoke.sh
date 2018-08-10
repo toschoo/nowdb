@@ -151,6 +151,14 @@ then
 	exit 1
 fi
 
+echo "running sortsmoke" >> log/test.log
+test/smoke/sortsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: sortsmoke failed"
+	exit 1
+fi
+
 echo "running funsmoke" >> log/test.log
 test/smoke/funsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]

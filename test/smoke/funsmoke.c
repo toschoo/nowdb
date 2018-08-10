@@ -58,7 +58,7 @@ void getTime(int64_t *tm) {
 
 int prepare(nowdb_type_t type, char calm) {
 	int x;
-	do x = rand()%10; while(x==0); // calm?rand()%10:rand()%1000; while (x==0);
+	do x = calm?rand()%10:rand()%1000; while (x==0);
 	edges = calloc(x, sizeof(nowdb_edge_t));
 	if (edges == NULL) {
 		fprintf(stderr, "out-of-mem\n");
@@ -71,6 +71,37 @@ int prepare(nowdb_type_t type, char calm) {
 		getTime(&edges[i].timestamp);
 	}
 	return x;
+}
+
+#define EDG(x) \
+	((nowdb_edge_t*)x)
+
+int wcompare(const void *one, const void *two) {
+	if (EDG(one)->weight < EDG(two)->weight) return -1;
+	if (EDG(one)->weight > EDG(two)->weight) return  1;
+	return 0;
+}
+
+double medianf(int n) {
+	int h;
+	double w1, w2;
+
+	qsort(edges, n, NOWDB_EDGE_SIZE, &wcompare);
+
+	h = n/2;
+
+	memcpy(&w1, &edges[h].weight, 8);
+
+	fprintf(stderr, "%d/2=%d: %.4f\n", n, h, w1);
+	
+	if (n%2 != 0) return w1;
+
+	h++;
+	memcpy(&w2, &edges[h].weight, 8);
+
+	fprintf(stderr, "%d/2+1=%d: %.4f\n", n, h, w2);
+
+	return ((w1 + w2)/2);
 }
 
 #define OP(t, x, v) \
@@ -142,7 +173,8 @@ int eval(void *x, void *v, nowdb_type_t t) {
 	switch(t) {
 	case NOWDB_TYP_FLOAT:
 		fprintf(stderr, "%.4f / %.4f\n", *(double*)x, *(double*)v);
-		r = (*(double*)x == *(double*)v); break;
+		r = (round(*(double*)x * 1000) ==
+		    (round(*(double*)v * 1000))); break;
 	case NOWDB_TYP_UINT:
 	case NOWDB_TYP_TIME:
 		fprintf(stderr, "%lu / %lu\n", *(uint64_t*)x, *(uint64_t*)v);
@@ -201,6 +233,7 @@ int checkResult(uint32_t ftype,
 			h++; break;
 
 		case NOWDB_FUN_MEDIAN: break;
+
 		case NOWDB_FUN_STDDEV: 
 			TOFLOAT((char*)(edges+i)+off, dtype);
 			op(NOWDB_FUN_SUM, &u,(char*)(edges+i)+off,
@@ -222,7 +255,11 @@ int checkResult(uint32_t ftype,
 		mytype = NOWDB_TYP_FLOAT;
 		break;
 
-	case NOWDB_FUN_MEDIAN: return 0;
+	case NOWDB_FUN_MEDIAN: 
+			r = medianf(mx);
+			memcpy(&u, &r, 8);
+			break;
+
 	case NOWDB_FUN_STDDEV:
 		if (mx < 2) {
 			u = 0; break;
@@ -456,6 +493,15 @@ int main() {
 		            NOWDB_TYP_FLOAT,
 		            NOWDB_OFF_WEIGHT,&fzero) != 0) {
 			fprintf(stderr, "testFun STDDEV, FLOAT, WEIGHT failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	}
+	fprintf(stderr, "TESTING MEDIAN, FLOAT, WEIGHT\n");
+	for(int i=0; i<ITER; i++) {
+		if (testFun(NOWDB_FUN_MEDIAN,
+		            NOWDB_TYP_FLOAT,
+		            NOWDB_OFF_WEIGHT,&fzero) != 0) {
+			fprintf(stderr, "testFun MEDIAN, FLOAT, WEIGHT failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 	}
