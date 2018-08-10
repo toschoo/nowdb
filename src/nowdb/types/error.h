@@ -265,6 +265,7 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_beet            57
 #define nowdb_err_fun             58
 #define nowdb_err_not_found       59
+#define nowdb_err_parser          60
 #define nowdb_err_unknown       9999
 
 #endif

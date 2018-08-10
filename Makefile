@@ -78,8 +78,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
       $(SRC)/sql/parser.o     \
-      $(SRC)/ifc/nowdb.o      \
-      $(SRC)/ifc/session.o
+      $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
@@ -121,8 +120,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
       $(SRC)/sql/parser.h     \
-      $(SRC)/ifc/nowdb.h      \
-      $(SRC)/ifc/session.h
+      $(SRC)/ifc/nowdb.h
 
 default:	lib 
 
