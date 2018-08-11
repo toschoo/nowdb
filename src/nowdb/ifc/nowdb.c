@@ -830,8 +830,6 @@ void *nowdb_session_entry(void *session) {
 	// x = pthread_sigmask(SIG_SETMASK, &s, NULL);
 
 	for(;;) {
-		if (setWaiting(ses) < 0) break;
-
 		x = sigwait(&s, &sig);
 		if (x != 0) {
 			ses->err = nowdb_err_getRC(nowdb_err_sigwait,
@@ -855,6 +853,8 @@ void *nowdb_session_entry(void *session) {
 		if (stop == 2) break;
 
 		leaveSession(ses);
+
+		if (setWaiting(ses) < 0) break;
 
 		err = signalMaster(ses);
 		if (err != NOWDB_OK) {
