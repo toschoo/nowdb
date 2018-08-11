@@ -56,7 +56,7 @@ typedef struct {
  */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                          ts_algo_list_t  *rsc,
+                          void            *rsc,
                           nowdb_path_t    base,
                       nowdb_qry_result_t *res);
 

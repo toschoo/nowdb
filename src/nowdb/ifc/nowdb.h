@@ -22,10 +22,15 @@ typedef struct {
 	void                 *lib; /* from where we get scopes           */
 	nowdb_scope_t      *scope; /* on what we process                 */
 	nowdb_task_t         task; /* this runs the session              */
+	nowdb_task_t       master; /* the main thread                    */
 	nowdbsql_parser_t *parser; /* the parser                         */
 	nowdb_err_t           err; /* error                              */
 	ts_algo_list_node_t *node; /* where to find us                   */
-	FILE               *ifile; /* input stream as file               */
+	FILE               *ifile; /* input  stream as file              */
+	FILE               *ofile; /* output stream as file              */
+	FILE               *efile; /* error  stream as file              */
+	char                 *buf; /* result buffer                      */
+	uint32_t            bufsz; /* result buffer size                 */
 	int               istream; /* incoming stream                    */
 	int               ostream; /* outgoing stream (may be == istream */
 	int               estream; /* error stream (may be == ostream    */
@@ -49,6 +54,8 @@ nowdb_err_t nowdb_library_shutdown(nowdb_t *lib);
 
 nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
                            nowdb_scope_t    **scope);
+nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
+                           nowdb_scope_t *scope); 
 
 nowdb_err_t nowdb_getSession(nowdb_t *lib, nowdb_session_t **ses,
                            int istream, int ostream, int estream);

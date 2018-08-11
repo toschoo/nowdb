@@ -14,12 +14,25 @@
 
 static char *OBJECT = "lib";
 
+#define BUFSIZE 8192
+
 #define INVALID(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
 
 #define NOMEM(s) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
 
+#define SETERR() \
+	err->cause = ses->err; \
+	ses->err = err;
+
+#define LOGERR(err) \
+	nowdb_err_send(err, ses->estream);
+
+/* -----------------------------------------------------------------------
+ * Scope Descriptor
+ * -----------------------------------------------------------------------
+ */
 typedef struct {
 	char           *name;
 	char           inuse;
@@ -48,6 +61,7 @@ static void scopedestroy(void *rsc, void **n) {
  		/* close them explicitly ! */
 		NOWDB_IGNORE(nowdb_scope_close(SCOPE(*n)->scope));
 		nowdb_scope_destroy(SCOPE(*n)->scope);
+		free(SCOPE(*n)->scope);
 	}
 	free(*n); *n=NULL;
 }
@@ -65,6 +79,8 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads) {
 
 	sigemptyset(&s);
         sigaddset(&s, SIGUSR1);
+        sigaddset(&s, SIGINT);
+        sigaddset(&s, SIGABRT);
 
 	x = pthread_sigmask(SIG_SETMASK, &s, NULL);
 	if (x != 0) {
@@ -226,28 +242,42 @@ nowdb_err_t nowdb_library_shutdown(nowdb_t *lib) {
 
 nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
                            nowdb_scope_t    **scope) {
-	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2;
-	scope_t pattern;
+	scope_t pattern, *result;
 
 	if (lib == NULL) INVALID("lib is NULL");
 	if (name == NULL) INVALID("name is NULL");
 	if (scope == NULL) INVALID("scope pointer is NULL");
 
-	err = nowdb_lock_read(lib->lock);
-	if (err != NOWDB_OK) return err;
-
 	pattern.name = name;
-	*scope = ts_algo_tree_find(lib->scopes, &pattern);
-	if (*scope == NULL) err = nowdb_err_get(nowdb_err_key_not_found,
-	                                            FALSE, OBJECT, name);
+	result = ts_algo_tree_find(lib->scopes, &pattern);
+	if (result != NULL) *scope = result->scope;
 
-	err2 = nowdb_unlock_read(lib->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err;
-		return err2;
+	return NOWDB_OK;
+}
+
+nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
+                           nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	scope_t *desc;
+
+	desc = calloc(1,sizeof(scope_t));
+	if (desc == NULL) {
+		NOMEM("allocating scope descriptor");
+		return err;
 	}
-	return err;
+	desc->name = strdup(name);
+	if (desc->name == NULL) {
+		NOMEM("allocating name");
+		free(desc); return err;
+	}
+	desc->scope = scope;
+
+	if (ts_algo_tree_insert(lib->scopes, desc) != TS_ALGO_OK) {
+		NOMEM("tree.insert");
+		free(desc->name); free(desc);
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 static nowdb_err_t initSession(nowdb_session_t *ses,
@@ -265,15 +295,32 @@ static nowdb_err_t initSession(nowdb_session_t *ses,
 	ses->running = 0;
 	ses->stop    = 0;
 	ses->alive   = 1;
+	ses->master  = nowdb_task_myself();
 
 	if (ses->ifile != NULL) {
 		fclose(ses->ifile);
+	}
+	if (ses->ofile != NULL) {
+		fclose(ses->ofile);
+	}
+	if (ses->efile != NULL) {
+		fclose(ses->efile);
 	}
 	ses->ifile = fdopen(istream, "r");
 	if (ses->ifile == NULL) {
 		fprintf(stderr, "istream: %d\n", istream);
 		return nowdb_err_get(nowdb_err_open,
 			   TRUE, OBJECT, "istream");
+	}
+	ses->ofile = fdopen(dup(ostream), "w");
+	if (ses->ofile == NULL) {
+		return nowdb_err_get(nowdb_err_open,
+			   TRUE, OBJECT, "ostream");
+	}
+	ses->efile = fdopen(dup(estream), "w");
+	if (ses->efile == NULL) {
+		return nowdb_err_get(nowdb_err_open,
+			   TRUE, OBJECT, "estream");
 	}
 	if (ses->parser != NULL) {
 		nowdbsql_parser_destroy(ses->parser);
@@ -321,6 +368,15 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 		free(*ses); *ses = NULL;
 		return err;
 	}
+
+	(*ses)->buf = malloc(BUFSIZE);
+	if ((*ses)->buf == NULL) {
+		NOMEM("allocating buffer");
+		nowdb_session_destroy(*ses);
+		free(*ses); *ses = NULL;
+		return err;
+	}
+	(*ses)->bufsz = BUFSIZE;
 
 	err = initSession(*ses, istream, ostream, estream);
 	if (err != NOWDB_OK) {
@@ -422,6 +478,16 @@ unlock:
 #define LIB(x) \
 	((nowdb_t*)x)
 
+static nowdb_err_t signalMaster(nowdb_session_t *ses) {
+	int x;
+
+	x = pthread_kill(ses->master, SIGUSR1);
+	if (x != 0) {
+		return nowdb_err_getRC(nowdb_err_signal, x, OBJECT, NULL);
+	}
+	return NOWDB_OK;
+}
+
 static nowdb_err_t signalSession(nowdb_session_t *ses) {
 	int x;
 
@@ -438,16 +504,14 @@ static int getStop(nowdb_session_t *ses) {
 
 	err = nowdb_lock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 	stop = ses->stop;
 
 	err = nowdb_unlock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 	return stop;
@@ -458,8 +522,7 @@ static int setStop(nowdb_session_t *ses, int stop) {
 
 	err = nowdb_lock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 
@@ -467,8 +530,7 @@ static int setStop(nowdb_session_t *ses, int stop) {
 
 	err = nowdb_unlock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 	return 0;
@@ -479,8 +541,7 @@ static int setWaiting(nowdb_session_t *ses) {
 
 	err = nowdb_lock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 
@@ -489,8 +550,7 @@ static int setWaiting(nowdb_session_t *ses) {
 
 	err = nowdb_unlock(ses->lock);
 	if (err != NOWDB_OK) {
-		err->cause = ses->err;
-		ses->err = err;
+		SETERR();
 		return -1;
 	}
 	return 0;
@@ -500,7 +560,6 @@ static int setWaiting(nowdb_session_t *ses) {
 nowdb_err_t nowdb_session_run(nowdb_session_t *ses) {
 	if (ses == NULL) INVALID("session is NULL");
 	if (ses->alive == 0) INVALID("session is dead");
-	fprintf(stderr, "starting session\n");
 	return signalSession(ses);
 }
 
@@ -509,7 +568,6 @@ nowdb_err_t nowdb_session_stop(nowdb_session_t *ses) {
 
 	if (ses == NULL) INVALID("session is NULL");
 	if (ses->alive == 0) INVALID("session is dead");
-	fprintf(stderr, "stopping session\n");
 
 	if (setStop(ses, 1) != 0) {
 		ses->alive = 0;
@@ -528,7 +586,6 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 
 	if (ses == NULL) INVALID("session is NULL");
 	if (ses->alive == 0) INVALID("session is dead");
-	fprintf(stderr, "shutting down session %p\n", ses);
 
 	if (setStop(ses, 2) != 0) {
 		ses->alive = 0;
@@ -550,6 +607,9 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 // destroy session
 void nowdb_session_destroy(nowdb_session_t *ses) {
 	if (ses == NULL) return;
+	if (ses->buf != NULL) {
+		free(ses->buf); ses->buf = NULL;
+	}
 	if (ses->parser != NULL) {
 		nowdbsql_parser_destroy(ses->parser);
 		free(ses->parser); ses->parser = NULL;
@@ -557,18 +617,120 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 	if (ses->ifile != NULL) {
 		fclose(ses->ifile); ses->ifile = NULL;
 	}
+	if (ses->ofile != NULL) {
+		fclose(ses->ofile); ses->ofile = NULL;
+	}
+	if (ses->efile != NULL) {
+		fclose(ses->efile); ses->efile = NULL;
+	}
 	if (ses->lock != NULL) {
 		nowdb_lock_destroy(ses->lock);
 		free(ses->lock); ses->lock = NULL;
 	}
 }
 
-static int handleAst(char *path, nowdb_ast_t *ast) {
-	nowdb_ast_show(ast);
+static int printReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
+	nowdb_qry_report_t *rep;
+
+	if (res->result == NULL) {
+		fprintf(stderr, "NO REPORT!\n");
+		return -1;
+	}
+	rep = res->result;
+	fprintf(stderr, "%lu rows loaded with %lu errors in %ldus\n",
+	                rep->affected,
+	                rep->errors,
+	                rep->runtime);
+	free(res->result); res->result = NULL;
 	return 0;
 }
 
+static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
+	uint32_t osz;
+	uint32_t cnt;
+	uint64_t total=0;
+	char eof=0;
+	nowdb_err_t err=NOWDB_OK;
+	char *buf = ses->buf;
+	uint32_t sz = ses->bufsz;
+	struct timespec t1, t2;
+
+	err = nowdb_cursor_open(cur);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			fprintf(stderr, "Read: 0\n");
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+		goto cleanup;
+	}
+	for(;;) {
+		nowdb_timestamp(&t1);
+		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				err = NOWDB_OK;
+				eof = 1;
+				if (cnt == 0) break;
+			} else break;
+		}
+		nowdb_timestamp(&t2);
+		total += cnt;
+		if (cur->row != NULL && cur->hasid) {
+			err = nowdb_row_write(buf, osz, ses->ofile);
+			if (err != NOWDB_OK) break;
+
+		} else if (cur->recsize == 32) {
+			// printVertex((nowdb_vertex_t*)buf, osz/32);
+		} else if (cur->recsize == 64) {
+			// printEdge((nowdb_edge_t*)buf, osz/64);
+		}
+		if (eof) break;
+	}
+	fprintf(stderr, "Read: %lu\n", total);
+
+cleanup:
+	nowdb_cursor_destroy(cur); free(cur);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return -1;
+	}
+	return 0;
+}
+
+static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
+	nowdb_err_t err;
+	nowdb_qry_result_t res;
+	char *path = LIB(ses->lib)->base;
+
+	err = nowdb_stmt_handle(ast, ses->scope, ses->lib, path, &res);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot handle ast: \n");
+		nowdb_ast_show(ast);
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	switch(res.resType) {
+	case NOWDB_QRY_RESULT_NOTHING: break;
+	case NOWDB_QRY_RESULT_REPORT: return printReport(ses, &res);
+	case NOWDB_QRY_RESULT_SCOPE: ses->scope = res.result; break;
+	case NOWDB_QRY_RESULT_CURSOR: return processCursor(ses, res.result);
+
+	default:
+		fprintf(stderr, "unknown result :-(\n");
+		return -1;
+	}
+	return 0;
+}
+
+static nowdb_err_t negotiate(nowdb_session_t *ses) {
+	return NOWDB_OK;
+}
+
 static void runSession(nowdb_session_t *ses) {
+	nowdb_err_t err;
 	int rc = 0;
 	nowdb_ast_t       *ast;
 	struct timespec t1, t2;
@@ -577,11 +739,22 @@ static void runSession(nowdb_session_t *ses) {
 	if (ses->err != NOWDB_OK) return;
 	if (ses->alive == 0) return;
 
-	fprintf(stderr, "running session\n");
+	// fprintf(stderr, "running session\n");
 
+	err = negotiate(ses);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return;
+	}
 	for(;;) {
 
 		// this must be interruptibel
+		if (ses->parser == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid, FALSE,
+			           OBJECT, "session not initialised");
+			SETERR();
+			break;
+		}
 		rc = nowdbsql_parser_run(ses->parser, &ast);
 		if (rc == NOWDB_SQL_ERR_EOF) {
 			rc = 0; break;
@@ -596,7 +769,7 @@ static void runSession(nowdb_session_t *ses) {
 		}
 		nowdb_timestamp(&t1);
 
-		rc = handleAst(LIB(ses->lib)->base, ast);
+		rc = handleAst(ses, ast);
 		if (rc != 0) {
 			nowdb_ast_destroy(ast); free(ast);
 			fprintf(stderr, "cannot handle ast\n"); break;
@@ -617,16 +790,12 @@ static void runSession(nowdb_session_t *ses) {
 
 static void leaveSession(nowdb_session_t *ses) {
 	nowdb_err_t err;
-	nowdb_err_t err2;
 
-	fprintf(stderr, "leaving session\n");
-
-	err2 = ses->err;
+	// fprintf(stderr, "leaving session\n");
 
 	err = nowdb_lock_write(LIB(ses->lib)->lock);
 	if (err != NOWDB_OK) {
-		err->cause = err2;
-		ses->err = err;
+		SETERR();
 		return;
 	}
 
@@ -635,8 +804,7 @@ static void leaveSession(nowdb_session_t *ses) {
 
 	err = nowdb_unlock_write(LIB(ses->lib)->lock);
 	if (err != NOWDB_OK) {
-		err->cause = err2;
-		ses->err = err;
+		SETERR();
 		return;
 	}
 	if (ses->parser != NULL) {
@@ -650,12 +818,12 @@ static void leaveSession(nowdb_session_t *ses) {
 
 // session entry point
 void *nowdb_session_entry(void *session) {
+	nowdb_err_t err;
 	nowdb_session_t *ses = session;
 	sigset_t s;
 	int sig, x;
 	int stop;
 
-	fprintf(stderr, "session entry point\n");
 	sigemptyset(&s);
         sigaddset(&s, SIGUSR1);
 
@@ -664,30 +832,37 @@ void *nowdb_session_entry(void *session) {
 	for(;;) {
 		if (setWaiting(ses) < 0) break;
 
-		fprintf(stderr, "waiting for signal\n");
 		x = sigwait(&s, &sig);
 		if (x != 0) {
 			ses->err = nowdb_err_getRC(nowdb_err_sigwait,
 			                             x, OBJECT, NULL);
 			break;
 		}
-		fprintf(stderr, "got signal\n");
 
 		stop = getStop(ses);
 		if (stop < 0) break;
 		if (stop == 2) break;
+		if (stop == 1) continue;
 
 		runSession(ses);
-
-		if (ses->err != NOWDB_OK) break;
+		if (ses->err != NOWDB_OK) {
+			LOGERR(ses->err);
+			break;
+		}
 
 		stop = getStop(ses);
 		if (stop < 0) break;
 		if (stop == 2) break;
 
 		leaveSession(ses);
+
+		err = signalMaster(ses);
+		if (err != NOWDB_OK) {
+			SETERR();
+			break;
+		}
 	}
 	ses->alive = 0;
-	fprintf(stderr, "terminating\n");
+	// fprintf(stderr, "terminating\n");
 	return NULL;
 }

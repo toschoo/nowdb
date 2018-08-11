@@ -69,15 +69,15 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
       $(SRC)/fun/group.o      \
-      $(SRC)/query/stmt.o     \
-      $(SRC)/query/row.o      \
-      $(SRC)/query/plan.o     \
-      $(SRC)/query/cursor.o   \
       $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
       $(SRC)/sql/parser.o     \
+      $(SRC)/query/stmt.o     \
+      $(SRC)/query/row.o      \
+      $(SRC)/query/plan.o     \
+      $(SRC)/query/cursor.o   \
       $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/types.h    \

@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 /* -----------------------------------------------------------------------
  * get a little help for my friends
@@ -60,6 +61,8 @@ int main(int argc, char **argv) {
 	nowdb_session_t ses;
 	char *path;
 	int rc = EXIT_SUCCESS;
+	sigset_t s;
+	int sig, x;
 
 	if (argc < 2) {
 		helptxt(argv[0]);
@@ -102,7 +105,15 @@ int main(int argc, char **argv) {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	sleep(1); // start to process things
+	sigemptyset(&s);
+        sigaddset(&s, SIGUSR1);
+        sigaddset(&s, SIGINT);
+        sigaddset(&s, SIGABRT);
+	x = sigwait(&s, &sig);
+	if (x != 0) {
+		err = nowdb_err_getRC(nowdb_err_sigwait,
+		                       x, "main", NULL);
+	}
 
 cleanup:
 	err = nowdb_library_shutdown(nowdb);
