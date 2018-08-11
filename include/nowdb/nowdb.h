@@ -25,8 +25,9 @@ typedef struct nowdb_cursor_t* nowdb_cursor_t;
 typedef struct nowdb_session_t* nowdb_session_t;
 
 // init and close library
-nowdb_err_t nowdb_library_init(nowdb_t *nowdb, int nthreads);
+nowdb_err_t nowdb_library_init(nowdb_t *nowdb, char *base, int nthreads);
 void nowdb_library_close(nowdb_t nowdb);
+nowdb_err_t nowdb_library_shutdown(nowdb_t nowdb);
 
 nowdb_err_t nowdb_getSession(nowdb_t lib, nowdb_session_t *ses,
                          int istream, int ostream, int estream);
@@ -46,6 +47,8 @@ nowdb_err_t nowdb_session_create(nowdb_t  nowdb,
 
 // run a session everything is done internally
 nowdb_err_t nowdb_session_run(nowdb_session_t  ses);
+
+nowdb_err_t nowdb_session_stop(nowdb_session_t ses);
 
 // destroy session
 void nowdb_session_destroy(nowdb_session_t  ses);

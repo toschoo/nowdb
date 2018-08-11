@@ -18,6 +18,7 @@
 #include <tsalgo/list.h>
 
 typedef struct {
+	nowdb_lock_t        *lock; /* protect the session                */
 	void                 *lib; /* from where we get scopes           */
 	nowdb_scope_t      *scope; /* on what we process                 */
 	nowdb_task_t         task; /* this runs the session              */
@@ -30,6 +31,7 @@ typedef struct {
 	int               estream; /* error stream (may be == ostream    */
 	char              running; /* running or waiting                 */
 	char                 stop; /* terminate thread                   */
+	char                alive; /* session alive                      */
 } nowdb_session_t;
 
 typedef struct {
@@ -41,8 +43,9 @@ typedef struct {
 	int             nthreads;
 } nowdb_t;
 
-nowdb_err_t nowdb_library_init(nowdb_t **lib, int nthreads);
+nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads);
 void nowdb_library_close(nowdb_t *lib);
+nowdb_err_t nowdb_library_shutdown(nowdb_t *lib);
 
 nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
                            nowdb_scope_t    **scope);
@@ -59,6 +62,9 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 
 // run a session everything is done internally
 nowdb_err_t nowdb_session_run(nowdb_session_t *ses);
+
+nowdb_err_t nowdb_session_stop(nowdb_session_t *ses);
+nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses);
 
 // destroy session
 void nowdb_session_destroy(nowdb_session_t *ses);
