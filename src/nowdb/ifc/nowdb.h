@@ -18,6 +18,22 @@
 #include <tsalgo/list.h>
 
 typedef struct {
+	char stype;
+	char rtype;
+        char ctype;
+        int  opts;
+} nowdb_ses_option_t;
+
+#define NOWDB_SES_SQL 0
+#define NOWDB_SES_LE  0
+#define NOWDB_SES_TXT 1
+#define NOWDB_SES_BE  2
+#define NOWDB_SES_ACK 1
+#define NOWDB_SES_NOACK 0
+
+#define NOWDB_SES_TIMING 1
+
+typedef struct {
 	nowdb_lock_t        *lock; /* protect the session                */
 	void                 *lib; /* from where we get scopes           */
 	nowdb_scope_t      *scope; /* on what we process                 */
@@ -37,6 +53,7 @@ typedef struct {
 	char              running; /* running or waiting                 */
 	char                 stop; /* terminate thread                   */
 	char                alive; /* session alive                      */
+        nowdb_ses_option_t    opt; /* session options                    */
 } nowdb_session_t;
 
 typedef struct {
@@ -57,12 +74,17 @@ nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
 nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
                            nowdb_scope_t *scope); 
 
-nowdb_err_t nowdb_getSession(nowdb_t *lib, nowdb_session_t **ses,
-                           int istream, int ostream, int estream);
+nowdb_err_t nowdb_getSession(nowdb_t *lib,
+                             nowdb_session_t **ses,
+                             nowdb_task_t master,
+                             int istream,
+                             int ostream,
+                             int estream);
 
 // run a session everything is done internally
 nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
                                  nowdb_t          *lib,
+                                 nowdb_task_t   master,
                                  int           istream,
                                  int           ostream,
                                  int           estream);

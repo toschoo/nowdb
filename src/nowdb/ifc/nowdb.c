@@ -27,7 +27,8 @@ static char *OBJECT = "lib";
 	ses->err = err;
 
 #define LOGERR(err) \
-	nowdb_err_send(err, ses->estream);
+	nowdb_err_send(err, ses->estream); \
+	nowdb_err_release(err);
 
 /* -----------------------------------------------------------------------
  * Scope Descriptor
@@ -79,12 +80,14 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads) {
 
 	sigemptyset(&s);
         sigaddset(&s, SIGUSR1);
+        sigaddset(&s, SIGUSR2);
         sigaddset(&s, SIGINT);
         sigaddset(&s, SIGABRT);
 
 	x = pthread_sigmask(SIG_SETMASK, &s, NULL);
 	if (x != 0) {
-		fprintf(stderr, "sigmask failed\n");
+		return nowdb_err_getRC(nowdb_err_sigset, x,
+		                         OBJECT, "setmask");
 	}
 
 	if (lib == NULL) INVALID("library pointer is NULL");
@@ -160,7 +163,6 @@ static nowdb_err_t signalSessions(nowdb_t *lib, int what) {
 		list=i==0?lib->uthreads:lib->fthreads;
 		for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 			ses = runner->cont;
-			if (ses->alive == 0) continue;
 			switch(what) {
 			case 1: err = nowdb_session_stop(ses); break;
 			case 2: err = nowdb_session_shutdown(ses); break;
@@ -280,7 +282,8 @@ nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
 	return NOWDB_OK;
 }
 
-static nowdb_err_t initSession(nowdb_session_t *ses,
+static nowdb_err_t initSession(nowdb_session_t  *ses,
+                               nowdb_task_t   master,
                                int           istream,
                                int           ostream,
                                int           estream) 
@@ -295,7 +298,7 @@ static nowdb_err_t initSession(nowdb_session_t *ses,
 	ses->running = 0;
 	ses->stop    = 0;
 	ses->alive   = 1;
-	ses->master  = nowdb_task_myself();
+	ses->master  = master; // pthread_self();
 
 	if (ses->ifile != NULL) {
 		fclose(ses->ifile);
@@ -312,26 +315,29 @@ static nowdb_err_t initSession(nowdb_session_t *ses,
 		return nowdb_err_get(nowdb_err_open,
 			   TRUE, OBJECT, "istream");
 	}
+	setbuf(ses->ifile, NULL);
 	ses->ofile = fdopen(dup(ostream), "w");
 	if (ses->ofile == NULL) {
 		return nowdb_err_get(nowdb_err_open,
 			   TRUE, OBJECT, "ostream");
 	}
+	setbuf(ses->ofile, NULL);
 	ses->efile = fdopen(dup(estream), "w");
 	if (ses->efile == NULL) {
 		return nowdb_err_get(nowdb_err_open,
 			   TRUE, OBJECT, "estream");
 	}
+	setbuf(ses->efile, NULL);
+
 	if (ses->parser != NULL) {
-		nowdbsql_parser_destroy(ses->parser);
-	} else {
-		ses->parser = calloc(1,sizeof(nowdbsql_parser_t));
-		if (ses->parser == NULL) {
-			NOMEM("allocating parser");
-			return err;
-		}
+		nowdbsql_parser_destroy(ses->parser); free(ses->parser);
 	}
-	if (nowdbsql_parser_init(ses->parser, ses->ifile) != 0) {
+	ses->parser = calloc(1,sizeof(nowdbsql_parser_t));
+	if (ses->parser == NULL) {
+		NOMEM("allocating parser");
+		return err;
+	}
+	if (nowdbsql_parser_initSock(ses->parser, ses->istream) != 0) {
 		err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT,
 		                              "cannot init parser");
 		free(ses->parser); ses->parser = NULL;
@@ -343,6 +349,7 @@ static nowdb_err_t initSession(nowdb_session_t *ses,
 // run a session everything is done internally
 nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
                                  nowdb_t          *lib,
+                                 nowdb_task_t   master,
                                  int           istream,
                                  int           ostream,
                                  int           estream) {
@@ -378,7 +385,7 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 	}
 	(*ses)->bufsz = BUFSIZE;
 
-	err = initSession(*ses, istream, ostream, estream);
+	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
 		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
@@ -405,6 +412,7 @@ static void addNode(ts_algo_list_t      *list,
 
 nowdb_err_t nowdb_getSession(nowdb_t *lib,
                     nowdb_session_t **ses,
+                      nowdb_task_t master,
                               int istream,
                               int ostream,
                               int estream) {
@@ -422,8 +430,8 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 			  FALSE, OBJECT, "empty thread pool");
 			goto unlock;
 		}
-		err = nowdb_session_create(ses, lib,
-		          istream, ostream, estream);
+		err = nowdb_session_create(ses, lib, master,
+		                  istream, ostream, estream);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "cannot create session\n");
 			goto unlock;
@@ -455,7 +463,7 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 		break;
 	}
 
-	err = initSession(*ses, istream, ostream, estream);
+	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init session\n");
 		(*ses)->alive = 0;
@@ -481,6 +489,7 @@ unlock:
 static nowdb_err_t signalMaster(nowdb_session_t *ses) {
 	int x;
 
+	if (ses->master == 0) return NOWDB_OK;
 	x = pthread_kill(ses->master, SIGUSR1);
 	if (x != 0) {
 		return nowdb_err_getRC(nowdb_err_signal, x, OBJECT, NULL);
@@ -567,7 +576,7 @@ nowdb_err_t nowdb_session_stop(nowdb_session_t *ses) {
 	nowdb_err_t err;
 
 	if (ses == NULL) INVALID("session is NULL");
-	if (ses->alive == 0) INVALID("session is dead");
+	if (ses->alive == 0) return NOWDB_OK;
 
 	if (setStop(ses, 1) != 0) {
 		ses->alive = 0;
@@ -585,16 +594,17 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 	nowdb_err_t err;
 
 	if (ses == NULL) INVALID("session is NULL");
-	if (ses->alive == 0) INVALID("session is dead");
 
-	if (setStop(ses, 2) != 0) {
-		ses->alive = 0;
-		return ses->err;
-	}
-	err = signalSession(ses);
-	if (err != NOWDB_OK) { 
-		ses->alive = 0;
-		return err;
+	if (ses->alive) {
+		if (setStop(ses, 2) != 0) {
+			ses->alive = 0;
+			return ses->err;
+		}
+		err = signalSession(ses);
+		if (err != NOWDB_OK) { 
+			ses->alive = 0;
+			return err;
+		}
 	}
 	err = nowdb_task_join(ses->task);
 	if (err != NOWDB_OK) { // what to do?
@@ -678,8 +688,15 @@ static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		nowdb_timestamp(&t2);
 		total += cnt;
 		if (cur->row != NULL && cur->hasid) {
-			err = nowdb_row_write(buf, osz, ses->ofile);
-			if (err != NOWDB_OK) break;
+			if (ses->opt.rtype == NOWDB_SES_TXT) {
+				fprintf(stderr, "writing result\n");
+				err = nowdb_row_write(buf, osz, ses->ofile);
+				if (err != NOWDB_OK) break;
+			} else {
+				if (write(ses->ostream, buf, osz) != osz) {
+					perror("cannot write"); break;
+				}
+			}
 
 		} else if (cur->recsize == 32) {
 			// printVertex((nowdb_vertex_t*)buf, osz/32);
@@ -726,7 +743,68 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 }
 
 static nowdb_err_t negotiate(nowdb_session_t *ses) {
+	char buf[8];
+
+        if (read(ses->istream, buf, 8) != 8) {
+		return nowdb_err_get(nowdb_err_read, TRUE, OBJECT,
+		                        "reading session options");
+	}
+	if (buf[0] != 'S') goto sql_error;
+	if (buf[1] != 'Q') goto sql_error;
+	if (buf[2] != 'L') goto sql_error;
+
+	ses->opt.stype = NOWDB_SES_SQL;
+	ses->opt.opts = 0;
+
+	if (buf[3] == 'L' && buf[4] == 'E') {
+		ses->opt.rtype = NOWDB_SES_LE;
+	} else if (buf[3] == 'B' && buf[4] == 'E') {
+		ses->opt.rtype = NOWDB_SES_BE;
+	} else if (buf[3] == 'T' && buf[4] == 'X') {
+		ses->opt.rtype = NOWDB_SES_TXT;
+	} else {
+		goto out_error;
+	}
+	if (buf[5] == '1') {
+		ses->opt.ctype = NOWDB_SES_ACK;
+	} else if (buf[5] == '0') {
+		ses->opt.ctype = NOWDB_SES_NOACK;
+	} else {
+		goto chan_error;
+	}
+	if (buf[6] != ' ' || buf[7] != ' ') {
+		goto term_error;
+	}
+	if (ses->opt.ctype == NOWDB_SES_ACK) {
+		if (write(ses->ostream, buf, 8) != 8) {
+			return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                 "writing session options");
+		}
+		// await ack
+        	if (read(ses->istream, buf, 4) != 4) {
+			return nowdb_err_get(nowdb_err_read, TRUE, OBJECT,
+		                                            "reading ACK");
+		}
+		if (buf[0] != 'A' || buf[1] != 'C' || buf[2] != 'K')
+			goto ack_error;
+	}
 	return NOWDB_OK;
+
+sql_error:
+	return nowdb_err_get(nowdb_err_protocol, FALSE, OBJECT,
+		                        "unknown session type");
+out_error:
+	return nowdb_err_get(nowdb_err_protocol, FALSE, OBJECT,
+		                       "unknown response type");
+chan_error:
+	return nowdb_err_get(nowdb_err_protocol, FALSE, OBJECT,
+		                       "unknown channel type");
+term_error:
+	return nowdb_err_get(nowdb_err_protocol, FALSE, OBJECT,
+		                            "missing terminal");
+ack_error:
+	return nowdb_err_get(nowdb_err_protocol, FALSE, OBJECT,
+		                   "session options not ack'd");
 }
 
 static void runSession(nowdb_session_t *ses) {
@@ -738,12 +816,16 @@ static void runSession(nowdb_session_t *ses) {
 	if (ses == NULL) return;
 	if (ses->err != NOWDB_OK) return;
 	if (ses->alive == 0) return;
-
-	// fprintf(stderr, "running session\n");
+	
+	/*
+	fprintf(stderr, "running session on behalf of %ld\n",
+	                                         ses->master);
+	*/
 
 	err = negotiate(ses);
 	if (err != NOWDB_OK) {
 		SETERR();
+		nowdb_err_print(err);
 		return;
 	}
 	for(;;) {
@@ -755,8 +837,9 @@ static void runSession(nowdb_session_t *ses) {
 			SETERR();
 			break;
 		}
-		rc = nowdbsql_parser_run(ses->parser, &ast);
+		rc = nowdbsql_parser_runSocket(ses->parser, &ast);
 		if (rc == NOWDB_SQL_ERR_EOF) {
+			// fprintf(stderr, "EOF\n");
 			rc = 0; break;
 		}
 		if (rc != 0) {
@@ -777,15 +860,16 @@ static void runSession(nowdb_session_t *ses) {
 		nowdb_ast_destroy(ast); free(ast); ast = NULL;
 
 		nowdb_timestamp(&t2);
-		// if (global_timing) {
+		if (ses->opt.opts & NOWDB_SES_TIMING) {
 			fprintf(stderr, "overall: %luus\n",
 			   nowdb_time_minus(&t2, &t1)/1000);
-		// }
+		}
 	}
 	if (rc != 0) {
 		fprintf(stderr, "ERROR: %s\n",
 		nowdbsql_parser_errmsg(ses->parser));
 	}
+	// fprintf(stderr, "session through\n");
 }
 
 static void leaveSession(nowdb_session_t *ses) {
@@ -816,6 +900,13 @@ static void leaveSession(nowdb_session_t *ses) {
 	}
 }
 
+#define SIGNALEOS() \
+	err = signalMaster(ses); \
+	if (err != NOWDB_OK) { \
+		SETERR(); \
+		break; \
+	}
+
 // session entry point
 void *nowdb_session_entry(void *session) {
 	nowdb_err_t err;
@@ -842,10 +933,16 @@ void *nowdb_session_entry(void *session) {
 		if (stop == 2) break;
 		if (stop == 1) continue;
 
+		if (ses->err != NOWDB_OK) {
+			LOGERR(ses->err);
+			ses->err = NOWDB_OK;
+			break;
+		}
+
 		runSession(ses);
 		if (ses->err != NOWDB_OK) {
 			LOGERR(ses->err);
-			break;
+			ses->err = NOWDB_OK;
 		}
 
 		stop = getStop(ses);
@@ -854,13 +951,14 @@ void *nowdb_session_entry(void *session) {
 
 		leaveSession(ses);
 
-		if (setWaiting(ses) < 0) break;
-
-		err = signalMaster(ses);
-		if (err != NOWDB_OK) {
-			SETERR();
+		if (setWaiting(ses) < 0) {
+			LOGERR(ses->err);
+			ses->err = NOWDB_OK;
+			SIGNALEOS();
 			break;
 		}
+
+		SIGNALEOS();
 	}
 	ses->alive = 0;
 	// fprintf(stderr, "terminating\n");

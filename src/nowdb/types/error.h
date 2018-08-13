@@ -268,6 +268,12 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_parser          60
 #define nowdb_err_sigwait         61
 #define nowdb_err_signal          62
+#define nowdb_err_sigset          63
+#define nowdb_err_protocol        64
+#define nowdb_err_socket          65
+#define nowdb_err_bind            66
+#define nowdb_err_listen          67
+#define nowdb_err_accept          68
 #define nowdb_err_unknown       9999
 
 #endif

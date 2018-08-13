@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
 		nowdb_err_release(err);
 		return EXIT_FAILURE;
 	}
-	err = nowdb_getSession(nowdb, &ses, 0, 1, 2);
+	err = nowdb_getSession(nowdb, &ses, pthread_self(), 0, 1, 2);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot get session\n");
 		nowdb_err_print(err);

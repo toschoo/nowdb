@@ -7,6 +7,8 @@
 #include <nowdb/sql/lex.h>
 #include <nowdb/sql/state.h>
 
+#define BUFSIZE 8192
+
 /* -----------------------------------------------------------------------
  * Announce the token seen in the stream on stderr.
  * We should think of a tracer (e.g. NDEBUG).
@@ -36,6 +38,8 @@ void nowdb_sql_parseInit(void *parser);
 int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
 	p->fd = fd;
 	p->errmsg = NULL;
+	p->buf = NULL;
+	p->streaming = 0;
 
 	/* initialise our internal state */
 	if (nowdbsql_state_init(&p->st) != 0) return -1;
@@ -57,6 +61,38 @@ int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
 }
 
 /* -----------------------------------------------------------------------
+ * Initialise the parser for sockets
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_initSock(nowdbsql_parser_t *p, int fd) {
+	p->sock = fd;
+	p->errmsg = NULL;
+	p->streaming = 1;
+
+	/* allocate buffer */
+	p->buf = malloc(BUFSIZE);
+	if (p->buf == NULL) return NOWDB_SQL_ERR_NO_MEM;
+
+	/* initialise our internal state */
+	if (nowdbsql_state_init(&p->st) != 0) return -1;
+
+	/* allocate the lemon-generated parser */
+	p->lp = nowdb_sql_parseAlloc(malloc);
+	if (p->lp == NULL) {
+		nowdbsql_state_destroy(&p->st);
+		free(p->buf); p->buf = NULL;
+		return -1;
+	}
+	/* initialise the lemon-generated parser */
+	nowdb_sql_parseInit(p->lp);
+
+	/* initialise the lexer */
+	yylex_init(&p->sc);
+
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
  * Destroy the parser
  * -----------------------------------------------------------------------
  */
@@ -67,6 +103,9 @@ void nowdbsql_parser_destroy(nowdbsql_parser_t *p) {
 	if (p->lp != NULL) {
 		nowdb_sql_parseFree(p->lp, free);
 		p->lp = NULL;
+	}
+	if (p->buf != NULL) {
+		free(p->buf); p->buf = NULL;
 	}
 
 	yylex_destroy(p->sc); p->sc = NULL;
@@ -174,6 +213,13 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		reinitHARD(p);
 		*ast = NULL; return err;
 	}
+
+	/*
+	if (p->streaming) {
+		if (feof(p->fd)) return NOWDB_SQL_ERR_EOF;
+	}
+	*/
+
 	/* terminate the parser */
 	if(have) nowdb_sql_parse(p->lp , 0, NULL, &p->st);
 	else {
@@ -212,4 +258,42 @@ int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
 
 	yy_delete_buffer(pst, p->sc);
 	return rc;
+}
+
+/* -----------------------------------------------------------------------
+ * Parse socket
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_runSocket(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
+	int x;
+	int size;
+
+	for(;;) {
+		if (p->fd == NULL) { // || feof(p->fd)) {
+			if (read(p->sock, &size, 4) != 4)
+				return NOWDB_SQL_ERR_EOF;
+			if (size > BUFSIZE) return NOWDB_SQL_ERR_BUFSIZE;
+			if (p->fd != NULL) {
+				fclose(p->fd); p->fd = NULL;
+			}
+			fprintf(stderr, "waiting\n");
+			size = read(p->sock, p->buf, BUFSIZE);
+			if (size == 0) return NOWDB_SQL_ERR_EOF;
+			p->fd = fmemopen(p->buf, size, "r");
+			if (p->fd == NULL) return NOWDB_SQL_ERR_INPUT;
+			setbuf(p->fd, NULL);
+			yyset_in(p->fd, p->sc);
+		}
+		x = nowdbsql_parser_run(p, ast);
+		/*
+		if (x == 0 && *ast == NULL) {
+			fclose(p->fd); p->fd = NULL;
+			continue;
+		}
+		*/
+		// if (x != 0 && x != NOWDB_SQL_ERR_EOF) return x;
+		if (x != 0) return x;
+		break;
+	}
+	return 0;
 }

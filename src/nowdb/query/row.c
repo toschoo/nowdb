@@ -500,6 +500,7 @@ nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream) {
 			  FALSE, OBJECT, "unknown type in row");
 		}
 	}
+	fflush(stream);
 	return NOWDB_OK;
 }
 

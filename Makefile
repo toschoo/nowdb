@@ -24,6 +24,7 @@ INC = -I./include -I./test -I./src -I./
 LIB = lib
 
 SRC = src/nowdb
+SRD = src/nowdbd
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -125,6 +126,8 @@ DEP = $(SRC)/types/types.h    \
 default:	lib 
 
 all:	default tools tests bench
+
+server:	$(BIN)/nowdbd
 
 tools:	bin/randomfile    \
 	bin/readfile      \
@@ -528,6 +531,13 @@ $(BIN)/scopetool2:	$(LIB) $(TOOLS)/scopetool2.o \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
 
+$(BIN)/nowdbd:		$(DEP) $(LIB) $(SRD)/nowdbd.o \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(SRD)/nowdbd.o \
+			              	       $(COM)/cmd.o      \
+			                 $(libs) -lnowdb
+
 
 # Clean up
 clean:
@@ -607,4 +617,5 @@ clean:
 	rm -f $(BIN)/scopetool2
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
+	rm -f $(BIN)/nowdbd
 

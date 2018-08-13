@@ -10,6 +10,9 @@
 // types should go to include
 #include <nowdb/types/error.h>
 
+#include <pthread.h>
+typedef pthread_t nowdb_thread_t;
+
 // structure to hold the opened scopes
 typedef struct nowdb_t* nowdb_t;
 
@@ -29,21 +32,18 @@ nowdb_err_t nowdb_library_init(nowdb_t *nowdb, char *base, int nthreads);
 void nowdb_library_close(nowdb_t nowdb);
 nowdb_err_t nowdb_library_shutdown(nowdb_t nowdb);
 
-nowdb_err_t nowdb_getSession(nowdb_t lib, nowdb_session_t *ses,
-                         int istream, int ostream, int estream);
+nowdb_err_t nowdb_getSession(nowdb_t lib,
+                             nowdb_session_t *ses,
+                             nowdb_thread_t master,           
+                             int istream,
+                             int ostream,
+                             int estream);
 
 // execute statement as string
 nowdb_err_t nowdb_exec_statement(nowdb_t          nowdb,
                                  nowdb_scope_t    scope,
                                  char              *sql,
                                  nowdb_result_t *result);
-
-// create a session 
-// would be a callback a good idea?
-nowdb_err_t nowdb_session_create(nowdb_t  nowdb,
-                                 int    istream,
-                                 int    ostream,
-                                 int    estream);
 
 // run a session everything is done internally
 nowdb_err_t nowdb_session_run(nowdb_session_t  ses);

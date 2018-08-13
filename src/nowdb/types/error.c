@@ -289,6 +289,12 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_parser: return "parser error";
 	case nowdb_err_sigwait: return "operation sigwait failed";
 	case nowdb_err_signal: return "operation pthread_kill failed";
+	case nowdb_err_sigset: return "operation sigmask failed";
+	case nowdb_err_socket: return "operation sigmask failed";
+	case nowdb_err_bind: return "operation bind failed";
+	case nowdb_err_listen: return "operation listen failed";
+	case nowdb_err_accept: return "operation accept failed";
+	case nowdb_err_protocol: return "protocol error";
 	default: return "unknown";
 	}
 }
