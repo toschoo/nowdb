@@ -542,6 +542,7 @@ $(BIN)/nowdbd:		$(DEP) $(LIB) $(SRD)/nowdbd.o \
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
+	rm -f $(SRD)/*.o
 	rm -f $(TST)/*/*.o
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
