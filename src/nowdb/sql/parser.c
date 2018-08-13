@@ -7,6 +7,8 @@
 #include <nowdb/sql/lex.h>
 #include <nowdb/sql/state.h>
 
+#include <signal.h>
+
 #define BUFSIZE 8192
 
 /* -----------------------------------------------------------------------
@@ -267,30 +269,47 @@ int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
 int nowdbsql_parser_runSocket(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 	int x;
 	int size;
+	sigset_t s;
+	
+	sigemptyset(&s);
+	sigaddset(&s, SIGUSR1);
 
+	x = pthread_sigmask(SIG_BLOCK, &s, NULL);
+	
 	for(;;) {
+		// fprintf(stderr, "looping\n");
 		if (p->fd == NULL) { // || feof(p->fd)) {
-			if (read(p->sock, &size, 4) != 4)
-				return NOWDB_SQL_ERR_EOF;
-			if (size > BUFSIZE) return NOWDB_SQL_ERR_BUFSIZE;
-			if (p->fd != NULL) {
-				fclose(p->fd); p->fd = NULL;
+			x = pthread_sigmask(SIG_UNBLOCK, &s, NULL);
+			fprintf(stderr, "reading size\n");
+			x = read(p->sock, &size, 4);
+			if (x <= 0) {
+				fprintf(stderr, "ERROR: %d/%d\n", errno, x);
+				return NOWDB_SQL_ERR_CLOSED;
 			}
-			fprintf(stderr, "waiting\n");
+			if (size > BUFSIZE) return NOWDB_SQL_ERR_BUFSIZE;
+			if (size <= 0) {
+				// protocol violation: we should close it
+				return NOWDB_SQL_ERR_CLOSED;
+			}
+			fprintf(stderr, "waiting for %d\n", size);
 			size = read(p->sock, p->buf, BUFSIZE);
-			if (size == 0) return NOWDB_SQL_ERR_EOF;
+			if (size == 0) return NOWDB_SQL_ERR_CLOSED;
+			if (size < 0) {
+				fprintf(stderr, "ERROR: %d\n", errno);
+				return NOWDB_SQL_ERR_INPUT;
+			}
 			p->fd = fmemopen(p->buf, size, "r");
 			if (p->fd == NULL) return NOWDB_SQL_ERR_INPUT;
 			setbuf(p->fd, NULL);
 			yyset_in(p->fd, p->sc);
 		}
+		x = pthread_sigmask(SIG_BLOCK, &s, NULL);
 		x = nowdbsql_parser_run(p, ast);
-		/*
-		if (x == 0 && *ast == NULL) {
+		if ((x == 0 || x == NOWDB_SQL_ERR_EOF) && *ast == NULL) {
 			fclose(p->fd); p->fd = NULL;
 			continue;
 		}
-		*/
+		fprintf(stderr, "%p\n", *ast);
 		// if (x != 0 && x != NOWDB_SQL_ERR_EOF) return x;
 		if (x != 0) return x;
 		break;

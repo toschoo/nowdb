@@ -52,8 +52,10 @@ int parsecmd(int argc, char **argv) {
 
 volatile sig_atomic_t global_stop;
 
-void sighandler(int sig) {
+void stophandler(int sig) {
 	global_stop = 1;
+}
+void ignhandler(int sig) {
 }
 
 typedef struct {
@@ -111,7 +113,6 @@ void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 }
 
 void *serve(void *arg) {
-	struct sigaction sact;
 	srv_t *srv = arg;
 	int sock, con;
 	struct sockaddr_in badr, aadr;
@@ -122,18 +123,6 @@ void *serve(void *arg) {
 
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR2);
-
-	memset(&sact, 0, sizeof(struct sigaction));
-	sact.sa_handler = sighandler;
-	sact.sa_mask = s;
-	sact.sa_flags = 0;
-
-	/* set up sigaction */
-	if (sigaction(SIGUSR2, &sact, NULL) != 0) {
-		SETERR(nowdb_err_signal, TRUE,
-		   "sigaction failed for SIGUSR2");
-		return NULL;
-	}
 
 	memset(&badr, 0, sizeof(struct sockaddr_in));
 	memset(&aadr, 0, sizeof(struct sockaddr_in));
@@ -205,6 +194,7 @@ nowdb_err_t stopListener(srv_t *srv, nowdb_task_t listener) {
 }
 
 int runServer(int argc, char **argv) {
+	struct sigaction sact;
 	nowdb_task_t listener;
 	nowdb_err_t err;
 	nowdb_t *lib;
@@ -240,6 +230,30 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	initServer(&srv, lib, 55505);
+
+	memset(&sact, 0, sizeof(struct sigaction));
+	sact.sa_handler = stophandler;
+	sact.sa_flags = 0;
+	sigemptyset(&sact.sa_mask);
+	sigaddset(&sact.sa_mask, SIGUSR2);
+
+	/* set up sigaction */
+	if (sigaction(SIGUSR2, &sact, NULL) != 0) {
+		perror("cannot set signal handler for SIGUSR2");
+		nowdb_library_close(lib);
+		return EXIT_FAILURE;
+	}
+
+	// sact.sa_handler = SIG_IGN;
+	sact.sa_handler = ignhandler;
+	sigemptyset(&sact.sa_mask);
+	sigaddset(&sact.sa_mask, SIGUSR1);
+
+	if (sigaction(SIGUSR1, &sact, NULL) != 0) {
+		perror("cannot set signal handler for SIGUSR1");
+		nowdb_library_close(lib);
+		return EXIT_FAILURE;
+	}
 
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR1);

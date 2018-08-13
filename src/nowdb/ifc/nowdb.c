@@ -639,7 +639,7 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 	}
 }
 
-static int printReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
+static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
 	nowdb_qry_report_t *rep;
 
 	if (res->result == NULL) {
@@ -652,6 +652,25 @@ static int printReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
 	                rep->errors,
 	                rep->runtime);
 	free(res->result); res->result = NULL;
+	return 0;
+}
+
+static int sendOK(nowdb_session_t *ses) {
+	char ok;
+	nowdb_err_t err;
+
+	switch(ses->opt.rtype) {
+	case NOWDB_SES_TXT: ok = '0'; break;
+	case NOWDB_SES_LE:
+	case NOWDB_SES_BE:
+	default: ok = 0; break;
+	}
+	if (write(ses->ostream, &ok, 1) != 1) {
+		err = nowdb_err_get(nowdb_err_write,
+		        TRUE, OBJECT, "writing ACK");
+		SETERR();
+		return -1;
+	}
 	return 0;
 }
 
@@ -723,6 +742,11 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 
 	err = nowdb_stmt_handle(ast, ses->scope, ses->lib, path, &res);
 	if (err != NOWDB_OK) {
+
+		/* 
+		 * sendError
+		 */
+		
 		fprintf(stderr, "cannot handle ast: \n");
 		nowdb_ast_show(ast);
 		nowdb_err_print(err);
@@ -730,11 +754,12 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		return -1;
 	}
 	switch(res.resType) {
-	case NOWDB_QRY_RESULT_NOTHING: break;
-	case NOWDB_QRY_RESULT_REPORT: return printReport(ses, &res);
-	case NOWDB_QRY_RESULT_SCOPE: ses->scope = res.result; break;
-	case NOWDB_QRY_RESULT_CURSOR: return processCursor(ses, res.result);
-
+	case NOWDB_QRY_RESULT_NOTHING: return sendOK(ses);
+	case NOWDB_QRY_RESULT_REPORT: return sendReport(ses, &res);
+	case NOWDB_QRY_RESULT_SCOPE:
+		ses->scope = res.result; return sendOK(ses);
+	case NOWDB_QRY_RESULT_CURSOR:
+		return processCursor(ses, res.result);
 	default:
 		fprintf(stderr, "unknown result :-(\n");
 		return -1;
@@ -829,7 +854,6 @@ static void runSession(nowdb_session_t *ses) {
 		return;
 	}
 	for(;;) {
-
 		// this must be interruptibel
 		if (ses->parser == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
@@ -838,9 +862,13 @@ static void runSession(nowdb_session_t *ses) {
 			break;
 		}
 		rc = nowdbsql_parser_runSocket(ses->parser, &ast);
-		if (rc == NOWDB_SQL_ERR_EOF) {
-			// fprintf(stderr, "EOF\n");
+		if (rc == NOWDB_SQL_ERR_CLOSED) {
+			fprintf(stderr, "SOCKET CLOSED\n");
 			rc = 0; break;
+		}
+		if (rc == NOWDB_SQL_ERR_EOF) {
+			fprintf(stderr, "EOF\n");
+			rc = 0; continue;
 		}
 		if (rc != 0) {
 			fprintf(stderr, "parsing error\n");
@@ -869,7 +897,7 @@ static void runSession(nowdb_session_t *ses) {
 		fprintf(stderr, "ERROR: %s\n",
 		nowdbsql_parser_errmsg(ses->parser));
 	}
-	// fprintf(stderr, "session through\n");
+	fprintf(stderr, "session ending\n");
 }
 
 static void leaveSession(nowdb_session_t *ses) {

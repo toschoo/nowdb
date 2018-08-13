@@ -29,6 +29,7 @@
 #define NOWDB_SQL_ERR_EOF        7
 #define NOWDB_SQL_ERR_BUFSIZE    8
 #define NOWDB_SQL_ERR_INPUT      9
+#define NOWDB_SQL_ERR_CLOSED    10
 #define NOWDB_SQL_ERR_PANIC     99
 #define NOWDB_SQL_ERR_UNKNOWN  100
 

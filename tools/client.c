@@ -10,8 +10,25 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define SQLTEST "use retail;select count(*) from tx;"
 char buf[8192];
+
+#define SENDSQL(sql) \
+	s = strlen(sql); \
+	memcpy(msg, &s, 4); \
+	if (write(sock, msg, 4) != 4) { \
+		perror("cannot send size"); \
+		close(sock); \
+		return EXIT_FAILURE; \
+	} \
+	memcpy(msg, sql, s); \
+	if (write(sock, msg, s) != s) { \
+		perror("cannot send SQL"); \
+		close(sock); \
+		return EXIT_FAILURE; \
+	}
+
+#define READACK() \
+	s = read(sock, msg, 8192); \
 
 int main(int argc, char **argv) {
 	size_t s;
@@ -55,21 +72,19 @@ int main(int argc, char **argv) {
 		close(sock);
 		return EXIT_FAILURE;
 	}
-	s = strlen(SQLTEST);
-	memcpy(msg, &s, 4);
-	if (write(sock, msg, 4) != 4) {
-		perror("cannot send size");
-		close(sock);
-		return EXIT_FAILURE;
-	}
-	memcpy(msg, SQLTEST, s);
-	if (write(sock, msg, s) != s) {
-		perror("cannot send SQL");
-		close(sock);
-		return EXIT_FAILURE;
-	}
+	SENDSQL("use retail");
+	READACK();
+
+	SENDSQL("select count(*) from tx");
+
 	s = read(sock, msg, 8192);
 	write(1, msg, s); write(1, "\n", 1);
+
+	fprintf(stderr, "blocking!\n");
+	s = read(sock, msg, 8192); // just block
+
+	fprintf(stderr, "received: %zu\n", s);
+	write(1, msg, 1); write(1,"\n",1);
 	
 	close(sock);
 	return EXIT_SUCCESS;
