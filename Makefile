@@ -22,9 +22,11 @@ LDFLAGS = -L./lib
 
 INC = -I./include -I./test -I./src -I./
 LIB = lib
+CLIENTLIB = nowclientlib 
 
 SRC = src/nowdb
 SRD = src/nowdbd
+SRL = src/nowdbclient
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -125,9 +127,11 @@ DEP = $(SRC)/types/types.h    \
 
 default:	lib 
 
-all:	default tools tests bench
+all:	default tools tests bench server client
 
 server:	$(BIN)/nowdbd
+
+client:	$(BIN)/nowclient
 
 tools:	bin/randomfile    \
 	bin/readfile      \
@@ -201,6 +205,15 @@ lib/libnowdb.so:	$(OBJ) $(DEP)
 			$(CC) -shared \
 			      -o $(OUTLIB)/libnowdb.so \
 			         $(OBJ) $(libs)
+
+# Client Library 
+nowclientlib:		lib/libnowdbclient.so
+
+lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP)
+			$(LNKMSG)
+			$(CC) -shared \
+			      -o $(OUTLIB)/libnowdbclient.so \
+			         $(SRL)/nowdbclient.o $(libs)
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
@@ -466,7 +479,7 @@ $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/sql/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
-			         $(BENCH)/parserbench.o -lnowdb
+			         $(BENCH)/parserbench.o $(libs) -lnowdb
 		
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
@@ -538,11 +551,20 @@ $(BIN)/nowdbd:		$(DEP) $(LIB) $(SRD)/nowdbd.o \
 			              	       $(COM)/cmd.o      \
 			                 $(libs) -lnowdb
 
+$(BIN)/nowclient:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(TOOLS)/nowclient.o \
+			$(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/nowclient.o \
+			              	       $(COM)/cmd.o      \
+			                 $(libs) -lnowdbclient
+
 
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
 	rm -f $(SRD)/*.o
+	rm -f $(SRL)/*.o
 	rm -f $(TST)/*/*.o
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
@@ -555,6 +577,7 @@ clean:
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
+	rm -f $(OUTLIB)/libnowdbclient.so
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
 	rm -f $(RSC)/*.dbz
@@ -619,4 +642,5 @@ clean:
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
 	rm -f $(BIN)/nowdbd
+	rm -f $(BIN)/nowclient
 

@@ -37,11 +37,21 @@ void nowdb_sql_parseInit(void *parser);
  * Initialise the parser
  * -----------------------------------------------------------------------
  */
-int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
-	p->fd = fd;
+static inline int initParser(nowdbsql_parser_t *p, FILE *f, int fd) {
+	p->fd = f;
+	p->sock = fd;
 	p->errmsg = NULL;
 	p->buf = NULL;
-	p->streaming = 0;
+
+	p->streaming = f==NULL?1:0;
+
+	if (p->streaming) {
+		p->buf = malloc(BUFSIZE);
+		if (p->buf == NULL) return NOWDB_SQL_ERR_NO_MEM;
+	
+		sigemptyset(&p->sigs);
+		sigaddset(&p->sigs, SIGUSR1);
+	}
 
 	/* initialise our internal state */
 	if (nowdbsql_state_init(&p->st) != 0) return -1;
@@ -57,41 +67,26 @@ int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
 
 	/* initialise the lexer */
 	yylex_init(&p->sc);
-	yyset_in(fd, p->sc);
+
+	if (f != NULL) yyset_in(f, p->sc);
 
 	return 0;
 }
 
 /* -----------------------------------------------------------------------
- * Initialise the parser for sockets
+ * Initialise the parser
  * -----------------------------------------------------------------------
  */
-int nowdbsql_parser_initSock(nowdbsql_parser_t *p, int fd) {
-	p->sock = fd;
-	p->errmsg = NULL;
-	p->streaming = 1;
+int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
+	return initParser(p, fd, 0);
+}
 
-	/* allocate buffer */
-	p->buf = malloc(BUFSIZE);
-	if (p->buf == NULL) return NOWDB_SQL_ERR_NO_MEM;
-
-	/* initialise our internal state */
-	if (nowdbsql_state_init(&p->st) != 0) return -1;
-
-	/* allocate the lemon-generated parser */
-	p->lp = nowdb_sql_parseAlloc(malloc);
-	if (p->lp == NULL) {
-		nowdbsql_state_destroy(&p->st);
-		free(p->buf); p->buf = NULL;
-		return -1;
-	}
-	/* initialise the lemon-generated parser */
-	nowdb_sql_parseInit(p->lp);
-
-	/* initialise the lexer */
-	yylex_init(&p->sc);
-
-	return 0;
+/* -----------------------------------------------------------------------
+ * Initialise the parser
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_initStreaming(nowdbsql_parser_t *p, int fd) {
+	return initParser(p, NULL, fd);
 }
 
 /* -----------------------------------------------------------------------
@@ -216,12 +211,6 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		*ast = NULL; return err;
 	}
 
-	/*
-	if (p->streaming) {
-		if (feof(p->fd)) return NOWDB_SQL_ERR_EOF;
-	}
-	*/
-
 	/* terminate the parser */
 	if(have) nowdb_sql_parse(p->lp , 0, NULL, &p->st);
 	else {
@@ -262,55 +251,54 @@ int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
 	return rc;
 }
 
+#define RETERR(e) \
+	{ \
+	pthread_sigmask(SIG_BLOCK, &p->sigs, NULL); \
+	return e; \
+	}
+
+#define SIGOFF() \
+	x = pthread_sigmask(SIG_UNBLOCK, &p->sigs, NULL); \
+	if (x != 0) return NOWDB_SQL_ERR_SIGNAL;
+
+#define SIGON() \
+	x = pthread_sigmask(SIG_BLOCK, &p->sigs, NULL); \
+	if (x != 0) return NOWDB_SQL_ERR_SIGNAL;
+
 /* -----------------------------------------------------------------------
  * Parse socket
  * -----------------------------------------------------------------------
  */
-int nowdbsql_parser_runSocket(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
+int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 	int x;
 	int size;
-	sigset_t s;
-	
-	sigemptyset(&s);
-	sigaddset(&s, SIGUSR1);
-
-	x = pthread_sigmask(SIG_BLOCK, &s, NULL);
 	
 	for(;;) {
-		// fprintf(stderr, "looping\n");
-		if (p->fd == NULL) { // || feof(p->fd)) {
-			x = pthread_sigmask(SIG_UNBLOCK, &s, NULL);
-			fprintf(stderr, "reading size\n");
+		if (p->fd == NULL) {
+
+			SIGOFF();
+
 			x = read(p->sock, &size, 4);
-			if (x <= 0) {
-				fprintf(stderr, "ERROR: %d/%d\n", errno, x);
-				return NOWDB_SQL_ERR_CLOSED;
-			}
-			if (size > BUFSIZE) return NOWDB_SQL_ERR_BUFSIZE;
-			if (size <= 0) {
-				// protocol violation: we should close it
-				return NOWDB_SQL_ERR_CLOSED;
-			}
-			fprintf(stderr, "waiting for %d\n", size);
-			size = read(p->sock, p->buf, BUFSIZE);
-			if (size == 0) return NOWDB_SQL_ERR_CLOSED;
-			if (size < 0) {
-				fprintf(stderr, "ERROR: %d\n", errno);
-				return NOWDB_SQL_ERR_INPUT;
-			}
+			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
+			if (size > BUFSIZE) RETERR(NOWDB_SQL_ERR_BUFSIZE);
+			if (size <= 0) RETERR(NOWDB_SQL_ERR_PROTOCOL);
+
+			x = read(p->sock, p->buf, size);
+			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
+			if (x != size) RETERR(NOWDB_SQL_ERR_PROTOCOL);
+
+			SIGON();
+
 			p->fd = fmemopen(p->buf, size, "r");
 			if (p->fd == NULL) return NOWDB_SQL_ERR_INPUT;
 			setbuf(p->fd, NULL);
 			yyset_in(p->fd, p->sc);
 		}
-		x = pthread_sigmask(SIG_BLOCK, &s, NULL);
 		x = nowdbsql_parser_run(p, ast);
 		if ((x == 0 || x == NOWDB_SQL_ERR_EOF) && *ast == NULL) {
 			fclose(p->fd); p->fd = NULL;
 			continue;
 		}
-		fprintf(stderr, "%p\n", *ast);
-		// if (x != 0 && x != NOWDB_SQL_ERR_EOF) return x;
 		if (x != 0) return x;
 		break;
 	}

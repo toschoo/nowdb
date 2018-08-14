@@ -80,11 +80,14 @@ int main(int argc, char **argv) {
 	s = read(sock, msg, 8192);
 	write(1, msg, s); write(1, "\n", 1);
 
+	/*
 	fprintf(stderr, "blocking!\n");
-	s = read(sock, msg, 8192); // just block
-
-	fprintf(stderr, "received: %zu\n", s);
-	write(1, msg, 1); write(1,"\n",1);
+	for(;;) {
+		s = read(sock, msg, 8192); // just block
+		fprintf(stderr, "received: %zu\n", s);
+		write(1, msg, 1); write(1,"\n",1);
+	}
+	*/
 	
 	close(sock);
 	return EXIT_SUCCESS;

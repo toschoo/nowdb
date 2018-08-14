@@ -337,7 +337,7 @@ static nowdb_err_t initSession(nowdb_session_t  *ses,
 		NOMEM("allocating parser");
 		return err;
 	}
-	if (nowdbsql_parser_initSock(ses->parser, ses->istream) != 0) {
+	if (nowdbsql_parser_initStreaming(ses->parser, ses->istream) != 0) {
 		err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT,
 		                              "cannot init parser");
 		free(ses->parser); ses->parser = NULL;
@@ -656,21 +656,66 @@ static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
 }
 
 static int sendOK(nowdb_session_t *ses) {
-	char ok;
+	char status[2];
 	nowdb_err_t err;
 
-	switch(ses->opt.rtype) {
-	case NOWDB_SES_TXT: ok = '0'; break;
-	case NOWDB_SES_LE:
-	case NOWDB_SES_BE:
-	default: ok = 0; break;
-	}
-	if (write(ses->ostream, &ok, 1) != 1) {
+	status[0] = NOWDB_STATUS;
+	status[1] = NOWDB_ACK;
+
+	if (write(ses->ostream, status, 2) != 2) {
 		err = nowdb_err_get(nowdb_err_write,
 		        TRUE, OBJECT, "writing ACK");
 		SETERR();
 		return -1;
 	}
+	fprintf(stderr, "OK\n");
+	return 0;
+}
+
+static int sendErr(nowdb_session_t *ses,
+                   nowdb_err_t      err,
+                   nowdb_ast_t     *ast) {
+	char *tmp="unknown";
+	int sz;
+	char status[2];
+	char freetmp=0;
+
+	status[0] = NOWDB_STATUS;
+	status[1] = NOWDB_NOK;
+
+	// send NOK
+	if (write(ses->ostream, status, 2) != 2) {
+		err = nowdb_err_get(nowdb_err_write,
+		     TRUE, OBJECT, "writing status");
+		SETERR();
+		return -1;
+	}
+	// build error report
+	if (ast == NULL) {
+		tmp = (char*)nowdbsql_parser_errmsg(ses->parser);
+		if (tmp == NULL) tmp = "unknown";
+	} else if (err != NOWDB_OK) {
+		tmp = nowdb_err_describe(err, ';');
+		if (tmp == NULL) tmp = "out-of-mem";
+		else freetmp = 1;
+	}
+	// send error report
+	sz = strlen(tmp);
+	if (write(ses->ostream, &sz, 4) != 4) {
+		err = nowdb_err_get(nowdb_err_write,
+		      TRUE, OBJECT, "writing error");
+		SETERR();
+		if (freetmp) free(tmp);
+		return -1;
+	}
+	if (write(ses->ostream, tmp, sz) != sz) {
+		err = nowdb_err_get(nowdb_err_write,
+		      TRUE, OBJECT, "writing error");
+		SETERR();
+		if (freetmp) free(tmp);
+		return -1;
+	}
+	if (freetmp) free(tmp);
 	return 0;
 }
 
@@ -741,18 +786,7 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	char *path = LIB(ses->lib)->base;
 
 	err = nowdb_stmt_handle(ast, ses->scope, ses->lib, path, &res);
-	if (err != NOWDB_OK) {
-
-		/* 
-		 * sendError
-		 */
-		
-		fprintf(stderr, "cannot handle ast: \n");
-		nowdb_ast_show(ast);
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return -1;
-	}
+	if (err != NOWDB_OK) return sendErr(ses, err, ast);
 	switch(res.resType) {
 	case NOWDB_QRY_RESULT_NOTHING: return sendOK(ses);
 	case NOWDB_QRY_RESULT_REPORT: return sendReport(ses, &res);
@@ -854,14 +888,13 @@ static void runSession(nowdb_session_t *ses) {
 		return;
 	}
 	for(;;) {
-		// this must be interruptibel
 		if (ses->parser == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			           OBJECT, "session not initialised");
 			SETERR();
 			break;
 		}
-		rc = nowdbsql_parser_runSocket(ses->parser, &ast);
+		rc = nowdbsql_parser_runStream(ses->parser, &ast);
 		if (rc == NOWDB_SQL_ERR_CLOSED) {
 			fprintf(stderr, "SOCKET CLOSED\n");
 			rc = 0; break;
@@ -871,8 +904,8 @@ static void runSession(nowdb_session_t *ses) {
 			rc = 0; continue;
 		}
 		if (rc != 0) {
-			fprintf(stderr, "parsing error\n");
-			break;
+			rc = sendErr(ses, err, ast);
+			if (rc != 0) break;
 		}
 		if (ast == NULL) {
 			fprintf(stderr, "no error, no ast :-(\n");
