@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <limits.h>
 #include <errno.h>
 #include <ctype.h>
 #include <sys/stat.h>
@@ -207,44 +209,38 @@ static inline int readResult(struct nowdb_con_t    *con,
                              struct nowdb_result_t *res) {
 	int x;
 
-	if (read(con->sock, con->buf, 1) != 1) {
+	res->buf = con->buf;
+
+	if (read(con->sock, con->buf, 2) != 2) {
 		perror("cannot read socket");
 		return NOWDB_ERR_NOREAD;
 	}
 
 	res->rtype = (int)con->buf[0];
 
-	switch(con->buf[0]) {
-	case NOWDB_STATUS:
-		if (read(con->sock, con->buf, 1) != 1) {
-			perror("cannot read socket");
-			return NOWDB_ERR_NOREAD;
-		}
-		res->buf = con->buf;
-		res->status = -1;
-		if (con->buf[0] == ACK) {
-			res->status = 0;
-			return NOWDB_OK;
-		}
-		if (con->buf[0] != NOK) return NOWDB_ERR_PROTO;
+	res->status = -1;
+	if (con->buf[1] == ACK) {
+		res->status = 0;
+		if (res->rtype == NOWDB_STATUS) return NOWDB_OK;
 
-	case NOWDB_REPORT:
-	case NOWDB_ROW:
-		x = readSize(con, &res->sz);
-		if (x != NOWDB_OK) return x;
-		res->buf = con->buf;
-		if (read(con->sock, con->buf, res->sz) != res->sz) {
-			perror("cannot read socket");
-			return NOWDB_ERR_NOREAD;
-		}
-		if (res->rtype == NOWDB_REPORT) res->buf[res->sz] = 0;
-		return NOWDB_OK;
-		
-	case NOWDB_CURSOR:
-		// read cursor id
-
-	default: return NOWDB_ERR_PROTO;   
+	} else if (res->rtype == NOWDB_STATUS && con->buf[1] == NOK) {
+		return NOWDB_ERR_PROTO;
 	}
+
+	x = readSize(con, &res->sz);
+	if (x != NOWDB_OK) return x;
+
+	if (read(con->sock, con->buf, res->sz) != res->sz) {
+		perror("cannot read socket");
+		return NOWDB_ERR_NOREAD;
+	}
+	if (res->rtype == NOWDB_REPORT) res->buf[res->sz] = 0;
+	return NOWDB_OK;
+	
+	/*
+	NOWDB_CURSOR
+	*/
+
 }
 
 static inline int readbytes(struct nowdb_con_t *con, size_t *sz) {
@@ -390,6 +386,115 @@ nowdb_row_t nowdb_result_row(nowdb_result_t res) {
 	return (nowdb_row_t)res;
 }
 
+#define ROW(x) \
+	((struct nowdb_result_t*)x)
+
+const char *nowdb_row_next(nowdb_row_t p) {
+	int i,j;
+
+	/* search start of next */
+	for(i=ROW(p)->off; i<ROW(p)->sz; i++) {
+		if (ROW(p)->buf[i] == EOROW) break;
+	}
+	if (i == ROW(p)->sz) {
+		ROW(p)->off = ROW(p)->sz;
+		return NULL;
+	}
+	i++;
+
+	/* make sure the row is complete */
+	for(j=i; j<ROW(p)->sz; j++) {
+		if (ROW(p)->buf[j] == EOROW) break;
+	}
+	if (j == ROW(p)->sz) return NULL;
+	ROW(p)->off = i;
+	return ROW(p)->buf+i;
+}
+
+void nowdb_row_rewind(nowdb_row_t p) {
+	ROW(p)->off = 0;
+}
+
+void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
+	int i;
+	int f=0;
+
+	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != EOROW;)  {
+		if (f==field) {
+			*type = (int)ROW(p)->buf[i];
+			return ROW(p)->buf+i;
+		}
+		if (ROW(p)->buf[i] == NOWDB_TEXT) {
+			while(i<ROW(p)->sz && ROW(p)->buf[i] != 0) i++;
+			i++;
+		} else {
+			i+=8;
+		}
+		f++;
+	}
+	return NULL;
+}
+
+int nowdb_row_write(FILE *stream, nowdb_row_t row) {
+	char *buf;
+	char tmp[32];
+	uint32_t i=0;
+	char t;
+	char x=0;
+	int err;
+	int sz;
+
+	buf = ROW(row)->buf;
+
+	// find last row
+	for(sz=ROW(row)->sz; sz>0; sz--) {
+		if (buf[sz] == EOROW) break;
+	}
+	if (sz == 0) return NOWDB_OK;
+	while(i<sz) {
+		t = buf[i]; i++;
+		if (t == EOROW) {
+			fprintf(stream, "\n");
+			fflush(stream);
+			x=0;
+			continue;
+		} else if (x) {
+			fprintf(stream, ";");
+		}
+		switch((int)t) {
+		case NOWDB_TEXT:
+			fprintf(stream, "%s", buf+i);
+			i+=strlen(buf+i)+1; break;
+
+		case NOWDB_DATE: 
+		case NOWDB_TIME: 
+			err = nowdb_time_toString(*(nowdb_time_t*)(buf+i),
+		                                        NOWDB_TIME_FORMAT,
+		                                                  tmp, 32);
+			if (err != NOWDB_OK) return err;
+			fprintf(stream, "%s", tmp); i+=8; break;
+
+		case NOWDB_INT: 
+			fprintf(stream, "%ld", *(int64_t*)(buf+i));
+			i+=8; break;
+
+		case NOWDB_UINT: 
+			fprintf(stream, "%lu", *(uint64_t*)(buf+i));
+			i+=8; break;
+
+		case NOWDB_FLOAT: 
+			fprintf(stream, "%.4f", *(double*)(buf+i));
+			i+=8; break;
+
+		default: return NOWDB_ERR_PROTO;
+
+		}
+		x = 1;
+	}
+	fprintf(stream, "\n"); fflush(stream);
+	return NOWDB_OK;
+}
+
 nowdb_cursor_t nowdb_result_cursor(nowdb_result_t res) {
 	return NULL;
 }
@@ -400,7 +505,30 @@ nowdb_cursor_t nowdb_result_cursor(nowdb_result_t res) {
  */
 int nowdb_exec_statement(nowdb_con_t     con,
                          char     *statement,
-                         nowdb_result_t *res);
+                         nowdb_result_t *res) {
+	int x;
+	size_t sz;
+
+	if (con == NULL) return NOWDB_ERR_INVALID;
+
+	sz = strnlen(statement, 4097);
+	if (sz > 4096) return NOWDB_ERR_INVALID;
+
+	memcpy(con->buf, statement, sz);
+
+	x = sendbuf(con, sz);
+	if (x != NOWDB_OK) return x;
+
+	*res = mkResult();
+	if (*res == NULL) return NOWDB_ERR_NOMEM;
+
+	x = readResult(con, *res);
+	if (x != NOWDB_OK) {
+		free(*res); *res = NULL;
+		return x;
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Cursor
@@ -451,3 +579,146 @@ int nowdb_use(nowdb_con_t con, char *db, nowdb_result_t *res) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Unit
+ * ------------------------------------------------------------------------
+ */
+static int64_t persec = 1000000000l;
+
+/* ------------------------------------------------------------------------
+ * The epoch
+ * ------------------------------------------------------------------------
+ */
+static int64_t nowdb_epoch = 0;
+
+#define NANOPERSEC 1000000000
+
+/* ------------------------------------------------------------------------
+ * Important constants
+ * ------------------------------------------------------------------------
+ */
+static int64_t max_unix_sec = sizeof(time_t) == 4?INT_MAX:LONG_MAX;
+static int64_t min_unix_sec = sizeof(time_t) == 4?INT_MIN:LONG_MIN;
+
+/* ------------------------------------------------------------------------
+ * Helper to treat negative values uniformly, in particular
+ * if the nanoseconds are negative,
+ * the seconds are decremented by 1
+ * and nanoseconds are set to one second + nanoseconds, i.e.
+ * second - abs(nanosecond).
+ * ------------------------------------------------------------------------
+ */
+static inline void normalize(struct timespec *tm) {
+	if (tm->tv_nsec < 0) {
+		tm->tv_sec -= 1;
+		tm->tv_nsec = NANOPERSEC + tm->tv_nsec;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Convert UNIX system time to nowdb time (helper)
+ * ------------------------------------------------------------------------
+ */
+static inline void fromSystem(const struct timespec *tm,
+                                    nowdb_time_t  *time) {
+	struct timespec tmp;
+	memcpy(&tmp, tm, sizeof(struct timespec));
+	normalize(&tmp);
+	*time = tmp.tv_sec;
+	*time *= persec;
+	*time += tmp.tv_nsec/(NANOPERSEC/persec);
+	*time += nowdb_epoch;
+}
+
+/* ------------------------------------------------------------------------
+ * Get time from string
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_fromString(const char *buf,
+                          const char *frm,
+                          nowdb_time_t *t) {
+	struct tm tm;
+	char  *nsecs, *hlp;
+	struct timespec tv;
+
+	memset(&tm, 0, sizeof(struct tm));
+	memset(&tv, 0, sizeof(struct timespec));
+
+	nsecs = strptime(buf, frm, &tm);
+	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
+		return NOWDB_ERR_FORMAT;
+	}
+
+	tv.tv_sec = timegm(&tm);
+
+	if (nsecs != NULL && *nsecs != 0) {
+		nsecs++;
+
+		tv.tv_nsec = strtol(nsecs, &hlp, 10);
+		if (hlp == NULL || *hlp != 0) {
+			return NOWDB_ERR_FORMAT;
+		}
+		switch(strlen(nsecs)) {
+		case 1: tv.tv_nsec *= 100000000; break;
+		case 2: tv.tv_nsec *= 10000000; break;
+		case 3: tv.tv_nsec *= 1000000; break;
+		case 4: tv.tv_nsec *= 100000; break;
+		case 5: tv.tv_nsec *= 10000; break;
+		case 6: tv.tv_nsec *= 1000; break;
+		case 7: tv.tv_nsec *= 100; break;
+		case 8: tv.tv_nsec *= 10; break;
+		}
+	}
+	fromSystem(&tv, t);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Convert nowdb time to UNIX system time (helper)
+ * ------------------------------------------------------------------------
+ */
+static inline int toSystem(nowdb_time_t       time,
+                           struct timespec     *tm) {
+	nowdb_time_t t = time - nowdb_epoch;
+	nowdb_time_t tmp = t / persec;
+	if (tmp > max_unix_sec || tmp < min_unix_sec) {
+		return NOWDB_ERR_TOOBIG;
+	}
+	tm->tv_sec = (time_t)tmp;
+	tm->tv_nsec = (long)(t - tmp*persec) * (NANOPERSEC/persec);
+	normalize(tm);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Write time to string
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_toString(nowdb_time_t  t,
+                        const char *frm,
+                              char *buf,
+                            size_t max) {
+	struct tm tm;
+	struct timespec tv;
+	size_t sz;
+	int err;
+
+	memset(&tv, 0, sizeof(struct timespec));
+
+	err = toSystem(t, &tv);
+	if (err != NOWDB_OK) return err;
+
+	if (gmtime_r(&tv.tv_sec, &tm) == NULL) {
+		return NOWDB_ERR_OSERR;
+	}
+	sz = strftime(buf, max, frm, &tm);
+	if (sz == 0) {
+		return NOWDB_ERR_TOOBIG;
+	}
+	if (tv.tv_nsec > 0 && sz+11<max) {
+		sprintf(buf+sz, ".%09ld", tv.tv_nsec);
+	} else if (tv.tv_nsec > 0) {
+		return NOWDB_ERR_TOOBIG;
+	}
+	return NOWDB_OK;
+}

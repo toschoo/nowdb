@@ -719,6 +719,34 @@ static int sendErr(nowdb_session_t *ses,
 	return 0;
 }
 
+static int sendRow(nowdb_session_t *ses, char *buf, uint32_t sz) {
+	nowdb_err_t err;
+	char status[2];
+
+	status[0] = NOWDB_ROW;
+	status[1] = NOWDB_ACK;
+
+	if (write(ses->ostream, status, 2) != 2) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                    "writing row");
+		SETERR();
+		return -1;
+	}
+	if (write(ses->ostream, &sz, 4) != 4) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                    "writing row");
+		SETERR();
+		return -1;
+	}
+	if (write(ses->ostream, buf, sz) != sz) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                    "writing row");
+		SETERR();
+		return -1;
+	}
+	return 0;
+}
+
 static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	uint32_t osz;
 	uint32_t cnt;
@@ -757,7 +785,7 @@ static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 				err = nowdb_row_write(buf, osz, ses->ofile);
 				if (err != NOWDB_OK) break;
 			} else {
-				if (write(ses->ostream, buf, osz) != osz) {
+				if (sendRow(ses, buf, osz) != 0) {
 					perror("cannot write"); break;
 				}
 			}

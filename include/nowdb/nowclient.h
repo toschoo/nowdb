@@ -27,6 +27,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* ------------------------------------------------------------------------
  * Error codes
@@ -45,12 +46,61 @@
 #define NOWDB_ERR_NOUSE   10
 #define NOWDB_ERR_PROTO   11
 #define NOWDB_ERR_TOOBIG  12
+#define NOWDB_ERR_OSERR   13
+#define NOWDB_ERR_FORMAT  14
 
 /* ------------------------------------------------------------------------
  * Describe error
  * ------------------------------------------------------------------------
  */
 const char *nowdb_err_describe(int err);
+
+/* ------------------------------------------------------------------------
+ * The earliest and latest possible time points.
+ * The concrete meaning depends on epoch and units.
+ * For the UNIX epoch with nanosecond unit, 
+ *         DAWN is in the year 1677
+ *         DUSK is in the year 2262
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_TIME_DAWN (nowdb_time_t)(LONG_MIN)
+#define NOWDB_TIME_DUSK (nowdb_time_t)(LONG_MAX)
+
+/* ------------------------------------------------------------------------
+ * Standard date and time formats (ISO8601)
+ * time: "2006-01-02T15:04:05"
+ * date: "2006-01-02"
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_TIME_FORMAT "%Y-%m-%dT%H:%M:%S"
+#define NOWDB_DATE_FORMAT "%Y-%m-%d"
+
+typedef int64_t nowdb_time_t;
+
+/* ------------------------------------------------------------------------
+ * Get current system time as nowdb time
+ * Errors:
+ * - OS Error
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_now(nowdb_time_t *time);
+
+/* ------------------------------------------------------------------------
+ * Get time from string
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_fromString(const char *buf,
+                          const char *frm,
+                          nowdb_time_t *t);
+
+/* ------------------------------------------------------------------------
+ * Write time to string
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_toString(nowdb_time_t  t,
+                        const char *frm,
+                              char *buf,
+                             size_t max);
 
 /* ------------------------------------------------------------------------
  * Flags
@@ -94,8 +144,15 @@ int nowdb_result_type(nowdb_result_t res);
 
 int nowdb_result_status(nowdb_result_t res);
 const char *nowdb_result_details(nowdb_result_t res);
+
 nowdb_report_t nowdb_result_report(nowdb_result_t res);
+
 nowdb_row_t nowdb_result_row(nowdb_result_t res);
+const char *nowdb_row_next(nowdb_row_t row);
+void nowdb_row_rewind(nowdb_row_t row);
+void *nowdb_row_field(nowdb_row_t row, int field, int *type);
+int nowdb_row_write(FILE *file, nowdb_row_t row);
+
 nowdb_cursor_t nowdb_result_cursor(nowdb_result_t res);
 
 void nowdb_result_destroy(nowdb_result_t res);

@@ -255,6 +255,16 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	memset(&sact, 0, sizeof(struct sigaction));
+	sact.sa_handler = SIG_IGN;
+	sigemptyset(&sact.sa_mask);
+
+	if (sigaction(SIGPIPE, &sact, NULL) != 0) {
+		perror("cannot set signal handler for SIGPIPE");
+		nowdb_library_close(lib);
+		return EXIT_FAILURE;
+	}
+
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGABRT);

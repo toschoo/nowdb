@@ -29,14 +29,41 @@
 #include <string.h>
 #include <stdint.h>
 
+#define EXEC(sql) \
+	err = nowdb_exec_statement(con, sql, &res); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot execute statement: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_status(res) != 0) { \
+		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res)); \
+	} \
+	nowdb_result_destroy(res);
+
+#define DQL(sql) \
+	err = nowdb_exec_statement(con, sql, &res); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot execute statement: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_status(res) != 0) { \
+		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res)); \
+	} \
+	err = nowdb_row_write(stdout, nowdb_result_row(res)); \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "cannot write row: %d\n", err); \
+	} \
+	nowdb_result_destroy(res);
+	
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	int err;
-	int flags;
+	int flags=0;
 	nowdb_con_t con;
 	nowdb_result_t res;
 
-	flags = NOWDB_FLAGS_TEXT;
+	// flags = NOWDB_FLAGS_TEXT;
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
@@ -54,6 +81,12 @@ int main() {
 		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res));
 	}
 	nowdb_result_destroy(res);
+
+	EXEC("create tiny context myctx");
+	EXEC("drop context myctx");
+
+	DQL("select edge, timestamp, weight from tx\
+	       where edge = 'buys_product' and origin = 0");
 	
 cleanup:
 	err = nowdb_connection_close(con);
