@@ -137,28 +137,10 @@ static int tryConnect(struct nowdb_con_t *con) {
 	return NOWDB_OK;
 }
 
-static inline int sendstr(struct nowdb_con_t *con, char *str) {
-	size_t sz = strlen(str);
-	memcpy(con->buf, str, sz);
-	if (write(con->sock, con->buf, sz) != sz) {
-		perror("cannot write to socket");
-		return NOWDB_ERR_NOWRITE;
-	}
-	return NOWDB_OK;
-} 
-
-static inline int sendbyte(struct nowdb_con_t *con, char byte) {
-	memcpy(con->buf, &byte, 1);
-	if (write(con->sock, con->buf, 1) != 1) {
-		perror("cannot write to socket");
-		return NOWDB_ERR_NOWRITE;
-	}
-	return NOWDB_OK;
-} 
-
 static inline int sendbytes(struct nowdb_con_t *con, char *bytes, int sz) {
-	memcpy(con->buf, bytes, sz);
-	if (write(con->sock, con->buf, sz) != sz) {
+	memcpy(con->buf, &sz, 4);
+	memcpy(con->buf+4, bytes, sz);
+	if (write(con->sock, con->buf, sz+4) != sz+4) {
 		perror("cannot write to socket");
 		return NOWDB_ERR_NOWRITE;
 	}
@@ -166,10 +148,6 @@ static inline int sendbytes(struct nowdb_con_t *con, char *bytes, int sz) {
 }
 
 static inline int sendbuf(struct nowdb_con_t *con, int sz) {
-	if (write(con->sock, &sz, 4) != 4) {
-		perror("cannot write to socket");
-		return NOWDB_ERR_NOWRITE;
-	}
 	if (write(con->sock, con->buf, sz) != sz) {
 		perror("cannot write to socket");
 		return NOWDB_ERR_NOWRITE;
@@ -514,9 +492,7 @@ int nowdb_exec_statement(nowdb_con_t     con,
 	sz = strnlen(statement, 4097);
 	if (sz > 4096) return NOWDB_ERR_INVALID;
 
-	memcpy(con->buf, statement, sz);
-
-	x = sendbuf(con, sz);
+	x = sendbytes(con, statement, sz);
 	if (x != NOWDB_OK) return x;
 
 	*res = mkResult();
@@ -561,11 +537,13 @@ int nowdb_use(nowdb_con_t con, char *db, nowdb_result_t *res) {
 	sz = strnlen(db, 4097);
 	if (sz > 4096) return NOWDB_ERR_INVALID;
 
-	memcpy(con->buf, "USE", 3); con->buf[3] = ' ';
-	memcpy(con->buf+4, db, sz);
-	memcpy(con->buf+4+sz, ";", 1);
+	memcpy(con->buf+4, "USE", 3); con->buf[7] = ' ';
+	memcpy(con->buf+8, db, sz);
+	memcpy(con->buf+8+sz, ";", 1);
+	sz+=5;
+	memcpy(con->buf, &sz, 4);
 
-	x = sendbuf(con, sz+5);
+	x = sendbuf(con, sz+4);
 	if (x != NOWDB_OK) return x;
 
 	*res = mkResult();
