@@ -672,50 +672,58 @@ static int sendOK(nowdb_session_t *ses) {
 	return 0;
 }
 
+#define CLEANUP() \
+	if (cause != NOWDB_OK) nowdb_err_release(cause); \
+	if (freetmp) free(tmp);
+
 static int sendErr(nowdb_session_t *ses,
-                   nowdb_err_t      err,
+                   nowdb_err_t    cause,
                    nowdb_ast_t     *ast) {
 	char *tmp="unknown";
-	int sz;
-	char status[2];
+	int sz=0;
+	char status[4];
 	char freetmp=0;
+	short errcode;
+	nowdb_err_t err;
 
 	status[0] = NOWDB_STATUS;
 	status[1] = NOWDB_NOK;
+	errcode = cause == NOWDB_OK?nowdb_err_unknown:cause->errcode;
+	memcpy(status+2, &errcode, 2);
 
 	// send NOK
-	if (write(ses->ostream, status, 2) != 2) {
+	if (write(ses->ostream, status, 4) != 4) {
 		err = nowdb_err_get(nowdb_err_write,
 		     TRUE, OBJECT, "writing status");
 		SETERR();
+		CLEANUP();
 		return -1;
 	}
 	// build error report
-	if (ast == NULL) {
-		tmp = (char*)nowdbsql_parser_errmsg(ses->parser);
-		if (tmp == NULL) tmp = "unknown";
-	} else if (err != NOWDB_OK) {
-		tmp = nowdb_err_describe(err, ';');
+	if (cause != NOWDB_OK) {
+		tmp = nowdb_err_describe(cause, ';');
 		if (tmp == NULL) tmp = "out-of-mem";
 		else freetmp = 1;
 	}
-	// send error report
+
 	sz = strlen(tmp);
+
+	// send error report
 	if (write(ses->ostream, &sz, 4) != 4) {
 		err = nowdb_err_get(nowdb_err_write,
 		      TRUE, OBJECT, "writing error");
 		SETERR();
-		if (freetmp) free(tmp);
+		CLEANUP();
 		return -1;
 	}
 	if (write(ses->ostream, tmp, sz) != sz) {
 		err = nowdb_err_get(nowdb_err_write,
 		      TRUE, OBJECT, "writing error");
 		SETERR();
-		if (freetmp) free(tmp);
+		CLEANUP();
 		return -1;
 	}
-	if (freetmp) free(tmp);
+	CLEANUP();
 	return 0;
 }
 
@@ -805,7 +813,7 @@ cleanup:
 }
 
 static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	nowdb_qry_result_t res;
 	char *path = LIB(ses->lib)->base;
 
@@ -890,8 +898,12 @@ ack_error:
 		                   "session options not ack'd");
 }
 
+#define MAKEPARSEERR() \
+	err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT, \
+	         (char*)nowdbsql_parser_errmsg(ses->parser));
+
 static void runSession(nowdb_session_t *ses) {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	int rc = 0;
 	nowdb_ast_t       *ast;
 	struct timespec t1, t2;
@@ -928,8 +940,10 @@ static void runSession(nowdb_session_t *ses) {
 			rc = 0; continue;
 		}
 		if (rc != 0) {
+			MAKEPARSEERR();
 			rc = sendErr(ses, err, ast);
 			if (rc != 0) break;
+			continue;
 		}
 		if (ast == NULL) {
 			fprintf(stderr, "no error, no ast :-(\n");

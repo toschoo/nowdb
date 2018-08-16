@@ -29,6 +29,20 @@
 #include <string.h>
 #include <stdint.h>
 
+#define USE(sql) \
+	err = nowdb_use(con, sql, &res); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot execute statement: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_status(res) != 0) { \
+		fprintf(stderr, "ERROR %hd: %s\n", \
+		        nowdb_result_errcode(res), \
+		       nowdb_result_details(res)); \
+		nowdb_result_destroy(res); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+
 #define EXEC(sql) \
 	err = nowdb_exec_statement(con, sql, &res); \
 	if (err != 0) { \
@@ -36,7 +50,11 @@
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
 	if (nowdb_result_status(res) != 0) { \
-		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res)); \
+		fprintf(stderr, "ERROR %hd: %s\n", \
+		        nowdb_result_errcode(res), \
+		       nowdb_result_details(res)); \
+		nowdb_result_destroy(res); \
+		rc = EXIT_FAILURE; goto cleanup; \
 	} \
 	nowdb_result_destroy(res);
 
@@ -47,7 +65,11 @@
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
 	if (nowdb_result_status(res) != 0) { \
-		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res)); \
+		fprintf(stderr, "ERROR %d: %s\n",\
+		       nowdb_result_errcode(res), \
+		       nowdb_result_details(res)); \
+		nowdb_result_destroy(res); \
+		rc = EXIT_FAILURE; goto cleanup; \
 	} \
 	err = nowdb_row_write(stdout, nowdb_result_row(res)); \
 	if (err != NOWDB_OK) { \
@@ -71,17 +93,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	err = nowdb_use(con, "retail", &res);
-	if (err != 0) {
-		fprintf(stderr, "cannot use retail: %d\n", err);
-		// describe error
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	if (nowdb_result_status(res) != 0) {
-		fprintf(stderr, "ERROR: %s\n", nowdb_result_details(res));
-	}
-	nowdb_result_destroy(res);
-
+	USE("retail");
 	EXEC("create tiny context myctx");
 	EXEC("drop context myctx");
 

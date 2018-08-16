@@ -85,6 +85,7 @@ struct nowdb_con_t {
 
 struct nowdb_result_t {
 	int rtype;
+	short err;
 	int sz;
 	char *buf;
 	int off;
@@ -201,8 +202,12 @@ static inline int readResult(struct nowdb_con_t    *con,
 		res->status = 0;
 		if (res->rtype == NOWDB_STATUS) return NOWDB_OK;
 
-	} else if (res->rtype == NOWDB_STATUS && con->buf[1] == NOK) {
-		return NOWDB_ERR_PROTO;
+	} else if (res->rtype == NOWDB_STATUS) {
+		if (con->buf[1] != NOK) return NOWDB_ERR_PROTO;
+		if (read(con->sock, &res->err, 2) != 2) {
+			perror("cannot read socket");
+			return NOWDB_ERR_NOREAD;
+		}
 	}
 
 	x = readSize(con, &res->sz);
@@ -212,7 +217,8 @@ static inline int readResult(struct nowdb_con_t    *con,
 		perror("cannot read socket");
 		return NOWDB_ERR_NOREAD;
 	}
-	if (res->rtype == NOWDB_REPORT) res->buf[res->sz] = 0;
+	if (res->rtype == NOWDB_STATUS ||
+	    res->rtype == NOWDB_REPORT) res->buf[res->sz] = 0;
 	return NOWDB_OK;
 	
 	/*
@@ -349,6 +355,11 @@ int nowdb_result_type(nowdb_result_t res) {
 
 int nowdb_result_status(nowdb_result_t res) {
 	return res->status;
+}
+
+short nowdb_result_errcode(nowdb_result_t res) {
+	if (res->status == ACK) return NOWDB_OK;
+	return res->err;
 }
 
 const char *nowdb_result_details(nowdb_result_t res) {

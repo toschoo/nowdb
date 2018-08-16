@@ -144,6 +144,7 @@ int nowdb_result_type(nowdb_result_t res);
 
 int nowdb_result_status(nowdb_result_t res);
 const char *nowdb_result_details(nowdb_result_t res);
+short nowdb_result_errcode(nowdb_result_t res);
 
 nowdb_report_t nowdb_result_report(nowdb_result_t res);
 
