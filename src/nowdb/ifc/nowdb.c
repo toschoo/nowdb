@@ -716,6 +716,8 @@ static int sendEOF(nowdb_session_t *ses) {
 	nowdb_err_t err;
 	char status[4];
 
+	fprintf(stderr, "EOF\n");
+
 	status[0] = NOWDB_STATUS;
 	status[1] = NOWDB_NOK;
 	memcpy(status+2, &errcode, 2);
@@ -906,25 +908,77 @@ cleanup:
 	return 0;
 }
 
+static int fetch(nowdb_session_t    *ses,
+                 nowdb_ses_cursor_t *scur) 
+{
+	nowdb_err_t err;
+	uint32_t osz;
+	uint32_t cnt;
+	uint32_t sz = ses->bufsz;
+	char *buf = ses->buf;
+
+	if (nowdb_cursor_eof(scur->cur)) {
+		if (sendEOF(ses) != 0) return -1;
+		return 0;
+	}
+	err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			if (osz == 0) {
+				if (sendEOF(ses) != 0) {
+					return -1;
+				}
+			}
+			return 0;
+		} else {
+			if (sendErr(ses, err, NULL) != 0) {
+				// in this case we must end the session
+				fprintf(stderr, "cannot send error\n");
+				SETERR();
+				return -1;
+			}
+			return 0;
+		}
+	}
+	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
+		return -1;
+	}
+	return 0;
+}
+
 static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	char *tmp;
 	nowdb_err_t err;
-	nowdb_ses_cursor_t cur;
+	nowdb_ses_cursor_t pattern;
+	nowdb_ses_cursor_t *cur;
 
-	fprintf(stderr, "handle op\n");
-
+	fprintf(stderr, "handle op: %d\n", ast->ntype);
+	pattern.curid = strtoul(ast->value, &tmp, 10);
+	if (*tmp != 0) {
+		err = nowdb_err_get(nowdb_err_invalid,
+		  FALSE, OBJECT, "not a valid number");
+		if (sendErr(ses, err, NULL) != 0) return -1;
+		return 0;
+	}
 	switch(ast->ntype) {
 	case NOWDB_AST_FETCH:
-	case NOWDB_AST_CLOSE:
-		cur.curid = strtoul(ast->value, &tmp, 10);
-		if (*tmp != 0) {
-			fprintf(stderr, "not a valid number: %s\n", (char*)ast->value);
+		fprintf(stderr, "FETCH\n");
+		cur = ts_algo_tree_find(ses->cursors, &pattern);
+		if (cur == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid,
-			  FALSE, OBJECT, "not a valid number");
+			  FALSE, OBJECT, "not an open cursor");
 			if (sendErr(ses, err, NULL) != 0) return -1;
 			return 0;
 		}
-		ts_algo_tree_delete(ses->cursors, &cur); break;
+		if (fetch(ses, cur) != 0) return -1;
+		return 0;
+	
+	case NOWDB_AST_CLOSE:
+		fprintf(stderr, "CLOSE\n");
+		ts_algo_tree_delete(ses->cursors, &pattern); 
+		if (sendOK(ses) != 0) return -1;
+		return 0;
 
 	default:
 		fprintf(stderr, "AST: %d\n", ast->ntype);
@@ -933,7 +987,6 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		if (sendErr(ses, err, NULL) != 0) return -1;
 		return 0;
 	}
-	if (sendOK(ses) != 0) return -1;
 	return 0;
 }
 

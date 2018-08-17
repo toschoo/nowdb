@@ -145,10 +145,10 @@ int nowdb_result_type(nowdb_result_t res);
 int nowdb_result_status(nowdb_result_t res);
 const char *nowdb_result_details(nowdb_result_t res);
 short nowdb_result_errcode(nowdb_result_t res);
+int nowdb_result_eof(nowdb_result_t res);
 
 nowdb_report_t nowdb_result_report(nowdb_result_t res);
 
-nowdb_row_t nowdb_result_row(nowdb_result_t res);
 const char *nowdb_row_next(nowdb_row_t row);
 void nowdb_row_rewind(nowdb_row_t row);
 void *nowdb_row_field(nowdb_row_t row, int field, int *type);
@@ -175,13 +175,13 @@ int nowdb_cursor_open(nowdb_result_t  res,
 
 int nowdb_cursor_close(nowdb_cursor_t cur);
 
-int nowdb_cursor_fetch(nowdb_cursor_t cur,
-                       nowdb_row_t   *row);
+int nowdb_cursor_fetch(nowdb_cursor_t  cur);
+nowdb_row_t nowdb_cursor_row(nowdb_cursor_t cur);
+const char *nowdb_cursor_details(nowdb_cursor_t res);
+short nowdb_cursor_errcode(nowdb_cursor_t res);
 
-int nowdb_cursor_fetchBulk(nowdb_cursor_t  cur,
-                           uint32_t  requested,
-                           uint32_t   received,
-                           nowdb_row_t   *row);
+int nowdb_cursor_eof(nowdb_cursor_t cur);
+int nowdb_cursor_ok(nowdb_cursor_t cur);
 
 /* ------------------------------------------------------------------------
  * Misc

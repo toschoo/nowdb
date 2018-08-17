@@ -42,6 +42,7 @@
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
+	nowdb_result_destroy(res);
 
 #define EXEC(sql) \
 	err = nowdb_exec_statement(con, sql, &res); \
@@ -59,36 +60,31 @@
 	nowdb_result_destroy(res);
 
 #define DQL(sql) \
-	err = nowdb_exec_statement(con, sql, &res); \
+	err = nowdb_exec_statement(con, sql, &cres); \
 	if (err != 0) { \
 		fprintf(stderr, "cannot execute statement: %d\n", err); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
-	if (nowdb_result_status(res) != 0) { \
-		if (nowdb_result_errcode(res) == NOWDB_ERR_EOF) { \
+	if (nowdb_result_status(cres) != 0) { \
+		if (nowdb_result_errcode(cres) == NOWDB_ERR_EOF) { \
 			fprintf(stderr, "EOF\n"); \
 		} else { \
 			fprintf(stderr, "ERROR %d: %s\n",\
-			       nowdb_result_errcode(res), \
-			       nowdb_result_details(res)); \
+			       nowdb_result_errcode(cres), \
+			       nowdb_result_details(cres)); \
 		} \
-		nowdb_result_destroy(res); \
+		nowdb_result_destroy(cres); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
-	err = nowdb_cursor_open(res, &cur); \
+	err = nowdb_cursor_open(cres, &cur); \
 	if (err != NOWDB_OK) { \
 		fprintf(stderr, "NOT A CURSOR\n"); \
 		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	fprintf(stderr, "cursor opened, writing\n"); \
-	err = nowdb_row_write(stdout, nowdb_result_row(res)); \
-	if (err != NOWDB_OK) { \
-		fprintf(stderr, "cannot write row: %d\n", err); \
 	}
 
 #define CLOSE() \
 	err = nowdb_cursor_close(cur); \
-	if (err != 0) { \
+	if (err != NOWDB_OK) { \
 		fprintf(stderr, "cannot close cursor: %d\n", err); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
@@ -99,6 +95,7 @@ int main() {
 	int flags=0;
 	nowdb_con_t con;
 	nowdb_result_t res;
+	nowdb_result_t cres;
 	nowdb_cursor_t cur;
 
 	// flags = NOWDB_FLAGS_TEXT;
@@ -115,7 +112,26 @@ int main() {
 
 	DQL("select edge, timestamp, weight from tx\
 	       where edge = 'buys_product' and origin = 0");
+
+	while (nowdb_cursor_ok(cur)) {
+		err = nowdb_row_write(stdout, nowdb_cursor_row(cur));
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot write row: %d\n", err);
+		}
+		err = nowdb_cursor_fetch(cur);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot fetch: %d\n", err);
+			rc = EXIT_FAILURE;
+		}
+	}
+	if (!nowdb_cursor_eof(cur)) {
+		fprintf(stderr, "ERROR %d: %s\n",
+		        nowdb_cursor_errcode(cur),
+		        nowdb_cursor_details(cur));
+		rc = EXIT_FAILURE;
+	}
 	CLOSE();
+	// nowdb_result_destroy(res);
 	
 cleanup:
 	err = nowdb_connection_close(con);

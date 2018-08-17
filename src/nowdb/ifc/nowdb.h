@@ -13,6 +13,7 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/sql/parser.h>
+#include <nowdb/query/cursor.h>
 
 #include <tsalgo/tree.h>
 #include <tsalgo/list.h>
