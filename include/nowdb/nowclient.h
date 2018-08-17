@@ -37,17 +37,17 @@
 #define NOWDB_ERR_NOMEM   1
 #define NOWDB_ERR_NOCON   2
 #define NOWDB_ERR_NORES   3
-#define NOWDB_ERR_EOF     4
 #define NOWDB_ERR_INVALID 5
-#define NOWDB_ERR_NOREAD  6
-#define NOWDB_ERR_NOWRITE 7
-#define NOWDB_ERR_NOOPEN  8
-#define NOWDB_ERR_NOCLOSE 9
-#define NOWDB_ERR_NOUSE   10
-#define NOWDB_ERR_PROTO   11
-#define NOWDB_ERR_TOOBIG  12
-#define NOWDB_ERR_OSERR   13
-#define NOWDB_ERR_FORMAT  14
+#define NOWDB_ERR_EOF     8
+#define NOWDB_ERR_NOREAD  101
+#define NOWDB_ERR_NOWRITE 102
+#define NOWDB_ERR_NOOPEN  103
+#define NOWDB_ERR_NOCLOSE 104
+#define NOWDB_ERR_NOUSE   105
+#define NOWDB_ERR_PROTO   106
+#define NOWDB_ERR_TOOBIG  107
+#define NOWDB_ERR_OSERR   108
+#define NOWDB_ERR_FORMAT  109
 
 /* ------------------------------------------------------------------------
  * Describe error
@@ -170,8 +170,7 @@ int nowdb_exec_statement(nowdb_con_t     con,
  * Cursor
  * ------------------------------------------------------------------------
  */
-int nowdb_cursor_open(nowdb_con_t     con,
-                      char     *statement,
+int nowdb_cursor_open(nowdb_result_t  res,
                       nowdb_cursor_t *cur);
 
 int nowdb_cursor_close(nowdb_cursor_t cur);

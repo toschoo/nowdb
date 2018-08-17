@@ -47,6 +47,8 @@
 
 (?i:LOAD)		return NOWDB_SQL_LOAD;
 (?i:USE)		return NOWDB_SQL_USE;
+(?i:FETCH)		return NOWDB_SQL_FETCH;
+(?i:CLOSE)		return NOWDB_SQL_CLOSE;
 
 (?i:SCOPE)		return NOWDB_SQL_SCOPE;
 (?i:SCHEMA)		return NOWDB_SQL_SCOPE;

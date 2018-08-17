@@ -84,15 +84,14 @@ struct nowdb_con_t {
 };
 
 struct nowdb_result_t {
+	uint64_t cur;
+	nowdb_con_t con;
 	int rtype;
 	short err;
 	int sz;
 	char *buf;
 	int off;
 	int status;
-};
-
-struct nowdb_cursor_t {
 };
 
 static void destroyCon(struct nowdb_con_t *con) {
@@ -180,7 +179,10 @@ static inline int readSize(struct nowdb_con_t *con, int *sz) {
 		perror("cannot read socket");
 		return NOWDB_ERR_NOREAD;
 	}
-	if (*sz > BUFSIZE-2) return NOWDB_ERR_TOOBIG;
+	if (*sz > BUFSIZE-2) {
+		fprintf(stderr, "SIZE: %d\n", *sz);
+		return NOWDB_ERR_TOOBIG;
+	}
 	return NOWDB_OK;
 }
 
@@ -206,6 +208,20 @@ static inline int readResult(struct nowdb_con_t    *con,
 		if (con->buf[1] != NOK) return NOWDB_ERR_PROTO;
 		if (read(con->sock, &res->err, 2) != 2) {
 			perror("cannot read socket");
+			return NOWDB_ERR_NOREAD;
+		}
+		fprintf(stderr, "Error: %d\n", res->err);
+		if (res->err == NOWDB_ERR_EOF) {
+			res->buf[0] = 0; return 0;
+		}
+	}
+
+	fprintf(stderr, "type: %x\n", res->rtype);
+
+	if (res->rtype == NOWDB_CURSOR) {
+		fprintf(stderr, "reading curid\n");
+		if (read(con->sock, &res->cur, 8) != 8) {
+			perror("cannot read cursor id");
 			return NOWDB_ERR_NOREAD;
 		}
 	}
@@ -341,8 +357,11 @@ void nowdb_connection_destroy(nowdb_con_t con) {
  * ------------------------------------------------------------------------
  */
 
-static nowdb_result_t mkResult() {
-	return calloc(1, sizeof(struct nowdb_result_t));
+static nowdb_result_t mkResult(nowdb_con_t con) {
+	nowdb_result_t r = calloc(1, sizeof(struct nowdb_result_t));
+	if (r == NULL) return NULL;
+	r->con = con;
+	return r;
 }
 
 void nowdb_result_destroy(nowdb_result_t res) {
@@ -506,7 +525,7 @@ int nowdb_exec_statement(nowdb_con_t     con,
 	x = sendbytes(con, statement, sz);
 	if (x != NOWDB_OK) return x;
 
-	*res = mkResult();
+	*res = mkResult(con);
 	if (*res == NULL) return NOWDB_ERR_NOMEM;
 
 	x = readResult(con, *res);
@@ -521,11 +540,48 @@ int nowdb_exec_statement(nowdb_con_t     con,
  * Cursor
  * ------------------------------------------------------------------------
  */
-int nowdb_cursor_open(nowdb_con_t     con,
-                      char     *statement,
-                      nowdb_cursor_t *cur);
+int nowdb_cursor_open(nowdb_result_t  res,
+                      nowdb_cursor_t *cur) 
+{
+	if (res->rtype != NOWDB_CURSOR) return NOWDB_ERR_INVALID;
+	*cur = (nowdb_cursor_t)res;
+	return NOWDB_OK;
+}
 
-int nowdb_cursor_close(nowdb_cursor_t cur);
+#define CUR(x) \
+	((nowdb_result_t)x)
+
+int nowdb_cursor_close(nowdb_cursor_t cur) {
+	int x;
+	char *sql;
+	size_t sz;
+	nowdb_result_t res;
+
+	sql = malloc(32);
+	if (sql == NULL) return NOWDB_ERR_NOMEM;
+
+	sprintf(sql, "close %lu;", CUR(cur)->cur);
+
+	fprintf(stderr, "sending '%s'\n", sql);
+
+	sz = strlen(sql);
+	x = sendbytes(CUR(cur)->con, sql, sz); free(sql);
+	if (x != NOWDB_OK) return x;
+
+	res = mkResult(CUR(cur)->con);
+	if (res == NULL) return NOWDB_ERR_NOMEM;
+
+	x = readResult(CUR(cur)->con, res);
+	if (x != NOWDB_OK) {
+		free(res); return x;
+	}
+	if (res->status != 0) {
+		fprintf(stderr, "CLOSE: %s\n", nowdb_result_details(res));
+		free(res); return NOWDB_ERR_NOCLOSE;
+	}
+	free(res); free(cur);
+	return NOWDB_OK;
+}
 
 int nowdb_cursor_fetch(nowdb_cursor_t cur,
                        nowdb_row_t   *row);
@@ -557,7 +613,7 @@ int nowdb_use(nowdb_con_t con, char *db, nowdb_result_t *res) {
 	x = sendbuf(con, sz+4);
 	if (x != NOWDB_OK) return x;
 
-	*res = mkResult();
+	*res = mkResult(con);
 	if (*res == NULL) return NOWDB_ERR_NOMEM;
 
 	x = readResult(con, *res);

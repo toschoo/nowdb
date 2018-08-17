@@ -33,6 +33,7 @@
 #define NOWDB_QRY_RESULT_PLAN    3
 #define NOWDB_QRY_RESULT_SCOPE   4
 #define NOWDB_QRY_RESULT_CURSOR  5
+#define NOWDB_QRY_RESULT_OP      6
 
 /* -----------------------------------------------------------------------
  * Result

@@ -749,7 +749,7 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
 			return NOWDB_OK;
 		}
 	}
-	return NOWDB_OK;
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -1038,6 +1038,12 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		res->resType = NOWDB_QRY_RESULT_SCOPE;
 		res->result = NULL;
 		return handleUse(op, rsc, base, res);
+
+	case NOWDB_AST_FETCH: 
+	case NOWDB_AST_CLOSE: 
+		res->resType = NOWDB_QRY_RESULT_OP;
+		res->result = op;
+		return NOWDB_OK;
 
 	default: INVALIDAST("invalid operation in AST");
 	}

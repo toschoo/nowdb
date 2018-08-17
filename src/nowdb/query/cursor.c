@@ -610,6 +610,9 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	char x;
 	
 	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
+
+	cur->eof = 1;
+
 	if (cur->group == NULL && cur->nogrp == NULL) return old;
 
 	if (cur->nogrp != NULL) {
@@ -773,3 +776,11 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_cursor_rewind(nowdb_cursor_t *cur);
+
+/* ------------------------------------------------------------------------
+ * EOF
+ * ------------------------------------------------------------------------
+ */
+char nowdb_cursor_eof(nowdb_cursor_t *cur) {
+	return cur->eof;
+}

@@ -65,18 +65,33 @@
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
 	if (nowdb_result_status(res) != 0) { \
-		fprintf(stderr, "ERROR %d: %s\n",\
-		       nowdb_result_errcode(res), \
-		       nowdb_result_details(res)); \
+		if (nowdb_result_errcode(res) == NOWDB_ERR_EOF) { \
+			fprintf(stderr, "EOF\n"); \
+		} else { \
+			fprintf(stderr, "ERROR %d: %s\n",\
+			       nowdb_result_errcode(res), \
+			       nowdb_result_details(res)); \
+		} \
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
+	err = nowdb_cursor_open(res, &cur); \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "NOT A CURSOR\n"); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	fprintf(stderr, "cursor opened, writing\n"); \
 	err = nowdb_row_write(stdout, nowdb_result_row(res)); \
 	if (err != NOWDB_OK) { \
 		fprintf(stderr, "cannot write row: %d\n", err); \
-	} \
-	nowdb_result_destroy(res);
-	
+	}
+
+#define CLOSE() \
+	err = nowdb_cursor_close(cur); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot close cursor: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	}
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -84,6 +99,7 @@ int main() {
 	int flags=0;
 	nowdb_con_t con;
 	nowdb_result_t res;
+	nowdb_cursor_t cur;
 
 	// flags = NOWDB_FLAGS_TEXT;
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
@@ -99,6 +115,7 @@ int main() {
 
 	DQL("select edge, timestamp, weight from tx\
 	       where edge = 'buys_product' and origin = 0");
+	CLOSE();
 	
 cleanup:
 	err = nowdb_connection_close(con);

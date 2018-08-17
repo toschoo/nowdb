@@ -34,6 +34,12 @@ typedef struct {
 #define NOWDB_SES_TIMING 1
 
 typedef struct {
+	uint32_t curid;
+	uint32_t off;
+	nowdb_cursor_t *cur;
+} nowdb_ses_cursor_t;
+
+typedef struct {
 	nowdb_lock_t        *lock; /* protect the session                */
 	void                 *lib; /* from where we get scopes           */
 	nowdb_scope_t      *scope; /* on what we process                 */
@@ -46,7 +52,9 @@ typedef struct {
 	FILE               *ofile; /* output stream as file              */
 	FILE               *efile; /* error  stream as file              */
 	char                 *buf; /* result buffer                      */
+	ts_algo_tree_t   *cursors; /* open cursors                       */
 	uint32_t            bufsz; /* result buffer size                 */
+	uint64_t            curid; /* next free cursorid                 */
 	int               istream; /* incoming stream                    */
 	int               ostream; /* outgoing stream (may be == istream */
 	int               estream; /* error stream (may be == ostream    */

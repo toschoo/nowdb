@@ -198,6 +198,38 @@ typedef struct {
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'FETCH'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_FETCH(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *f; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&f, NOWDB_AST_FETCH, 0); \
+	nowdb_ast_setValue(f, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, f); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'CLOSE'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_CLOSE(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *c; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&c, NOWDB_AST_CLOSE, 0); \
+	nowdb_ast_setValue(c, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, c); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
  * Create and add an option to an ast 
  * Parameters:
  * - C: the ast to add to

@@ -43,8 +43,7 @@ typedef struct {
 #define SCOPE(x) \
 	((scope_t*)x)
 
-static ts_algo_cmp_t scopecompare(void *rsc, void *one,
-                                      void *two) {
+static ts_algo_cmp_t scopecompare(void *rsc, void *one, void *two) {
 	char x;
 	x = strcmp(SCOPE(one)->name, SCOPE(two)->name);
 	if (x < 0) return ts_algo_cmp_less;
@@ -68,6 +67,30 @@ static void scopedestroy(void *rsc, void **n) {
 }
 
 static ts_algo_rc_t noupdate(void *rsc, void *o, void *n) {
+	return TS_ALGO_OK;
+}
+
+#define CUR(x) \
+	((nowdb_ses_cursor_t*)x)
+
+static ts_algo_cmp_t cursorcompare(void *rsc, void *one, void *two) {
+	if (CUR(one)->curid < CUR(two)->curid) return ts_algo_cmp_less;
+	if (CUR(one)->curid > CUR(two)->curid) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+static void cursordestroy(void *rsc, void **n) {
+	if (n == NULL) return;
+	if (*n == NULL) return;
+	if (CUR(*n)->cur != NULL) {
+		nowdb_cursor_destroy(CUR(*n)->cur);
+		free(CUR(*n)->cur); CUR(*n)->cur = NULL;
+	}
+	free(*n); *n = NULL;
+}
+
+static ts_algo_rc_t cursorupdate(void *rsc, void *o, void *n) {
+	CUR(o)->off = CUR(n)->off;
 	return TS_ALGO_OK;
 }
 
@@ -299,6 +322,7 @@ static nowdb_err_t initSession(nowdb_session_t  *ses,
 	ses->stop    = 0;
 	ses->alive   = 1;
 	ses->master  = master; // pthread_self();
+	ses->curid   = 0x100;
 
 	if (ses->ifile != NULL) {
 		fclose(ses->ifile);
@@ -387,6 +411,17 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 
 	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
+		nowdb_session_destroy(*ses);
+		free(*ses); *ses = NULL;
+		return err;
+	}
+
+	(*ses)->cursors = ts_algo_tree_new(&cursorcompare, NULL,
+                                           &cursorupdate,
+	                                   &cursordestroy,
+	                                   &cursordestroy);
+	if ((*ses)->cursors == NULL) {
+		NOMEM("tree.alloc");
 		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		return err;
@@ -624,6 +659,10 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 		nowdbsql_parser_destroy(ses->parser);
 		free(ses->parser); ses->parser = NULL;
 	}
+	if (ses->cursors != NULL) {
+		ts_algo_tree_destroy(ses->cursors);
+		free(ses->cursors); ses->cursors = NULL;
+	}
 	if (ses->ifile != NULL) {
 		fclose(ses->ifile); ses->ifile = NULL;
 	}
@@ -669,6 +708,25 @@ static int sendOK(nowdb_session_t *ses) {
 		return -1;
 	}
 	fprintf(stderr, "OK\n");
+	return 0;
+}
+
+static int sendEOF(nowdb_session_t *ses) {
+	short errcode = (short)nowdb_err_eof;
+	nowdb_err_t err;
+	char status[4];
+
+	status[0] = NOWDB_STATUS;
+	status[1] = NOWDB_NOK;
+	memcpy(status+2, &errcode, 2);
+
+	// send NOK
+	if (write(ses->ostream, status, 4) != 4) {
+		err = nowdb_err_get(nowdb_err_write,
+		     TRUE, OBJECT, "writing status");
+		SETERR();
+		return -1;
+	}
 	return 0;
 }
 
@@ -751,6 +809,134 @@ static int sendRow(nowdb_session_t *ses, char *buf, uint32_t sz) {
 	return 0;
 }
 
+static int sendCursor(nowdb_session_t   *ses,
+                      uint64_t         curid,
+                      char *buf, uint32_t sz) {
+	nowdb_err_t err;
+	char status[16];
+
+	status[0] = NOWDB_CURSOR;
+	status[1] = NOWDB_ACK;
+
+	fprintf(stderr, "sendinng curid %lu\n", curid);
+	memcpy(status+2, &curid, 8);
+
+	fprintf(stderr, "sendinng size %u\n", sz);
+	memcpy(status+10, &sz, 4);
+
+	if (write(ses->ostream, status, 14) != 14) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                 "writing cursor");
+		SETERR();
+		return -1;
+	}
+	if (write(ses->ostream, buf, sz) != sz) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+		                                 "writing cursor");
+		SETERR();
+		return -1;
+	}
+	return 0;
+}
+
+static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
+	uint32_t osz;
+	uint32_t cnt;
+	nowdb_err_t err=NOWDB_OK;
+	char *buf = ses->buf;
+	uint32_t sz = ses->bufsz;
+	nowdb_ses_cursor_t *scur;
+
+	err = nowdb_cursor_open(cur);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			fprintf(stderr, "Read: 0\n");
+			nowdb_err_release(err);
+			if (sendEOF(ses) != 0) {
+				fprintf(stderr, "cannot send eof\n");
+				goto cleanup;
+			}
+		}
+		goto cleanup;
+	}
+	err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			fprintf(stderr, "EOF after fetch\n");
+			nowdb_err_release(err);
+			if (osz == 0) {
+				if (sendEOF(ses) != 0) goto cleanup;
+			}
+		} else {
+			if (sendErr(ses, err, NULL) != 0) {
+				// in this case we must end the session
+				fprintf(stderr, "cannot send error\n");
+				SETERR();
+				goto cleanup;
+			}
+			goto cleanup;
+		}
+	}
+
+	// insert cursor into tree
+	ses->curid++;
+	scur = calloc(1,sizeof(nowdb_ses_cursor_t));
+	if (scur == NULL) {
+		NOMEM("allocating cursor");
+		SETERR();
+		goto cleanup;
+	}
+	scur->curid = ses->curid;
+	scur->cur = cur;
+	if (ts_algo_tree_insert(ses->cursors, scur) != TS_ALGO_OK) {
+		NOMEM("tree.insert");
+		SETERR();
+		free(scur); goto cleanup;
+	}
+	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
+		perror("cannot send cursor");
+		ts_algo_tree_delete(ses->cursors, scur);
+		return -1;
+	}
+	return 0;
+
+cleanup:
+	nowdb_cursor_destroy(cur); free(cur);
+	if (ses->err != NOWDB_OK) return -1;
+	return 0;
+}
+
+static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
+	char *tmp;
+	nowdb_err_t err;
+	nowdb_ses_cursor_t cur;
+
+	fprintf(stderr, "handle op\n");
+
+	switch(ast->ntype) {
+	case NOWDB_AST_FETCH:
+	case NOWDB_AST_CLOSE:
+		cur.curid = strtoul(ast->value, &tmp, 10);
+		if (*tmp != 0) {
+			fprintf(stderr, "not a valid number: %s\n", (char*)ast->value);
+			err = nowdb_err_get(nowdb_err_invalid,
+			  FALSE, OBJECT, "not a valid number");
+			if (sendErr(ses, err, NULL) != 0) return -1;
+			return 0;
+		}
+		ts_algo_tree_delete(ses->cursors, &cur); break;
+
+	default:
+		fprintf(stderr, "AST: %d\n", ast->ntype);
+		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                 "unknown operation");
+		if (sendErr(ses, err, NULL) != 0) return -1;
+		return 0;
+	}
+	if (sendOK(ses) != 0) return -1;
+	return 0;
+}
+
 static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	uint32_t osz;
 	uint32_t cnt;
@@ -825,7 +1011,9 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_SCOPE:
 		ses->scope = res.result; return sendOK(ses);
 	case NOWDB_QRY_RESULT_CURSOR:
-		return processCursor(ses, res.result);
+		return openCursor(ses, res.result);
+	case NOWDB_QRY_RESULT_OP:
+		return handleOp(ses, res.result);
 	default:
 		fprintf(stderr, "unknown result :-(\n");
 		return -1;
