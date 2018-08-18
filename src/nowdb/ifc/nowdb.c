@@ -14,7 +14,7 @@
 
 static char *OBJECT = "lib";
 
-#define BUFSIZE 0x10000
+#define BUFSIZE 0x7000
 #define MAXROW  0x1000
 
 #define INVALID(s) \
@@ -872,6 +872,7 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		SETERR();
 		free(scur); goto cleanup;
 	}
+	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
 	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
 		perror("cannot send cursor");
 		ts_algo_tree_delete(ses->cursors, scur);
@@ -906,8 +907,8 @@ static int fetch(nowdb_session_t    *ses,
 				if (sendEOF(ses) != 0) {
 					return -1;
 				}
+				return 0;
 			}
-			return 0;
 		} else {
 			if (sendErr(ses, err, NULL) != 0) {
 				// in this case we must end the session
@@ -918,6 +919,7 @@ static int fetch(nowdb_session_t    *ses,
 			return 0;
 		}
 	}
+	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
 	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
 		return -1;
 	}

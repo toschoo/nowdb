@@ -586,19 +586,22 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 	char x=0;
 	int err;
 	int sz;
+	int cnt=0;
 
 	if (row == NULL) return NOWDB_ERR_INVALID;
 
 	buf = ROW(row)->buf;
 
 	// find last row
-	for(sz=ROW(row)->sz; sz>0; sz--) {
-		if (buf[sz-1] == EOROW) break;
+	for(sz=ROW(row)->sz-1; sz>0; sz--) {
+		if (buf[sz] == EOROW) break;
 	}
 	if (sz == 0) return NOWDB_OK;
+	sz++;
 	while(i<sz) {
 		t = buf[i]; i++;
 		if (t == EOROW) {
+			cnt++;
 			fprintf(stream, "\n");
 			fflush(stream);
 			x=0;
@@ -631,12 +634,15 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 			fprintf(stream, "%.4f", *(double*)(buf+i));
 			i+=8; break;
 
+		case NOWDB_NOTHING:
+			i+=8; break;
+
 		default: return NOWDB_ERR_PROTO;
 
 		}
 		x = 1;
 	}
-	fprintf(stream, "\n"); fflush(stream);
+	// fprintf(stream, "\n"); fflush(stream);
 	return NOWDB_OK;
 }
 
@@ -702,26 +708,34 @@ int nowdb_cursor_close(nowdb_cursor_t cur) {
  * Rescue bytes of incomplete row at end of cursor
  * ------------------------------------------------------------------------
  */
-static inline int leftovers(nowdb_cursor_t cur) {
+static inline int leftover(nowdb_cursor_t cur) {
 	int i;
 	char *buf = CUR(cur)->mybuf;
-	
+
 	CUR(cur)->lo = 0;
-	for(i=ROW(cur)->sz; i>0; i--) {
-		if (buf[i-1] == EOROW) break;
+	if (CUR(cur)->sz == 0) return NOWDB_OK;
+	
+	for(i=ROW(cur)->sz-1; i>0; i--) {
+		if (buf[i] == EOROW) break;
 	}
-	if (i == ROW(cur)->sz) return NOWDB_OK;
-	if (i == 0) return NOWDB_ERR_TOOBIG;
+	if (i == ROW(cur)->sz-1) return NOWDB_OK;
+	i++;
 
 	CUR(cur)->lo = CUR(cur)->sz - i;
-	if (CUR(cur)->lo >= MAXROW) return NOWDB_ERR_TOOBIG;
+	if (CUR(cur)->lo >= MAXROW) {
+		fprintf(stderr, "leftover too big: %d\n",
+			CUR(cur)->lo);
+		return NOWDB_ERR_PROTO;
+	}
 
-	fprintf(stderr, "have leftovers: %d, size: %d\n",
-	                                 i, CUR(cur)->lo);
+	/*
+	fprintf(stderr, "have leftover: %d of %d size: %d, %d\n",
+	                   i, CUR(cur)->sz, CUR(cur)->lo, buf[i]);
+	*/
 
-	memcpy(CUR(cur)->mybuf, CUR(cur)->mybuf+i, CUR(cur)->lo);
+	memcpy(buf, buf+i, CUR(cur)->lo);
 	
-	return 0;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -733,8 +747,11 @@ int nowdb_cursor_fetch(nowdb_cursor_t  cur) {
 	size_t sz;
 	char *sql;
 
-	x = leftovers(cur);
-	if (x != 0) return x;
+	x = leftover(cur);
+	if (x != NOWDB_OK) {
+		fprintf(stderr, "leftover: %d\n", x);
+		return x;
+	}
 
 	sql = malloc(32);
 	if (sql == NULL) return NOWDB_ERR_NOMEM;
@@ -746,11 +763,16 @@ int nowdb_cursor_fetch(nowdb_cursor_t  cur) {
 	if (x != NOWDB_OK) return x;
 
 	x = readResult(CUR(cur)->con, CUR(cur));
-	if (x != NOWDB_OK) return x;
+	if (x != NOWDB_OK) {
+		fprintf(stderr, "read result: %d\n", x);
+		return x;
+	}
 
 	if (CUR(cur)->mybuf != NULL) {
 		memcpy(CUR(cur)->mybuf+CUR(cur)->lo,
-		       CUR(cur)->buf, CUR(cur)->sz);
+		       CUR(cur)->con->buf,
+		       CUR(cur)->sz);
+		CUR(cur)->sz += CUR(cur)->lo;
 		CUR(cur)->buf = CUR(cur)->mybuf;
 	}
 

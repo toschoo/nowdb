@@ -78,8 +78,9 @@ int main() {
 	EXECZC("drop context myctx");
 	nowdb_result_destroy(res);
 
-	EXEC("select edge, timestamp, weight from tx\
-	      where edge = 'buys_product' and origin = 0");
+	EXEC("select edge, destin, timestamp, weight from tx\
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 419800000002");
 
 	err = nowdb_cursor_open(res, &cur);
 	if (err != NOWDB_OK) {
@@ -94,7 +95,7 @@ int main() {
 		err = nowdb_cursor_fetch(cur);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "cannot fetch: %d\n", err);
-			rc = EXIT_FAILURE;
+			rc = EXIT_FAILURE; break;
 		}
 	}
 	if (!nowdb_cursor_eof(cur)) {

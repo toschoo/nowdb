@@ -230,7 +230,8 @@ int printReport(nowdb_qry_result_t *res) {
 	return 0;
 }
 
-char buf[8192];
+#define BUFSIZE 0x10000
+char buf[BUFSIZE];
 
 /* -----------------------------------------------------------------------
  * Process Cursor
@@ -257,7 +258,7 @@ int processCursor(nowdb_cursor_t *cur) {
 
 	for(;;) {
 		nowdb_timestamp(&t1);
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
+		err = nowdb_cursor_fetch(cur, buf, BUFSIZE, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);

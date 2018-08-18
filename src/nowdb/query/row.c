@@ -399,7 +399,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			(*osz)++;
 			row->dirty = 0;
 			// (*cnt)++;
-			return NOWDB_OK;
+			// return NOWDB_OK;
 		}
 	}
 	for(int i=row->cur; i<row->sz; i++) {
@@ -413,7 +413,10 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			               buf, sz, osz, &nsp);
 			}
 			if (err != NOWDB_OK) return err;
-			if (nsp) return NOWDB_OK;
+			if (nsp) {
+				row->cur = i;
+				return NOWDB_OK;
+			}
 
 		} else {
 			*ok = 1;
