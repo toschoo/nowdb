@@ -36,8 +36,10 @@
 #define NOWDB_OK          0
 #define NOWDB_ERR_NOMEM   1
 #define NOWDB_ERR_NOCON   2
-#define NOWDB_ERR_NORES   3
-#define NOWDB_ERR_INVALID 5
+#define NOWDB_ERR_NOSOCK  3
+#define NOWDB_ERR_ADDR    4
+#define NOWDB_ERR_NORES   5
+#define NOWDB_ERR_INVALID 6
 #define NOWDB_ERR_EOF     8
 #define NOWDB_ERR_NOREAD  101
 #define NOWDB_ERR_NOWRITE 102
@@ -48,6 +50,7 @@
 #define NOWDB_ERR_TOOBIG  107
 #define NOWDB_ERR_OSERR   108
 #define NOWDB_ERR_FORMAT  109
+#define NOWDB_ERR_CURZC   110
 
 /* ------------------------------------------------------------------------
  * Describe error
@@ -126,13 +129,10 @@ int nowdb_connection_close(nowdb_con_t con);
 void nowdb_connection_destroy(nowdb_con_t con);
 
 /* ------------------------------------------------------------------------
- * Possible results
+ * Generic Result
  * ------------------------------------------------------------------------
  */
 typedef struct nowdb_result_t* nowdb_result_t;
-typedef struct nowdb_row_t* nowdb_row_t;
-typedef struct nowdb_report_t* nowdb_report_t;
-typedef struct nowdb_cursor_t* nowdb_cursor_t;
 
 int nowdb_result_type(nowdb_result_t res);
 
@@ -144,19 +144,20 @@ int nowdb_result_type(nowdb_result_t res);
 
 int nowdb_result_status(nowdb_result_t res);
 const char *nowdb_result_details(nowdb_result_t res);
-short nowdb_result_errcode(nowdb_result_t res);
+int nowdb_result_errcode(nowdb_result_t res);
 int nowdb_result_eof(nowdb_result_t res);
+void nowdb_result_destroy(nowdb_result_t res);
 
-nowdb_report_t nowdb_result_report(nowdb_result_t res);
-
+/* ------------------------------------------------------------------------
+ * Row
+ * ------------------------------------------------------------------------
+ */
+typedef struct nowdb_row_t* nowdb_row_t;
 const char *nowdb_row_next(nowdb_row_t row);
 void nowdb_row_rewind(nowdb_row_t row);
 void *nowdb_row_field(nowdb_row_t row, int field, int *type);
 int nowdb_row_write(FILE *file, nowdb_row_t row);
 
-nowdb_cursor_t nowdb_result_cursor(nowdb_result_t res);
-
-void nowdb_result_destroy(nowdb_result_t res);
 
 /* ------------------------------------------------------------------------
  * Single SQL statement
@@ -167,9 +168,18 @@ int nowdb_exec_statement(nowdb_con_t     con,
                          nowdb_result_t *res);
 
 /* ------------------------------------------------------------------------
+ * Single SQL statement (zerocopy)
+ * ------------------------------------------------------------------------
+ */
+int nowdb_exec_statementZC(nowdb_con_t     con,
+                           char     *statement,
+                           nowdb_result_t *res);
+
+/* ------------------------------------------------------------------------
  * Cursor
  * ------------------------------------------------------------------------
  */
+typedef struct nowdb_cursor_t* nowdb_cursor_t;
 int nowdb_cursor_open(nowdb_result_t  res,
                       nowdb_cursor_t *cur);
 
@@ -178,15 +188,9 @@ int nowdb_cursor_close(nowdb_cursor_t cur);
 int nowdb_cursor_fetch(nowdb_cursor_t  cur);
 nowdb_row_t nowdb_cursor_row(nowdb_cursor_t cur);
 const char *nowdb_cursor_details(nowdb_cursor_t res);
-short nowdb_cursor_errcode(nowdb_cursor_t res);
+int nowdb_cursor_errcode(nowdb_cursor_t res);
 
 int nowdb_cursor_eof(nowdb_cursor_t cur);
 int nowdb_cursor_ok(nowdb_cursor_t cur);
-
-/* ------------------------------------------------------------------------
- * Misc
- * ------------------------------------------------------------------------
- */
-int nowdb_use(nowdb_con_t con, char *db, nowdb_result_t *res);
 
 #endif 

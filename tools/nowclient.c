@@ -29,8 +29,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#define USE(sql) \
-	err = nowdb_use(con, sql, &res); \
+#define EXECZC(sql) \
+	err = nowdb_exec_statementZC(con, sql, &res); \
 	if (err != 0) { \
 		fprintf(stderr, "cannot execute statement: %d\n", err); \
 		rc = EXIT_FAILURE; goto cleanup; \
@@ -41,8 +41,7 @@
 		       nowdb_result_details(res)); \
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	nowdb_result_destroy(res);
+	}
 
 #define EXEC(sql) \
 	err = nowdb_exec_statement(con, sql, &res); \
@@ -56,37 +55,6 @@
 		       nowdb_result_details(res)); \
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	nowdb_result_destroy(res);
-
-#define DQL(sql) \
-	err = nowdb_exec_statement(con, sql, &cres); \
-	if (err != 0) { \
-		fprintf(stderr, "cannot execute statement: %d\n", err); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	if (nowdb_result_status(cres) != 0) { \
-		if (nowdb_result_errcode(cres) == NOWDB_ERR_EOF) { \
-			fprintf(stderr, "EOF\n"); \
-		} else { \
-			fprintf(stderr, "ERROR %d: %s\n",\
-			       nowdb_result_errcode(cres), \
-			       nowdb_result_details(cres)); \
-		} \
-		nowdb_result_destroy(cres); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	err = nowdb_cursor_open(cres, &cur); \
-	if (err != NOWDB_OK) { \
-		fprintf(stderr, "NOT A CURSOR\n"); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	}
-
-#define CLOSE() \
-	err = nowdb_cursor_close(cur); \
-	if (err != NOWDB_OK) { \
-		fprintf(stderr, "cannot close cursor: %d\n", err); \
-		rc = EXIT_FAILURE; goto cleanup; \
 	}
 
 int main() {
@@ -95,24 +63,29 @@ int main() {
 	int flags=0;
 	nowdb_con_t con;
 	nowdb_result_t res;
-	nowdb_result_t cres;
 	nowdb_cursor_t cur;
 
-	// flags = NOWDB_FLAGS_TEXT;
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
-		// describe error
 		return EXIT_FAILURE;
 	}
 
-	USE("retail");
-	EXEC("create tiny context myctx");
-	EXEC("drop context myctx");
+	EXECZC("use retail");
+	nowdb_result_destroy(res);
+	EXECZC("create tiny context myctx");
+	nowdb_result_destroy(res);
+	EXECZC("drop context myctx");
+	nowdb_result_destroy(res);
 
-	DQL("select edge, timestamp, weight from tx\
-	       where edge = 'buys_product' and origin = 0");
+	EXEC("select edge, timestamp, weight from tx\
+	      where edge = 'buys_product' and origin = 0");
 
+	err = nowdb_cursor_open(res, &cur);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "NOT A CURSOR\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	while (nowdb_cursor_ok(cur)) {
 		err = nowdb_row_write(stdout, nowdb_cursor_row(cur));
 		if (err != NOWDB_OK) {
@@ -130,8 +103,11 @@ int main() {
 		        nowdb_cursor_details(cur));
 		rc = EXIT_FAILURE;
 	}
-	CLOSE();
-	// nowdb_result_destroy(res);
+	err = nowdb_cursor_close(cur);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot close cursor: %d\n", err);
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 	
 cleanup:
 	err = nowdb_connection_close(con);

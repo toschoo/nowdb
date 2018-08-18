@@ -14,7 +14,8 @@
 
 static char *OBJECT = "lib";
 
-#define BUFSIZE 8192
+#define BUFSIZE 0x10000
+#define MAXROW  0x1000
 
 #define INVALID(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
@@ -787,30 +788,6 @@ static int sendErr(nowdb_session_t *ses,
 	return 0;
 }
 
-static int sendRow(nowdb_session_t *ses, char *buf, uint32_t sz) {
-	nowdb_err_t err;
-	char status[8];
-
-	status[0] = NOWDB_ROW;
-	status[1] = NOWDB_ACK;
-
-	memcpy(status+2, &sz, 4);
-
-	if (write(ses->ostream, status, 6) != 6) {
-		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                    "writing row");
-		SETERR();
-		return -1;
-	}
-	if (write(ses->ostream, buf, sz) != sz) {
-		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                    "writing row");
-		SETERR();
-		return -1;
-	}
-	return 0;
-}
-
 static int sendCursor(nowdb_session_t   *ses,
                       uint64_t         curid,
                       char *buf, uint32_t sz) {
@@ -986,67 +963,6 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		                                 "unknown operation");
 		if (sendErr(ses, err, NULL) != 0) return -1;
 		return 0;
-	}
-	return 0;
-}
-
-static int processCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
-	uint32_t osz;
-	uint32_t cnt;
-	uint64_t total=0;
-	char eof=0;
-	nowdb_err_t err=NOWDB_OK;
-	char *buf = ses->buf;
-	uint32_t sz = ses->bufsz;
-	struct timespec t1, t2;
-
-	err = nowdb_cursor_open(cur);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			fprintf(stderr, "Read: 0\n");
-			nowdb_err_release(err);
-			err = NOWDB_OK;
-		}
-		goto cleanup;
-	}
-	for(;;) {
-		nowdb_timestamp(&t1);
-		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
-		if (err != NOWDB_OK) {
-			if (err->errcode == nowdb_err_eof) {
-				nowdb_err_release(err);
-				err = NOWDB_OK;
-				eof = 1;
-				if (cnt == 0) break;
-			} else break;
-		}
-		nowdb_timestamp(&t2);
-		total += cnt;
-		if (cur->row != NULL && cur->hasid) {
-			if (ses->opt.rtype == NOWDB_SES_TXT) {
-				fprintf(stderr, "writing result\n");
-				err = nowdb_row_write(buf, osz, ses->ofile);
-				if (err != NOWDB_OK) break;
-			} else {
-				if (sendRow(ses, buf, osz) != 0) {
-					perror("cannot write"); break;
-				}
-			}
-
-		} else if (cur->recsize == 32) {
-			// printVertex((nowdb_vertex_t*)buf, osz/32);
-		} else if (cur->recsize == 64) {
-			// printEdge((nowdb_edge_t*)buf, osz/64);
-		}
-		if (eof) break;
-	}
-	fprintf(stderr, "Read: %lu\n", total);
-
-cleanup:
-	nowdb_cursor_destroy(cur); free(cur);
-	if (err != NOWDB_OK) {
-		SETERR();
-		return -1;
 	}
 	return 0;
 }

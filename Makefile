@@ -125,6 +125,8 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/parser.h     \
       $(SRC)/ifc/nowdb.h
 
+IFC = include/nowdb/nowdb.h
+
 default:	lib 
 
 all:	default tools tests bench server client
@@ -544,7 +546,7 @@ $(BIN)/scopetool2:	$(LIB) $(TOOLS)/scopetool2.o \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
 
-$(BIN)/nowdbd:		$(DEP) $(LIB) $(SRD)/nowdbd.o \
+$(BIN)/nowdbd:		$(IFC) $(LIB) $(SRD)/nowdbd.o \
 			              $(COM)/cmd.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(SRD)/nowdbd.o \
