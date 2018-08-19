@@ -798,23 +798,17 @@ static int sendCursor(nowdb_session_t   *ses,
 	status[0] = NOWDB_CURSOR;
 	status[1] = NOWDB_ACK;
 
-	fprintf(stderr, "sendinng curid %lu\n", curid);
+	// fprintf(stderr, "sendinng curid %lu\n", curid);
 	memcpy(status+2, &curid, 8);
 
-	fprintf(stderr, "sendinng size %u\n", sz);
+	// fprintf(stderr, "sendinng size %u\n", sz);
 	memcpy(status+10, &sz, 4);
 
-	int t=0;
-	while(t<sz+14) {
-		int x = write(ses->ostream, buf+2+t, sz+14-t);
-	        if (x <= 0) {
-			fprintf(stderr, "write failed\n");
-			err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-			                                 "writing cursor");
-			SETERR();
-			return -1;
-		}
-		t+=x;
+	if (write(ses->ostream, buf+2, sz+14) != sz+14) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+			                         "writing cursor");
+		SETERR();
+		return -1;
 	}
 	return 0;
 }
@@ -830,7 +824,6 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
-			fprintf(stderr, "Read: 0\n");
 			nowdb_err_release(err);
 			if (sendEOF(ses) != 0) {
 				fprintf(stderr, "cannot send eof\n");
@@ -842,7 +835,6 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
-			fprintf(stderr, "EOF after fetch\n");
 			nowdb_err_release(err);
 			if (osz == 0) {
 				if (sendEOF(ses) != 0) goto cleanup;
@@ -874,7 +866,7 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		SETERR();
 		free(scur); goto cleanup;
 	}
-	fprintf(stderr, "fetched: %u / %u (%d)\n", osz, cnt, buf[osz-1]);
+	// fprintf(stderr, "fetched: %u / %u (%d)\n", osz, cnt, buf[osz-1]);
 	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		perror("cannot send cursor");
 		ts_algo_tree_delete(ses->cursors, scur);
@@ -902,32 +894,28 @@ static int fetch(nowdb_session_t    *ses,
 		if (sendEOF(ses) != 0) return -1;
 		return 0;
 	}
-	// while(cnt == 0) {
-		err = nowdb_cursor_fetch(scur->cur, buf+t, sz-t, &osz, &cnt);
-		if (err != NOWDB_OK) {
-			if (err->errcode == nowdb_err_eof) {
-				nowdb_err_release(err);
-				if (osz == 0) {
-					if (sendEOF(ses) != 0) {
-						return -1;
-					}
-					return 0;
-				}
-			} else {
-				if (sendErr(ses, err, NULL) != 0) {
-					// in this case we must end the session
-					fprintf(stderr, "cannot send error\n");
-					SETERR();
+	err = nowdb_cursor_fetch(scur->cur, buf+t, sz-t, &osz, &cnt);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			if (osz == 0) {
+				if (sendEOF(ses) != 0) {
 					return -1;
 				}
 				return 0;
 			}
+		} else {
+			if (sendErr(ses, err, NULL) != 0) {
+				// in this case we must end the session
+				fprintf(stderr, "cannot send error\n");
+				SETERR();
+				return -1;
+			}
+			return 0;
 		}
-		scur->count += cnt;
-		t+=osz;
-		fprintf(stderr, "stp: %u\n", cnt);
-	// }
-	fprintf(stderr, "fetched: %u / %u (%d -- %d)\n", t, scur->count, buf[0], buf[osz-1]);
+	}
+	scur->count += cnt;
+	// fprintf(stderr, "fetched: %u / %u (%d -- %d)\n", t, scur->count, buf[0], buf[osz-1]);
 	if (sendCursor(ses, scur->curid, ses->buf, t) != 0) {
 		return -1;
 	}
@@ -940,7 +928,6 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	nowdb_ses_cursor_t pattern;
 	nowdb_ses_cursor_t *cur;
 
-	fprintf(stderr, "handle op: %d\n", ast->ntype);
 	pattern.curid = strtoul(ast->value, &tmp, 10);
 	if (*tmp != 0) {
 		err = nowdb_err_get(nowdb_err_invalid,
@@ -950,7 +937,6 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	}
 	switch(ast->ntype) {
 	case NOWDB_AST_FETCH:
-		fprintf(stderr, "FETCH\n");
 		cur = ts_algo_tree_find(ses->cursors, &pattern);
 		if (cur == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid,
@@ -962,7 +948,6 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		return 0;
 	
 	case NOWDB_AST_CLOSE:
-		fprintf(stderr, "CLOSE\n");
 		ts_algo_tree_delete(ses->cursors, &pattern); 
 		if (sendOK(ses) != 0) return -1;
 		return 0;

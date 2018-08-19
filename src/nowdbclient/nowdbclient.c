@@ -186,15 +186,32 @@ static inline int sendbytes(struct nowdb_con_t *con, char *bytes, int sz) {
 }
 
 /* ------------------------------------------------------------------------
+ * generic read
+ * ------------------------------------------------------------------------
+ */
+static inline int readN(int sock, char *buf, int sz) {
+	size_t t=0;
+	size_t x;
+
+	while(t<sz) {
+		x = read(sock, buf+t, sz-t);
+       		if (x <= 0) {
+			fprintf(stderr, "cannot read socket: %d/%zu\n",
+			                                        sz, x);
+			perror("cannot read socket");
+			return NOWDB_ERR_NOREAD;
+		}
+		t+=x;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Read type and status flags
  * ------------------------------------------------------------------------
  */
 static inline int readStatus(struct nowdb_con_t *con) {
-	if (read(con->sock, con->buf, 2) != 2) {
-		perror("cannot read socket");
-		return NOWDB_ERR_NOREAD;
-	}
-	return NOWDB_OK;
+	return readN(con->sock, con->buf, 2);
 }
 
 /* ------------------------------------------------------------------------
@@ -202,10 +219,9 @@ static inline int readStatus(struct nowdb_con_t *con) {
  * ------------------------------------------------------------------------
  */
 static inline int readSize(struct nowdb_con_t *con, int *sz) {
-	if (read(con->sock, sz, 4) != 4) {
-		perror("cannot read socket");
-		return NOWDB_ERR_NOREAD;
-	}
+	int x;
+	x = readN(con->sock, (char*)sz, 4);
+	if (x != 0) return x;
 	if (*sz > BUFSIZE-MAXROW) {
 		fprintf(stderr, "SIZE: %d\n", *sz);
 		return NOWDB_ERR_TOOBIG;
@@ -219,7 +235,7 @@ static inline int readSize(struct nowdb_con_t *con, int *sz) {
  */
 static inline int readResult(struct nowdb_con_t    *con,
                              struct nowdb_result_t *res) {
-	int x, t;
+	int x;
 
 	res->buf = con->buf;
 
@@ -268,25 +284,8 @@ static inline int readResult(struct nowdb_con_t    *con,
 	// fprintf(stderr, "size is %d\n", res->sz);
 
 	// read the content
-	t=0;
-	while(t<res->sz) {
-		x = read(con->sock, con->buf+t, res->sz-t);
-       		if (x <= 0) {
-			fprintf(stderr, "cannot read socket: %d/%d\n",
-			                                  res->sz, x);
-			perror("cannot read socket");
-			return NOWDB_ERR_NOREAD;
-		}
-		t+=x;
-		if (t < res->sz) fprintf(stderr, "REPEATING\n");
-	}
-
-	/*
-	timestamp(&t2);
-	fprintf(stderr, "wait: %ldus, %ldus\n",
-	                 minus(&t1, &t3)/1000,
-	                 minus(&t2, &t1)/1000);
-	*/
+	x = readN(con->sock, con->buf, res->sz);
+       	if (x != NOWDB_OK) return NOWDB_ERR_NOREAD;
 
 	// we handle status reports and reports as strings
 	if (res->rtype == NOWDB_STATUS ||
@@ -645,7 +644,6 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 	sz = findLastRow(buf, ROW(row)->sz);
 	if (sz < 0) return NOWDB_ERR_PROTO;
 	if (sz == 0) return NOWDB_OK;
-	// fprintf(stderr, "last in write is %d\n", sz);
 
 	while(i<sz) {
 		t = buf[i]; i++;
@@ -691,7 +689,6 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 		}
 		x = 1;
 	}
-	// fprintf(stream, "\n");
 	fflush(stream);
 	return NOWDB_OK;
 }
@@ -788,15 +785,6 @@ static inline int leftover(nowdb_cursor_t cur) {
 
 	memcpy(buf, buf+l, CUR(cur)->lo);
 
-	/*
-	if (CUR(cur)->lo == 41) {
-		for(int i=0; i<CUR(cur)->lo;i++) {
-			fprintf(stderr, "%d ", buf[i]);
-		}
-		fprintf(stderr, "\n");
-	}
-	*/
-	
 	return NOWDB_OK;
 }
 

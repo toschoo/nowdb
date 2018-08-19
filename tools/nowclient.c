@@ -66,7 +66,7 @@ int main() {
 	nowdb_con_t con;
 	nowdb_result_t res;
 	nowdb_cursor_t cur;
-	struct timespec t1, t2, t3, t4;
+	struct timespec t1, t2;
 
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
 	if (err != 0) {
@@ -103,7 +103,6 @@ int main() {
 			                                      err,cnt);
 			rc = EXIT_FAILURE; goto cleanup;
 		}
-		// timestamp(&t3);
 		err = nowdb_cursor_fetch(cur);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "cannot fetch: %d\n", err);
