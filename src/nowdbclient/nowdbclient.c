@@ -38,7 +38,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define BUFSIZE 0x10000
+#define BUFSIZE 0x12000
 #define MAXROW  0x1000
 
 #ifdef _NOWDB_LE_
@@ -165,7 +165,10 @@ static int tryConnect(struct nowdb_con_t *con) {
  * ------------------------------------------------------------------------
  */
 static inline int sendbuf(struct nowdb_con_t *con, int sz) {
-	if (write(con->sock, con->buf, sz) != sz) {
+	int x;
+	x = write(con->sock, con->buf, sz);
+       	if (x != sz) {
+		fprintf(stderr, "cannot write socket: %d\n", x);
 		perror("cannot write to socket");
 		return NOWDB_ERR_NOWRITE;
 	}
@@ -216,7 +219,7 @@ static inline int readSize(struct nowdb_con_t *con, int *sz) {
  */
 static inline int readResult(struct nowdb_con_t    *con,
                              struct nowdb_result_t *res) {
-	int x;
+	int x, t;
 
 	res->buf = con->buf;
 
@@ -247,7 +250,7 @@ static inline int readResult(struct nowdb_con_t    *con,
 
 		// we provide no further information on EOF
 		if (res->err == NOWDB_ERR_EOF) {
-			res->buf[0] = 0; return 0;
+			con->buf[0] = 0; return 0;
 		}
 	}
 
@@ -262,16 +265,32 @@ static inline int readResult(struct nowdb_con_t    *con,
 	// read size
 	x = readSize(con, &res->sz);
 	if (x != NOWDB_OK) return x;
+	fprintf(stderr, "size is %d\n", res->sz);
 
 	// read the content
-	if (read(con->sock, con->buf, res->sz) != res->sz) {
-		perror("cannot read socket");
-		return NOWDB_ERR_NOREAD;
+	t=0;
+	while(t<res->sz) {
+		x = read(con->sock, con->buf+t, res->sz-t);
+       		if (x <= 0) {
+			fprintf(stderr, "cannot read socket: %d/%d\n",
+			                                  res->sz, x);
+			perror("cannot read socket");
+			return NOWDB_ERR_NOREAD;
+		}
+		t+=x;
+		if (t < res->sz) fprintf(stderr, "REPEATING\n");
 	}
+
+	/*
+	timestamp(&t2);
+	fprintf(stderr, "wait: %ldus, %ldus\n",
+	                 minus(&t1, &t3)/1000,
+	                 minus(&t2, &t1)/1000);
+	*/
 
 	// we handle status reports and reports as strings
 	if (res->rtype == NOWDB_STATUS ||
-	    res->rtype == NOWDB_REPORT) res->buf[res->sz] = 0;
+	    res->rtype == NOWDB_REPORT) con->buf[res->sz] = 0;
 
 	// done
 	return NOWDB_OK;
@@ -599,9 +618,9 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 	if (sz == 0) return NOWDB_OK;
 	sz++;
 	while(i<sz) {
+		cnt++;
 		t = buf[i]; i++;
 		if (t == EOROW) {
-			cnt++;
 			fprintf(stream, "\n");
 			fflush(stream);
 			x=0;
@@ -637,7 +656,8 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 		case NOWDB_NOTHING:
 			i+=8; break;
 
-		default: return NOWDB_ERR_PROTO;
+		default:
+			return NOWDB_ERR_PROTO;
 
 		}
 		x = 1;
@@ -710,30 +730,53 @@ int nowdb_cursor_close(nowdb_cursor_t cur) {
  */
 static inline int leftover(nowdb_cursor_t cur) {
 	int i;
+	int l=CUR(cur)->sz-1;
 	char *buf = CUR(cur)->mybuf;
 
 	CUR(cur)->lo = 0;
 	if (CUR(cur)->sz == 0) return NOWDB_OK;
 	
+	/*
 	for(i=ROW(cur)->sz-1; i>0; i--) {
 		if (buf[i] == EOROW) break;
 	}
-	if (i == ROW(cur)->sz-1) return NOWDB_OK;
-	i++;
+	*/
+	if (l == EOROW) return NOWDB_OK;
+	for(i=0; i<ROW(cur)->sz;) {
+		if (buf[i] == EOROW) {
+			l=i; i++; continue;
+		}
+		if (buf[i] == NOWDB_TEXT) {
+			while(buf[i] != 0) {
+				if (i == ROW(cur)->sz) {
+					fprintf(stderr, "field incomplete\n");
+					return NOWDB_ERR_PROTO;
+				}
+				i++;
+			}
+			i++; continue;
+		}
+		i+=9;
+	}
+	if (l == ROW(cur)->sz-1) return NOWDB_OK;
+	l++;
 
-	CUR(cur)->lo = CUR(cur)->sz - i;
+	CUR(cur)->lo = CUR(cur)->sz - l;
 	if (CUR(cur)->lo >= MAXROW) {
 		fprintf(stderr, "leftover too big: %d\n",
 			CUR(cur)->lo);
 		return NOWDB_ERR_PROTO;
 	}
 
-	/*
-	fprintf(stderr, "have leftover: %d of %d size: %d, %d\n",
-	                   i, CUR(cur)->sz, CUR(cur)->lo, buf[i]);
-	*/
+	fprintf(stderr, "have leftover: %d of %d size: %d, %d/%d/%d/%d/%d\n",
+	      l, CUR(cur)->sz, CUR(cur)->lo,
+	      (int)buf[l-2],
+	      (int)buf[l-1], 
+	      (int)buf[l], 
+	      (int)buf[l+1], 
+	      (int)buf[l+2]);
 
-	memcpy(buf, buf+i, CUR(cur)->lo);
+	memcpy(buf, buf+l, CUR(cur)->lo);
 	
 	return NOWDB_OK;
 }
@@ -767,7 +810,6 @@ int nowdb_cursor_fetch(nowdb_cursor_t  cur) {
 		fprintf(stderr, "read result: %d\n", x);
 		return x;
 	}
-
 	if (CUR(cur)->mybuf != NULL) {
 		memcpy(CUR(cur)->mybuf+CUR(cur)->lo,
 		       CUR(cur)->con->buf,

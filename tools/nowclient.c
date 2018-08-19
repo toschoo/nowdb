@@ -24,6 +24,8 @@
  */
 #include <nowdb/nowclient.h>
 
+#include <common/bench.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -64,6 +66,7 @@ int main() {
 	nowdb_con_t con;
 	nowdb_result_t res;
 	nowdb_cursor_t cur;
+	struct timespec t1, t2, t3, t4;
 
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
 	if (err != 0) {
@@ -73,13 +76,17 @@ int main() {
 
 	EXECZC("use retail");
 	nowdb_result_destroy(res);
+	/*
 	EXECZC("create tiny context myctx");
 	nowdb_result_destroy(res);
 	EXECZC("drop context myctx");
 	nowdb_result_destroy(res);
+	*/
 
+	timestamp(&t1);
 	EXEC("select edge, destin, timestamp, weight from tx\
 	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	//    where edge = 'buys_product' and origin = 419800000002");
 
 	err = nowdb_cursor_open(res, &cur);
@@ -87,16 +94,23 @@ int main() {
 		fprintf(stderr, "NOT A CURSOR\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	int cnt=0;
 	while (nowdb_cursor_ok(cur)) {
+		cnt++;
 		err = nowdb_row_write(stdout, nowdb_cursor_row(cur));
 		if (err != NOWDB_OK) {
-			fprintf(stderr, "cannot write row: %d\n", err);
+			fprintf(stderr, "cannot write row: %d on %d\n",
+			                                      err,cnt);
+			rc = EXIT_FAILURE; goto cleanup;
 		}
+		// timestamp(&t3);
 		err = nowdb_cursor_fetch(cur);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "cannot fetch: %d\n", err);
 			rc = EXIT_FAILURE; break;
 		}
+		// timestamp(&t4);
+		// fprintf(stderr, "fetch: %ldus\n", minus(&t4, &t3)/1000);
 	}
 	if (!nowdb_cursor_eof(cur)) {
 		fprintf(stderr, "ERROR %d: %s\n",
@@ -109,6 +123,8 @@ int main() {
 		fprintf(stderr, "cannot close cursor: %d\n", err);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	timestamp(&t2);
+	fprintf(stderr, "time: %ldus\n", minus(&t2, &t1)/1000);
 	
 cleanup:
 	err = nowdb_connection_close(con);

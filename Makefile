@@ -555,11 +555,13 @@ $(BIN)/nowdbd:		$(IFC) $(LIB) $(SRD)/nowdbd.o \
 
 $(BIN)/nowclient:	$(CLIENTDEP) $(CLIENTLIB) \
 			$(TOOLS)/nowclient.o \
-			$(COM)/cmd.o
+			$(COM)/cmd.o \
+			$(COM)/bench.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/nowclient.o \
 			              	       $(COM)/cmd.o      \
-			                 $(libs) -lnowdbclient
+			              	       $(COM)/bench.o      \
+			                 $(libs) -lnowdbclient -lnowdb
 
 
 # Clean up

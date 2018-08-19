@@ -14,8 +14,9 @@
 
 static char *OBJECT = "lib";
 
-#define BUFSIZE 0x7000
+#define BUFSIZE 0x10000
 #define MAXROW  0x1000
+#define HDRSIZE 16
 
 #define INVALID(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
@@ -792,7 +793,7 @@ static int sendCursor(nowdb_session_t   *ses,
                       uint64_t         curid,
                       char *buf, uint32_t sz) {
 	nowdb_err_t err;
-	char status[16];
+	char *status=buf+2;
 
 	status[0] = NOWDB_CURSOR;
 	status[1] = NOWDB_ACK;
@@ -803,17 +804,25 @@ static int sendCursor(nowdb_session_t   *ses,
 	fprintf(stderr, "sendinng size %u\n", sz);
 	memcpy(status+10, &sz, 4);
 
+	/*
 	if (write(ses->ostream, status, 14) != 14) {
 		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
 		                                 "writing cursor");
 		SETERR();
 		return -1;
 	}
-	if (write(ses->ostream, buf, sz) != sz) {
-		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                 "writing cursor");
-		SETERR();
-		return -1;
+	*/
+	int t=0;
+	while(t<sz+14) {
+		int x = write(ses->ostream, buf+2+t, sz+14-t);
+	        if (x <= 0) {
+			fprintf(stderr, "write failed\n");
+			err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+			                                 "writing cursor");
+			SETERR();
+			return -1;
+		}
+		t+=x;
 	}
 	return 0;
 }
@@ -822,8 +831,8 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	uint32_t osz;
 	uint32_t cnt;
 	nowdb_err_t err=NOWDB_OK;
-	char *buf = ses->buf;
-	uint32_t sz = ses->bufsz;
+	char *buf = ses->buf+HDRSIZE;
+	uint32_t sz = ses->bufsz-HDRSIZE;
 	nowdb_ses_cursor_t *scur;
 
 	err = nowdb_cursor_open(cur);
@@ -873,7 +882,7 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		free(scur); goto cleanup;
 	}
 	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
-	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
+	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		perror("cannot send cursor");
 		ts_algo_tree_delete(ses->cursors, scur);
 		return -1;
@@ -892,8 +901,8 @@ static int fetch(nowdb_session_t    *ses,
 	nowdb_err_t err;
 	uint32_t osz;
 	uint32_t cnt;
-	uint32_t sz = ses->bufsz;
-	char *buf = ses->buf;
+	char *buf = ses->buf+HDRSIZE;
+	uint32_t sz = ses->bufsz-HDRSIZE;
 
 	if (nowdb_cursor_eof(scur->cur)) {
 		if (sendEOF(ses) != 0) return -1;
@@ -920,7 +929,7 @@ static int fetch(nowdb_session_t    *ses,
 		}
 	}
 	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
-	if (sendCursor(ses, scur->curid, buf, osz) != 0) {
+	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		return -1;
 	}
 	return 0;
