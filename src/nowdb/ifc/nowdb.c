@@ -886,7 +886,6 @@ static int fetch(nowdb_session_t    *ses,
 	nowdb_err_t err;
 	uint32_t osz;
 	uint32_t cnt=0;
-	uint32_t t=0;
 	char *buf = ses->buf+HDRSIZE;
 	uint32_t sz = ses->bufsz-HDRSIZE;
 
@@ -894,7 +893,7 @@ static int fetch(nowdb_session_t    *ses,
 		if (sendEOF(ses) != 0) return -1;
 		return 0;
 	}
-	err = nowdb_cursor_fetch(scur->cur, buf+t, sz-t, &osz, &cnt);
+	err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
 			nowdb_err_release(err);
@@ -915,8 +914,11 @@ static int fetch(nowdb_session_t    *ses,
 		}
 	}
 	scur->count += cnt;
-	// fprintf(stderr, "fetched: %u / %u (%d -- %d)\n", t, scur->count, buf[0], buf[osz-1]);
-	if (sendCursor(ses, scur->curid, ses->buf, t) != 0) {
+	if (osz < 9) {
+		fprintf(stderr, "fetched: %u / %u (%d -- %d)\n",
+		          osz, scur->count, buf[0], buf[osz-1]);
+	}
+	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		return -1;
 	}
 	return 0;
