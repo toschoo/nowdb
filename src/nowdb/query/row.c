@@ -398,9 +398,9 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			buf[*osz] = '\n';
 			(*osz)++;
 			row->dirty = 0;
-			// fprintf(stderr, "dirty love\n");
-			// (*cnt)++;
-			// return NOWDB_OK;
+			fprintf(stderr, "dirty love\n");
+			(*cnt)++; *ok=1;
+			return NOWDB_OK;
 		}
 	}
 	for(int i=row->cur; i<row->sz; i++) {

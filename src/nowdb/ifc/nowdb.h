@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
 	uint32_t curid;
 	uint32_t off;
+	uint32_t count;
 	nowdb_cursor_t *cur;
 } nowdb_ses_cursor_t;
 

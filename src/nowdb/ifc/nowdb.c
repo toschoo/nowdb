@@ -804,14 +804,6 @@ static int sendCursor(nowdb_session_t   *ses,
 	fprintf(stderr, "sendinng size %u\n", sz);
 	memcpy(status+10, &sz, 4);
 
-	/*
-	if (write(ses->ostream, status, 14) != 14) {
-		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-		                                 "writing cursor");
-		SETERR();
-		return -1;
-	}
-	*/
 	int t=0;
 	while(t<sz+14) {
 		int x = write(ses->ostream, buf+2+t, sz+14-t);
@@ -875,13 +867,14 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		goto cleanup;
 	}
 	scur->curid = ses->curid;
+	scur->count = cnt;
 	scur->cur = cur;
 	if (ts_algo_tree_insert(ses->cursors, scur) != TS_ALGO_OK) {
 		NOMEM("tree.insert");
 		SETERR();
 		free(scur); goto cleanup;
 	}
-	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
+	fprintf(stderr, "fetched: %u / %u (%d)\n", osz, cnt, buf[osz-1]);
 	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		perror("cannot send cursor");
 		ts_algo_tree_delete(ses->cursors, scur);
@@ -900,7 +893,8 @@ static int fetch(nowdb_session_t    *ses,
 {
 	nowdb_err_t err;
 	uint32_t osz;
-	uint32_t cnt;
+	uint32_t cnt=0;
+	uint32_t t=0;
 	char *buf = ses->buf+HDRSIZE;
 	uint32_t sz = ses->bufsz-HDRSIZE;
 
@@ -908,28 +902,33 @@ static int fetch(nowdb_session_t    *ses,
 		if (sendEOF(ses) != 0) return -1;
 		return 0;
 	}
-	err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (osz == 0) {
-				if (sendEOF(ses) != 0) {
+	while(cnt == 0) {
+		err = nowdb_cursor_fetch(scur->cur, buf+t, sz-t, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				if (osz == 0) {
+					if (sendEOF(ses) != 0) {
+						return -1;
+					}
+					return 0;
+				}
+			} else {
+				if (sendErr(ses, err, NULL) != 0) {
+					// in this case we must end the session
+					fprintf(stderr, "cannot send error\n");
+					SETERR();
 					return -1;
 				}
 				return 0;
 			}
-		} else {
-			if (sendErr(ses, err, NULL) != 0) {
-				// in this case we must end the session
-				fprintf(stderr, "cannot send error\n");
-				SETERR();
-				return -1;
-			}
-			return 0;
 		}
+		scur->count += cnt;
+		t+=osz;
+		fprintf(stderr, "stp: %u\n", cnt);
 	}
-	fprintf(stderr, "fetched: %u / %u\n", osz, cnt);
-	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
+	fprintf(stderr, "fetched: %u / %u (%d -- %d)\n", t, scur->count, buf[0], buf[osz-1]);
+	if (sendCursor(ses, scur->curid, ses->buf, t) != 0) {
 		return -1;
 	}
 	return 0;

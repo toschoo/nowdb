@@ -536,6 +536,38 @@ int nowdb_exec_statement(nowdb_con_t     con,
 	((struct nowdb_result_t*)x)
 
 /* ------------------------------------------------------------------------
+ * Find last complete row
+ * ------------------------------------------------------------------------
+ */
+static inline int findLastRow(char *buf, int sz) {
+	int i;
+	int l=sz;
+	
+	if (sz == 0) return 0;
+	for(i=0; i<sz;) {
+		if (buf[i] == EOROW) {
+			l=i; i++;
+			if (i == sz) break;
+		}
+		if (buf[i] == NOWDB_TEXT) {
+			i++;
+			while(buf[i] != 0) {
+				if (i == sz) {
+					fprintf(stderr,
+					"field incomplete\n");
+					return -1;
+				}
+				i++;
+			}
+			i++; continue;
+		}
+		i+=9;
+	}
+	l++;
+	return l;
+}
+
+/* ------------------------------------------------------------------------
  * Get next row
  * ------------------------------------------------------------------------
  */
@@ -594,7 +626,7 @@ void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
 }
 
 /* ------------------------------------------------------------------------
- * Write the row to tile 'stream'
+ * Write the row to file 'stream'
  * ------------------------------------------------------------------------
  */
 int nowdb_row_write(FILE *stream, nowdb_row_t row) {
@@ -605,20 +637,17 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 	char x=0;
 	int err;
 	int sz;
-	int cnt=0;
 
 	if (row == NULL) return NOWDB_ERR_INVALID;
 
 	buf = ROW(row)->buf;
 
-	// find last row
-	for(sz=ROW(row)->sz-1; sz>0; sz--) {
-		if (buf[sz] == EOROW) break;
-	}
+	sz = findLastRow(buf, ROW(row)->sz);
+	if (sz < 0) return NOWDB_ERR_PROTO;
 	if (sz == 0) return NOWDB_OK;
-	sz++;
+	fprintf(stderr, "last in write is %d\n", sz);
+
 	while(i<sz) {
-		cnt++;
 		t = buf[i]; i++;
 		if (t == EOROW) {
 			fprintf(stream, "\n");
@@ -662,7 +691,8 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 		}
 		x = 1;
 	}
-	// fprintf(stream, "\n"); fflush(stream);
+	// fprintf(stream, "\n");
+	fflush(stream);
 	return NOWDB_OK;
 }
 
@@ -729,37 +759,15 @@ int nowdb_cursor_close(nowdb_cursor_t cur) {
  * ------------------------------------------------------------------------
  */
 static inline int leftover(nowdb_cursor_t cur) {
-	int i;
-	int l=CUR(cur)->sz-1;
+	int l=0;
 	char *buf = CUR(cur)->mybuf;
 
 	CUR(cur)->lo = 0;
 	if (CUR(cur)->sz == 0) return NOWDB_OK;
-	
-	/*
-	for(i=ROW(cur)->sz-1; i>0; i--) {
-		if (buf[i] == EOROW) break;
-	}
-	*/
-	if (l == EOROW) return NOWDB_OK;
-	for(i=0; i<ROW(cur)->sz;) {
-		if (buf[i] == EOROW) {
-			l=i; i++; continue;
-		}
-		if (buf[i] == NOWDB_TEXT) {
-			while(buf[i] != 0) {
-				if (i == ROW(cur)->sz) {
-					fprintf(stderr, "field incomplete\n");
-					return NOWDB_ERR_PROTO;
-				}
-				i++;
-			}
-			i++; continue;
-		}
-		i+=9;
-	}
-	if (l == ROW(cur)->sz-1) return NOWDB_OK;
-	l++;
+
+	l = findLastRow(buf, CUR(cur)->sz);
+	if (l < 0) return NOWDB_ERR_PROTO;
+	if (l >= ROW(cur)->sz) return NOWDB_OK;
 
 	CUR(cur)->lo = CUR(cur)->sz - l;
 	if (CUR(cur)->lo >= MAXROW) {
@@ -777,6 +785,13 @@ static inline int leftover(nowdb_cursor_t cur) {
 	      (int)buf[l+2]);
 
 	memcpy(buf, buf+l, CUR(cur)->lo);
+
+	if (CUR(cur)->lo == 41) {
+		for(int i=0; i<CUR(cur)->lo;i++) {
+			fprintf(stderr, "%d ", buf[i]);
+		}
+		fprintf(stderr, "\n");
+	}
 	
 	return NOWDB_OK;
 }
