@@ -265,7 +265,7 @@ static inline int readResult(struct nowdb_con_t    *con,
 	// read size
 	x = readSize(con, &res->sz);
 	if (x != NOWDB_OK) return x;
-	fprintf(stderr, "size is %d\n", res->sz);
+	// fprintf(stderr, "size is %d\n", res->sz);
 
 	// read the content
 	t=0;
@@ -645,7 +645,7 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 	sz = findLastRow(buf, ROW(row)->sz);
 	if (sz < 0) return NOWDB_ERR_PROTO;
 	if (sz == 0) return NOWDB_OK;
-	fprintf(stderr, "last in write is %d\n", sz);
+	// fprintf(stderr, "last in write is %d\n", sz);
 
 	while(i<sz) {
 		t = buf[i]; i++;
@@ -776,6 +776,7 @@ static inline int leftover(nowdb_cursor_t cur) {
 		return NOWDB_ERR_PROTO;
 	}
 
+	/*
 	fprintf(stderr, "have leftover: %d of %d size: %d, %d/%d/%d/%d/%d\n",
 	      l, CUR(cur)->sz, CUR(cur)->lo,
 	      (int)buf[l-2],
@@ -783,15 +784,18 @@ static inline int leftover(nowdb_cursor_t cur) {
 	      (int)buf[l], 
 	      (int)buf[l+1], 
 	      (int)buf[l+2]);
+	*/
 
 	memcpy(buf, buf+l, CUR(cur)->lo);
 
+	/*
 	if (CUR(cur)->lo == 41) {
 		for(int i=0; i<CUR(cur)->lo;i++) {
 			fprintf(stderr, "%d ", buf[i]);
 		}
 		fprintf(stderr, "\n");
 	}
+	*/
 	
 	return NOWDB_OK;
 }

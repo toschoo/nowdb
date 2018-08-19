@@ -85,8 +85,8 @@ int main() {
 
 	timestamp(&t1);
 	EXEC("select edge, destin, timestamp, weight from tx\
-	      where edge = 'buys_product' and origin = 0");
-	//    where edge = 'buys_product' and destin = 1960");
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	//    where edge = 'buys_product' and origin = 419800000002");
 
 	err = nowdb_cursor_open(res, &cur);

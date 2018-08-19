@@ -902,7 +902,7 @@ static int fetch(nowdb_session_t    *ses,
 		if (sendEOF(ses) != 0) return -1;
 		return 0;
 	}
-	while(cnt == 0) {
+	// while(cnt == 0) {
 		err = nowdb_cursor_fetch(scur->cur, buf+t, sz-t, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
@@ -926,7 +926,7 @@ static int fetch(nowdb_session_t    *ses,
 		scur->count += cnt;
 		t+=osz;
 		fprintf(stderr, "stp: %u\n", cnt);
-	}
+	// }
 	fprintf(stderr, "fetched: %u / %u (%d -- %d)\n", t, scur->count, buf[0], buf[osz-1]);
 	if (sendCursor(ses, scur->curid, ses->buf, t) != 0) {
 		return -1;
