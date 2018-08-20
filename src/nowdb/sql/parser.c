@@ -104,7 +104,9 @@ void nowdbsql_parser_destroy(nowdbsql_parser_t *p) {
 	if (p->buf != NULL) {
 		free(p->buf); p->buf = NULL;
 	}
-
+	if (p->streaming && p->fd != NULL) {
+		fclose(p->fd); p->fd = NULL;
+	}
 	yylex_destroy(p->sc); p->sc = NULL;
 	nowdbsql_state_destroy(&p->st);
 	
@@ -315,7 +317,9 @@ int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 			fclose(p->fd); p->fd = NULL;
 			continue;
 		}
-		if (x != 0) return x;
+		if (x != 0) {
+			fclose(p->fd); p->fd = NULL;
+		}
 		break;
 	}
 	return 0;

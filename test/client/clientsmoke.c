@@ -137,8 +137,8 @@ int main() {
 	nowdb_result_destroy(res);
 
 	EXEC("select edge, origin, count(*), sum(weight) from tx\
-	      where edge = 'buys_product' and origin = 0");
-	//    where edge = 'buys_product' and destin = 1960");
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	err = nowdb_cursor_open(res, &cur);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "NOT A CURSOR\n");
@@ -173,8 +173,8 @@ int main() {
 
 	timestamp(&t1);
 	EXEC("select edge, destin, timestamp, weight from tx\
-	      where edge = 'buys_product' and origin = 0");
-	//    where edge = 'buys_product' and destin = 1960");
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	//    where edge = 'buys_product' and origin = 419800000002");
 
 	err = nowdb_cursor_open(res, &cur);

@@ -410,6 +410,18 @@ static nowdb_err_t initSession(nowdb_session_t  *ses,
 	ses->master  = master;
 	ses->curid   = 0x100;
 
+	if (ses->cursors != NULL) {
+		ts_algo_tree_destroy(ses->cursors);
+		free(ses->cursors); ses->cursors = NULL;
+	}
+	ses->cursors = ts_algo_tree_new(&cursorcompare, NULL,
+                                        &noupdate,
+	                                &cursordestroy,
+	                                &cursordestroy);
+	if (ses->cursors == NULL) {
+		NOMEM("tree.alloc");
+		return err;
+	}
 	if (ses->parser != NULL) {
 		nowdbsql_parser_destroy(ses->parser); free(ses->parser);
 	}
@@ -471,17 +483,6 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 
 	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
-		nowdb_session_destroy(*ses);
-		free(*ses); *ses = NULL;
-		return err;
-	}
-
-	(*ses)->cursors = ts_algo_tree_new(&cursorcompare, NULL,
-                                           &noupdate,
-	                                   &cursordestroy,
-	                                   &cursordestroy);
-	if ((*ses)->cursors == NULL) {
-		NOMEM("tree.alloc");
 		nowdb_session_destroy(*ses);
 		free(*ses); *ses = NULL;
 		return err;
@@ -1335,6 +1336,10 @@ static void leaveSession(nowdb_session_t *ses) {
 	if (ses->parser != NULL) {
 		nowdbsql_parser_destroy(ses->parser);
 		free(ses->parser); ses->parser = NULL;
+	}
+	if (ses->cursors != NULL) {
+		ts_algo_tree_destroy(ses->cursors);
+		free(ses->cursors); ses->cursors = NULL;
 	}
 }
 
