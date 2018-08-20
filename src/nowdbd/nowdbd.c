@@ -6,6 +6,7 @@
  */
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
+#include <nowdb/types/time.h>
 #include <nowdb/ifc/nowdb.h>
 
 #include <common/cmd.h>
@@ -30,6 +31,56 @@ void helptxt(char *progname) {
 	fprintf(stderr, "%s <path-to-base> [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
 	fprintf(stderr, "port: port to bin (default: 55505)\n");
+}
+
+/* -----------------------------------------------------------------------
+ * banner
+ * -----------------------------------------------------------------------
+ */
+void banner(char *path) {
+char tstr[32];
+nowdb_err_t err;
+nowdb_time_t tm;
+
+err = nowdb_time_now(&tm);
+if (err != NOWDB_OK) {
+	fprintf(stderr, "bad start: we have no banner :-(\n");
+	nowdb_err_print(err);
+	nowdb_err_release(err);
+	return;
+}
+
+tm /= 1000000;
+tm *= 1000000;
+
+err = nowdb_time_toString(tm, NOWDB_TIME_FORMAT, tstr, 32);
+if (err != NOWDB_OK) {
+	fprintf(stderr, "bad start: we have no banner :-(\n");
+	nowdb_err_print(err);
+	nowdb_err_release(err);
+	return;
+}
+
+fprintf(stdout, "\n");
+
+fprintf(stdout, "+--------------------------------------------------------------+ \n");
+fprintf(stdout, " \n");
+fprintf(stdout, "  UTC %s\n", tstr);
+fprintf(stdout, " \n");
+fprintf(stdout, "  The server is ready\n");
+fprintf(stdout, " \n");
+fprintf(stdout, " \n");
+fprintf(stdout, "+--------------------------------------------------------------+\n");
+fprintf(stdout, "  wwww   iwwi          nnnn    wwwwww       wwwwww       wwwwww\n");
+fprintf(stdout, "    wi  i   wi       i      i    iw           iw           er  \n");
+fprintf(stdout, "    wi i     wi     n        n    iw         e  wi        e    \n");
+fprintf(stdout, "    wii      wi    wi        iw    iw       e    wi      e     \n");
+fprintf(stdout, "    wi       wi    wi        iw     iw     e      wi    e      \n");
+fprintf(stdout, "    wi       wi     n        n       iw   e        wi  e       \n");
+fprintf(stdout, "    wi       wi      i      i         iw e          wie        \n");
+fprintf(stdout, "   nnnn     nnnn       nnnn             n            n         \n");
+// fprintf(stdout, "\n");
+fprintf(stdout, "+--------------------------------------------------------------+\n\n\n");
 }
 
 uint64_t global_port;
@@ -327,7 +378,8 @@ int runServer(int argc, char **argv) {
 	}
 
 	/* make a nice welcome banner and an option to suppress it */
-	fprintf(stderr, "server running\n");
+	// fprintf(stderr, "server running\n");
+	banner(path);
 
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;
