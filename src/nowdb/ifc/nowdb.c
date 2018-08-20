@@ -681,17 +681,31 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 }
 
 static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
+	nowdb_err_t err;
 	nowdb_qry_report_t *rep;
+	char *status = ses->buf;
 
 	if (res->result == NULL) {
 		fprintf(stderr, "NO REPORT!\n");
 		return -1;
 	}
+
 	rep = res->result;
-	fprintf(stderr, "%lu rows loaded with %lu errors in %ldus\n",
-	                rep->affected,
-	                rep->errors,
-	                rep->runtime);
+
+	status[0] = NOWDB_REPORT;
+	status[1] = NOWDB_ACK;
+
+	memcpy(status+2, &rep->affected, 8);
+	memcpy(status+10, &rep->errors, 8);
+	memcpy(status+18, &rep->runtime, 8);
+
+	if (write(ses->ostream, status, 26) != 26) {
+		err = nowdb_err_get(nowdb_err_write,
+		     TRUE, OBJECT, "writing Report");
+		SETERR();
+		free(res->result); res->result = NULL;
+		return -1;
+	}
 	free(res->result); res->result = NULL;
 	return 0;
 }
@@ -743,24 +757,18 @@ static int sendErr(nowdb_session_t *ses,
                    nowdb_ast_t     *ast) {
 	char *tmp="unknown";
 	int sz=0;
-	char status[4];
+	char* status = ses->buf;
 	char freetmp=0;
 	short errcode;
 	nowdb_err_t err;
 
+	// send NOK
 	status[0] = NOWDB_STATUS;
 	status[1] = NOWDB_NOK;
+
 	errcode = cause == NOWDB_OK?nowdb_err_unknown:cause->errcode;
 	memcpy(status+2, &errcode, 2);
 
-	// send NOK
-	if (write(ses->ostream, status, 4) != 4) {
-		err = nowdb_err_get(nowdb_err_write,
-		     TRUE, OBJECT, "writing status");
-		SETERR();
-		CLEANUP();
-		return -1;
-	}
 	// build error report
 	if (cause != NOWDB_OK) {
 		tmp = nowdb_err_describe(cause, ';');
@@ -768,17 +776,15 @@ static int sendErr(nowdb_session_t *ses,
 		else freetmp = 1;
 	}
 
+	// length of report
 	sz = strlen(tmp);
+	memcpy(status+4, &sz, 4);
+
+	// error report
+	memcpy(status+8, tmp, sz);
 
 	// send error report
-	if (write(ses->ostream, &sz, 4) != 4) {
-		err = nowdb_err_get(nowdb_err_write,
-		      TRUE, OBJECT, "writing error");
-		SETERR();
-		CLEANUP();
-		return -1;
-	}
-	if (write(ses->ostream, tmp, sz) != sz) {
+	if (write(ses->ostream, status, sz+8) != sz+8) {
 		err = nowdb_err_get(nowdb_err_write,
 		      TRUE, OBJECT, "writing error");
 		SETERR();

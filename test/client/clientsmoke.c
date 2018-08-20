@@ -45,6 +45,29 @@
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
 
+#define EXECDLL(sql) \
+	err = nowdb_exec_statementZC(con, sql, &res); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot execute statement: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_status(res) != 0) { \
+		fprintf(stderr, "ERROR %hd: %s\n", \
+		        nowdb_result_errcode(res), \
+		       nowdb_result_details(res)); \
+		nowdb_result_destroy(res); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_type(res) != NOWDB_RESULT_REPORT) { \
+		fprintf(stderr, "NOT A REPORT: %d\n", \
+		             nowdb_result_type(res)); \
+		nowdb_result_destroy(res); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	nowdb_result_report(res, &aff, &errs, &rt); \
+	fprintf(stderr, "loaded %ld with %ld errors in %ldus\n", \
+	                aff, errs, rt); 
+
 #define EXEC(sql) \
 	err = nowdb_exec_statement(con, sql, &res); \
 	if (err != 0) { \
@@ -59,10 +82,20 @@
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
 
-#define WHERE \
-	where edge = 'buys_product' and origin = 0");
-	// where edge = 'buys_product' and destin = 1960");
-	// where edge = 'buys_product' and origin = 419800000002");
+#define EXECFAULTY(sql) \
+	fprintf(stderr, "executing %s\n", sql); \
+	err = nowdb_exec_statement(con, sql, &res); \
+	if (err != 0) { \
+		fprintf(stderr, "cannot execute statement: %d\n", err); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	if (nowdb_result_status(res) == 0) { \
+		fprintf(stderr, "faulty statement status == 0!\n"); \
+		rc = EXIT_FAILURE; goto cleanup; \
+	} \
+	fprintf(stderr, "ERROR %hd: %s\n", \
+	        nowdb_result_errcode(res), \
+	        nowdb_result_details(res)); \
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -77,7 +110,7 @@ int main() {
 	uint64_t cnt=0;
 	double   w, wt=0;
 	int t;
-	char *tmp, *e;
+	char *tmp;
 	nowdb_row_t row;
 
 	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
@@ -88,15 +121,24 @@ int main() {
 
 	EXECZC("use retail");
 	nowdb_result_destroy(res);
+	
 	/*
-	EXECZC("create tiny context myctx");
+	uint64_t aff, errs, rt;
+	EXECZC("create tiny context myctx if not exists");
 	nowdb_result_destroy(res);
-	EXECZC("drop context myctx");
+	EXECDLL("load 'rsc/kilo.csv' into myctx");
+	nowdb_result_destroy(res);
+	EXECZC("drop context myctx if exists");
 	nowdb_result_destroy(res);
 	*/
 
+	// expect error
+	EXECFAULTY("select edge from nosuchcontext");
+	nowdb_result_destroy(res);
+
 	EXEC("select edge, origin, count(*), sum(weight) from tx\
-	      where edge = 'buys_product' and origin = 0");
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	err = nowdb_cursor_open(res, &cur);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "NOT A CURSOR\n");
@@ -131,8 +173,8 @@ int main() {
 
 	timestamp(&t1);
 	EXEC("select edge, destin, timestamp, weight from tx\
-	      where edge = 'buys_product' and origin = 0");
-	//    where edge = 'buys_product' and destin = 1960");
+	      where edge = 'buys_product' and destin = 1960");
+	//    where edge = 'buys_product' and origin = 0");
 	//    where edge = 'buys_product' and origin = 419800000002");
 
 	err = nowdb_cursor_open(res, &cur);
@@ -142,6 +184,7 @@ int main() {
 	}
 	while (nowdb_cursor_ok(cur)) {
 		// count rows
+		// row = nowdb_row_copy(nowdb_cursor_row(cur));
 		row = nowdb_cursor_row(cur);
 		if (row == NULL) {
 			fprintf(stderr, "NO ROW!\n");
@@ -151,6 +194,7 @@ int main() {
 		tmp = nowdb_row_field(row, 3, &t);
 		if (tmp == NULL) {
 			fprintf(stderr, "cannot get weight!\n");
+			// nowdb_result_destroy(row);
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		memcpy(&w, tmp, 8); wt += w;
@@ -161,16 +205,20 @@ int main() {
 			tmp = nowdb_row_field(row, 3, &t);
 			if (tmp == NULL) {
 				fprintf(stderr, "cannot get weight!\n");
+				// nowdb_result_destroy(row);
 				rc = EXIT_FAILURE; goto cleanup;
 			}
 			memcpy(&w, tmp, 8); wt += w;
 		}
+		// nowdb_result_destroy(row);
 		if (err != NOWDB_ERR_EOF) {
 			fprintf(stderr, "cannot count rows: %d on %lu\n",
 			                                       err,cnt);
 			rc = EXIT_FAILURE; goto cleanup;
 		}
-		err = nowdb_row_write(stdout, nowdb_cursor_row(cur));
+		row = nowdb_cursor_row(cur);
+		nowdb_row_rewind(row);
+		err = nowdb_row_write(stdout, row);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "cannot write row: %d on %lu\n",
 			                                       err,cnt);

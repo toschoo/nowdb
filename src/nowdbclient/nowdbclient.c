@@ -92,16 +92,19 @@ struct nowdb_con_t {
  * ------------------------------------------------------------------------
  */
 struct nowdb_result_t {
-	uint64_t cur;     /* cursor id (if result is cursor)         */
-	nowdb_con_t con;  /* connection from where it came           */
-	char *buf;        /* pointer to the content buffer           */
-	char *mybuf;      /* my own private buffer                   */
-	int rtype;        /* result type (status, row, cursor, etc.) */
-	int status;       /* status: ok or nok                       */
-	int sz;           /* content size                            */
-	int off;          /* offset into a row                       */
-	int lo;           /* size of leftover (in case of rows)      */
-	short err;        /* error code                              */
+	uint64_t cur;      /* cursor id (if result is cursor)         */
+	nowdb_con_t con;   /* connection from where it came           */
+	char *buf;         /* pointer to the content buffer           */
+	char *mybuf;       /* my own private buffer                   */
+	uint64_t affected; /* report: rows affected                   */
+	uint64_t errors;   /* report: errors                          */
+	uint64_t runtime;  /* report: runtime                         */
+	int rtype;         /* result type (status, row, cursor, etc.) */
+	int status;        /* status: ok or nok                       */
+	int sz;            /* content size                            */
+	int off;           /* offset into a row                       */
+	int lo;            /* size of leftover (in case of rows)      */
+	short err;         /* error code                              */
 };
 
 /* ------------------------------------------------------------------------
@@ -259,10 +262,8 @@ static inline int readResult(struct nowdb_con_t    *con,
 		if (con->buf[1] != NOK) return NOWDB_ERR_PROTO;
 
 		// in case of NOK, read error code
-		if (read(con->sock, &res->err, 2) != 2) {
-			perror("cannot read socket");
-			return NOWDB_ERR_NOREAD;
-		}
+		x = readN(con->sock, (char*)&res->err, 2);
+		if (x != NOWDB_OK) return x;
 
 		// we provide no further information on EOF
 		if (res->err == NOWDB_ERR_EOF) {
@@ -270,12 +271,20 @@ static inline int readResult(struct nowdb_con_t    *con,
 		}
 	}
 
+	// in case of report, read three integers
+	if (res->rtype == NOWDB_REPORT) {
+		x = readN(con->sock, con->buf, 24);
+       		if (x != NOWDB_OK) return x;
+		memcpy(&res->affected, con->buf, 8);
+		memcpy(&res->errors, con->buf+8, 8);
+		memcpy(&res->runtime, con->buf+16, 8);
+		return NOWDB_OK;
+	}
+
 	// in case of cursor, read cursor id
-	if (res->rtype == NOWDB_CURSOR) {
-		if (read(con->sock, &res->cur, 8) != 8) {
-			perror("cannot read cursor id");
-			return NOWDB_ERR_NOREAD;
-		}
+	if (res->rtype == NOWDB_CURSOR) { // readN
+		x = readN(con->sock, (char*)&res->cur, 8);
+		if (x != NOWDB_OK) return x;
 	}
 
 	// read size
@@ -285,11 +294,10 @@ static inline int readResult(struct nowdb_con_t    *con,
 
 	// read the content
 	x = readN(con->sock, con->buf, res->sz);
-       	if (x != NOWDB_OK) return NOWDB_ERR_NOREAD;
+       	if (x != NOWDB_OK) return x;
 
-	// we handle status reports and reports as strings
-	if (res->rtype == NOWDB_STATUS ||
-	    res->rtype == NOWDB_REPORT) con->buf[res->sz] = 0;
+	// we handle some results as strings
+	con->buf[res->sz] = 0;
 
 	// done
 	return NOWDB_OK;
@@ -467,6 +475,27 @@ const char *nowdb_result_details(nowdb_result_t res) {
 }
 
 /* ------------------------------------------------------------------------
+ * Get Report details
+ * ------------------------------------------------------------------------
+ */
+void nowdb_result_report(nowdb_result_t res,
+                         uint64_t *affected, 
+                         uint64_t *errors, 
+                         uint64_t *runtime) {
+	if (res == NULL) return;
+	if (res->rtype != NOWDB_REPORT) return;
+	if (affected != NULL) {
+		*affected = res->affected;
+	}
+	if (errors != NULL) {
+		*errors = res->errors;
+	}
+	if (runtime != NULL) {
+		*runtime = res->runtime;
+	}
+}
+
+/* ------------------------------------------------------------------------
  * Issue an SQL statement
  * ------------------------------------------------------------------------
  */
@@ -498,7 +527,7 @@ int execStatement(nowdb_con_t     con,
 		nowdb_result_destroy(*res); *res = NULL;
 		return NOWDB_ERR_NOMEM;
 	}
-	memcpy((*res)->mybuf, (*res)->buf, (*res)->sz);
+	memcpy((*res)->mybuf, (*res)->buf, (*res)->sz+1);
 	(*res)->buf = (*res)->mybuf;
 	return NOWDB_OK;
 }

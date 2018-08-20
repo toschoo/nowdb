@@ -158,10 +158,10 @@ typedef struct nowdb_result_t* nowdb_result_t;
 int nowdb_result_type(nowdb_result_t res);
 
 #define NOWDB_RESULT_NOTHING 0
-#define NOWDB_RESULT_STATUS  1
-#define NOWDB_RESULT_REPORT  2
-#define NOWDB_RESULT_ROW     3
-#define NOWDB_RESULT_CURSOR  4
+#define NOWDB_RESULT_STATUS  0x21
+#define NOWDB_RESULT_REPORT  0x22
+#define NOWDB_RESULT_ROW     0x23
+#define NOWDB_RESULT_CURSOR  0x24
 
 /* ------------------------------------------------------------------------
  * Get Status
@@ -182,6 +182,15 @@ int nowdb_result_errcode(nowdb_result_t res);
  * ------------------------------------------------------------------------
  */
 const char *nowdb_result_details(nowdb_result_t res);
+
+/* ------------------------------------------------------------------------
+ * Get Report
+ * ------------------------------------------------------------------------
+ */
+void nowdb_result_report(nowdb_result_t res,
+		         uint64_t *affected,
+		         uint64_t *errors,
+		         uint64_t *runtime);
 
 /* ------------------------------------------------------------------------
  * Check if result is 'EOF'
