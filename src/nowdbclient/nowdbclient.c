@@ -535,6 +535,38 @@ int nowdb_exec_statement(nowdb_con_t     con,
 	((struct nowdb_result_t*)x)
 
 /* ------------------------------------------------------------------------
+ * End of string
+ * ------------------------------------------------------------------------
+ */
+static inline int findEndOfStr(char *buf, int sz, int idx) {
+	int z;
+	int x = strnlen(buf+idx, 4097);
+	if (x > 4096) return -1;
+	z = idx+x;
+	if (z>=sz) return -1;
+	return (z+1);
+}
+
+/* ------------------------------------------------------------------------
+ * End of row
+ * ------------------------------------------------------------------------
+ */
+static inline int findEORow(nowdb_row_t p, int idx) {
+	int i;
+	for(i=idx; i<ROW(p)->sz;) {
+		if (ROW(p)->buf[i] == EOROW) break;
+		if (ROW(p)->buf[i] == NOWDB_TEXT) {
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
+			continue;
+		}
+		i+=9;
+	}
+	if (i >= ROW(p)->sz) return -1;
+	return (i+1);
+}
+
+/* ------------------------------------------------------------------------
  * Find last complete row
  * ------------------------------------------------------------------------
  */
@@ -570,26 +602,19 @@ static inline int findLastRow(char *buf, int sz) {
  * Get next row
  * ------------------------------------------------------------------------
  */
-const char *nowdb_row_next(nowdb_row_t p) {
+int nowdb_row_next(nowdb_row_t p) {
 	int i,j;
 
 	/* search start of next */
-	for(i=ROW(p)->off; i<ROW(p)->sz; i++) {
-		if (ROW(p)->buf[i] == EOROW) break;
-	}
-	if (i == ROW(p)->sz) {
-		ROW(p)->off = ROW(p)->sz;
-		return NULL;
-	}
-	i++;
+	i = findEORow(p, ROW(p)->off);
+	if (i < 0) return NOWDB_ERR_EOF;
 
 	/* make sure the row is complete */
-	for(j=i; j<ROW(p)->sz; j++) {
-		if (ROW(p)->buf[j] == EOROW) break;
-	}
-	if (j == ROW(p)->sz) return NULL;
+	j = findEORow(p, i);
+	if (j<0) return NOWDB_ERR_EOF;
+
 	ROW(p)->off = i;
-	return ROW(p)->buf+i;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -610,14 +635,14 @@ void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
 
 	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != EOROW;)  {
 		if (f==field) {
-			*type = (int)ROW(p)->buf[i];
-			return ROW(p)->buf+i;
+			*type = (int)ROW(p)->buf[i]; i++;
+			return (ROW(p)->buf+i);
 		}
 		if (ROW(p)->buf[i] == NOWDB_TEXT) {
-			while(i<ROW(p)->sz && ROW(p)->buf[i] != 0) i++;
-			i++;
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
 		} else {
-			i+=8;
+			i+=9;
 		}
 		f++;
 	}
@@ -865,7 +890,34 @@ const char *nowdb_cursor_details(nowdb_cursor_t cur) {
  * ------------------------------------------------------------------------
  */
 nowdb_row_t nowdb_cursor_row(nowdb_cursor_t cur) {
-	return (nowdb_row_t)cur;
+	if (cur == NULL) return NULL;
+	CUR(cur)->off = 0;
+	return ((nowdb_row_t)cur);
+}
+
+/* ------------------------------------------------------------------------
+ * Get row from cursor
+ * ------------------------------------------------------------------------
+ */
+nowdb_row_t nowdb_row_copy(nowdb_row_t row) {
+	nowdb_row_t cp;
+
+	if (row == NULL) return NULL;
+
+	cp = (nowdb_row_t)mkResult(ROW(row)->con);
+	if (cp == NULL) return NULL;
+
+	ROW(cp)->rtype = ROW(row)->rtype;
+	ROW(cp)->status = ROW(row)->status;
+	ROW(cp)->err = ROW(row)->err;
+	ROW(cp)->cur = ROW(row)->cur;
+	ROW(cp)->off = ROW(row)->off;
+	ROW(cp)->sz = ROW(row)->sz;
+	ROW(cp)->buf = ROW(row)->buf;
+	ROW(cp)->lo  = 0;
+	ROW(cp)->mybuf = NULL;
+
+	return cp;
 }
 
 /* ------------------------------------------------------------------------

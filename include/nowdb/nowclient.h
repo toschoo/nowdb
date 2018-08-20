@@ -120,12 +120,29 @@ int nowdb_time_toString(nowdb_time_t  t,
  */
 typedef struct nowdb_con_t* nowdb_con_t;
 
+/* ------------------------------------------------------------------------
+ * Connect to a server
+ * ------------------------------------------------------------------------
+ */
 int nowdb_connect(nowdb_con_t *con,
                   char *host, short port,
                   char *user, char *pw,
                   int flags);
 
+/* ------------------------------------------------------------------------
+ * Close connection
+ * ------------------------------------------------------------------------
+ */
 int nowdb_connection_close(nowdb_con_t con);
+
+/* ------------------------------------------------------------------------
+ * Destroy connection
+ * ------------------
+ * Only to be used as least resort when close failed;
+ * in particular one must not first close and then destroy,
+ * that would cause a double free exception.
+ * ------------------------------------------------------------------------
+ */
 void nowdb_connection_destroy(nowdb_con_t con);
 
 /* ------------------------------------------------------------------------
@@ -134,6 +151,10 @@ void nowdb_connection_destroy(nowdb_con_t con);
  */
 typedef struct nowdb_result_t* nowdb_result_t;
 
+/* ------------------------------------------------------------------------
+ * Result types
+ * ------------------------------------------------------------------------
+ */
 int nowdb_result_type(nowdb_result_t res);
 
 #define NOWDB_RESULT_NOTHING 0
@@ -142,22 +163,37 @@ int nowdb_result_type(nowdb_result_t res);
 #define NOWDB_RESULT_ROW     3
 #define NOWDB_RESULT_CURSOR  4
 
-int nowdb_result_status(nowdb_result_t res);
-const char *nowdb_result_details(nowdb_result_t res);
-int nowdb_result_errcode(nowdb_result_t res);
-int nowdb_result_eof(nowdb_result_t res);
-void nowdb_result_destroy(nowdb_result_t res);
-
 /* ------------------------------------------------------------------------
- * Row
+ * Get Status
+ * ----------
+ * The status is either OK or NOK
  * ------------------------------------------------------------------------
  */
-typedef struct nowdb_row_t* nowdb_row_t;
-const char *nowdb_row_next(nowdb_row_t row);
-void nowdb_row_rewind(nowdb_row_t row);
-void *nowdb_row_field(nowdb_row_t row, int field, int *type);
-int nowdb_row_write(FILE *file, nowdb_row_t row);
+int nowdb_result_status(nowdb_result_t res);
 
+/* ------------------------------------------------------------------------
+ * Get NOWDB Error Code
+ * ------------------------------------------------------------------------
+ */
+int nowdb_result_errcode(nowdb_result_t res);
+
+/* ------------------------------------------------------------------------
+ * Get Error Details
+ * ------------------------------------------------------------------------
+ */
+const char *nowdb_result_details(nowdb_result_t res);
+
+/* ------------------------------------------------------------------------
+ * Check if result is 'EOF'
+ * ------------------------------------------------------------------------
+ */
+int nowdb_result_eof(nowdb_result_t res);
+
+/* ------------------------------------------------------------------------
+ * Destroy result 
+ * ------------------------------------------------------------------------
+ */
+void nowdb_result_destroy(nowdb_result_t res);
 
 /* ------------------------------------------------------------------------
  * Single SQL statement
@@ -176,21 +212,97 @@ int nowdb_exec_statementZC(nowdb_con_t     con,
                            nowdb_result_t *res);
 
 /* ------------------------------------------------------------------------
+ * Row
+ * ------------------------------------------------------------------------
+ */
+typedef struct nowdb_row_t* nowdb_row_t;
+
+/* ------------------------------------------------------------------------
+ * Get the next row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_row_next(nowdb_row_t row);
+
+/* ------------------------------------------------------------------------
+ * Rewind to first row
+ * ------------------------------------------------------------------------
+ */
+void nowdb_row_rewind(nowdb_row_t row);
+
+/* ------------------------------------------------------------------------
+ * Get field from row
+ * ---------
+ * The 'fieldth' field is selected
+ * indexing starts with 0
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_row_field(nowdb_row_t row, int field, int *type);
+
+/* ------------------------------------------------------------------------
+ * Copy row 
+ * ------------------------------------------------------------------------
+ */
+nowdb_row_t nowdb_row_copy(nowdb_row_t row);
+
+/* ------------------------------------------------------------------------
+ * Write all rows in human-readable form to file
+ * ------------------------------------------------------------------------
+ */
+int nowdb_row_write(FILE *file, nowdb_row_t row);
+
+/* ------------------------------------------------------------------------
  * Cursor
  * ------------------------------------------------------------------------
  */
 typedef struct nowdb_cursor_t* nowdb_cursor_t;
+
+/* ------------------------------------------------------------------------
+ * Open cursor from given result
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_open(nowdb_result_t  res,
                       nowdb_cursor_t *cur);
 
+/* ------------------------------------------------------------------------
+ * Close cursor
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_close(nowdb_cursor_t cur);
 
+/* ------------------------------------------------------------------------
+ * Fetch next bunch of rows from server
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_fetch(nowdb_cursor_t  cur);
+
+/* ------------------------------------------------------------------------
+ * Get first row from cursor
+ * ------------------------------------------------------------------------
+ */
 nowdb_row_t nowdb_cursor_row(nowdb_cursor_t cur);
-const char *nowdb_cursor_details(nowdb_cursor_t res);
+
+/* ------------------------------------------------------------------------
+ * Get error code from cursor
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_errcode(nowdb_cursor_t res);
 
+/* ------------------------------------------------------------------------
+ * Get error details from cursor
+ * ------------------------------------------------------------------------
+ */
+const char *nowdb_cursor_details(nowdb_cursor_t res);
+
+/* ------------------------------------------------------------------------
+ * Check whether cursor is 'EOF'
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_eof(nowdb_cursor_t cur);
+
+/* ------------------------------------------------------------------------
+ * Check whether cursor has error
+ * ------------------------------------------------------------------------
+ */
 int nowdb_cursor_ok(nowdb_cursor_t cur);
 
 #endif 

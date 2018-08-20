@@ -34,6 +34,7 @@ COM = common
 BENCH= bench
 SMK = test/smoke
 STRESS = test/stress
+CMK = test/client
 BIN = bin
 LOG = log
 TOOLS = tools
@@ -176,9 +177,11 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/sortsmoke               \
 	$(SMK)/sqlsmoke
 
+clientsmoke:	$(CMK)/clientsmoke
+
 stress:	$(STRESS)/deepscope
 
-tests: smoke stress
+tests: smoke stress clientsmoke
 
 debug:	CFLAGS += -g
 debug:	default
@@ -563,6 +566,14 @@ $(BIN)/nowclient:	$(CLIENTDEP) $(CLIENTLIB) \
 			              	       $(COM)/bench.o      \
 			                 $(libs) -lnowdbclient -lnowdb
 
+$(CMK)/clientsmoke:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(CMK)/clientsmoke.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(CMK)/clientsmoke.o \
+			              	       $(COM)/bench.o      \
+			                 $(libs) -lnowdbclient -lnowdb
+
 
 # Clean up
 clean:
@@ -628,6 +639,7 @@ clean:
 	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sortsmoke
 	rm -f $(SMK)/sqlsmoke
+	rm -f $(CMK)/clientsmoke
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
