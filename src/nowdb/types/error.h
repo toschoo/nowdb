@@ -274,6 +274,7 @@ void nowdb_err_send(nowdb_err_t err, int fd);
 #define nowdb_err_bind            66
 #define nowdb_err_listen          67
 #define nowdb_err_accept          68
+#define nowdb_err_server          69
 #define nowdb_err_unknown       9999
 
 #endif

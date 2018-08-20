@@ -265,6 +265,22 @@ int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
 	x = pthread_sigmask(SIG_BLOCK, &p->sigs, NULL); \
 	if (x != 0) return NOWDB_SQL_ERR_SIGNAL;
 
+/* ------------------------------------------------------------------------
+ * generic read
+ * ------------------------------------------------------------------------
+ */
+static inline int readN(int sock, char *buf, int sz) {
+	size_t t=0;
+	size_t x;
+
+	while(t<sz) {
+		x = read(sock, buf+t, sz-t);
+       		if (x <= 0) return x;
+		t+=x;
+	}
+	return t;
+}
+
 /* -----------------------------------------------------------------------
  * Parse socket
  * -----------------------------------------------------------------------
@@ -278,12 +294,12 @@ int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 
 			SIGOFF();
 
-			x = read(p->sock, &size, 4);
+			x = readN(p->sock, (char*)&size, 4);
 			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
 			if (size > BUFSIZE) RETERR(NOWDB_SQL_ERR_BUFSIZE);
 			if (size <= 0) RETERR(NOWDB_SQL_ERR_PROTOCOL);
 
-			x = read(p->sock, p->buf, size);
+			x = readN(p->sock, p->buf, size);
 			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
 			if (x != size) RETERR(NOWDB_SQL_ERR_PROTOCOL);
 

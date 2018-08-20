@@ -1,7 +1,7 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Collection of scopes + threadpool
+ * Server interface (internal)
  * ========================================================================
  */
 #ifndef nowdb_main_decl
@@ -18,11 +18,15 @@
 #include <tsalgo/tree.h>
 #include <tsalgo/list.h>
 
+/* ------------------------------------------------------------------------
+ * session options
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	char stype;
-	char rtype;
-        char ctype;
-        int  opts;
+	char stype; /* session type (always SQL) */
+	char rtype; /* return type (txt, le, be) */ 
+        char ctype; /* ack option or not (never) */
+        int  opts;  /* detailed options          */
 } nowdb_ses_option_t;
 
 #define NOWDB_SES_SQL 0
@@ -34,13 +38,20 @@ typedef struct {
 
 #define NOWDB_SES_TIMING 1
 
+/* ------------------------------------------------------------------------
+ * session cursor
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	uint32_t curid;
-	uint32_t off;
-	uint32_t count;
-	nowdb_cursor_t *cur;
+	uint32_t curid;       /* unique cursor id      */
+	uint64_t count;       /* total count of rows   */
+	nowdb_cursor_t *cur;  /* internal cursor       */
 } nowdb_ses_cursor_t;
 
+/* ------------------------------------------------------------------------
+ * session
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_lock_t        *lock; /* protect the session                */
 	void                 *lib; /* from where we get scopes           */
@@ -50,9 +61,6 @@ typedef struct {
 	nowdbsql_parser_t *parser; /* the parser                         */
 	nowdb_err_t           err; /* error                              */
 	ts_algo_list_node_t *node; /* where to find us                   */
-	FILE               *ifile; /* input  stream as file              */
-	FILE               *ofile; /* output stream as file              */
-	FILE               *efile; /* error  stream as file              */
 	char                 *buf; /* result buffer                      */
 	ts_algo_tree_t   *cursors; /* open cursors                       */
 	uint32_t            bufsz; /* result buffer size                 */
@@ -66,24 +74,55 @@ typedef struct {
         nowdb_ses_option_t    opt; /* session options                    */
 } nowdb_session_t;
 
+/* ------------------------------------------------------------------------
+ * server library
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	nowdb_rwlock_t     *lock;
-	char               *base;
-	ts_algo_tree_t   *scopes;
-	ts_algo_list_t *fthreads;
-	ts_algo_list_t *uthreads;
-	int             nthreads;
+	nowdb_rwlock_t     *lock; /* protect the library    */
+	char               *base; /* base path              */
+	ts_algo_tree_t   *scopes; /* tree of scope          */
+	ts_algo_list_t *fthreads; /* list of free sessions  */
+	ts_algo_list_t *uthreads; /* list of used sessions  */
+	int             nthreads; /* max number of sessions */
 } nowdb_t;
 
+/* ------------------------------------------------------------------------
+ * init library (called only once per process)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads);
+
+/* ------------------------------------------------------------------------
+ * close library (called only once per process)
+ * ------------------------------------------------------------------------
+ */
 void nowdb_library_close(nowdb_t *lib);
+
+/* ------------------------------------------------------------------------
+ * stop busy sessions
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_library_shutdown(nowdb_t *lib);
 
+/* ------------------------------------------------------------------------
+ * get scope from lib (used in nowdb_stmt_handle)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
                            nowdb_scope_t    **scope);
+
+/* ------------------------------------------------------------------------
+ * add scope to lib (used in nowdb_stmt_handle)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
                            nowdb_scope_t *scope); 
 
+/* ------------------------------------------------------------------------
+ * get a free session
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_getSession(nowdb_t *lib,
                              nowdb_session_t **ses,
                              nowdb_task_t master,
@@ -91,7 +130,10 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
                              int ostream,
                              int estream);
 
-// run a session everything is done internally
+/* ------------------------------------------------------------------------
+ * create a new session
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
                                  nowdb_t          *lib,
                                  nowdb_task_t   master,
@@ -99,16 +141,34 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
                                  int           ostream,
                                  int           estream);
 
-// run a session everything is done internally
+/* ------------------------------------------------------------------------
+ * run session
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_session_run(nowdb_session_t *ses);
 
+/* ------------------------------------------------------------------------
+ * stop session
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_session_stop(nowdb_session_t *ses);
+
+/* ------------------------------------------------------------------------
+ * shutdown session (terminate thread)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses);
 
-// destroy session
+/* ------------------------------------------------------------------------
+ * destroy session object
+ * ------------------------------------------------------------------------
+ */
 void nowdb_session_destroy(nowdb_session_t *ses);
 
-// session entry point
+/* ------------------------------------------------------------------------
+ * session entry point
+ * ------------------------------------------------------------------------
+ */
 void *nowdb_session_entry(void *session);
 
 #endif

@@ -611,15 +611,9 @@ static inline int findLastRow(char *buf, int sz) {
 		}
 		if (buf[i] == NOWDB_TEXT) {
 			i++;
-			while(buf[i] != 0) {
-				if (i == sz) {
-					fprintf(stderr,
-					"field incomplete\n");
-					return -1;
-				}
-				i++;
-			}
-			i++; continue;
+			i = findEndOfStr(buf, sz, i);
+			if (i < 0) return i;
+			continue;
 		}
 		i+=9;
 	}

@@ -50,25 +50,46 @@ int parsecmd(int argc, char **argv) {
 	return 0;
 }
 
-volatile sig_atomic_t global_stop;
+/* -----------------------------------------------------------------------
+ * signal stop to listener
+ * -----------------------------------------------------------------------
+ */
+static volatile sig_atomic_t global_stop;
 
+/* -----------------------------------------------------------------------
+ * stop handler
+ * -----------------------------------------------------------------------
+ */
 void stophandler(int sig) {
 	global_stop = 1;
 }
-void ignhandler(int sig) {
-}
 
+/* -----------------------------------------------------------------------
+ * ignore handler: does nothing but does not ignore the signal
+ *                 before it could interrupt the process (like IGN)
+ * -----------------------------------------------------------------------
+ */
+void ignhandler(int sig) {}
+
+/* -----------------------------------------------------------------------
+ * server object
+ * -----------------------------------------------------------------------
+ */
 typedef struct {
-	nowdb_t *lib;
-	nowdb_err_t err;
-	nowdb_task_t master;
-	short port;
-	uint64_t ses_started; 
-	uint64_t ses_ended; 
+	nowdb_t         *lib;  /* the library object          */
+	nowdb_err_t      err;  /* error occurred              */
+	nowdb_task_t  master;  /* threadid of the main thread */
+	short           port;  /* port we are running on      */
+	uint64_t ses_started;  /* number of started session   */
+	uint64_t   ses_ended;  /* number of stopped session   */
 	// addresses
 	// options...
 } srv_t;
 
+/* -----------------------------------------------------------------------
+ * init server object
+ * -----------------------------------------------------------------------
+ */
 void initServer(srv_t *srv, nowdb_t *lib, short port) {
 	srv->lib = lib;
 	srv->master = nowdb_task_myself();
@@ -80,12 +101,24 @@ void initServer(srv_t *srv, nowdb_t *lib, short port) {
 
 char *OBJECT = "nowdbd";
 
+/* -----------------------------------------------------------------------
+ * Set error with OS errcode passed in as parameter
+ * -----------------------------------------------------------------------
+ */
 #define SETXRR(c,x,s) \
 	srv->err = nowdb_err_get(c,x,OBJECT,s);
 
+/* -----------------------------------------------------------------------
+ * Set error with TRUE/FALSE indicator
+ * -----------------------------------------------------------------------
+ */
 #define SETERR(c,t,s) \
 	srv->err = nowdb_err_get(c,t,OBJECT,s);
 
+/* -----------------------------------------------------------------------
+ * handle connection
+ * -----------------------------------------------------------------------
+ */
 void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 	nowdb_err_t err;
 	nowdb_session_t *ses;
@@ -112,6 +145,10 @@ void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * listener
+ * -----------------------------------------------------------------------
+ */
 void *serve(void *arg) {
 	srv_t *srv = arg;
 	int sock, con;
@@ -138,8 +175,8 @@ void *serve(void *arg) {
 	}
 
 	badr.sin_family = AF_INET;
-	badr.sin_port   = htons(srv->port);
-	badr.sin_addr.s_addr = INADDR_ANY;
+	badr.sin_port   = htons(srv->port); /* should be parameter */
+	badr.sin_addr.s_addr = INADDR_ANY;  /* should be parameter */
 
 	if (bind(sock, (struct sockaddr*)&badr, sizeof(badr)) != 0) {
 		SETERR(nowdb_err_bind, TRUE, NULL);
@@ -176,6 +213,10 @@ void *serve(void *arg) {
 	return NULL;
 }
 
+/* -----------------------------------------------------------------------
+ * signal and stop listener
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t stopListener(srv_t *srv, nowdb_task_t listener) {
 	nowdb_err_t err;
 	int x;
@@ -193,6 +234,10 @@ nowdb_err_t stopListener(srv_t *srv, nowdb_task_t listener) {
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * the server process
+ * -----------------------------------------------------------------------
+ */
 int runServer(int argc, char **argv) {
 	struct sigaction sact;
 	nowdb_task_t listener;
@@ -231,20 +276,20 @@ int runServer(int argc, char **argv) {
 	}
 	initServer(&srv, lib, 55505);
 
+	/* install stop handler */
 	memset(&sact, 0, sizeof(struct sigaction));
 	sact.sa_handler = stophandler;
 	sact.sa_flags = 0;
 	sigemptyset(&sact.sa_mask);
 	sigaddset(&sact.sa_mask, SIGUSR2);
 
-	/* set up sigaction */
 	if (sigaction(SIGUSR2, &sact, NULL) != 0) {
 		perror("cannot set signal handler for SIGUSR2");
 		nowdb_library_close(lib);
 		return EXIT_FAILURE;
 	}
 
-	// sact.sa_handler = SIG_IGN;
+	/* install ignore handler (interrupts a single session) */
 	sact.sa_handler = ignhandler;
 	sigemptyset(&sact.sa_mask);
 	sigaddset(&sact.sa_mask, SIGUSR1);
@@ -255,6 +300,7 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	/* install IGN handler for SIGPIPE */
 	memset(&sact, 0, sizeof(struct sigaction));
 	sact.sa_handler = SIG_IGN;
 	sigemptyset(&sact.sa_mask);
@@ -265,6 +311,7 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	/* signals we actively waiting for */
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGABRT);
@@ -278,7 +325,10 @@ int runServer(int argc, char **argv) {
 		nowdb_library_close(lib);
 		return EXIT_FAILURE;
 	}
+
+	/* make a nice welcome banner and an option to suppress it */
 	fprintf(stderr, "server running\n");
+
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;
 		x = sigwait(&s, &sig);
@@ -292,6 +342,8 @@ int runServer(int argc, char **argv) {
 			break;
 		}
 		switch(sig) {
+
+		// session has ended
 		case SIGUSR1:
 			if (srv.ses_ended == 0x7fffffffffffffff) {
 				srv.ses_ended = 1;
@@ -300,16 +352,20 @@ int runServer(int argc, char **argv) {
 			}
 			break;
 
+		// user wants us to terminate
 		case SIGABRT:
 		case SIGINT:
 			global_stop = 1; 
 			break;
 
+		// unknown signal
 		default:
 			fprintf(stderr, "unknown signal: %d\n", sig);
 		}
 		if (global_stop) break;
 	}
+
+	// stop listener
 	err = stopListener(&srv, listener);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot stop listener");
@@ -317,6 +373,7 @@ int runServer(int argc, char **argv) {
 		nowdb_err_release(err);
 		rc = EXIT_FAILURE;
 	}
+	// report listener error
 	if (srv.err != NOWDB_OK) {
 		fprintf(stderr, "error in listener:");
 		nowdb_err_print(err);
@@ -324,6 +381,7 @@ int runServer(int argc, char **argv) {
 		srv.err = NOWDB_OK;
 		rc = EXIT_FAILURE;
 	}
+	// shutdown library
 	err = nowdb_library_shutdown(lib);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot shutdown library");
@@ -331,10 +389,18 @@ int runServer(int argc, char **argv) {
 		nowdb_err_release(err);
 		rc = EXIT_FAILURE;
 	}
+	// and finally close it
 	nowdb_library_close(lib);
+
+	// make a nice farewell banner
+	// and an option to suppress it
 	return rc;
 }
 
+/* -----------------------------------------------------------------------
+ * this could well be elsewhere
+ * -----------------------------------------------------------------------
+ */
 int main(int argc, char **argv) {
 	return runServer(argc, argv);
 }
