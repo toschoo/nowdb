@@ -351,6 +351,7 @@ nowdb_err_t nowdb_getScope(nowdb_t *lib, char *name,
 	if (name == NULL) INVALID("name is NULL");
 	if (scope == NULL) INVALID("scope pointer is NULL");
 
+	*scope = NULL;
 	pattern.name = name;
 	result = ts_algo_tree_find(lib->scopes, &pattern);
 	if (result != NULL) *scope = result->scope;
@@ -385,6 +386,16 @@ nowdb_err_t nowdb_addScope(nowdb_t *lib, char *name,
 		return err;
 	}
 	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * drop scope
+ * -----------------------------------------------------------------------
+ */
+void nowdb_dropScope(nowdb_t *lib, char *name) {
+	scope_t pattern;
+	pattern.name = name;
+	ts_algo_tree_delete(lib->scopes, &pattern);
 }
 
 /* -----------------------------------------------------------------------

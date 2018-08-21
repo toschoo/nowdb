@@ -66,12 +66,14 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t dropScope(nowdb_ast_t  *op,
+                             nowdb_t      *lib,
                              nowdb_path_t  base,
                              char         *name) {
 	nowdb_ast_t *o;
-	nowdb_path_t p;
-	nowdb_scope_t *scope;
-	nowdb_err_t err;
+	nowdb_path_t p=NULL;
+	nowdb_scope_t *scope=NULL;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
 
 	p = nowdb_path_append(base, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -84,16 +86,57 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 		}
 	}
 
-	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
-	if (err != NOWDB_OK) return err;
-	
-	err = nowdb_scope_drop(scope);
-	if (err != NOWDB_OK) {
+	if (lib == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);free(p);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) return err;
+
 		nowdb_scope_destroy(scope); free(scope);
+
+		return NOWDB_OK;
+	}
+
+	err = nowdb_lock_write(lib->lock);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR ON LOCK: ");
+		nowdb_err_print(err);
 		return err;
 	}
-	nowdb_scope_destroy(scope); free(scope);
-	return NOWDB_OK;
+
+	err = nowdb_getScope(lib, name, &scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (scope == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);
+		if (err != NOWDB_OK) goto unlock;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) goto unlock;
+
+		nowdb_scope_destroy(scope); free(scope);
+		goto unlock;
+	}
+
+	err = nowdb_scope_close(scope);
+	if (err != NOWDB_OK) goto unlock;
+	
+	err = nowdb_scope_drop(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	nowdb_dropScope(lib, name);
+
+unlock:
+	if (p != NULL) free(p);
+	if (lib != NULL) {
+		err2 = nowdb_unlock_write(lib->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -840,6 +883,7 @@ unlock:
  */
 static nowdb_err_t handleDDL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
+                                   void  *rsc,
                          nowdb_path_t    base,
                       nowdb_qry_result_t *res) 
 {
@@ -878,7 +922,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	else if (op->ntype == NOWDB_AST_DROP) {
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
-			return dropScope(op, base, trg->value);
+			return dropScope(op, rsc, base, trg->value);
 		case NOWDB_AST_CONTEXT:
 			return dropContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
@@ -1063,7 +1107,7 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
 	if (res == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                 FALSE, OBJECT, "result objet is NULL");
 	switch(ast->ntype) {
-	case NOWDB_AST_DDL: return handleDDL(ast, scope, base, res);
+	case NOWDB_AST_DDL: return handleDDL(ast, scope, rsc, base, res);
 	case NOWDB_AST_DLL: return handleDLL(ast, scope, res);
 	case NOWDB_AST_DML: return handleDML(ast, scope, res);
 	case NOWDB_AST_DQL: return handleDQL(ast, scope, res);

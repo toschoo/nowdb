@@ -43,8 +43,7 @@
 		       nowdb_result_details(res)); \
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	nowdb_result_destroy(res);
+	}
 
 #define EXECDLL(sql) \
 	err = nowdb_exec_statementZC(con, sql, &res); \
@@ -69,7 +68,7 @@
 	fprintf(stderr, "loaded %ld with %ld errors in %ldus\n", \
 	                aff, errs, rt); 
 
-#define EXECDIRTY(sql) \
+#define EXEC(sql) \
 	err = nowdb_exec_statement(con, sql, &res); \
 	if (err != 0) { \
 		fprintf(stderr, "cannot execute statement: %d\n", err); \
@@ -82,30 +81,6 @@
 		nowdb_result_destroy(res); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	}
-
-#define EXEC(sql) \
-	fprintf(stderr, "executing %s\n", sql); \
-	err = nowdb_exec_statement(con, sql, &res); \
-	if (err != 0) { \
-		fprintf(stderr, "cannot execute statement: %d\n", err); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	if (nowdb_result_status(res) != 0) { \
-		fprintf(stderr, "ERROR %hd: %s\n", \
-		        nowdb_result_errcode(res), \
-		       nowdb_result_details(res)); \
-		nowdb_result_destroy(res); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	nowdb_result_destroy(res);
-
-#define FORGET(sql) \
-	err = nowdb_exec_statement(con, sql, &res); \
-	if (err != 0) { \
-		fprintf(stderr, "cannot execute statement: %d\n", err); \
-		rc = EXIT_FAILURE; goto cleanup; \
-	} \
-	nowdb_result_destroy(res);
 
 #define EXECFAULTY(sql) \
 	fprintf(stderr, "executing %s\n", sql); \
@@ -121,7 +96,6 @@
 	fprintf(stderr, "ERROR %hd: %s\n", \
 	        nowdb_result_errcode(res), \
 	        nowdb_result_details(res)); \
-	nowdb_result_destroy(res);
 
 int main() {
 	int rc = EXIT_SUCCESS;
@@ -145,46 +119,8 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	// some syntactically wrong statements
-	fprintf(stderr, "error cases\n");
-	EXECFAULTY("create dabu client200");
-	EXECFAULTY("create db client300");
-
-	// now create the database
-	fprintf(stderr, "now start real things\n");
-	EXEC("drop database client100 if exists");
-	EXEC("create database client100");
-
-	// use it
-	EXEC("use client100");
-
-	// do something
-	// EXECFAULTY("select edge from nosuchcontext");
-
-	EXEC("create tiny index vidx_rovi on vertex (role, vid)");
-	EXEC("create index vidx_ropo on vertex (role, property)");
-
-	EXEC("create tiny table sales set stress=constant");
-
-	EXEC("create index cidx_ctx_de on sales (destin, edge)");
-	EXEC("create index cidx_ctx_oe on sales (origin, edge)");
-
-	EXEC("create type product (\
-		prod_key uint primary key, \
-		prod_desc text)");
-
-	EXEC("create type client (\
-		client_id uint primary key, \
-		client_name text)");
-
-	EXEC("create edge buys (\
-		origin client, \
-		destination product, \
-		weight float, \
-		weight2 float)");
-
-
-	// EXEC("drop database client100");
+	EXECZC("use retail");
+	nowdb_result_destroy(res);
 	
 	/*
 	uint64_t aff, errs, rt;
@@ -196,7 +132,10 @@ int main() {
 	nowdb_result_destroy(res);
 	*/
 
-	/*
+	// expect error
+	EXECFAULTY("select edge from nosuchcontext");
+	nowdb_result_destroy(res);
+
 	EXEC("select edge, origin, count(*), sum(weight) from tx\
 	      where edge = 'buys_product' and destin = 1960");
 	//    where edge = 'buys_product' and origin = 0");
@@ -315,7 +254,6 @@ int main() {
 		fprintf(stderr, "unexpected sum: %.4f != %.4f\n", wt, s);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	*/
 
 cleanup:
 	err = nowdb_connection_close(con);

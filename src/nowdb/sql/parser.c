@@ -288,6 +288,7 @@ static inline int readN(int sock, char *buf, int sz) {
  * -----------------------------------------------------------------------
  */
 int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
+	char dummy[32];
 	int x;
 	int size;
 	
@@ -318,7 +319,13 @@ int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 			continue;
 		}
 		if (x != 0) {
+			while(!feof(p->fd)) {
+				if (fread(dummy, 32, 1, p->fd) <= 0) break;
+			}
 			fclose(p->fd); p->fd = NULL;
+			yylex_destroy(p->sc);
+			yylex_init(&p->sc);
+			return x;
 		}
 		break;
 	}

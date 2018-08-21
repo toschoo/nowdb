@@ -588,6 +588,14 @@ $(CMK)/clientsmoke:	$(CLIENTDEP) $(CLIENTLIB) \
 			                 $(clibs) -lnowdbclient
 
 
+$(CMK)/clientsmoke2:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(CMK)/clientsmoke2.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(CMK)/clientsmoke2.o \
+			              	       $(COM)/bench.o      \
+			                 $(clibs) -lnowdbclient
+
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
@@ -622,6 +630,7 @@ clean:
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
 	rm -rf $(RSC)/scope???
+	rm -rf $(RSC)/client???
 	rm -rf $(RSC)/iman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
@@ -653,6 +662,7 @@ clean:
 	rm -f $(SMK)/sortsmoke
 	rm -f $(SMK)/sqlsmoke
 	rm -f $(CMK)/clientsmoke
+	rm -f $(CMK)/clientsmoke2
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
