@@ -25,38 +25,52 @@
 #ifndef NOWDB_CLIENT_DECL 
 #define NOWDB_CLIENT_DECL
 
+/* ------------------------------------------------------------------------
+ * Server error codes
+ * ------------------------------------------------------------------------
+ */
+#include <nowdb/errcode.h>
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 
 /* ------------------------------------------------------------------------
- * Error codes
+ * Client error codes
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OK          0
-#define NOWDB_ERR_NOMEM   1
-#define NOWDB_ERR_NOCON   2
-#define NOWDB_ERR_NOSOCK  3
-#define NOWDB_ERR_ADDR    4
-#define NOWDB_ERR_NORES   5
-#define NOWDB_ERR_INVALID 6
-#define NOWDB_ERR_EOF     8
-#define NOWDB_ERR_NOREAD  101
-#define NOWDB_ERR_NOWRITE 102
-#define NOWDB_ERR_NOOPEN  103
-#define NOWDB_ERR_NOCLOSE 104
-#define NOWDB_ERR_NOUSE   105
-#define NOWDB_ERR_PROTO   106
-#define NOWDB_ERR_TOOBIG  107
-#define NOWDB_ERR_OSERR   108
-#define NOWDB_ERR_FORMAT  109
-#define NOWDB_ERR_CURZC   110
+#define NOWDB_OK 0
+#define NOWDB_ERR_NOMEM   -1
+#define NOWDB_ERR_NOCON   -2
+#define NOWDB_ERR_NOSOCK  -3
+#define NOWDB_ERR_ADDR    -4
+#define NOWDB_ERR_NORES   -5
+#define NOWDB_ERR_INVALID -6
+#define NOWDB_ERR_NOREAD  -101
+#define NOWDB_ERR_NOWRITE -102
+#define NOWDB_ERR_NOOPEN  -103
+#define NOWDB_ERR_NOCLOSE -104
+#define NOWDB_ERR_NOUSE   -105
+#define NOWDB_ERR_PROTO   -106
+#define NOWDB_ERR_TOOBIG  -107
+#define NOWDB_ERR_OSERR   -108
+#define NOWDB_ERR_FORMAT  -109
+#define NOWDB_ERR_CURZC   -110
+#define NOWDB_ERR_CURCL   -111
+
+#define NOWDB_ERR_EOF nowdb_err_eof
 
 /* ------------------------------------------------------------------------
- * Describe error
+ * Explain error
  * ------------------------------------------------------------------------
  */
-const char *nowdb_err_describe(int err);
+const char *nowdb_err_explain(int err);
+
+/* ------------------------------------------------------------------------
+ * Time is a 64-bit signed integer
+ * ------------------------------------------------------------------------
+ */
+typedef int64_t nowdb_time_t;
 
 /* ------------------------------------------------------------------------
  * The earliest and latest possible time points.
@@ -78,32 +92,40 @@ const char *nowdb_err_describe(int err);
 #define NOWDB_TIME_FORMAT "%Y-%m-%dT%H:%M:%S"
 #define NOWDB_DATE_FORMAT "%Y-%m-%d"
 
-typedef int64_t nowdb_time_t;
-
 /* ------------------------------------------------------------------------
  * Get current system time as nowdb time
- * Errors:
- * - OS Error
  * ------------------------------------------------------------------------
  */
-int nowdb_time_now(nowdb_time_t *time);
+nowdb_time_t nowdb_time_get();
 
 /* ------------------------------------------------------------------------
  * Get time from string
  * ------------------------------------------------------------------------
  */
-int nowdb_time_fromString(const char *buf,
-                          const char *frm,
-                          nowdb_time_t *t);
+int nowdb_time_parse(const char *buf,
+                     const char *frm,
+                     nowdb_time_t *t);
 
 /* ------------------------------------------------------------------------
  * Write time to string
  * ------------------------------------------------------------------------
  */
-int nowdb_time_toString(nowdb_time_t  t,
-                        const char *frm,
-                              char *buf,
-                             size_t max);
+int nowdb_time_show(nowdb_time_t  t,
+                    const char *frm,
+                          char *buf,
+                        size_t max);
+
+/* ------------------------------------------------------------------------
+ * Convert nowdb time to unix timespec
+ * ------------------------------------------------------------------------
+ */
+nowdb_time_t nowdb_time_fromUnix(const struct timespec *tp); 
+
+/* ------------------------------------------------------------------------
+ * Convert unix timespec to nowdb time
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_toUnix(nowdb_time_t t, struct timespec *tp); 
 
 /* ------------------------------------------------------------------------
  * Flags

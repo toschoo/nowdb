@@ -710,9 +710,9 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 
 		case NOWDB_DATE: 
 		case NOWDB_TIME: 
-			err = nowdb_time_toString(*(nowdb_time_t*)(buf+i),
-		                                        NOWDB_TIME_FORMAT,
-		                                                  tmp, 32);
+			err = nowdb_time_show(*(nowdb_time_t*)(buf+i),
+		                                    NOWDB_TIME_FORMAT,
+		                                              tmp, 32);
 			if (err != NOWDB_OK) return err;
 			fprintf(stream, "%s", tmp); i+=8; break;
 
@@ -792,7 +792,7 @@ int nowdb_cursor_close(nowdb_cursor_t cur) {
 		fprintf(stderr, "CLOSE %d/%d: %s\n",
 		  res->status, res->err, nowdb_result_details(res));
 		nowdb_result_destroy(res);
-		return NOWDB_ERR_NOCLOSE;
+		return NOWDB_ERR_CURCL;
 	}
 	nowdb_result_destroy(res);
 	nowdb_result_destroy(CUR(cur));
@@ -944,145 +944,135 @@ nowdb_row_t nowdb_row_copy(nowdb_row_t row) {
 }
 
 /* ------------------------------------------------------------------------
- * Unit
+ * Wrappers
  * ------------------------------------------------------------------------
  */
-static int64_t persec = 1000000000l;
+void *nowdb_time_fromString(const char *buf,
+                            const char *frm,
+                            nowdb_time_t *t);
 
-/* ------------------------------------------------------------------------
- * The epoch
- * ------------------------------------------------------------------------
- */
-static int64_t nowdb_epoch = 0;
+void *nowdb_time_toString(nowdb_time_t  t,
+                          const char *frm,
+                                char *buf,
+                               size_t max);
 
-#define NANOPERSEC 1000000000
+void *nowdb_time_now(nowdb_time_t *t);
 
-/* ------------------------------------------------------------------------
- * Important constants
- * ------------------------------------------------------------------------
- */
-static int64_t max_unix_sec = sizeof(time_t) == 4?INT_MAX:LONG_MAX;
-static int64_t min_unix_sec = sizeof(time_t) == 4?INT_MIN:LONG_MIN;
+void nowdb_time_fromSystem(const struct timespec *tp,
+                         nowdb_time_t *t);
 
-/* ------------------------------------------------------------------------
- * Helper to treat negative values uniformly, in particular
- * if the nanoseconds are negative,
- * the seconds are decremented by 1
- * and nanoseconds are set to one second + nanoseconds, i.e.
- * second - abs(nanosecond).
- * ------------------------------------------------------------------------
- */
-static inline void normalize(struct timespec *tm) {
-	if (tm->tv_nsec < 0) {
-		tm->tv_sec -= 1;
-		tm->tv_nsec = NANOPERSEC + tm->tv_nsec;
-	}
-}
+void *nowdb_time_toSystem(nowdb_time_t t,
+                          struct timespec *tp);
 
-/* ------------------------------------------------------------------------
- * Convert UNIX system time to nowdb time (helper)
- * ------------------------------------------------------------------------
- */
-static inline void fromSystem(const struct timespec *tm,
-                                    nowdb_time_t  *time) {
-	struct timespec tmp;
-	memcpy(&tmp, tm, sizeof(struct timespec));
-	normalize(&tmp);
-	*time = tmp.tv_sec;
-	*time *= persec;
-	*time += tmp.tv_nsec/(NANOPERSEC/persec);
-	*time += nowdb_epoch;
-}
+int nowdb_err_code(void *err);
+void nowdb_err_release(void *err);
+void nowdb_err_print(void *err);
+const char *nowdb_err_desc(int errcode);
 
 /* ------------------------------------------------------------------------
  * Get time from string
  * ------------------------------------------------------------------------
  */
-int nowdb_time_fromString(const char *buf,
-                          const char *frm,
-                          nowdb_time_t *t) {
-	struct tm tm;
-	char  *nsecs, *hlp;
-	struct timespec tv;
+int nowdb_time_parse(const char *buf,
+                     const char *frm,
+                     nowdb_time_t *t) {
 
-	memset(&tm, 0, sizeof(struct tm));
-	memset(&tv, 0, sizeof(struct timespec));
+	void *err;
+	int rc;
 
-	nsecs = strptime(buf, frm, &tm);
-	if (nsecs == NULL || (*nsecs != '.' && *nsecs != 0)) {
-		return NOWDB_ERR_FORMAT;
+	err = nowdb_time_fromString(buf, frm, t);
+	if (err != NULL) {
+		rc = nowdb_err_code(err);
+		nowdb_err_release(err);
+		return rc;
 	}
-
-	tv.tv_sec = timegm(&tm);
-
-	if (nsecs != NULL && *nsecs != 0) {
-		nsecs++;
-
-		tv.tv_nsec = strtol(nsecs, &hlp, 10);
-		if (hlp == NULL || *hlp != 0) {
-			return NOWDB_ERR_FORMAT;
-		}
-		switch(strlen(nsecs)) {
-		case 1: tv.tv_nsec *= 100000000; break;
-		case 2: tv.tv_nsec *= 10000000; break;
-		case 3: tv.tv_nsec *= 1000000; break;
-		case 4: tv.tv_nsec *= 100000; break;
-		case 5: tv.tv_nsec *= 10000; break;
-		case 6: tv.tv_nsec *= 1000; break;
-		case 7: tv.tv_nsec *= 100; break;
-		case 8: tv.tv_nsec *= 10; break;
-		}
-	}
-	fromSystem(&tv, t);
 	return NOWDB_OK;
 }
-
-/* ------------------------------------------------------------------------
- * Convert nowdb time to UNIX system time (helper)
- * ------------------------------------------------------------------------
- */
-static inline int toSystem(nowdb_time_t       time,
-                           struct timespec     *tm) {
-	nowdb_time_t t = time - nowdb_epoch;
-	nowdb_time_t tmp = t / persec;
-	if (tmp > max_unix_sec || tmp < min_unix_sec) {
-		return NOWDB_ERR_TOOBIG;
-	}
-	tm->tv_sec = (time_t)tmp;
-	tm->tv_nsec = (long)(t - tmp*persec) * (NANOPERSEC/persec);
-	normalize(tm);
-	return NOWDB_OK;
-}
-
+	
 /* ------------------------------------------------------------------------
  * Write time to string
  * ------------------------------------------------------------------------
  */
-int nowdb_time_toString(nowdb_time_t  t,
-                        const char *frm,
-                              char *buf,
-                            size_t max) {
-	struct tm tm;
-	struct timespec tv;
-	size_t sz;
-	int err;
+int nowdb_time_show(nowdb_time_t  t,
+                    const char *frm,
+                          char *buf,
+                         size_t max) {
+	void *err;
+	int rc;
 
-	memset(&tv, 0, sizeof(struct timespec));
-
-	err = toSystem(t, &tv);
-	if (err != NOWDB_OK) return err;
-
-	if (gmtime_r(&tv.tv_sec, &tm) == NULL) {
-		return NOWDB_ERR_OSERR;
-	}
-	sz = strftime(buf, max, frm, &tm);
-	if (sz == 0) {
-		return NOWDB_ERR_TOOBIG;
-	}
-	if (tv.tv_nsec > 0 && sz+11<max) {
-		sprintf(buf+sz, ".%09ld", tv.tv_nsec);
-	} else if (tv.tv_nsec > 0) {
-		return NOWDB_ERR_TOOBIG;
+	err = nowdb_time_toString(t, frm, buf, max);
+	if (err != NULL) {
+		rc = nowdb_err_code(err);
+		nowdb_err_release(err);
+		return rc;
 	}
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get system time as nowdb time
+ * ------------------------------------------------------------------------
+ */
+nowdb_time_t nowdb_time_get() {
+	nowdb_time_t t;
+	void *err;
+	err = nowdb_time_now(&t);
+	if (err != NULL) return NOWDB_TIME_DAWN;
+	return t;
+}
+
+/* ------------------------------------------------------------------------
+ * Unix time to nowdb time
+ * ------------------------------------------------------------------------
+ */
+nowdb_time_t nowdb_time_fromUnix(const struct timespec *tp) {
+	nowdb_time_t t;
+	nowdb_time_fromSystem(tp, &t);
+	return t;
+}
+
+/* ------------------------------------------------------------------------
+ * Nowdb time to Unix time
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_toUnix(nowdb_time_t t,
+                      struct timespec *tp) {
+	void *err;
+	int rc;
+	err = nowdb_time_toSystem(t, tp);
+	if (err != NULL) {
+		rc = nowdb_err_code(err);
+		nowdb_err_release(err);
+		return rc;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Describe error
+ * ------------------------------------------------------------------------
+ */
+const char *nowdb_err_explain(int err) {
+	if (err == 0) return "OK";
+	if (err > 0) return nowdb_err_desc(err);
+	switch(err) {
+	case NOWDB_ERR_NOMEM:   return "client out of memory";
+	case NOWDB_ERR_NOCON:   return "cannot connect";
+	case NOWDB_ERR_NOSOCK:  return "cannot create socket";
+	case NOWDB_ERR_ADDR:    return "cannot initialise address";
+	case NOWDB_ERR_NORES:   return "no result";
+	case NOWDB_ERR_INVALID: return "invalid input";
+	case NOWDB_ERR_NOREAD:  return "cannot read from socket";
+	case NOWDB_ERR_NOWRITE: return "cannot write to socket";
+	case NOWDB_ERR_NOOPEN:  return "cannot open";
+	case NOWDB_ERR_NOCLOSE: return "cannot close socket";
+	case NOWDB_ERR_NOUSE:   return "cannot use that db";
+	case NOWDB_ERR_PROTO:   return "protocol error";
+	case NOWDB_ERR_TOOBIG:  return "requested resource too big";
+	case NOWDB_ERR_OSERR:   return "OS error in client; check errno!";
+	case NOWDB_ERR_FORMAT:  return "cannot connect";
+	case NOWDB_ERR_CURZC:   return "cursor with zero copy requested";
+	case NOWDB_ERR_CURCL:   return "cannot close cursor";
+	default: return "unknown client error";
+	}
 }

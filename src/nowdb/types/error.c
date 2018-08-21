@@ -222,6 +222,15 @@ void nowdb_err_send(nowdb_err_t err, int fd) {
 }
 
 /* ------------------------------------------------------------------------
+ * Retrieves the errorcode from the error
+ * ------------------------------------------------------------------------
+ */
+nowdb_errcode_t nowdb_err_code(nowdb_err_t err) {
+	if (err == NOWDB_OK) return 0;
+	return err->errcode;
+}
+
+/* ------------------------------------------------------------------------
  * Human readable error descriptions
  * ------------------------------------------------------------------------
  */

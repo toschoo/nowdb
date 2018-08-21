@@ -41,6 +41,7 @@ TOOLS = tools
 RSC = rsc
 OUTLIB = lib
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv
+clibs = -lm -lpthread -ltsalgo
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -86,6 +87,7 @@ OBJ = $(SRC)/types/types.o    \
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
+      $(HDR)/errcode.h        \
       $(SRC)/types/error.h    \
       $(SRC)/types/time.h     \
       $(SRC)/io/dir.h         \
@@ -125,6 +127,9 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/state.h      \
       $(SRC)/sql/parser.h     \
       $(SRC)/ifc/nowdb.h
+
+CLIENTDEP = $(HDR)/errcode.h  \
+            $(HDR)/nowclient.h
 
 IFC = include/nowdb/nowdb.h
 
@@ -214,10 +219,18 @@ lib/libnowdb.so:	$(OBJ) $(DEP)
 # Client Library 
 nowclientlib:		lib/libnowdbclient.so
 
-lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP)
+lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
+                        $(SRC)/types/types.o \
+                        $(SRC)/types/errman.o \
+                        $(SRC)/types/error.o \
+                        $(SRC)/types/time.o
 			$(LNKMSG)
 			$(CC) -shared \
 			      -o $(OUTLIB)/libnowdbclient.so \
+                        	 $(SRC)/types/types.o \
+                        	 $(SRC)/types/errman.o \
+                        	 $(SRC)/types/error.o \
+                        	 $(SRC)/types/time.o \
 			         $(SRL)/nowdbclient.o $(libs)
 
 # Lemon
@@ -564,7 +577,7 @@ $(BIN)/nowclient:	$(CLIENTDEP) $(CLIENTLIB) \
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/nowclient.o \
 			              	       $(COM)/cmd.o      \
 			              	       $(COM)/bench.o      \
-			                 $(libs) -lnowdbclient -lnowdb
+			                 $(clibs) -lnowdbclient
 
 $(CMK)/clientsmoke:	$(CLIENTDEP) $(CLIENTLIB) \
 			$(CMK)/clientsmoke.o \
@@ -572,7 +585,7 @@ $(CMK)/clientsmoke:	$(CLIENTDEP) $(CLIENTLIB) \
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(CMK)/clientsmoke.o \
 			              	       $(COM)/bench.o      \
-			                 $(libs) -lnowdbclient -lnowdb
+			                 $(clibs) -lnowdbclient
 
 
 # Clean up

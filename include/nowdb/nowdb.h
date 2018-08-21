@@ -1,17 +1,34 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Public interface
+ * Public server interface
  * ========================================================================
  */
 #ifndef NOWDB_DECL
 #define NOWDB_DECL
 
-// types should go to include
-#include <nowdb/types/error.h>
+#include <nowdb/errcode.h>
+
+#include <stdlib.h>
+#include <stdint.h>
 
 #include <pthread.h>
 typedef pthread_t nowdb_thread_t;
+
+typedef struct nowdb_err_t* nowdb_err_t;
+typedef uint32_t nowdb_errcode_t;
+
+#define NOWDB_OK NULL
+
+void nowdb_err_release(nowdb_err_t err);
+void nowdb_err_print(nowdb_err_t err);
+void nowdb_err_describe(nowdb_err_t err);
+nowdb_err_t nowdb_err_get(nowdb_errcode_t code,
+                 char t, char *obj, char *info);
+nowdb_err_t nowdb_err_getRC(nowdb_errcode_t code,
+                int oserr, char *obj, char *info);
+
+// fundamental time definitions
 
 // structure to hold the opened scopes
 typedef struct nowdb_t* nowdb_t;

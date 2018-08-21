@@ -61,17 +61,17 @@ if (err != NOWDB_OK) {
 	return;
 }
 
-fprintf(stdout, "\n");
+// fprintf(stdout, "\n");
 
-fprintf(stdout, "+--------------------------------------------------------------+ \n");
+fprintf(stdout, "+---------------------------------------------------------------+ \n");
 fprintf(stdout, " \n");
 fprintf(stdout, "  UTC %s\n", tstr);
 fprintf(stdout, " \n");
 fprintf(stdout, "  The server is ready\n");
 fprintf(stdout, " \n");
 fprintf(stdout, " \n");
-fprintf(stdout, "+--------------------------------------------------------------+\n");
-fprintf(stdout, "  wwww   iwwi          nnnn    wwwwww       wwwwww       wwwwww\n");
+fprintf(stdout, "+---------------------------------------------------------------+\n");
+fprintf(stdout, "  nnnn   nnnn          nnnn    nnnnnn       nnnnnn       nnnnnn\n");
 fprintf(stdout, "    wi  i   wi       i      i    iw           iw           er  \n");
 fprintf(stdout, "    wi i     wi     n        n    iw         e  wi        e    \n");
 fprintf(stdout, "    wii      wi    wi        iw    iw       e    wi      e     \n");
@@ -79,8 +79,7 @@ fprintf(stdout, "    wi       wi    wi        iw     iw     e      wi    e      
 fprintf(stdout, "    wi       wi     n        n       iw   e        wi  e       \n");
 fprintf(stdout, "    wi       wi      i      i         iw e          wie        \n");
 fprintf(stdout, "   nnnn     nnnn       nnnn             n            n         \n");
-// fprintf(stdout, "\n");
-fprintf(stdout, "+--------------------------------------------------------------+\n\n\n");
+fprintf(stdout, "+---------------------------------------------------------------+\n\n\n");
 }
 
 uint64_t global_port;
