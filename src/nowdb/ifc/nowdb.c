@@ -888,6 +888,7 @@ static int sendErr(nowdb_session_t *ses,
 		return -1;
 	}
 	CLEANUP();
+	fprintf(stderr, "ERR\n");
 	return 0;
 }
 
