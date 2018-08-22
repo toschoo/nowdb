@@ -80,6 +80,7 @@ fprintf(stdout, "    wi       wi     n        n       iw   e        wi  e       
 fprintf(stdout, "    wi       wi      i      i         iw e          wie        \n");
 fprintf(stdout, "   nnnn     nnnn       nnnn             n            n         \n");
 fprintf(stdout, "+---------------------------------------------------------------+\n\n\n");
+fflush(stdout);
 }
 
 uint64_t global_port;
