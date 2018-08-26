@@ -393,22 +393,23 @@ int handleFile(nowdb_con_t con, FILE *ifile) {
 					rc = -1; break;
 				}
 			}
-			x+=n; n=0;
+			x+=r;
 		}
 		// find end of next query
-		buf[x] = 0;
+		// buf[x] = 0;
 		n = findEnd(buf, x);
 		if (n < 0) {
 			fprintf(stderr, "string too long\n");
 			rc = -1; break;
 		}
+
 		// remove whitespace
 		k = whitespace(buf, -1, n);
 
 		// if not empty and not a comment:
 		// handle this query
-		if (!empty(buf, n) &&
-                    !comment(buf, n)) {
+		if (!empty(buf+k, n-k) &&
+                    !comment(buf+k, n-k)) {
 			if (handleQuery(con, buf+k, n-k) != 0) {
 				rc = -1; break;
 			}
@@ -419,10 +420,7 @@ int handleFile(nowdb_con_t con, FILE *ifile) {
 
 		// prepare buffer for next query
 		r = x-n;
-		if (r < 0) {
-			r = 0; continue;
-		} 
-		if (r == 0) {
+		if (r <= 0) {
 			if (eof) break;
 			continue;
 		}
