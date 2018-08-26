@@ -27,6 +27,7 @@ CLIENTLIB = nowclientlib
 SRC = src/nowdb
 SRD = src/nowdbd
 SRL = src/nowdbclient
+PYC = pynow
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -601,6 +602,7 @@ clean:
 	rm -f $(SRC)/*/*.o
 	rm -f $(SRD)/*.o
 	rm -f $(SRL)/*.o
+	rm -f $(PYC)/*.pyc
 	rm -f $(TST)/*/*.o
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
