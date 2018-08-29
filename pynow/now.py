@@ -74,10 +74,10 @@ _rEof.argtypes = [c_void_p]
 def connect(addr, port, usr, pwd):
     con = c_void_p()
     x = _connect(byref(con), c_char_p(addr), c_short(port), c_char_p(usr), c_char_p(pwd), c_long(0))
-    if x == 0: # c_long(0):
-        return Connection(con)
+    if x == 0:
+        return (0,Connection(con))
     else:
-        return None
+        return (x,None)
 
 class Connection:
     def __init__(self, con):

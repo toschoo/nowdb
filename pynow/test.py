@@ -1,10 +1,9 @@
 from now import *
 
-c = connect("127.0.0.1", 55505, None, None)
+(x,c) = connect("127.0.0.1", 55505, None, None)
 if c == None:
-    print "cannot connect"
+    print "cannot connect: %d" % x
     exit(1)
-  
 
 r = c.execute("use retail")
 if not r.ok():
