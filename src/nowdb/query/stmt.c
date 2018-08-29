@@ -901,6 +901,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 
 	if (trg->value == NULL) INVALIDAST("no target name in AST");
 
+	if (trg->stype != NOWDB_AST_SCOPE && scope == NULL) {
+		INVALIDAST("no scope");
+	}
+
 	/* create */
 	if (op->ntype == NOWDB_AST_CREATE) {
 		switch(trg->stype) {
@@ -1002,6 +1006,8 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
                       nowdb_qry_result_t *res) {
 	nowdb_ast_t *op;
 	nowdb_ast_t *trg;
+
+	if (scope == NULL) INVALIDAST("no scope");
 	
 	res->resType = NOWDB_QRY_RESULT_REPORT;
 	res->result = NULL;
@@ -1039,6 +1045,8 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	nowdb_err_t err;
 	nowdb_cursor_t *cur;
 	ts_algo_list_t plan;
+
+	if (scope == NULL) INVALIDAST("no scope");
 
 	/* result is a cursor */
 	res->resType = NOWDB_QRY_RESULT_CURSOR;
@@ -1085,6 +1093,9 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 
 	case NOWDB_AST_FETCH: 
 	case NOWDB_AST_CLOSE: 
+
+		if (scope == NULL) INVALIDAST("no scope");
+
 		res->resType = NOWDB_QRY_RESULT_OP;
 		res->result = op;
 		return NOWDB_OK;
