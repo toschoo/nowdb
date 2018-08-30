@@ -44,6 +44,8 @@ FLOAT = 4
 INT = 5
 UINT = 6
 
+EOF = 8
+
 # ---- C functions --------------------------------------------------------
 _explainError = now.nowdb_err_explain
 _explainError.restype = c_char_p
@@ -105,27 +107,47 @@ _rEof = now.nowdb_cursor_eof
 _rEof.restype = c_long
 _rEof.argtypes = [c_void_p]
 
+# ---- explain error
+def explain(err):
+    return _explainError(c_long(err))
+
 # ---- create a connection
 def connect(addr, port, usr, pwd):
-    con = c_void_p()
-    x = _connect(byref(con), c_char_p(addr), c_short(port), c_char_p(usr), c_char_p(pwd), c_long(0))
-    if x == 0:
-        return (0,Connection(con))
-    else:
-        return (x,None)
+    return Connection(addr, port, usr, pwd)
 
 # ---- a connection
 class Connection:
-    def __init__(self, con):
-        self.con = con
+    def __init__(self, addr, port, usr, pwd):
+        con = c_void_p()
+        x = _connect(byref(con), c_char_p(addr), c_short(port), c_char_p(usr), c_char_p(pwd), c_long(0))
+        if x == 0:
+            self.con = con
+            self.addr = addr
+            self.port = port
+            self.usr  = usr
+            self.pwd  = pwd
+        else:
+            raise NowError(x)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, a, b, c):
+      if self.con != None:
+          _closeCon(self.con)
+          
     def close(self):
-        return _closeCon(self.con)
+        x = _closeCon(self.con)
+        if x == 0:
+            self.con = None
 
     def execute(self, stmt):
         r = c_void_p()
         x = _exec(self.con, c_char_p(stmt), byref(r))
-        return Result(r)
+        if x == 0:
+            return Result(r)
+        else:
+            raise NowError(x)
 
 # ---- result
 class Result:
@@ -133,8 +155,15 @@ class Result:
         self.r = r
 
     def release(self):
+        # print "releasing"
         _rDestroy(self.r)
         self.r = None
+
+    def __enter__(self):
+       return self
+
+    def __exit__(self, a, b, c):
+        self.release()
 
     def rType(self):
         return _rType(self.r)
@@ -144,35 +173,38 @@ class Result:
         return (x == 0)
 
     def code(self):
-        x = _rErrCode(self.r)
-        return x
+        return _rErrCode(self.r)
 
     def details(self):
-        s = _rDetails(self.r)
-        return s
+        return _rDetails(self.r)
 
     def row(self):
         if self.rType() != CURSOR:
-           return None
+           raise WrongType("result is not a cursor")
         r = _rCopy(_rRow(self.r))
         if r == None:
-           return None
+           raise NowError(-1)
         return Result(r)
 
     def next(self):
         t = self.rType()
         if t != CURSOR and t != ROW:
-            return False
+            raise WrongType("result not a cursor nor a row")
         x = _rNext(self.r)
-        return (x == 0)
+        if x == 0:
+          return True
+        if x == EOF:
+          return False
+        raise NowError(x)
 
     def field(self, idx):
         x = self.rType()
         if x != CURSOR and x != ROW:
-            return None
+            raise WrongType("result not a cursor nor a row")
 
         t = c_long()
         v = _rField(self.r, c_long(idx), byref(t))
+
         if t.value == TEXT:
             s = cast(v, c_char_p)
             return s.value
@@ -190,15 +222,29 @@ class Result:
             return f[0]
 
         else:
-            print "%s != %s != %s\n" % (t, c_long(TEXT), t.value)
             return None
 
     def fetch(self):
         if self.rType() != CURSOR and self.rType() != ROW:
-            return False
+            return False # throw wrong type
         x = _rFetch(self.r)
-        return (x == 0)
+        if x != 0:
+            raise NowError(x)
 
     def eof(self):
         x = _rEof(self.r)
         return (x != 0)
+
+class NowError(Exception):
+    def __init__(self, code):
+        self.code = code
+
+    def __str__(self):
+       return explain(self.code)
+
+class WrongType(Exception):
+    def __init__(self, s):
+        self.str = s
+
+    def __str__(self):
+        return self.str

@@ -1,65 +1,59 @@
 from now import *
 
-(x,c) = connect("127.0.0.1", 55505, None, None)
-if c == None:
-    print "cannot connect: %d" % x
-    exit(1)
+with Connection("127.0.0.1", 55505, None, None) as c:
+  print "connection created"
 
-r = c.execute("use retail")
-if not r.ok():
-    print "ERROR %d on use: %s" % (r.code(), r.details())
-    r.release()
-    exit(1)
+  with c.execute("use retail") as r:
+    if not r.ok():
+        print "ERROR %d on use: %s" % (r.code(), r.details())
+        exit(1)
 
-r.release()
+  with c.execute("select edge, count(*), sum(weight) from tx \
+                   where edge='buys_product' and origin=0") as r:
+    if not r.ok():
+      print "ERROR %d on select: %s" % (r.code(), r.details())
+      exit(1)
 
-r = c.execute("select edge, count(*), sum(weight) from tx where edge='buys_product' and origin=0")
-if not r.ok():
-    print "ERROR %d on select: %s" % (r.code(), r.details())
-    r.release()
-    exit(1)
+    with r.row() as row:
+      s = row.field(0)
+      m = row.field(1)
+      w = row.field(2)
 
-row = r.row()
+      print "%s: %.4f %d" % (s, w, m)
 
-s = row.field(0)
-m = row.field(1)
-w = row.field(2)
+  with c.execute("select edge, destin, weight from tx \
+                   where edge='buys_product' and origin=0") as r:
+    if not r.ok():
+        print "ERROR %d on select: %s" % (r.code(), r.details())
+        exit(1)
 
-print "%s: %.4f %d" % (s, w, m)
+    t = 0.0
+    cnt = 0
+    while r.ok():
+      with r.row() as row:
+        while True:
+          s = row.field(0)
+          d = row.field(1)
+          w = row.field(2)
+          t += w
+          cnt += 1
 
-row.release()
+          print "%s: %d %.4f" % (s, d, w)
 
-r = c.execute("select edge, destin, weight from tx where edge='buys_product' and origin=0")
-if not r.ok():
-    print "ERROR %d on select: %s" % (r.code(), r.details())
-    r.release()
-    exit(1)
+          if not row.next():
+             break
 
-t = 0.0
-cnt = 0
-row = r.row()
-while r.ok():
-    s = row.field(0)
-    d = row.field(1)
-    w = row.field(2)
-    t += w
-    cnt += 1
+        r.fetch()
 
-    print "%s: %d %.4f" % (s, d, w)
+    if not r.eof():
+      print "ERROR %d on select: %s" % (r.code(), r.details())
+      exit(1)
 
-    if not row.next():
-        if not r.fetch():
-            print "cannot fetch"
-            break
-        row.release()
-        row = r.row()
-
-if not r.eof():
-    print "ERROR %d on select: %s" % (r.code(), r.details())
-    r.release()
-    exit(1)
-
-print "sum: %.4f\n" % t
+  print "sum: %.4f\n" % t
     
-r.release()
-c.close()
+# connection closed at this point
+print "explain -1: %s" % explain(-1)
+print "explain  8: %s" % explain(8)
+print "explain -2: %s" % explain(-2)
+print "explain -3: %s" % explain(-3)
+print "explain -4: %s" % explain(-4)
