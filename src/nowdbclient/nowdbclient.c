@@ -176,7 +176,6 @@ static int tryConnect(struct nowdb_con_t *con,
 		                       runner->ai_addrlen) != -1)
 			break;
 
-		perror("cannot connect");
 		close(con->sock);
 	}
 	if (runner == NULL) return NOWDB_ERR_NOCON;
@@ -374,7 +373,6 @@ int nowdb_connect(nowdb_con_t *con,
 	(*con)->sock = -1;
 	(*con)->flags= flags;
 
-	fprintf(stderr, "allocating node\n");
 	(*con)->node = malloc(s1+1);
 	if ((*con)->node == NULL) {
 		free(*con); *con = NULL;
@@ -382,7 +380,6 @@ int nowdb_connect(nowdb_con_t *con,
 	}
 	strcpy((*con)->node, node);
 
-	fprintf(stderr, "allocating serv\n");
 	(*con)->serv = malloc(s2+1);
 	if ((*con)->serv == NULL) {
 		destroyCon(*con); free(*con); *con = NULL;
@@ -390,22 +387,18 @@ int nowdb_connect(nowdb_con_t *con,
 	}
 	strcpy((*con)->serv, srv);
 
-	fprintf(stderr, "allocating buf\n");
-
 	(*con)->buf = malloc(BUFSIZE+4);
 	if ((*con)->buf == NULL) {
 		destroyCon(*con); free(*con); *con = NULL;
 		return NOWDB_ERR_NOMEM;
 	}
 
-	fprintf(stderr, "getting address\n");
 	err = getAddress(*con, &as);
 	if (err != NOWDB_OK) {
 		destroyCon(*con); free(*con); *con = NULL;
 		return err;
 	}
 
-	fprintf(stderr, "try connect\n");
 	err = tryConnect(*con, as);
 	if (err != NOWDB_OK) {
 		if (as != NULL) freeaddrinfo(as);
@@ -413,7 +406,6 @@ int nowdb_connect(nowdb_con_t *con,
 		return err;
 	}
 
-	fprintf(stderr, "free address\n");
 	if (as != NULL) freeaddrinfo(as);
 
 	err = sendSessionOpts(*con);
