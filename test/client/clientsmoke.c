@@ -348,7 +348,7 @@ int main() {
 
         srand(time(NULL) ^ (uint64_t)&printf);
 
-	err = nowdb_connect(&con, "127.0.0.1", 55505, NULL, NULL, flags);
+	err = nowdb_connect(&con, "127.0.0.1", "55505", NULL, NULL, flags);
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
 		return EXIT_FAILURE;

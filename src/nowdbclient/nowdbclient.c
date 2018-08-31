@@ -37,6 +37,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 #define BUFSIZE 0x12000
 #define MAXROW  0x1000
@@ -78,13 +79,13 @@
  * ------------------------------------------------------------------------
  */
 struct nowdb_con_t {
-	char *host;  /* host address                */
+	char *node;  /* the node                    */
+	char *serv;  /* the service                 */
 	char *user;  /* connected user              */
 	char *pw;    /* pw (do we need to store it? */
 	char *buf;   /* temporary buffer            */
 	int   sock;  /* socket                      */
 	int   flags; /* session properties          */
-	short port;  /* the port                    */
 };
 
 /* ------------------------------------------------------------------------
@@ -113,8 +114,11 @@ struct nowdb_result_t {
  */
 static void destroyCon(struct nowdb_con_t *con) {
 	if (con == NULL) return;
-	if (con->host != NULL) {
-		free(con->host); con->host = NULL;
+	if (con->node != NULL) {
+		free(con->node); con->node = NULL;
+	}
+	if (con->serv != NULL) {
+		free(con->serv); con->serv = NULL;
 	}
 	if (con->user != NULL) {
 		free(con->user); con->user = NULL;
@@ -132,8 +136,22 @@ static void destroyCon(struct nowdb_con_t *con) {
  * TODO: implement
  * ------------------------------------------------------------------------
  */
-static int getAddress(struct nowdb_con_t *con) {
-	// use getaddrinfo to get addr infos
+static int getAddress(struct nowdb_con_t *con,
+                      struct addrinfo    **as) {
+	int x;
+	struct addrinfo hints;
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	x = getaddrinfo(con->node, con->serv, &hints, as);
+	if (x != 0) {
+		/* return code needs to be diversified */
+		fprintf(stderr, "cannot get address info: %d\n", x);
+		return NOWDB_ERR_ADDR;
+	}
+	if (*as == NULL) return NOWDB_ERR_ADDR;
 	return NOWDB_OK;
 }
 
@@ -141,25 +159,27 @@ static int getAddress(struct nowdb_con_t *con) {
  * Connect
  * ------------------------------------------------------------------------
  */
-static int tryConnect(struct nowdb_con_t *con) {
-	struct sockaddr_in adr;
+static int tryConnect(struct nowdb_con_t *con,
+                      struct addrinfo    *as) 
+{
+	struct addrinfo *runner;
 
-	if ((con->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP)) < 0) {
-		perror("cannot create socket");
-		return NOWDB_ERR_NOSOCK;
-	}
+	for(runner=as; runner!=NULL; runner=runner->ai_next) {
+		if ((con->sock = socket(runner->ai_family,
+		                        runner->ai_socktype,
+		                        runner->ai_protocol)) == -1) 
+		{
+			perror("cannot create socket");
+			continue;
+		}
+		if (connect(con->sock, runner->ai_addr,
+		                       runner->ai_addrlen) != -1)
+			break;
 
-	adr.sin_family = AF_INET;
-	adr.sin_port   = htons(con->port);
-
-	if (inet_aton(con->host, &adr.sin_addr) == 0) {
-		perror("cannot set address");
-		return NOWDB_ERR_ADDR;
-	}
-	if (connect(con->sock, (struct sockaddr*)&adr, sizeof(adr)) != 0) {
 		perror("cannot connect");
-		return NOWDB_ERR_NOCON;
+		close(con->sock);
 	}
+	if (runner == NULL) return NOWDB_ERR_NOCON;
 	return NOWDB_OK;
 }
 
@@ -332,30 +352,41 @@ static int sendSessionOpts(struct nowdb_con_t *con) {
  * ------------------------------------------------------------------------
  */
 int nowdb_connect(nowdb_con_t *con,
-                  char *host, short port,
+                  char *node, char *srv,
                   char *user, char *pw,
                   int flags) 
 {
 	int  err;
-	size_t s;
+	size_t s1, s2;
+	struct addrinfo *as=NULL;
 
-	if (host == NULL) return NOWDB_ERR_INVALID;
-	s = strnlen(host, 4097);
-	if (s > 4096) return NOWDB_ERR_INVALID;
+	if (node == NULL) return NOWDB_ERR_INVALID;
+	s1 = strnlen(node, 4097);
+	if (s1 > 4096) return NOWDB_ERR_INVALID;
+
+	if (srv == NULL) return NOWDB_ERR_INVALID;
+	s2 = strnlen(node, 4097);
+	if (s2 > 4096) return NOWDB_ERR_INVALID;
 
 	*con = calloc(1,sizeof(struct nowdb_con_t));
 	if (*con == NULL) return NOWDB_ERR_NOMEM;
 
 	(*con)->sock = -1;
-	(*con)->port = port;
 	(*con)->flags= flags;
 
-	(*con)->host = malloc(s+1);
-	if ((*con)->host == NULL) {
+	(*con)->node = malloc(s1+1);
+	if ((*con)->node == NULL) {
 		free(*con); *con = NULL;
 		return NOWDB_ERR_NOMEM;
 	}
-	strcpy((*con)->host, host);
+	strcpy((*con)->node, node);
+
+	(*con)->serv = malloc(s2+1);
+	if ((*con)->serv == NULL) {
+		destroyCon(*con); free(*con); *con = NULL;
+		return NOWDB_ERR_NOMEM;
+	}
+	strcpy((*con)->serv, srv);
 
 	(*con)->buf = malloc(BUFSIZE+4);
 	if ((*con)->buf == NULL) {
@@ -363,24 +394,26 @@ int nowdb_connect(nowdb_con_t *con,
 		return NOWDB_ERR_NOMEM;
 	}
 
-	err = getAddress(*con);
+	err = getAddress(*con, &as);
 	if (err != NOWDB_OK) {
 		destroyCon(*con); free(*con); *con = NULL;
 		return err;
 	}
 
-	err = tryConnect(*con);
+	err = tryConnect(*con, as);
 	if (err != NOWDB_OK) {
+		if (as != NULL) freeaddrinfo(as);
 		destroyCon(*con); free(*con); *con = NULL;
 		return err;
 	}
+
+	if (as != NULL) freeaddrinfo(as);
 
 	err = sendSessionOpts(*con);
 	if (err != NOWDB_OK) {
 		destroyCon(*con); free(*con); *con = NULL;
 		return err;
 	}
-	
 	return NOWDB_OK;
 }
 

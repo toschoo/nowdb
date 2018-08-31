@@ -147,7 +147,7 @@ typedef struct nowdb_con_t* nowdb_con_t;
  * ------------------------------------------------------------------------
  */
 int nowdb_connect(nowdb_con_t *con,
-                  char *host, short port,
+                  char *node, char *service,
                   char *user, char *pw,
                   int flags);
 

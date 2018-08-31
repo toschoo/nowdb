@@ -45,8 +45,8 @@
  * Global variables
  * -----------------------------------------------------------------------
  */
-short global_port = 55505;
-char *global_ip = "127.0.0.1";
+char *global_serv = "55505";
+char *global_node = "127.0.0.1";
 char *global_db = NULL;
 char *global_query = NULL;
 char global_feedback = 1;
@@ -59,12 +59,12 @@ char global_timing = 0;
 void helptxt(char *progname) {
 	fprintf(stderr, "%s [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "-p: port, default: 55505\n");
-	fprintf(stderr, "-s: server address, default: 127.0.0.1\n");
+	fprintf(stderr, "-p: port or service, default: 55505\n");
+	fprintf(stderr, "-s: node name or address, default: 127.0.0.1\n");
 	fprintf(stderr, "-d: database, default: NULL\n");
 	fprintf(stderr, "-Q: query string, default: NULL\n");
 	fprintf(stderr, "-t: timing\n");
-	fprintf(stderr, "-q: quite\n");
+	fprintf(stderr, "-q: quiet\n");
 	fprintf(stderr, "-V: version\n");
 	fprintf(stderr, "-?: \n");
 	fprintf(stderr, "-h: help\n");
@@ -84,25 +84,26 @@ void printVersion() {
  */
 int getOpts(int argc, char **argv) {
 	char *opts = "p:s:d:Q:tqVh?";
-	char *hlp;
 	char c;
 
 	while((c = getopt(argc, argv, opts)) != -1) {
 		switch(c) {
 		case 'p':
-			global_port = (short)strtol(optarg, &hlp, 10);
-			if (hlp == NULL || *hlp != 0) {
-				fprintf(stderr, "invalid number: %s\n", optarg);
+			global_serv = optarg;
+			if (global_serv[0] == '-') {
+				fprintf(stderr,
+				"invalid argument for service: %s\n",
+				global_serv);
 				return -1;
 			}
 			break;
 		
 		case 's': 
-			global_ip = optarg;
-			if (global_ip[0] == '-') {
+			global_node = optarg;
+			if (global_node[0] == '-') {
 				fprintf(stderr,
 				"invalid argument for server address: %s\n",
-				global_ip);
+				global_node);
 				return -1;
 			}
 			break;
@@ -446,7 +447,7 @@ int main(int argc, char **argv) {
 	if (x < 0) return EXIT_FAILURE;
 	if (global_query == NULL) ifile = stdin;
 
-	err = nowdb_connect(&con, global_ip, global_port, NULL, NULL, flags);
+	err = nowdb_connect(&con, global_node, global_serv, NULL, NULL, flags);
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
 		return EXIT_FAILURE;
