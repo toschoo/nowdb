@@ -127,7 +127,7 @@ class Connection:
             self.usr  = usr
             self.pwd  = pwd
         else:
-            raise NowError(x)
+            raise ClientError(x)
 
     def __enter__(self):
         return self
@@ -147,7 +147,7 @@ class Connection:
         if x == 0:
             return Result(r)
         else:
-            raise NowError(x)
+            raise ClientError(x)
 
 # ---- result
 class Result:
@@ -183,7 +183,7 @@ class Result:
            raise WrongType("result is not a cursor")
         r = _rCopy(_rRow(self.r))
         if r == None:
-           raise NowError(-1)
+           raise ClientError(-1)
         return Result(r)
 
     def next(self):
@@ -195,7 +195,7 @@ class Result:
           return True
         if x == EOF:
           return False
-        raise NowError(x)
+        raise ClientError(x)
 
     def field(self, idx):
         x = self.rType()
@@ -226,16 +226,17 @@ class Result:
 
     def fetch(self):
         if self.rType() != CURSOR and self.rType() != ROW:
-            return False # throw wrong type
+            raise WrongType("result is not a cursor")
+
         x = _rFetch(self.r)
         if x != 0:
-            raise NowError(x)
+            raise ClientError(x)
 
     def eof(self):
         x = _rEof(self.r)
         return (x != 0)
 
-class NowError(Exception):
+class ClientError(Exception):
     def __init__(self, code):
         self.code = code
 
