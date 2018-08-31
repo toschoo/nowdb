@@ -1,6 +1,6 @@
 from now import *
 
-with Connection("127.0.0.1", 55505, None, None) as c:
+with Connection("127.0.0.1", "55505", None, None) as c:
   print "connection created"
 
   with c.execute("use retail") as r:

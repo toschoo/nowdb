@@ -53,7 +53,7 @@ _explainError.argtypes = [c_long]
 
 _connect = now.nowdb_connect
 _connect.restype = c_long
-_connect.argtypes = [c_void_p, c_char_p, c_short, c_char_p, c_char_p, c_long]
+_connect.argtypes = [c_void_p, c_char_p, c_char_p, c_char_p, c_char_p, c_long]
 
 _closeCon = now.nowdb_connection_close
 _closeCon.restype = c_long
@@ -119,7 +119,7 @@ def connect(addr, port, usr, pwd):
 class Connection:
     def __init__(self, addr, port, usr, pwd):
         con = c_void_p()
-        x = _connect(byref(con), c_char_p(addr), c_short(port), c_char_p(usr), c_char_p(pwd), c_long(0))
+        x = _connect(byref(con), c_char_p(addr), c_char_p(port), c_char_p(usr), c_char_p(pwd), c_long(0))
         if x == 0:
             self.con = con
             self.addr = addr

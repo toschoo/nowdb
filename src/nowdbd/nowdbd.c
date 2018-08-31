@@ -22,15 +22,97 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 /* -----------------------------------------------------------------------
- * get a little help for my friends
+ * Version Info
+ * -----------------------------------------------------------------------
+ */
+#define VERSION 0
+#define MAJOR 0
+#define MINOR 0
+#define BUILD 1
+
+/* -----------------------------------------------------------------------
+ * Global variables
+ * -----------------------------------------------------------------------
+ */
+char *global_serv = "55505";
+char *global_node = NULL;
+char *global_db = NULL;
+char global_feedback = 1;
+char global_timing = 0;
+char global_banner = 1;
+
+/* -----------------------------------------------------------------------
+ * HELP HELP HELP
  * -----------------------------------------------------------------------
  */
 void helptxt(char *progname) {
-	fprintf(stderr, "%s <path-to-base> [options]\n", progname);
+	fprintf(stderr, "%s <path> [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "port: port to bin (default: 55505)\n");
+	fprintf(stderr, "-p: port or service, default: 55505\n");
+	fprintf(stderr, "-s: bind domain or address, default: any\n");
+	fprintf(stderr, "-t: timing\n");
+	fprintf(stderr, "-q: quiet\n");
+	fprintf(stderr, "-n: no banner\n");
+	fprintf(stderr, "-V: version\n");
+	fprintf(stderr, "-?: \n");
+	fprintf(stderr, "-h: help\n");
+}
+
+/* -----------------------------------------------------------------------
+ * Print version
+ * -----------------------------------------------------------------------
+ */
+void printVersion() {
+	fprintf(stdout, "%d.%d.%d.%d\n", VERSION, MAJOR, MINOR, BUILD);
+}
+
+/* -----------------------------------------------------------------------
+ * Get Options
+ * -----------------------------------------------------------------------
+ */
+int getOpts(int argc, char **argv) {
+	char *opts = "p:s:tqVh?";
+	char c;
+
+	while((c = getopt(argc, argv, opts)) != -1) {
+		switch(c) {
+		case 'p':
+			global_serv = optarg;
+			if (global_serv[0] == '-') {
+				fprintf(stderr,
+				"invalid argument for service: %s\n",
+				global_serv);
+				return -1;
+			}
+			break;
+		
+		case 's': 
+			global_node = optarg;
+			if (global_node[0] == '-') {
+				fprintf(stderr,
+				"invalid argument for server address: %s\n",
+				global_node);
+				return -1;
+			}
+			break;
+
+		case 't': global_timing=1; break;
+		case 'q': global_feedback=0; break;
+		case 'n': global_banner=0; break;
+		case 'V':
+			printVersion(); return 1;
+		case 'h':
+		case '?':
+			helptxt(argv[0]); return 1;
+		default:
+			fprintf(stderr, "unknown option: %c\n", c);
+			return -1;
+		}
+	}
+	return 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -41,6 +123,8 @@ void banner(char *path) {
 char tstr[32];
 nowdb_err_t err;
 nowdb_time_t tm;
+
+if (!global_banner) return;
 
 err = nowdb_time_now(&tm);
 if (err != NOWDB_OK) {
@@ -86,22 +170,6 @@ fflush(stdout);
 uint64_t global_port;
 
 /* -----------------------------------------------------------------------
- * get options
- * -----------------------------------------------------------------------
- */
-int parsecmd(int argc, char **argv) {
-	int err = 0;
-
-	global_port = ts_algo_args_findUint(
-	            argc, argv, 2, "port", 55505, &err);
-	if (err != 0) {
-		fprintf(stderr, "command line error: %d\n", err);
-		return -1;
-	}
-	return 0;
-}
-
-/* -----------------------------------------------------------------------
  * signal stop to listener
  * -----------------------------------------------------------------------
  */
@@ -130,7 +198,7 @@ typedef struct {
 	nowdb_t         *lib;  /* the library object          */
 	nowdb_err_t      err;  /* error occurred              */
 	nowdb_task_t  master;  /* threadid of the main thread */
-	short           port;  /* port we are running on      */
+	char           *serv;  /* service (usually a port)    */
 	uint64_t ses_started;  /* number of started session   */
 	uint64_t   ses_ended;  /* number of stopped session   */
 	// addresses
@@ -141,11 +209,10 @@ typedef struct {
  * init server object
  * -----------------------------------------------------------------------
  */
-void initServer(srv_t *srv, nowdb_t *lib, short port) {
+void initServer(srv_t *srv, nowdb_t *lib) {
 	srv->lib = lib;
 	srv->master = nowdb_task_myself();
 	srv->err = NOWDB_OK;
-	srv->port = port;
 	srv->ses_started = 0;
 	srv->ses_ended = 0;
 }
@@ -197,13 +264,25 @@ void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 }
 
 /* -----------------------------------------------------------------------
+ * in case of error stop everything
+ * -----------------------------------------------------------------------
+ */
+#define STOPMASTER() \
+	x = pthread_kill(srv->master, SIGINT); \
+	if (x != 0) { \
+		fprintf(stderr, "CANNOT SIGNAL MASTER: %d\n", x); \
+	} \
+
+/* -----------------------------------------------------------------------
  * listener
  * -----------------------------------------------------------------------
  */
 void *serve(void *arg) {
+	struct addrinfo hints;
+	struct addrinfo *as=NULL, *runner;
+	struct sockaddr_in aadr;
 	srv_t *srv = arg;
 	int sock, con;
-	struct sockaddr_in badr, aadr;
 	socklen_t len=0;
 	int on = 1;
 	sigset_t s;
@@ -212,31 +291,51 @@ void *serve(void *arg) {
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR2);
 
-	memset(&badr, 0, sizeof(struct sockaddr_in));
-	memset(&aadr, 0, sizeof(struct sockaddr_in));
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
 
-	if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP)) < 0) {
-		SETERR(nowdb_err_socket, TRUE, "creating socket");
+	x = getaddrinfo(global_node, global_serv, &hints, &as);
+	if (x != 0) {
+		/* return code needs to be diversified */
+		SETXRR(nowdb_err_addr, x, "getaddrinfo");
+		STOPMASTER();
 		return NULL;
 	}
-	if (setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,&on,sizeof(int)) != 0) {
-		SETERR(nowdb_err_socket, TRUE, "setting option reuseaddr");
+	for(runner=as; runner!=NULL; runner=runner->ai_next) {
+		if ((sock = socket(runner->ai_family,
+		                   runner->ai_socktype,
+		                   runner->ai_protocol)) == -1) 
+		{
+			perror("cannot create socket");
+			continue;
+		}
+		if (setsockopt(sock,SOL_SOCKET,
+		                  SO_REUSEADDR,
+		               &on,sizeof(int)) != 0)
+		{
+			SETERR(nowdb_err_socket, TRUE,
+			   "setting option reuseaddr");
+			close(sock);
+			STOPMASTER();
+			return NULL;
+		}
+		if (bind(sock, runner->ai_addr, runner->ai_addrlen) == 0) {
+			break;
+		}
 		close(sock);
-		return NULL;
 	}
-
-	badr.sin_family = AF_INET;
-	badr.sin_port   = htons(srv->port); /* should be parameter */
-	badr.sin_addr.s_addr = INADDR_ANY;  /* should be parameter */
-
-	if (bind(sock, (struct sockaddr*)&badr, sizeof(badr)) != 0) {
-		SETERR(nowdb_err_bind, TRUE, NULL);
-		close(sock);
+	if (as != NULL) freeaddrinfo(as);
+	if (runner == NULL) {
+		SETERR(nowdb_err_addr, FALSE, "stopping listener");
+		STOPMASTER();
 		return NULL;
 	}
 	if (listen(sock, 1024) != 0) {
 		SETERR(nowdb_err_listen, TRUE, NULL);
 		close(sock);
+		STOPMASTER();
 		return NULL;
 	}
 	for(;;) {
@@ -251,7 +350,7 @@ void *serve(void *arg) {
 			if (global_stop) break;
 			continue;
 		}
-		fprintf(stderr, "received something\n");
+		fprintf(stderr, "ACCEPTED\n");
 		x = pthread_sigmask(SIG_BLOCK, &s, NULL);
 		if (x != 0) {
 			SETXRR(nowdb_err_sigset, x, "block");
@@ -314,10 +413,11 @@ int runServer(int argc, char **argv) {
 		helptxt(argv[0]);
 		return EXIT_FAILURE;
 	}
-	if (parsecmd(argc, argv) != 0) {
-		helptxt(argv[0]);
-		return EXIT_FAILURE;
-	}
+
+	x = getOpts(argc, argv);
+	if (x > 0) return EXIT_SUCCESS;
+	if (x < 0) return EXIT_FAILURE;
+
 	err = nowdb_library_init(&lib, path, 64);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot initialise library\n");
@@ -325,7 +425,8 @@ int runServer(int argc, char **argv) {
 		nowdb_err_release(err);
 		return EXIT_FAILURE;
 	}
-	initServer(&srv, lib, 55505);
+
+	initServer(&srv, lib);
 
 	/* install stop handler */
 	memset(&sact, 0, sizeof(struct sigaction));
@@ -428,8 +529,8 @@ int runServer(int argc, char **argv) {
 	// report listener error
 	if (srv.err != NOWDB_OK) {
 		fprintf(stderr, "error in listener:");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+		nowdb_err_print(srv.err);
+		nowdb_err_release(srv.err);
 		srv.err = NOWDB_OK;
 		rc = EXIT_FAILURE;
 	}
