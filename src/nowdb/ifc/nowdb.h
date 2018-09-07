@@ -53,25 +53,25 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_lock_t        *lock; /* protect the session                */
-	void                 *lib; /* from where we get scopes           */
-	nowdb_scope_t      *scope; /* on what we process                 */
-	nowdb_task_t         task; /* this runs the session              */
-	nowdb_task_t       master; /* the main thread                    */
-	nowdbsql_parser_t *parser; /* the parser                         */
-	nowdb_err_t           err; /* error                              */
-	ts_algo_list_node_t *node; /* where to find us                   */
-	char                 *buf; /* result buffer                      */
-	ts_algo_tree_t   *cursors; /* open cursors                       */
-	uint32_t            bufsz; /* result buffer size                 */
-	uint64_t            curid; /* next free cursorid                 */
-	int               istream; /* incoming stream                    */
-	int               ostream; /* outgoing stream (may be == istream */
-	int               estream; /* error stream (may be == ostream    */
-	char              running; /* running or waiting                 */
-	char                 stop; /* terminate thread                   */
-	char                alive; /* session alive                      */
-        nowdb_ses_option_t    opt; /* session options                    */
+	nowdb_lock_t        *lock; /* protect the session                 */
+	void                 *lib; /* from where we get scopes            */
+	nowdb_scope_t      *scope; /* on what we process                  */
+	nowdb_task_t         task; /* this runs the session               */
+	nowdb_task_t       master; /* the main thread                     */
+	nowdbsql_parser_t *parser; /* the parser                          */
+	nowdb_err_t           err; /* error                               */
+	ts_algo_list_node_t *node; /* where to find us                    */
+	char                 *buf; /* result buffer                       */
+	ts_algo_tree_t   *cursors; /* open cursors                        */
+	uint32_t            bufsz; /* result buffer size                  */
+	uint64_t            curid; /* next free cursorid                  */
+	int               istream; /* incoming stream                     */
+	int               ostream; /* outgoing stream (may be == istream) */
+	int               estream; /* error stream (may be == ostream)    */
+	char              running; /* running or waiting                  */
+	char                 stop; /* terminate thread                    */
+	char                alive; /* session alive                       */
+        nowdb_ses_option_t    opt; /* session options                     */
 } nowdb_session_t;
 
 /* ------------------------------------------------------------------------
@@ -85,13 +85,15 @@ typedef struct {
 	ts_algo_list_t *fthreads; /* list of free sessions  */
 	ts_algo_list_t *uthreads; /* list of used sessions  */
 	int             nthreads; /* max number of sessions */
+	int               loglvl; /* max number of sessions */
 } nowdb_t;
 
 /* ------------------------------------------------------------------------
  * init library (called only once per process)
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads);
+nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
+                                int loglvl, int nthreads);
 
 /* ------------------------------------------------------------------------
  * close library (called only once per process)

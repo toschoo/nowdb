@@ -28,6 +28,9 @@ static char *OBJECT = "lib";
 	err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT, \
 	         (char*)nowdbsql_parser_errmsg(ses->parser));
 
+#define LIB(x) \
+	((nowdb_t*)x)
+
 #define SETERR() \
 	err->cause = ses->err; \
 	ses->err = err;
@@ -41,6 +44,9 @@ static char *OBJECT = "lib";
 #define LOGERR(err) \
 	nowdb_err_send(err, ses->estream); \
 	nowdb_err_release(err);
+
+#define LOGMSG(m) \
+	if (LIB(ses->lib)->loglvl > 0) fprintf(stderr, "%s\n", m);
 
 /* -----------------------------------------------------------------------
  * Scope Descriptor
@@ -144,7 +150,8 @@ static inline nowdb_err_t readN(int sock, char *buf, int sz) {
  * initialise library
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads) {
+nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
+                                int loglvl, int nthreads) {
 	nowdb_err_t err;
 	sigset_t s;
 	int x;
@@ -174,6 +181,7 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base, int nthreads) {
 	}
 
 	(*lib)->nthreads = nthreads;
+	(*lib)->loglvl   = loglvl;
 
 	(*lib)->lock = calloc(1, sizeof(nowdb_rwlock_t));
 	if ((*lib)->lock == NULL) {
@@ -603,9 +611,6 @@ unlock:
 	return err;
 }
 
-#define LIB(x) \
-	((nowdb_t*)x)
-
 /* -----------------------------------------------------------------------
  * signal the master of all threads (to inform him that one session
  * is not running anymore)
@@ -812,7 +817,7 @@ static int sendOK(nowdb_session_t *ses) {
 		SETERR();
 		return -1;
 	}
-	fprintf(stderr, "OK\n");
+	LOGMSG("OK");
 	return 0;
 }
 
@@ -836,7 +841,7 @@ static int sendEOF(nowdb_session_t *ses) {
 		SETERR();
 		return -1;
 	}
-	fprintf(stderr, "EOF\n");
+	LOGMSG("EOF");
 	return 0;
 }
 
@@ -888,7 +893,7 @@ static int sendErr(nowdb_session_t *ses,
 		return -1;
 	}
 	CLEANUP();
-	fprintf(stderr, "ERR\n");
+	LOGMSG("ERR");
 	return 0;
 }
 
@@ -925,6 +930,7 @@ static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
 		return -1;
 	}
 	free(res->result); res->result = NULL;
+	LOGMSG("REPORT");
 	return 0;
 }
 
@@ -950,6 +956,7 @@ static int sendCursor(nowdb_session_t   *ses,
 		SETERR();
 		return -1;
 	}
+	LOGMSG("CURSOR");
 	return 0;
 }
 
@@ -1095,6 +1102,7 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 
 	switch(ast->ntype) {
 	case NOWDB_AST_FETCH:
+		LOGMSG("FETCHING CURSOR");
 		cur = ts_algo_tree_find(ses->cursors, &pattern);
 		if (cur == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid,
@@ -1105,6 +1113,7 @@ static int handleOp(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		return fetch(ses, cur);
 	
 	case NOWDB_AST_CLOSE:
+		LOGMSG("CLOSING CURSOR");
 		ts_algo_tree_delete(ses->cursors, &pattern); 
 		return sendOK(ses);
 
@@ -1238,10 +1247,7 @@ static void runSession(nowdb_session_t *ses) {
 	if (ses->err != NOWDB_OK) return;
 	if (ses->alive == 0) return;
 	
-	/*
-	fprintf(stderr, "running session on behalf of %ld\n",
-	                                         ses->master);
-	*/
+	LOGMSG("SESSION STARTED");
 
 	// negotiate seesion properties
 	err = negotiate(ses);
@@ -1316,7 +1322,7 @@ static void runSession(nowdb_session_t *ses) {
 			   nowdb_time_minus(&t2, &t1)/1000);
 		}
 	}
-	fprintf(stderr, "session ending\n");
+	LOGMSG("SESSION ENDING\n");
 }
 
 /* -----------------------------------------------------------------------

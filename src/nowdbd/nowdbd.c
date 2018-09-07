@@ -39,20 +39,37 @@
  */
 char *global_serv = "55505";
 char *global_node = NULL;
+char *global_path = "./";
 char *global_db = NULL;
 char global_feedback = 1;
 char global_timing = 0;
 char global_banner = 1;
 
 /* -----------------------------------------------------------------------
+ * produce some output
+ * -----------------------------------------------------------------------
+ */
+#define LOG(e,m) \
+	if (global_feedback || e) \
+		fprintf(stderr, "%s\n", m);
+
+/* -----------------------------------------------------------------------
+ * different kinds of messages
+ * -----------------------------------------------------------------------
+ */
+#define LOGERR(m) LOG(1,m);
+#define LOGMSG(m) LOG(0,m);
+
+/* -----------------------------------------------------------------------
  * HELP HELP HELP
  * -----------------------------------------------------------------------
  */
 void helptxt(char *progname) {
-	fprintf(stderr, "%s <path> [options]\n", progname);
+	fprintf(stderr, "%s [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "-p: port or service, default: 55505\n");
-	fprintf(stderr, "-s: bind domain or address, default: any\n");
+	fprintf(stderr, "-b: base path (default: ./)\n");
+	fprintf(stderr, "-p: port or service (default: 55505)\n");
+	fprintf(stderr, "-s: bind domain or address (default: any)\n");
 	fprintf(stderr, "-t: timing\n");
 	fprintf(stderr, "-q: quiet\n");
 	fprintf(stderr, "-n: no banner\n");
@@ -74,11 +91,21 @@ void printVersion() {
  * -----------------------------------------------------------------------
  */
 int getOpts(int argc, char **argv) {
-	char *opts = "p:s:tqVh?";
+	char *opts = "b:p:s:tqVh?";
 	char c;
 
 	while((c = getopt(argc, argv, opts)) != -1) {
 		switch(c) {
+		case 'b':
+			global_path = optarg;
+			if (global_path[0] == '-') {
+				fprintf(stderr,
+				"invalid argument for path: %s\n",
+				global_path);
+				return -1;
+			}
+			break;
+
 		case 'p':
 			global_serv = optarg;
 			if (global_serv[0] == '-') {
@@ -350,7 +377,7 @@ void *serve(void *arg) {
 			if (global_stop) break;
 			continue;
 		}
-		fprintf(stderr, "ACCEPTED\n");
+		LOGMSG("ACCEPTED");
 		x = pthread_sigmask(SIG_BLOCK, &s, NULL);
 		if (x != 0) {
 			SETXRR(nowdb_err_sigset, x, "block");
@@ -395,32 +422,16 @@ int runServer(int argc, char **argv) {
 	nowdb_t *lib;
 	int rc = EXIT_SUCCESS;
 	srv_t srv;
-	char *path;
 	sigset_t s;
 	int sig, x;
-
-	if (argc < 2) {
-		helptxt(argv[0]);
-		return EXIT_FAILURE;
-	}
-	path = argv[1];
-	if (strnlen(path, 4097) > 4096) {
-		fprintf(stderr, "path too long (max: 4096)\n");
-		return EXIT_FAILURE;
-	}
-	if (path[0] == '-') {
-		fprintf(stderr, "invalid path\n");
-		helptxt(argv[0]);
-		return EXIT_FAILURE;
-	}
 
 	x = getOpts(argc, argv);
 	if (x > 0) return EXIT_SUCCESS;
 	if (x < 0) return EXIT_FAILURE;
 
-	err = nowdb_library_init(&lib, path, 64);
+	err = nowdb_library_init(&lib, global_path, global_feedback, 64);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot initialise library\n");
+		LOGERR("cannot initialise library");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return EXIT_FAILURE;
@@ -480,7 +491,7 @@ int runServer(int argc, char **argv) {
 
 	/* make a nice welcome banner and an option to suppress it */
 	// fprintf(stderr, "server running\n");
-	banner(path);
+	banner(global_path);
 
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;
@@ -521,14 +532,14 @@ int runServer(int argc, char **argv) {
 	// stop listener
 	err = stopListener(&srv, listener);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot stop listener");
+		LOGERR("cannot stop listener: ");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		rc = EXIT_FAILURE;
 	}
 	// report listener error
 	if (srv.err != NOWDB_OK) {
-		fprintf(stderr, "error in listener:");
+		LOGERR("error in listener: ");
 		nowdb_err_print(srv.err);
 		nowdb_err_release(srv.err);
 		srv.err = NOWDB_OK;
@@ -537,7 +548,7 @@ int runServer(int argc, char **argv) {
 	// shutdown library
 	err = nowdb_library_shutdown(lib);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot shutdown library");
+		LOGERR("cannot shutdown library: ");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		rc = EXIT_FAILURE;

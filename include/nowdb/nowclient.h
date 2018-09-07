@@ -336,4 +336,10 @@ int nowdb_cursor_eof(nowdb_cursor_t cur);
  */
 int nowdb_cursor_ok(nowdb_cursor_t cur);
 
+/* ------------------------------------------------------------------------
+ * Get cursor id
+ * ------------------------------------------------------------------------
+ */
+uint64_t nowdb_cursor_id(nowdb_cursor_t cur);
+
 #endif 

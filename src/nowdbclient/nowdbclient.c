@@ -962,7 +962,7 @@ nowdb_row_t nowdb_row_copy(nowdb_row_t row) {
 	cp = (nowdb_row_t)mkResult(ROW(row)->con);
 	if (cp == NULL) return NULL;
 
-	ROW(cp)->rtype = ROW(row)->rtype;
+	ROW(cp)->rtype = NOWDB_ROW;
 	ROW(cp)->status = ROW(row)->status;
 	ROW(cp)->err = ROW(row)->err;
 	ROW(cp)->cur = ROW(row)->cur;
@@ -973,6 +973,15 @@ nowdb_row_t nowdb_row_copy(nowdb_row_t row) {
 	ROW(cp)->mybuf = NULL;
 
 	return cp;
+}
+
+/* ------------------------------------------------------------------------
+ * Get cursor id
+ * ------------------------------------------------------------------------
+ */
+uint64_t nowdb_cursor_id(nowdb_cursor_t cur) {
+	if (cur == NULL) return 0xffffffffffffffff;
+	return CUR(cur)->cur;
 }
 
 /* ------------------------------------------------------------------------
@@ -1108,3 +1117,4 @@ const char *nowdb_err_explain(int err) {
 	default: return "unknown client error";
 	}
 }
+

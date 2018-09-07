@@ -83,6 +83,10 @@ _rDetails = now.nowdb_result_details
 _rDetails.restype = c_char_p
 _rDetails.argtypes = [c_void_p]
 
+_rCurId = now.nowdb_cursor_id
+_rCurId.restype = c_ulonglong
+_rCurId.argtypes = [c_void_p]
+
 _rRow = now.nowdb_cursor_row
 _rRow.restype = c_void_p
 _rRow.argtypes = [c_void_p]
@@ -94,6 +98,10 @@ _rCopy.argtypes = [c_void_p]
 _rFetch = now.nowdb_cursor_fetch
 _rFetch.restype = c_long
 _rFetch.argtypes = [c_void_p]
+
+_rClose = now.nowdb_cursor_close
+_rClose.restype = c_long
+_rClose.argtypes = [c_void_p]
 
 _rField = now.nowdb_row_field
 _rField.restype = c_void_p
@@ -153,11 +161,18 @@ class Connection:
 class Result:
     def __init__(self, r):
         self.r = r
+        self.cur = None
+        if _rType(self.r) == CURSOR:
+            self.cur = _rCurId(self.r)
 
     def release(self):
-        # print "releasing"
-        _rDestroy(self.r)
+        x = 1
+        if self.cur != None:
+            x = _rClose(self.r)
+        if x != 0:
+            _rDestroy(self.r)
         self.r = None
+        self.cur = None
 
     def __enter__(self):
        return self

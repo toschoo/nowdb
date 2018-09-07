@@ -30,6 +30,7 @@ with Connection("127.0.0.1", "55505", None, None) as c:
     t = 0.0
     cnt = 0
     while r.ok():
+      print "r: %d" % r.rType()
       with r.row() as row:
         while True:
           s = row.field(0)
