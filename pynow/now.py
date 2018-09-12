@@ -162,10 +162,15 @@ class Result:
     def __init__(self, r):
         self.r = r
         self.cur = None
+        self.needNext = False
+        self.rw = None
         if _rType(self.r) == CURSOR:
             self.cur = _rCurId(self.r)
 
     def release(self):
+        if self.rw != None:
+            self.rw.release()
+
         x = 1
         if self.cur != None:
             x = _rClose(self.r)
@@ -174,25 +179,75 @@ class Result:
         self.r = None
         self.cur = None
 
+    # cursor is a resource manager
     def __enter__(self):
        return self
 
     def __exit__(self, a, b, c):
         self.release()
 
+    # cursor is an iterator
+    def __iter__(self):
+        if self.rType() == STATUS:
+            raise DBError(self.code(), self.details())
+          
+        if self.cur == None:
+            raise WrongType("result is not a cursor")
+
+        self.rw = self.row()
+        return self
+    
+    def __next__(self):
+        x = self.rType()
+        if x != CURSOR and x != ROW:
+            raise StopIteration
+
+        if not self.ok():
+            raise StopIteration
+
+        if self.needNext:
+            if not self.rw.nextRow():
+                self.rw.release()
+                self.rw = None
+                self.fetch()
+                if not self.ok():
+                    x = self.code()
+                    d = self.details()
+
+                    if x == EOF:
+                       raise StopIteration
+
+                    raise DBError(x, d)
+
+                self.NeedNext = False
+                self.rw = self.row()
+        else:
+            self.needNext = True
+
+        return self.rw
+
+    # the python 2 syntax is bad
+    def next(self):
+        return self.__next__()
+
+    # result type
     def rType(self):
         return _rType(self.r)
 
+    # status is ok
     def ok(self):
         x = _rStatus(self.r)
         return (x == 0)
 
+    # error code
     def code(self):
         return _rErrCode(self.r)
 
+    # error details
     def details(self):
         return _rDetails(self.r)
 
+    # get row from cursor
     def row(self):
         if self.rType() != CURSOR:
            raise WrongType("result is not a cursor")
@@ -201,7 +256,8 @@ class Result:
            raise ClientError(-1)
         return Result(r)
 
-    def next(self):
+    # next row from row
+    def nextRow(self):
         t = self.rType()
         if t != CURSOR and t != ROW:
             raise WrongType("result not a cursor nor a row")
@@ -212,6 +268,7 @@ class Result:
           return False
         raise ClientError(x)
 
+    # field from row
     def field(self, idx):
         x = self.rType()
         if x != CURSOR and x != ROW:
@@ -239,6 +296,7 @@ class Result:
         else:
             return None
 
+    # fetch a bunch for rows from cursor
     def fetch(self):
         if self.rType() != CURSOR and self.rType() != ROW:
             raise WrongType("result is not a cursor")
@@ -247,10 +305,12 @@ class Result:
         if x != 0:
             raise ClientError(x)
 
+    # end-of-file
     def eof(self):
         x = _rEof(self.r)
         return (x != 0)
 
+# something went wrong in the client
 class ClientError(Exception):
     def __init__(self, code):
         self.code = code
@@ -258,6 +318,18 @@ class ClientError(Exception):
     def __str__(self):
        return explain(self.code)
 
+# something went wrong in the db
+# is raised only in a for loop
+class DBError(Exception):
+    def __init__(self, code, details):
+        self.code = code
+        self.details = details
+
+    def __str__(self):
+       return str(self.code) + ": " + self.details
+
+# type mismatch: we are at the edge
+# of python dynamic typing to C static typing
 class WrongType(Exception):
     def __init__(self, s):
         self.str = s
