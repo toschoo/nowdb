@@ -103,6 +103,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_FUN: ASTCALLOC(2);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
+	case NOWDB_AST_FETCH: ASTCALLOC(0);
+	case NOWDB_AST_CLOSE: ASTCALLOC(0);
 
 	case NOWDB_AST_TARGET: ASTCALLOC(0);
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
@@ -188,6 +190,8 @@ static inline char *tellType(int ntype, int stype) {
 		}
 
 	case NOWDB_AST_USE: return "use";
+	case NOWDB_AST_FETCH: return "fetch";
+	case NOWDB_AST_CLOSE: return "close";
 
 	case NOWDB_AST_TARGET:
 		switch(stype) {
@@ -391,6 +395,8 @@ static inline int addmisc(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_USE: ADDKID(0);
+	case NOWDB_AST_FETCH: ADDKID(0);
+	case NOWDB_AST_CLOSE: ADDKID(0);
 	default: return -1;
 	}
 }

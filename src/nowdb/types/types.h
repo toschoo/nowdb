@@ -97,6 +97,18 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 
+#define NOWDB_EOR       0xa
+
+#define NOWDB_STATUS    0x21
+#define NOWDB_REPORT    0x22
+#define NOWDB_ROW       0x23
+#define NOWDB_CURSOR    0x24
+
+#define NOWDB_DELIM     0x3b
+
+#define NOWDB_ACK       0x4f
+#define NOWDB_NOK       0x4e
+
 #define NOWDB_UMAX ULLONG_MAX
 #define NOWDB_IMAX LLONG_MAX
 #define NOWDB_FMAX 9007199254740992ll

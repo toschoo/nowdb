@@ -8,6 +8,7 @@
 #include <nowdb/query/plan.h>
 #include <nowdb/query/cursor.h>
 #include <nowdb/index/index.h>
+#include <nowdb/ifc/nowdb.h>
 
 /* -------------------------------------------------------------------------
  * Macro for the very common error "invalid ast"
@@ -65,12 +66,14 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t dropScope(nowdb_ast_t  *op,
+                             nowdb_t      *lib,
                              nowdb_path_t  base,
                              char         *name) {
 	nowdb_ast_t *o;
-	nowdb_path_t p;
-	nowdb_scope_t *scope;
-	nowdb_err_t err;
+	nowdb_path_t p=NULL;
+	nowdb_scope_t *scope=NULL;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
 
 	p = nowdb_path_append(base, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -83,16 +86,57 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 		}
 	}
 
-	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
-	if (err != NOWDB_OK) return err;
-	
-	err = nowdb_scope_drop(scope);
-	if (err != NOWDB_OK) {
+	if (lib == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);free(p);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) return err;
+
 		nowdb_scope_destroy(scope); free(scope);
+
+		return NOWDB_OK;
+	}
+
+	err = nowdb_lock_write(lib->lock);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR ON LOCK: ");
+		nowdb_err_print(err);
 		return err;
 	}
-	nowdb_scope_destroy(scope); free(scope);
-	return NOWDB_OK;
+
+	err = nowdb_getScope(lib, name, &scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (scope == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);
+		if (err != NOWDB_OK) goto unlock;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) goto unlock;
+
+		nowdb_scope_destroy(scope); free(scope);
+		goto unlock;
+	}
+
+	err = nowdb_scope_close(scope);
+	if (err != NOWDB_OK) goto unlock;
+	
+	err = nowdb_scope_drop(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	nowdb_dropScope(lib, name);
+
+unlock:
+	if (p != NULL) free(p);
+	if (lib != NULL) {
+		err2 = nowdb_unlock_write(lib->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -748,26 +792,29 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
 			return NOWDB_OK;
 		}
 	}
-	return NOWDB_OK;
+	return err;
 }
 
 /* -------------------------------------------------------------------------
  * Find scope in list of open scopes
  * -------------------------------------------------------------------------
  */
-static inline void findScope(ts_algo_list_t *scopes,
-                             nowdb_path_t      path,
-                             nowdb_scope_t  **scope) {
-	ts_algo_list_node_t *runner;
-	nowdb_scope_t *tmp;
+static inline nowdb_err_t findScope(nowdb_t        *lib,
+                                    char           *name,
+                                    nowdb_scope_t **scope) {
+	if (lib == NULL) return NOWDB_OK;
+	return nowdb_getScope(lib, name, scope);
+}
 
-	if (scopes == NULL) return;
-	for(runner=scopes->head;runner!=NULL;runner=runner->nxt) {
-		tmp = runner->cont;
-		if (strcmp(tmp->path, path) == 0) {
-			*scope = tmp; break;
-		}
-	}
+/* -------------------------------------------------------------------------
+ * Add tist list of open scopes
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t addScope(nowdb_t       *lib,
+                                   char          *name,
+                                   nowdb_scope_t *scope) {
+	if (lib == NULL) return NOWDB_OK;
+	return nowdb_addScope(lib, name, scope);
 }
 
 /* -------------------------------------------------------------------------
@@ -775,33 +822,59 @@ static inline void findScope(ts_algo_list_t *scopes,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t handleUse(nowdb_ast_t        *ast,
-                             ts_algo_list_t  *scopes,
+                             nowdb_t            *lib,
                              nowdb_path_t       base,
                              nowdb_qry_result_t *res) {
 	nowdb_path_t p;
 	nowdb_scope_t *scope = NULL;
-	nowdb_err_t err;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
 	char *name;
 
 	name = nowdb_ast_getString(ast);
 	if (name == NULL) INVALIDAST("no name in AST");
 
-	p = nowdb_path_append(base, name);
-	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                        FALSE, OBJECT, "path.append");
+	if (lib != NULL) {
+		err = nowdb_lock_write(lib->lock);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "ERROR ON LOCK: ");
+			nowdb_err_print(err);
+			return err;
+		}
+	}
 
-	findScope(scopes, p, &scope);
+	err = findScope(lib, name, &scope);
+	if (err != NOWDB_OK) goto unlock;
+
 	if (scope != NULL) {
-		free(p);
 		res->result = scope;
-		return NOWDB_OK;
+		goto unlock;
+	}
+
+	p = nowdb_path_append(base, name);
+	if (p == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem,
+	                FALSE, OBJECT, "path.append");
+		goto unlock;
 	}
 
 	err = openScope(p, &scope); free(p);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) goto unlock;
+
+	err = addScope(lib, name, scope);
+	if (err != NOWDB_OK) goto unlock;
 
 	res->result = scope;
-	return NOWDB_OK;
+
+unlock:
+	if (lib != NULL) {
+		err2 = nowdb_unlock_write(lib->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -810,6 +883,7 @@ static nowdb_err_t handleUse(nowdb_ast_t        *ast,
  */
 static nowdb_err_t handleDDL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
+                                   void  *rsc,
                          nowdb_path_t    base,
                       nowdb_qry_result_t *res) 
 {
@@ -826,6 +900,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	if (trg == NULL) INVALIDAST("no target in AST");
 
 	if (trg->value == NULL) INVALIDAST("no target name in AST");
+
+	if (trg->stype != NOWDB_AST_SCOPE && scope == NULL) {
+		INVALIDAST("no scope");
+	}
 
 	/* create */
 	if (op->ntype == NOWDB_AST_CREATE) {
@@ -848,7 +926,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	else if (op->ntype == NOWDB_AST_DROP) {
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
-			return dropScope(op, base, trg->value);
+			return dropScope(op, rsc, base, trg->value);
 		case NOWDB_AST_CONTEXT:
 			return dropContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
@@ -928,6 +1006,8 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
                       nowdb_qry_result_t *res) {
 	nowdb_ast_t *op;
 	nowdb_ast_t *trg;
+
+	if (scope == NULL) INVALIDAST("no scope");
 	
 	res->resType = NOWDB_QRY_RESULT_REPORT;
 	res->result = NULL;
@@ -966,6 +1046,8 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	nowdb_cursor_t *cur;
 	ts_algo_list_t plan;
 
+	if (scope == NULL) INVALIDAST("no scope");
+
 	/* result is a cursor */
 	res->resType = NOWDB_QRY_RESULT_CURSOR;
 	res->result = NULL;
@@ -995,7 +1077,7 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
  */
 static nowdb_err_t handleMisc(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                        ts_algo_list_t *scopes,
+                          void            *rsc,
                           nowdb_path_t    base,
                        nowdb_qry_result_t *res) {
 	nowdb_ast_t *op;
@@ -1007,7 +1089,16 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 	case NOWDB_AST_USE: 
 		res->resType = NOWDB_QRY_RESULT_SCOPE;
 		res->result = NULL;
-		return handleUse(op, scopes, base, res);
+		return handleUse(op, rsc, base, res);
+
+	case NOWDB_AST_FETCH: 
+	case NOWDB_AST_CLOSE: 
+
+		if (scope == NULL) INVALIDAST("no scope");
+
+		res->resType = NOWDB_QRY_RESULT_OP;
+		res->result = op;
+		return NOWDB_OK;
 
 	default: INVALIDAST("invalid operation in AST");
 	}
@@ -1019,7 +1110,7 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
  */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                          ts_algo_list_t  *rsc,
+                          void            *rsc,
                           nowdb_path_t    base,
                        nowdb_qry_result_t *res) {
 	if (ast == NULL) return nowdb_err_get(nowdb_err_invalid,
@@ -1027,7 +1118,7 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
 	if (res == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                 FALSE, OBJECT, "result objet is NULL");
 	switch(ast->ntype) {
-	case NOWDB_AST_DDL: return handleDDL(ast, scope, base, res);
+	case NOWDB_AST_DDL: return handleDDL(ast, scope, rsc, base, res);
 	case NOWDB_AST_DLL: return handleDLL(ast, scope, res);
 	case NOWDB_AST_DML: return handleDML(ast, scope, res);
 	case NOWDB_AST_DQL: return handleDQL(ast, scope, res);

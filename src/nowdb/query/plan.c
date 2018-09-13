@@ -515,9 +515,17 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 		if (err != NOWDB_OK) return err;
 		err = getCondition(scope, trg, e, v, &(*b)->left,
 		                       nowdb_ast_operand(ast,1));
-		if (err != NOWDB_OK) return err;
-		return getCondition(scope, trg, e, v, &(*b)->right,
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(*b); free(*b);
+			return err;
+		}
+		err = getCondition(scope, trg, e, v, &(*b)->right,
 		                         nowdb_ast_operand(ast,2));
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(*b); free(*b);
+			return err;
+		}
+		return NOWDB_OK;
 
 	default:
 		INVALIDAST("unknown condition type in ast");

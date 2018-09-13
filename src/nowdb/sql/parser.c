@@ -7,6 +7,10 @@
 #include <nowdb/sql/lex.h>
 #include <nowdb/sql/state.h>
 
+#include <signal.h>
+
+#define BUFSIZE 8192
+
 /* -----------------------------------------------------------------------
  * Announce the token seen in the stream on stderr.
  * We should think of a tracer (e.g. NDEBUG).
@@ -33,9 +37,21 @@ void nowdb_sql_parseInit(void *parser);
  * Initialise the parser
  * -----------------------------------------------------------------------
  */
-int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
-	p->fd = fd;
+static inline int initParser(nowdbsql_parser_t *p, FILE *f, int fd) {
+	p->fd = f;
+	p->sock = fd;
 	p->errmsg = NULL;
+	p->buf = NULL;
+
+	p->streaming = f==NULL?1:0;
+
+	if (p->streaming) {
+		p->buf = malloc(BUFSIZE);
+		if (p->buf == NULL) return NOWDB_SQL_ERR_NO_MEM;
+	
+		sigemptyset(&p->sigs);
+		sigaddset(&p->sigs, SIGUSR1);
+	}
 
 	/* initialise our internal state */
 	if (nowdbsql_state_init(&p->st) != 0) return -1;
@@ -51,9 +67,26 @@ int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
 
 	/* initialise the lexer */
 	yylex_init(&p->sc);
-	yyset_in(fd, p->sc);
+
+	if (f != NULL) yyset_in(f, p->sc);
 
 	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Initialise the parser
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd) {
+	return initParser(p, fd, 0);
+}
+
+/* -----------------------------------------------------------------------
+ * Initialise the parser
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_initStreaming(nowdbsql_parser_t *p, int fd) {
+	return initParser(p, NULL, fd);
 }
 
 /* -----------------------------------------------------------------------
@@ -68,7 +101,12 @@ void nowdbsql_parser_destroy(nowdbsql_parser_t *p) {
 		nowdb_sql_parseFree(p->lp, free);
 		p->lp = NULL;
 	}
-
+	if (p->buf != NULL) {
+		free(p->buf); p->buf = NULL;
+	}
+	if (p->streaming && p->fd != NULL) {
+		fclose(p->fd); p->fd = NULL;
+	}
 	yylex_destroy(p->sc); p->sc = NULL;
 	nowdbsql_state_destroy(&p->st);
 	
@@ -174,6 +212,7 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		reinitHARD(p);
 		*ast = NULL; return err;
 	}
+
 	/* terminate the parser */
 	if(have) nowdb_sql_parse(p->lp , 0, NULL, &p->st);
 	else {
@@ -212,4 +251,79 @@ int nowdbsql_parser_buffer(nowdbsql_parser_t *p,
 
 	yy_delete_buffer(pst, p->sc);
 	return rc;
+}
+
+#define RETERR(e) \
+	{ \
+	pthread_sigmask(SIG_BLOCK, &p->sigs, NULL); \
+	return e; \
+	}
+
+#define SIGOFF() \
+	x = pthread_sigmask(SIG_UNBLOCK, &p->sigs, NULL); \
+	if (x != 0) return NOWDB_SQL_ERR_SIGNAL;
+
+#define SIGON() \
+	x = pthread_sigmask(SIG_BLOCK, &p->sigs, NULL); \
+	if (x != 0) return NOWDB_SQL_ERR_SIGNAL;
+
+/* ------------------------------------------------------------------------
+ * generic read
+ * ------------------------------------------------------------------------
+ */
+static inline int readN(int sock, char *buf, int sz) {
+	size_t t=0;
+	size_t x;
+
+	while(t<sz) {
+		x = read(sock, buf+t, sz-t);
+       		if (x <= 0) return x;
+		t+=x;
+	}
+	return t;
+}
+
+/* -----------------------------------------------------------------------
+ * Parse socket
+ * -----------------------------------------------------------------------
+ */
+int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
+	int x;
+	int size;
+	
+	for(;;) {
+		if (p->fd == NULL) {
+
+			SIGOFF();
+
+			x = readN(p->sock, (char*)&size, 4);
+			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
+			if (size > BUFSIZE) RETERR(NOWDB_SQL_ERR_BUFSIZE);
+			if (size <= 0) RETERR(NOWDB_SQL_ERR_PROTOCOL);
+
+			x = readN(p->sock, p->buf, size);
+			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
+			if (x != size) RETERR(NOWDB_SQL_ERR_PROTOCOL);
+
+			SIGON();
+
+			p->fd = fmemopen(p->buf, size, "r");
+			if (p->fd == NULL) return NOWDB_SQL_ERR_INPUT;
+			setbuf(p->fd, NULL);
+			yyset_in(p->fd, p->sc);
+		}
+		x = nowdbsql_parser_run(p, ast);
+		if ((x == 0 || x == NOWDB_SQL_ERR_EOF) && *ast == NULL) {
+			fclose(p->fd); p->fd = NULL;
+			continue;
+		}
+		if (x != 0) {
+			fclose(p->fd); p->fd = NULL;
+			yylex_destroy(p->sc);
+			yylex_init(&p->sc);
+			return x;
+		}
+		break;
+	}
+	return 0;
 }
