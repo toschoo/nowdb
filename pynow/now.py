@@ -24,6 +24,9 @@
 # -------------------------------------------------------------------------
 
 from ctypes import *
+from datetime import *
+from calendar import *
+from dateutil.tz import *
 
 # ---- load libraries -----------------------------------------------------
 libc = cdll.LoadLibrary("libc.so.6")
@@ -45,6 +48,8 @@ INT = 5
 UINT = 6
 
 EOF = 8
+
+utc = tzutc()
 
 # ---- C functions --------------------------------------------------------
 _explainError = now.nowdb_err_explain
@@ -119,6 +124,23 @@ _rEof.argtypes = [c_void_p]
 def explain(err):
     return _explainError(c_long(err))
 
+# ---- convert datetime to nowdb time
+def dt2now(dt):
+    x = timegm(dt.utctimetuple())
+    x *= 1000000
+    x += dt.microsecond
+    x *= 1000
+    return x
+
+# ---- convert nowdb time to datetime
+def now2dt(p):
+    t = p/1000 # to microseconds
+    s = t / 1000000 # to seconds
+    m = t - s * 1000000 # isolate microseconds
+    dt = datetime.fromtimestamp(s, utc)
+    dt += timedelta(microseconds=m)
+    return dt
+
 # ---- create a connection
 def connect(addr, port, usr, pwd):
     return Connection(addr, port, usr, pwd)
@@ -160,6 +182,7 @@ class Connection:
 # ---- result
 class Result:
     def __init__(self, r):
+        # print "result up"
         self.r = r
         self.cur = None
         self.needNext = False
@@ -168,6 +191,7 @@ class Result:
             self.cur = _rCurId(self.r)
 
     def release(self):
+        # print "result down"
         if self.rw != None:
             self.rw.release()
 

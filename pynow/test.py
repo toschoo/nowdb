@@ -16,16 +16,15 @@ with Connection("127.0.0.1", "55505", None, None) as c:
       exit(1)
 
     with r.row() as row:
-      s = row.field(0)
       m = row.field(1)
       w = row.field(2)
 
-    print "%s: %.4f %d" % (s, w, m)
+    print "sum: %.4f / count: %d" % (w, m)
 
   t = 0.0
   cnt = 0
 
-  with c.execute("select edge, destin, weight from tx \
+  with c.execute("select edge, destin, timestamp, weight from tx \
                    where edge='buys_product' \
                      and origin=419870620036") as cur:
 
@@ -33,18 +32,16 @@ with Connection("127.0.0.1", "55505", None, None) as c:
   
       s = row.field(0)
       d = row.field(1)
-      w = row.field(2)
+      dt = row.field(2)
+      w = row.field(3)
+      
+      ds = now2dt(dt).strftime("%Y-%m-%dT%H:%M:%S")
 
       t += w
       cnt += 1
 
-      print "%s: %d %.4f" % (s, d, w)
+      print "%s: %d (%s) %.4f" % (s, d, ds, w)
 
   print "sum: %.4f / count: %d" % (t,cnt)
-    
-# connection closed at this point
-print "explain -1: %s" % explain(-1)
-print "explain  8: %s" % explain(8)
-print "explain -2: %s" % explain(-2)
-print "explain -3: %s" % explain(-3)
-print "explain -4: %s" % explain(-4)
+
+

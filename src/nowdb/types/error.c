@@ -304,7 +304,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_listen: return "operation listen failed";
 	case nowdb_err_accept: return "operation accept failed";
 	case nowdb_err_protocol: return "protocol error";
-	case nowdb_err_server: return "inernal server error";
+	case nowdb_err_server: return "internal server error";
 	case nowdb_err_addr: return "cannot find address information";
 	default: return "unknown";
 	}
