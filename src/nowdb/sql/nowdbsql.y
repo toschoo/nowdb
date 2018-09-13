@@ -265,6 +265,12 @@ dql ::= projection_clause(P) from_clause(F) group_clause(G) order_clause(O). {
 misc ::= USE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_USE(I);
 }
+misc ::= FETCH UINTEGER(I). {
+	NOWDB_SQL_MAKE_FETCH(I);	
+}
+misc ::= CLOSE UINTEGER(I). {
+	NOWDB_SQL_MAKE_CLOSE(I);	
+}
 
 /* ------------------------------------------------------------------------
  *  Create Clause

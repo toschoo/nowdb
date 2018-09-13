@@ -27,7 +27,11 @@
 #define NOWDB_SQL_ERR_PARSER     5
 #define NOWDB_SQL_ERR_STACK      6
 #define NOWDB_SQL_ERR_EOF        7
-#define NOWDB_SQL_ERR_INPUT      8
+#define NOWDB_SQL_ERR_BUFSIZE    8
+#define NOWDB_SQL_ERR_INPUT      9
+#define NOWDB_SQL_ERR_CLOSED    10
+#define NOWDB_SQL_ERR_SIGNAL    11
+#define NOWDB_SQL_ERR_PROTOCOL  12
 #define NOWDB_SQL_ERR_PANIC     99
 #define NOWDB_SQL_ERR_UNKNOWN  100
 
@@ -191,6 +195,38 @@ typedef struct {
 	nowdb_ast_setValue(u, NOWDB_AST_V_STRING, S); \
 	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
 	NOWDB_SQL_ADDKID(m, u); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'FETCH'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_FETCH(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *f; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&f, NOWDB_AST_FETCH, 0); \
+	nowdb_ast_setValue(f, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, f); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'CLOSE'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_CLOSE(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *c; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&c, NOWDB_AST_CLOSE, 0); \
+	nowdb_ast_setValue(c, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, c); \
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------

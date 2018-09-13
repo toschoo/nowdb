@@ -20,17 +20,22 @@
 #include <nowdb/sql/nowdbsql.h>
 
 #include <stdio.h>
+#include <signal.h>
 
 /* ------------------------------------------------------------------------
  * Parser interface
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	void            *lp; /* lemon parser  */
-	yyscan_t         sc; /* scanner       */
-	nowdbsql_state_t st; /* parser state  */
-	FILE            *fd; /* input stream  */
-	char        *errmsg; /* error message */
+	void            *lp; /* lemon parser                 */
+	yyscan_t         sc; /* scanner                      */
+	nowdbsql_state_t st; /* parser state                 */
+	FILE            *fd; /* input stream                 */
+	int            sock; /* input socket                 */
+	char           *buf; /* buffer for socket            */
+	char        *errmsg; /* error message                */
+	sigset_t       sigs; /* signal set for stream parser */ 
+	char      streaming; /* streaming mode               */
 } nowdbsql_parser_t;
 
 /* ------------------------------------------------------------------------
@@ -38,6 +43,12 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 int nowdbsql_parser_init(nowdbsql_parser_t *p, FILE *fd);
+
+/* ------------------------------------------------------------------------
+ * Init the parser for socket
+ * ------------------------------------------------------------------------
+ */
+int nowdbsql_parser_initStreaming(nowdbsql_parser_t *p, int fd);
 
 /* ------------------------------------------------------------------------
  * Destroy the parser
@@ -63,6 +74,18 @@ const char *nowdbsql_parser_errmsg(nowdbsql_parser_t *p);
 int nowdbsql_parser_run(nowdbsql_parser_t *p,
                         nowdb_ast_t    **ast);
 
+
+/* ------------------------------------------------------------------------
+ * Run the parser on a socket
+ * --------------------------
+ * runs the parser on the input socket and
+ * produces an ast of one sql statement;
+ * the user is responsible for the memory management of the result.
+ * On error, the parser shall be destroyed and initialised again.
+ * ------------------------------------------------------------------------
+ */
+int nowdbsql_parser_runStream(nowdbsql_parser_t *p,
+                              nowdb_ast_t    **ast);
 
 /* ------------------------------------------------------------------------
  * Parse SQL from input buffer
