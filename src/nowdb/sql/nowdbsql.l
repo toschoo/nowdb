@@ -81,6 +81,8 @@
 (?i:TMSTMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:TSTAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:STAMP)		return NOWDB_SQL_TIMESTAMP;
+(?i:TRUE)		return NOWDB_SQL_TRUE;
+(?i:FALSE)		return NOWDB_SQL_FALSE;
 
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:FROM)		return NOWDB_SQL_FROM;

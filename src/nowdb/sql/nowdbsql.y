@@ -647,8 +647,12 @@ pj(P) ::= field(F). {
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
 }
 
+pj(P) ::= value(V). {
+        P=V;
+}
+
 pj(P) ::= fun(F). {
-	P = F;
+	P=F;
 }
 
 fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
@@ -841,5 +845,15 @@ value(V) ::= INTEGER(I). {
 value(V) ::= FLOAT(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_FLOAT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
+}
+value(V) ::= TRUE(T). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, T);
+}
+value(V) ::= FALSE(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
 	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
 }

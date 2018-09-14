@@ -1041,7 +1041,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		// fprintf(stderr, "%s\n", (char*)field->value);
+		fprintf(stderr, "%s\n", (char*)field->value);
 
 		flags = 0;
 
@@ -1052,6 +1052,11 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 			err = makeFun(trg, field, aggs);
 			if (err != NOWDB_OK) break;
+
+		} else if (field->ntype == NOWDB_AST_VALUE) {
+			fprintf(stderr, "VALUE: %s\n", (char*)field->value);
+			field = nowdb_ast_field(field);
+			continue;
 		}
 
 		f = calloc(1, sizeof(nowdb_field_t));
