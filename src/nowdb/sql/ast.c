@@ -1036,7 +1036,7 @@ nowdb_type_t nowdb_ast_type(uint32_t type) {
 	case NOWDB_AST_INT: return NOWDB_TYP_INT;
 	case NOWDB_AST_DATE: return NOWDB_TYP_DATE;
 	case NOWDB_AST_TIME: return NOWDB_TYP_TIME;
-	case NOWDB_AST_BOOL: return NOWDB_TYP_INT;
+	case NOWDB_AST_BOOL: return NOWDB_TYP_BOOL;
 	default: return NOWDB_TYP_NOTHING;
 	}
 	return NOWDB_TYP_NOTHING;

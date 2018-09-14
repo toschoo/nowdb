@@ -113,6 +113,10 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 				free(row->fields[i].name);
 				row->fields[i].name = NULL;
 			}
+			if (row->fields[i].value != NULL) {
+				free(row->fields[i].value);
+				row->fields[i].value = NULL;
+			}
 		}
 		free(row->fields); row->fields = NULL;
 	}
@@ -202,6 +206,50 @@ static inline nowdb_err_t projectFun(nowdb_row_t *row,
 	if (row->fur >= group->lst) {
 		nowdb_group_reset(group);
 		row->fur = 0;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: constant projection
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t projectConst(nowdb_field_t *field,
+                                       char *buf, uint32_t sz,
+                                       uint32_t *osz, char *nsp) {
+	uint32_t s;
+	char t=0;
+
+	switch(field->typ) {
+	case NOWDB_TYP_TEXT:
+		s = strlen(field->value);
+		if ((*osz)+s+2 > sz) {
+			*nsp = 1; return NOWDB_OK;
+		}
+		t = (char)NOWDB_TYP_TEXT;
+		memcpy(buf+(*osz), &t, 1); (*osz)++;
+		memcpy(buf+(*osz), field->value, s+1); (*osz)+=s+1;
+		break;
+
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_INT:
+	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_FLOAT:
+		HANDLEBINARY(field->value, field->typ);
+		break;
+
+	case NOWDB_TYP_BOOL:
+		if ((*osz)+2 >= sz) {
+			*nsp = 1; return NOWDB_OK;
+		}
+		t = (char)field->typ;
+		memcpy(buf+(*osz), &t, 1); (*osz)++;
+		memcpy(buf+(*osz), field->value, 1); (*osz)++;
+		break;
+
+	default: break;
+	
 	}
 	return NOWDB_OK;
 }
@@ -404,7 +452,16 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		}
 	}
 	for(int i=row->cur; i<row->sz; i++) {
-		if (row->fields[i].target == NOWDB_TARGET_EDGE) {
+		if (row->fields[i].target == NOWDB_TARGET_NULL) {
+			if (row->fields[i].value == NULL) continue;
+			err = projectConst(row->fields+i, buf, sz, osz, &nsp);
+			if (err != NOWDB_OK) return err;
+			if (nsp) {
+				row->cur = i;
+				return NOWDB_OK;
+			}
+
+		} else if (row->fields[i].target == NOWDB_TARGET_EDGE) {
 			if (row->fields[i].flags & NOWDB_FIELD_AGG) {
 				err = projectFun(row, group, buf, sz,
 				                          osz, &nsp);
@@ -469,14 +526,18 @@ nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream) {
 	char tmp[32];
 	uint32_t i=0;
 	char t;
+	char x=0;
 	while(i<sz) {
 		t = buf[i]; i++;
 		if (t == '\n') {
-			fprintf(stream, "\n"); continue;
+			fprintf(stream, "\n");
+			x=0; continue;
+		} else if (x) {
+			fprintf(stream, ";");
 		}
 		switch((nowdb_type_t)t) {
 		case NOWDB_TYP_TEXT:
-			fprintf(stream, "%s;", buf+i);
+			fprintf(stream, "%s", buf+i);
 			i+=strlen(buf+i)+1; break;
 
 		case NOWDB_TYP_DATE: 
@@ -485,24 +546,33 @@ nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream) {
 		                                        NOWDB_TIME_FORMAT,
 		                                                  tmp, 32);
 			if (err != NOWDB_OK) return err;
-			fprintf(stream, "%s;", tmp); i+=8; break;
+			fprintf(stream, "%s", tmp); i+=8; break;
 
 		case NOWDB_TYP_INT: 
-			fprintf(stream, "%ld;", *(int64_t*)(buf+i));
+			fprintf(stream, "%ld", *(int64_t*)(buf+i));
 			i+=8; break;
 
 		case NOWDB_TYP_UINT: 
-			fprintf(stream, "%lu;", *(uint64_t*)(buf+i));
+			fprintf(stream, "%lu", *(uint64_t*)(buf+i));
 			i+=8; break;
 
 		case NOWDB_TYP_FLOAT: 
-			fprintf(stream, "%.4f;", *(double*)(buf+i));
+			fprintf(stream, "%.4f", *(double*)(buf+i));
 			i+=8; break;
+
+		case NOWDB_TYP_BOOL: 
+			if (*(char*)(buf+i) == 0) {
+				fprintf(stream, "false");
+			} else {
+				fprintf(stream, "true");
+			}
+			i++; break;
 
 		default:
 			return nowdb_err_get(nowdb_err_invalid,
 			  FALSE, OBJECT, "unknown type in row");
 		}
+		x=1;
 	}
 	fflush(stream);
 	return NOWDB_OK;

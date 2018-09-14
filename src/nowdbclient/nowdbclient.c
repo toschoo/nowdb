@@ -58,6 +58,7 @@
 #define NOWDB_UINT     6
 #define NOWDB_COMPLEX  7
 #define NOWDB_LONGTEXT 8
+#define NOWDB_BOOL     9
 
 #define EOROW 0xa
 
@@ -759,6 +760,14 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 		case NOWDB_FLOAT: 
 			fprintf(stream, "%.4f", *(double*)(buf+i));
 			i+=8; break;
+
+		case NOWDB_BOOL: 
+			if (*(char*)(buf+i) == 0) {
+				fprintf(stream, "false");
+			} else {
+				fprintf(stream, "true");
+			}
+			i++; break;
 
 		case NOWDB_NOTHING:
 			i+=8; break;

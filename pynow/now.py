@@ -46,6 +46,7 @@ TIME = 3
 FLOAT = 4
 INT = 5
 UINT = 6
+BOOL = 9
 
 EOF = 8
 
@@ -316,6 +317,12 @@ class Result:
         elif t.value == FLOAT:
             f = cast(v,POINTER(c_double))
             return f[0]
+
+        elif t.value == BOOL:
+            f = cast(v,POINTER(c_byte))
+            if f[0] == 0:
+                return False
+            return True
 
         else:
             return None

@@ -116,6 +116,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
+      $(SRC)/fun/expr.h       \
       $(SRC)/fun/fun.h        \
       $(SRC)/fun/group.h      \
       $(SRC)/query/row.h      \

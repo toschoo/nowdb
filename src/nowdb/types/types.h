@@ -81,6 +81,7 @@ typedef uint64_t nowdb_value_t;
 /* context or vertex */
 typedef char nowdb_target_t;
 
+#define NOWDB_TARGET_NULL    0
 #define NOWDB_TARGET_EDGE    1
 #define NOWDB_TARGET_VERTEX  2
 
@@ -96,6 +97,7 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_UINT     6
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
+#define NOWDB_TYP_BOOL     9
 
 #define NOWDB_EOR       0xa
 
