@@ -500,6 +500,13 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 	}
 	(*ses)->bufsz = BUFSIZE;
 
+	err = nowdb_proc_create(&(*ses)->proc, lib, NULL);
+	if (err != NOWDB_OK) {
+		nowdb_session_destroy(*ses);
+		free(*ses); *ses = NULL;
+		return err;
+	}
+
 	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
 		nowdb_session_destroy(*ses);
@@ -793,6 +800,10 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 	if (ses->cursors != NULL) {
 		ts_algo_tree_destroy(ses->cursors);
 		free(ses->cursors); ses->cursors = NULL;
+	}
+	if (ses->proc != NULL) {
+		nowdb_proc_destroy(ses->proc);
+		free(ses->proc); ses->proc = NULL;
 	}
 	if (ses->lock != NULL) {
 		nowdb_lock_destroy(ses->lock);
@@ -1146,7 +1157,9 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_REPORT: return sendReport(ses, &res);
 
 	case NOWDB_QRY_RESULT_SCOPE:
-		ses->scope = res.result; return sendOK(ses);
+		ses->scope = res.result;
+		nowdb_proc_setScope(ses->proc, ses->scope);
+		return sendOK(ses);
 
 	case NOWDB_QRY_RESULT_CURSOR:
 		return openCursor(ses, res.result);

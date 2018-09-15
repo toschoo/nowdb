@@ -14,6 +14,7 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/sql/parser.h>
 #include <nowdb/query/cursor.h>
+#include <nowdb/ifc/proc.h>
 
 #include <tsalgo/tree.h>
 #include <tsalgo/list.h>
@@ -63,8 +64,9 @@ typedef struct {
 	ts_algo_list_node_t *node; /* where to find us                    */
 	char                 *buf; /* result buffer                       */
 	ts_algo_tree_t   *cursors; /* open cursors                        */
-	uint32_t            bufsz; /* result buffer size                  */
+	nowdb_proc_t        *proc; /* stored procedure interface          */
 	uint64_t            curid; /* next free cursorid                  */
+	uint32_t            bufsz; /* result buffer size                  */
 	int               istream; /* incoming stream                     */
 	int               ostream; /* outgoing stream (may be == istream) */
 	int               estream; /* error stream (may be == ostream)    */

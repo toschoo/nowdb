@@ -84,6 +84,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/query/row.o      \
       $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
+      $(SRC)/ifc/proc.o       \
       $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/types.h    \
@@ -128,6 +129,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
       $(SRC)/sql/parser.h     \
+      $(SRC)/ifc/proc.h       \
       $(SRC)/ifc/nowdb.h
 
 CLIENTDEP = $(HDR)/errcode.h  \
