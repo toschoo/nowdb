@@ -66,7 +66,7 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t dropScope(nowdb_ast_t  *op,
-                             nowdb_t      *lib,
+                             void         *rsc,
                              nowdb_path_t  base,
                              char         *name) {
 	nowdb_ast_t *o;
@@ -74,6 +74,7 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 	nowdb_scope_t *scope=NULL;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
+	nowdb_t *lib = nowdb_proc_getLib(rsc);
 
 	p = nowdb_path_append(base, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -822,13 +823,14 @@ static inline nowdb_err_t addScope(nowdb_t       *lib,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t handleUse(nowdb_ast_t        *ast,
-                             nowdb_t            *lib,
+                             void               *rsc,
                              nowdb_path_t       base,
                              nowdb_qry_result_t *res) {
 	nowdb_path_t p;
 	nowdb_scope_t *scope = NULL;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
+	nowdb_t *lib = nowdb_proc_getLib(rsc);
 	char *name;
 
 	name = nowdb_ast_getString(ast);
@@ -875,6 +877,38 @@ unlock:
 		}
 	}
 	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Handle execute statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleExec(nowdb_ast_t        *ast,
+                              void               *rsc,
+                              nowdb_qry_result_t *res) {
+	// nowdb_ast_t *params;
+	char *pname;
+
+	pname = ast->value;
+	if (pname == NULL) INVALIDAST("procedure without name");
+
+	// check if we already have the procedure in our session arsenal
+	//
+	// if not:
+	//     get procedure from scope
+	//     and add it to the session (i.e. to proc)
+	// 
+	// instantiate arguments
+	//
+	// get PyThread 
+	// run procedure
+	// get result
+	// save threadstate
+
+	fprintf(stderr, "executing %s\n", pname);
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
+	return NOWDB_OK;
 }
 
 /* -------------------------------------------------------------------------
@@ -1090,6 +1124,9 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		res->resType = NOWDB_QRY_RESULT_SCOPE;
 		res->result = NULL;
 		return handleUse(op, rsc, base, res);
+
+	case NOWDB_AST_EXEC:
+		return handleExec(op, rsc, res);
 
 	case NOWDB_AST_FETCH: 
 	case NOWDB_AST_CLOSE: 

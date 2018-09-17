@@ -95,3 +95,21 @@ void nowdb_proc_setScope(nowdb_proc_t  *proc,
                          nowdb_scope_t *scope) {
 	proc->scope = scope;
 }
+
+/* ------------------------------------------------------------------------
+ * Get scope from proc interface
+ * ------------------------------------------------------------------------
+ */
+nowdb_scope_t *nowdb_proc_getScope(nowdb_proc_t *proc) {
+	return proc->scope;
+}
+
+/* ------------------------------------------------------------------------
+ * Get lib from proc interface
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_proc_getLib(nowdb_proc_t *proc) {
+	if (proc == NULL) return NULL;
+	return proc->lib;
+}
+

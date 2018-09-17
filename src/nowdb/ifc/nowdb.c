@@ -1165,7 +1165,7 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	// it would be nice if we could distinguish between
 	// internal errors and errors specific to this query
 	// unfortunately, we cannot; so we may leak internals
-	err = nowdb_stmt_handle(ast, ses->scope, ses->lib, path, &res);
+	err = nowdb_stmt_handle(ast, ses->scope, ses->proc, path, &res);
 	if (err != NOWDB_OK) return sendErr(ses, err, ast);
 
 	switch(res.resType) {

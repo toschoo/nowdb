@@ -50,6 +50,23 @@ void nowdb_proc_destroy(nowdb_proc_t *proc);
 void nowdb_proc_setScope(nowdb_proc_t  *proc, 
                          nowdb_scope_t *scope);
 
+/* ------------------------------------------------------------------------
+ * Get scope from proc interface
+ * ------------------------------------------------------------------------
+ */
+nowdb_scope_t *nowdb_proc_getScope(nowdb_proc_t *proc);
+
+/* ------------------------------------------------------------------------
+ * Get lib from proc interface
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_proc_getLib(nowdb_proc_t *proc);
+
+// execute sql statement
+// result
+// cursor
+
+
 // execute sql statement
 // result
 // cursor
