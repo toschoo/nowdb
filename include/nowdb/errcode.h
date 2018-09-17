@@ -77,6 +77,7 @@
 #define nowdb_err_accept          68
 #define nowdb_err_server          69
 #define nowdb_err_addr            70
+#define nowdb_err_python          71
 #define nowdb_err_unknown       9999
 #endif
 

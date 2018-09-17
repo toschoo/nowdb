@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	err = nowdb_library_init(&nowdb, path, 5);
+	err = nowdb_library_init(&nowdb, path, 5, 1, 0);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init library\n");
 		nowdb_err_print(err);

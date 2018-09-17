@@ -306,6 +306,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_protocol: return "protocol error";
 	case nowdb_err_server: return "internal server error";
 	case nowdb_err_addr: return "cannot find address information";
+	case nowdb_err_python: return "python api error";
 	default: return "unknown";
 	}
 }

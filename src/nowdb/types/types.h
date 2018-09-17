@@ -23,6 +23,10 @@
 #define popcount64
 #endif
 
+#ifdef _NOWDB_WITH_PYTHON
+#define NOWDB_INC_PYTHON <python2.7/Python.h>
+#endif
+
 #define NOWDB_MAGIC 0x450099db
 
 #define NOWDB_VERSION 1

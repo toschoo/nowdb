@@ -45,7 +45,9 @@ typedef struct nowdb_cursor_t* nowdb_cursor_t;
 typedef struct nowdb_session_t* nowdb_session_t;
 
 // init and close library
-nowdb_err_t nowdb_library_init(nowdb_t *nowdb, char *base, int nthreads);
+nowdb_err_t nowdb_library_init(nowdb_t *nowdb, char *base,
+                               int loglvl, int nthreads,
+                               uint64_t flags);
 void nowdb_library_close(nowdb_t nowdb);
 nowdb_err_t nowdb_library_shutdown(nowdb_t nowdb);
 

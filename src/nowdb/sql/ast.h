@@ -126,6 +126,7 @@
 #define NOWDB_AST_USE    5001
 #define NOWDB_AST_FETCH  5002
 #define NOWDB_AST_CLOSE  5003
+#define NOWDB_AST_EXEC   5004
 
 /* -----------------------------------------------------------------------
  * Generic targets

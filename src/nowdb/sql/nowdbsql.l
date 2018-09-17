@@ -93,6 +93,8 @@
 (?i:AND)		return NOWDB_SQL_AND;
 (?i:OR)			return NOWDB_SQL_OR;
 (?i:NOT)		return NOWDB_SQL_NOT;
+(?i:EXECUTE)		return NOWDB_SQL_EXECUTE;
+(?i:EXEC)		return NOWDB_SQL_EXECUTE;
 
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;

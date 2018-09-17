@@ -151,7 +151,8 @@ static inline nowdb_err_t readN(int sock, char *buf, int sz) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
-                                int loglvl, int nthreads) {
+                                int loglvl, int nthreads,
+                                uint64_t flags) {
 	nowdb_err_t err;
 	sigset_t s;
 	int x;
@@ -226,6 +227,16 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		NOMEM("tree.new");
 		return err;
 	}
+
+#ifdef _NOWDB_WITH_PYTHON
+	if (flags & NOWDB_ENABLE_PYTHON) {
+		(*lib)->pyEnabled = 1;
+
+		Py_Initialize(); // init python interpreter
+		PyEval_InitThreads(); // init threads
+		(*lib)->mst = PyEval_SaveThread(); // save thread state
+	}
+#endif
 	return NOWDB_OK;
 }
 
@@ -331,6 +342,12 @@ void nowdb_library_close(nowdb_t *lib) {
 		nowdb_rwlock_destroy(lib->lock);
 		free(lib->lock); lib->lock = NULL;
 	}
+#ifdef _NOWDB_WITH_PYTHON
+	if (lib->pyEnabled && lib->mst != NULL) {
+		PyEval_RestoreThread(lib->mst);
+		Py_Finalize();
+	}
+#endif
 	free(lib);
 	nowdb_close();
 }

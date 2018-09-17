@@ -98,7 +98,7 @@ typedef struct {
 	size_t x; \
 	char *z; \
 	if (s != NULL) { \
-		x = strnlen(s, 255); \
+		x = strnlen(s, 257); \
 		if (x > 2) { \
 			z = malloc(x-1); \
 			if (z == NULL) { \
@@ -227,6 +227,24 @@ typedef struct {
 	nowdb_ast_setValue(c, NOWDB_AST_V_STRING, u); \
 	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
 	NOWDB_SQL_ADDKID(m, c); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'EXECUTE'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_EXEC(N,P) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *x; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_EXEC, 0); \
+	nowdb_ast_setValue(x, NOWDB_AST_V_STRING, N); \
+	if (P != NULL) \
+		NOWDB_SQL_ADDKID(x, P); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, x); \
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------

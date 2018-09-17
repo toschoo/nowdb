@@ -12,18 +12,41 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/sql/parser.h>
 
+#ifdef _NOWDB_WITH_PYTHON
+#include NOWDB_INC_PYTHON
+#endif
+
+/* ------------------------------------------------------------------------
+ * Stored procedure interface
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	void              *lib;    /* server lib    */
-	nowdb_scope_t     *scope;  /* current scope */
-	nowdbsql_parser_t *parser; /* string parser */
+	void              *lib;    /* server lib                */
+	nowdb_scope_t     *scope;  /* current scope             */
+	nowdbsql_parser_t *parser; /* string parser             */
+#ifdef _NOWDB_WITH_PYTHON
+	PyThreadState     *pyIntp; /* Python interpreter thread */
+#endif
 } nowdb_proc_t;
 
+/* ------------------------------------------------------------------------
+ * Create proc interface
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_proc_create(nowdb_proc_t **proc,
                               void          *lib,
                               nowdb_scope_t *scope);
 
+/* ------------------------------------------------------------------------
+ * Destroy proc interface
+ * ------------------------------------------------------------------------
+ */
 void nowdb_proc_destroy(nowdb_proc_t *proc);
 
+/* ------------------------------------------------------------------------
+ * Set current scope to proc interface
+ * ------------------------------------------------------------------------
+ */
 void nowdb_proc_setScope(nowdb_proc_t  *proc, 
                          nowdb_scope_t *scope);
 

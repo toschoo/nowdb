@@ -17,7 +17,11 @@ FLGMSG = @printf "CFLAGS: $(CFLAGS)\nLDFLAGS: $(LDFLAGS)\n"
 
 INSMSG = @printf ". setenv.sh"
 
-CFLAGS = -O3 -g -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
+CFLAGS = -O3 -g -Wall -std=c99 -fPIC \
+         -D_GNU_SOURCE \
+         -D_POSIX_C_SOURCE=200809L \
+         -D_NOWDB_WITH_PYTHON
+
 LDFLAGS = -L./lib
 
 INC = -I./include -I./test -I./src -I./
@@ -41,7 +45,8 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv
+LIBPY = python2.7
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
 clibs = -lm -lpthread -ltsalgo
 
 OBJ = $(SRC)/types/types.o    \

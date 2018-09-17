@@ -44,6 +44,7 @@ char *global_db = NULL;
 char global_feedback = 1;
 char global_timing = 0;
 char global_banner = 1;
+char global_python = 0;
 
 /* -----------------------------------------------------------------------
  * produce some output
@@ -91,7 +92,7 @@ void printVersion() {
  * -----------------------------------------------------------------------
  */
 int getOpts(int argc, char **argv) {
-	char *opts = "b:p:s:tqVh?";
+	char *opts = "b:p:s:tqyVh?";
 	char c;
 
 	while((c = getopt(argc, argv, opts)) != -1) {
@@ -126,6 +127,13 @@ int getOpts(int argc, char **argv) {
 			}
 			break;
 
+		case 'y':
+
+#ifdef _NOWDB_WITH_PYTHON
+			global_python=1;
+#endif
+			break;
+
 		case 't': global_timing=1; break;
 		case 'q': global_feedback=0; break;
 		case 'n': global_banner=0; break;
@@ -146,7 +154,7 @@ int getOpts(int argc, char **argv) {
  * banner
  * -----------------------------------------------------------------------
  */
-void banner(char *path) {
+void banner(nowdb_t *lib, char *path) {
 char tstr[32];
 nowdb_err_t err;
 nowdb_time_t tm;
@@ -179,6 +187,16 @@ fprintf(stdout, " \n");
 fprintf(stdout, "  UTC %s\n", tstr);
 fprintf(stdout, " \n");
 fprintf(stdout, "  The server is ready\n");
+#ifdef _NOWDB_WITH_PYTHON
+fprintf(stdout, " \n");
+fprintf(stdout, "    - with python support ");
+if (lib->pyEnabled) {
+	fprintf(stdout, "enabled\n");
+} else {
+	fprintf(stdout, "disabled\n");
+}
+fprintf(stdout, " \n");
+#endif
 fprintf(stdout, " \n");
 fprintf(stdout, " \n");
 fprintf(stdout, "+---------------------------------------------------------------+\n");
@@ -424,12 +442,18 @@ int runServer(int argc, char **argv) {
 	srv_t srv;
 	sigset_t s;
 	int sig, x;
+	uint64_t flags = 0;
 
 	x = getOpts(argc, argv);
 	if (x > 0) return EXIT_SUCCESS;
 	if (x < 0) return EXIT_FAILURE;
 
-	err = nowdb_library_init(&lib, global_path, global_feedback, 64);
+	if (global_python)
+		flags |= NOWDB_ENABLE_PYTHON;
+
+	err = nowdb_library_init(&lib, global_path,
+	                               global_feedback,
+	                               64, flags);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot initialise library");
 		nowdb_err_print(err);
@@ -491,7 +515,7 @@ int runServer(int argc, char **argv) {
 
 	/* make a nice welcome banner and an option to suppress it */
 	// fprintf(stderr, "server running\n");
-	banner(global_path);
+	banner(lib, global_path);
 
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;
