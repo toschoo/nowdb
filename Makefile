@@ -650,6 +650,7 @@ clean:
 	rm -rf $(RSC)/scope???
 	rm -rf $(RSC)/client???
 	rm -rf $(RSC)/iman??
+	rm -rf $(RSC)/pman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
