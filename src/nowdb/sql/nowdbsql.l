@@ -25,6 +25,7 @@
 
 %%
 
+"."			return NOWDB_SQL_DOT;
 ";"			return NOWDB_SQL_SEMICOLON;
 "="			return NOWDB_SQL_EQ;
 ","			return NOWDB_SQL_COMMA;
@@ -57,6 +58,7 @@
 (?i:TABLE)		return NOWDB_SQL_CONTEXT;
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
+(?i:PROCEDURE)		return NOWDB_SQL_PROCEDURE;
 
 (?i:TYPE)		return NOWDB_SQL_TYPE;
 (?i:TEXT)		return NOWDB_SQL_TEXT;
@@ -95,6 +97,7 @@
 (?i:NOT)		return NOWDB_SQL_NOT;
 (?i:EXECUTE)		return NOWDB_SQL_EXECUTE;
 (?i:EXEC)		return NOWDB_SQL_EXECUTE;
+(?i:LANGUAGE)		return NOWDB_SQL_LANGUAGE;
 
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;

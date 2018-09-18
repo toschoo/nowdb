@@ -9,6 +9,7 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
+ * - expression in select and where
  * - qualified names
  * - aliases
  * - joins
@@ -337,6 +338,10 @@ create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
 create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
 	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
 	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR RPAR LANGUAGE IDENTIFIER(L). {
+	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, NULL);
 }
 
 index_target(T) ::= IDENTIFIER(I). {

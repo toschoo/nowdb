@@ -148,6 +148,8 @@
 #define NOWDB_AST_ON       10105
 #define NOWDB_AST_TYPE     10106
 #define NOWDB_AST_EDGE     10107
+#define NOWDB_AST_PROC     10108
+#define NOWDB_AST_MODULE   10109
 
 /* -----------------------------------------------------------------------
  * Options
@@ -165,6 +167,7 @@
 #define NOWDB_AST_STRESS   10209
 #define NOWDB_AST_IGNORE   10210
 #define NOWDB_AST_PK       10211
+#define NOWDB_AST_LANG     10212
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:

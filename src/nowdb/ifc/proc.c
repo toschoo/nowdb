@@ -113,3 +113,26 @@ void *nowdb_proc_getLib(nowdb_proc_t *proc) {
 	return proc->lib;
 }
 
+/* ------------------------------------------------------------------------
+ * Get PyThread from proc interface
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_proc_getInterpreter(nowdb_proc_t *proc) {
+#ifdef _NOWDB_WITH_PYTHON
+	return proc->pyIntp;
+#else
+	return NULL;
+#endif
+}
+
+/* ------------------------------------------------------------------------
+ * Get PyThread from proc interface
+ * ------------------------------------------------------------------------
+ */
+void nowdb_proc_updateInterpreter(nowdb_proc_t *proc, void *intp) {
+#ifdef _NOWDB_WITH_PYTHON
+	proc->pyIntp = intp;
+#endif
+}
+
+

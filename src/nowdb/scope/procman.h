@@ -21,6 +21,10 @@
 #define NOWDB_STORED_PROC   1
 #define NOWDB_STORED_FUN    2
 
+/* ------------------------------------------------------------------------
+ * Stored Procedure/Function Manager
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_rwlock_t  *lock;
 	char            *base;
@@ -28,6 +32,10 @@ typedef struct {
 	ts_algo_tree_t *procs;
 } nowdb_procman_t;
 
+/* ------------------------------------------------------------------------
+ * Procedure Descriptor
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	char   *name;
 	uint16_t typ;
@@ -35,14 +43,27 @@ typedef struct {
 	void    *def;
 } nowdb_proc_arg_t;
 
+/* ------------------------------------------------------------------------
+ * Helper to destroy parameters
+ * ------------------------------------------------------------------------
+ */
+void nowdb_proc_args_destroy(uint16_t argn, nowdb_proc_arg_t *args);
+
+/* ------------------------------------------------------------------------
+ * Procedure Descriptor
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
-	char             *name;
-	char           *module;
-	nowdb_proc_arg_t *args;
-	uint16_t          argn;
-	char              type;
-	char              lang;
+	char             *name; /* procedure / function name    */
+	char           *module; /* module from where to load it */
+	nowdb_proc_arg_t *args; /* parameters                   */
+	uint16_t          argn; /* number of parameters         */
+	uint16_t         rtype; /* return type                  */
+	char              type; /* procedure / function         */
+	char              lang; /* language                     */
 } nowdb_proc_desc_t;
+
+void nowdb_proc_desc_destroy(nowdb_proc_desc_t *pd);
 
 nowdb_err_t nowdb_procman_new(nowdb_procman_t **pm,
                               nowdb_path_t    base);

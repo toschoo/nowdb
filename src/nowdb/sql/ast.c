@@ -107,7 +107,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_CLOSE: ASTCALLOC(0);
 	case NOWDB_AST_EXEC: ASTCALLOC(1);
 
-	case NOWDB_AST_TARGET: ASTCALLOC(0);
+	case NOWDB_AST_TARGET: ASTCALLOC(1);
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
 	case NOWDB_AST_PATH:   ASTCALLOC(0);
 	case NOWDB_AST_DATA:   ASTCALLOC(1);
@@ -181,6 +181,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_INT: return "int field"; 
 		case NOWDB_AST_DATE: return "date field"; 
 		case NOWDB_AST_TIME: return "time field"; 
+		case NOWDB_AST_BOOL: return "bool field"; 
 		case NOWDB_AST_TYPE: return "user defined"; 
 		default: return "unknown field type";
 		}
@@ -204,6 +205,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_INDEX: return "index";
 		case NOWDB_AST_TYPE: return "type";
 		case NOWDB_AST_EDGE: return "edge";
+		case NOWDB_AST_PROC: return "procedure";
+		case NOWDB_AST_MODULE: return "module";
 		default: return "unknown target";
 		}
 
@@ -230,6 +233,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_USE: return "option use";
 		case NOWDB_AST_PK: return "primary key";
 		case NOWDB_AST_TYPE: return "as type";
+		case NOWDB_AST_LANG: return "language";
 		default: return "unknown option";
 		}
 
@@ -692,6 +696,18 @@ static inline int addexec(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
+ * Add kid to target (module)
+ * -----------------------------------------------------------------------
+ */
+static inline int addtrg(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TARGET: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Add kid to any node
  * -----------------------------------------------------------------------
  */
@@ -728,7 +744,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_EXEC: return addexec(n,k);
 
-	case NOWDB_AST_TARGET:   return -1;
+	case NOWDB_AST_TARGET: return addtrg(n,k);
 	case NOWDB_AST_ON:       return -1;
 	case NOWDB_AST_OPTION:   return addopt(n,k);
 	case NOWDB_AST_SIZING:   return -1;

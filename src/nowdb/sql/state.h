@@ -268,8 +268,8 @@ typedef struct {
  * Parameters:
  * - C: the ast representing the CREATE
  * - x: the target subcode
- * - t: the target identifier
- * - v: an option to be added
+ * - I: the target identifier
+ * - O: an option to be added
  * ------------------------------------------------------------------------
  */
 #define NOWDB_SQL_MAKE_CREATE(C,x,I,O) \
@@ -281,6 +281,41 @@ typedef struct {
 	NOWDB_SQL_ADDKID(C, t); \
 	if (O != NULL) { \
 		NOWDB_SQL_ADDKID(C,O); \
+	}
+
+/* ------------------------------------------------------------------------
+ * Make a 'CREATE PROCEDURE' statement
+ * Parameters:
+ * - C: the ast representing the CREATE
+ * - M: the module
+ * - N: the name of the procedure
+ * - L: the language
+ * - r: the return type (0: procedure)
+ * - P: parameter list
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_PROC(C, M, N, L, r, P) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	nowdb_ast_t *m; \
+	nowdb_ast_t *o; \
+	nowdb_ast_t *o2; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_CREATE, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, NOWDB_AST_PROC); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_TARGET, NOWDB_AST_MODULE); \
+	NOWDB_SQL_CREATEAST(&o, NOWDB_AST_OPTION, NOWDB_AST_LANG); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, N); \
+	nowdb_ast_setValue(m, NOWDB_AST_V_STRING, M); \
+	nowdb_ast_setValue(o, NOWDB_AST_V_STRING, L); \
+	NOWDB_SQL_ADDKID(t, m); \
+	NOWDB_SQL_ADDKID(C, t); \
+	NOWDB_SQL_ADDKID(C, o); \
+	if (r != 0) { \
+		NOWDB_SQL_CREATEAST(&o2, NOWDB_AST_OPTION, r); \
+		NOWDB_SQL_ADDKID(C,o2); \
+	}\
+	if (P != NULL) { \
+		NOWDB_SQL_ADDKID(C,P); \
 	}
 
 /* ------------------------------------------------------------------------

@@ -62,6 +62,18 @@ nowdb_scope_t *nowdb_proc_getScope(nowdb_proc_t *proc);
  */
 void *nowdb_proc_getLib(nowdb_proc_t *proc);
 
+/* ------------------------------------------------------------------------
+ * Get PyThread from proc interface
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_proc_getInterpreter(nowdb_proc_t *proc);
+
+/* ------------------------------------------------------------------------
+ * Get PyThread from proc interface
+ * ------------------------------------------------------------------------
+ */
+void nowdb_proc_updateInterpreter(nowdb_proc_t *proc, void *intp);
+
 // execute sql statement
 // result
 // cursor
