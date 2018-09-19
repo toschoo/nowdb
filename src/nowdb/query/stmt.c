@@ -1088,12 +1088,20 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 	nowdb_err_t err;
 	nowdb_ast_t *p;
 	nowdb_value_t v;
+	int x;
 	double d;
 	uint64_t u;
 	int64_t l;
-	// PyObject *tpl;
 
-	if (params == NULL) return NOWDB_OK;
+	if (pd->argn == 0) {
+		if (params == NULL) return NOWDB_OK;
+		PYTHONERR("too many arguments");
+		return err;
+	}
+	if (params == NULL) {
+		PYTHONERR("not enough parameters");
+		return err;
+	}
 
 	*args = PyTuple_New((Py_ssize_t)pd->argn);
 	if (*args == NULL) NOMEM("allocating Python tuple");
@@ -1101,6 +1109,7 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 	p = params;
 	for(uint16_t i=0; i<pd->argn; i++) {
 		if (p == NULL) {
+			Py_DECREF(*args);
 			PYTHONERR("not enough parameters");
 			return err;
 		}
@@ -1115,7 +1124,7 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			            pd->args[i].typ,
                                            &v) != 0)
 			{
-				// dec
+				Py_DECREF(*args);
 				INVALID("conversion error");
 				return err;
 			}
@@ -1128,7 +1137,7 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			   (Py_ssize_t)pd->args[i].pos,
 			    Py_BuildValue("s", p->value)) != 0) 
 			{
-				// dec
+				Py_DECREF(*args);
 				PYTHONERR("cannot set item to tuple");
 				return err;
 			}
@@ -1140,7 +1149,7 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			   (Py_ssize_t)pd->args[i].pos,
 			    Py_BuildValue("d", d)) != 0) 
 			{
-				// dec
+				Py_DECREF(*args);
 				PYTHONERR("cannot set item to tuple");
 				return err;
 			}
@@ -1152,7 +1161,7 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			   (Py_ssize_t)pd->args[i].pos,
 			    Py_BuildValue("K", u)) != 0) 
 			{
-				// dec
+				Py_DECREF(*args);
 				PYTHONERR("cannot set item to tuple");
 				return err;
 			}
@@ -1166,23 +1175,42 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			   (Py_ssize_t)pd->args[i].pos,
 			    Py_BuildValue("L", l)) != 0) 
 			{
-				// dec
+				Py_DECREF(*args);
 				PYTHONERR("cannot set item to tuple");
 				return err;
 			}
 			break;
 
 		case NOWDB_TYP_BOOL:
-			// s[0] = '0';
-			break; // special case!!!
+			if (v) {
+				x = PyTuple_SetItem(*args,
+				    (Py_ssize_t)pd->args[i].pos,
+				     Py_True);
+			} else {
+				x = PyTuple_SetItem(*args,
+				    (Py_ssize_t)pd->args[i].pos,
+				     Py_False);
+			}
+			if (x != 0) {
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
 
 		default:
 			fprintf(stderr, "INVALID TYPE (%hu): %hu\n",
 			        pd->args[i].pos, pd->args[i].typ);
+			Py_DECREF(*args);
 			INVALID("invalid parameter type");
 			return err;
 		}
 		p = nowdb_ast_param(p);
+	}
+	if (p != NULL) {
+		Py_DECREF(*args);
+		PYTHONERR("too many arguments");
+		return err;
 	}
 	return NOWDB_OK;
 }
@@ -1208,7 +1236,6 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 	PyObject *r;
 	PyObject *args=NULL;
 #endif
-
 	lib = nowdb_proc_getLib(rsc);
 	if (lib == NULL) {
 		INVALID("no library in session");
@@ -1271,12 +1298,34 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 
 	fprintf(stderr, "executing %s\n", pname);
 	r = PyObject_CallObject(f, args);
-
-	// get result
-	fprintf(stderr, "result: %p\n", r);
+	if (args != NULL) Py_DECREF(args);
 
 	res->resType = NOWDB_QRY_RESULT_NOTHING;
 	res->result  = NULL;
+
+	// get result
+	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
+	if (fst == NULL) {
+		fprintf(stderr, "cannot parse result %p\n", r);
+		PyErr_Print();
+	} else {
+		// this is not 1:1
+		// we need in Python:
+		// status, report, single value, cursor
+		res->resType = (uint16_t)PyLong_AsLong(fst);
+		fprintf(stderr, "RESULT: %hu\n", res->resType);
+	}
+	if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
+		fprintf(stderr, "not nothing\n");
+		PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
+		if (snd == NULL) {
+			fprintf(stderr, "cannot parse result %p\n", r);
+			PyErr_Print();
+		} else {
+			res->result = PyLong_AsVoidPtr(snd);
+		}
+	} 
+	Py_DECREF(r);
 
 	nowdb_proc_updateInterpreter(rsc);
 
