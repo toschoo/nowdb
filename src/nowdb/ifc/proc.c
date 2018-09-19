@@ -129,9 +129,9 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc) {
  * Get PyThread from proc interface
  * ------------------------------------------------------------------------
  */
-void nowdb_proc_updateInterpreter(nowdb_proc_t *proc, void *intp) {
+void nowdb_proc_updateInterpreter(nowdb_proc_t *proc) {
 #ifdef _NOWDB_WITH_PYTHON
-	proc->pyIntp = intp;
+	proc->pyIntp = PyEval_SaveThread();
 #endif
 }
 

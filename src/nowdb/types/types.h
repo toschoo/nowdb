@@ -103,6 +103,8 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_LONGTEXT 8
 #define NOWDB_TYP_BOOL     9
 
+int nowdb_strtoval(char *str, nowdb_type_t typ, void *value);
+
 #define NOWDB_EOR       0xa
 
 #define NOWDB_STATUS    0x21

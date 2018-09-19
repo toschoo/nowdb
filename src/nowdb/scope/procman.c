@@ -93,8 +93,8 @@ static nowdb_err_t copyDesc(nowdb_proc_desc_t *src,
 			destroyDesc(trg);
 			return err;
 		}
-		trg->args[i].typ = trg->args[i].typ;
-		trg->args[i].pos = trg->args[i].pos;
+		trg->args[i].typ = src->args[i].typ;
+		trg->args[i].pos = src->args[i].pos;
 		trg->args[i].def = NULL;
 	}
 	return NOWDB_OK;
@@ -570,7 +570,7 @@ static inline void argSize(nowdb_proc_arg_t *arg,
                            uint32_t *agg) {
 	size_t s;
 
-	s = strnlen(arg->name,256);
+	s = arg->name==NULL?0:strnlen(arg->name,256);
 	(*agg)+=s+1;
 	(*agg)+=2*sizeof(uint16_t);
 }

@@ -855,6 +855,8 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_FROM: return ast->kids[0];
 
+	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
+
 	default: return NULL;
 	}
 }
@@ -904,6 +906,8 @@ nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
 	if (ast == NULL) return NULL;
 	switch(ast->ntype) {
 	case NOWDB_AST_FUN: return ast->kids[0];
+	case NOWDB_AST_EXEC: return ast->kids[0];
+	case NOWDB_AST_VALUE: return ast->kids[0];
 	default: return NULL;
 	}
 }

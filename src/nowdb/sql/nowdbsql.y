@@ -344,6 +344,11 @@ create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR RPAR 
 	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, NULL);
 }
 
+/* field_decl_list also allows PK! */
+create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR field_decl_list(P) RPAR LANGUAGE IDENTIFIER(L). {
+	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, P);
+}
+
 index_target(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_ON, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
@@ -425,6 +430,9 @@ type(T) ::= INT. {
 type(T) ::= UINT. {
 	T=NOWDB_AST_UINT;
 }
+type(T) ::= BOOL. {
+	T=NOWDB_AST_BOOL;
+}
 type ::= LONGTEXT.
 
 /* ------------------------------------------------------------------------
@@ -449,6 +457,10 @@ drop_clause(C) ::= DROP TYPE IDENTIFIER(I). {
 
 drop_clause(C) ::= DROP EDGE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_EDGE,I,NULL);
+}
+
+drop_clause(C) ::= DROP PROCEDURE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_PROC,I,NULL);
 }
 
 /* ------------------------------------------------------------------------

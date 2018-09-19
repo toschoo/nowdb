@@ -33,7 +33,7 @@ typedef struct {
 } nowdb_procman_t;
 
 /* ------------------------------------------------------------------------
- * Procedure Descriptor
+ * Procedure Argument Descriptor
  * ------------------------------------------------------------------------
  */
 typedef struct {

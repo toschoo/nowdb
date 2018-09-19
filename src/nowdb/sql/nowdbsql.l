@@ -69,6 +69,8 @@
 (?i:INTEGER)		return NOWDB_SQL_INT;
 (?i:UINT)		return NOWDB_SQL_UINT;
 (?i:UINTEGER)		return NOWDB_SQL_UINT;
+(?i:BOOL)		return NOWDB_SQL_BOOL;
+(?i:BOOLEAN)		return NOWDB_SQL_BOOL;
 (?i:PRIMARY\ KEY)	return NOWDB_SQL_PK;
 (?i:PK)			return NOWDB_SQL_PK;
 

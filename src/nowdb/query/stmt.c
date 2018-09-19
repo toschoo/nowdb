@@ -31,6 +31,13 @@
 #define INVALID(s) \
 	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "python error"
+ * -------------------------------------------------------------------------
+ */
+#define PYTHONERR(s) \
+	err = nowdb_err_get(nowdb_err_python, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
 
 /* -------------------------------------------------------------------------
@@ -534,6 +541,142 @@ static nowdb_err_t dropEdge(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Create Procedure
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createProc(nowdb_ast_t  *op,
+                              nowdb_ast_t *trg,
+                          nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_proc_desc_t *pd;
+	nowdb_ast_t  *l;
+	nowdb_ast_t  *m;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *p;
+	nowdb_ast_t  *r;
+	char *module;
+	char *name;
+	char *lang;
+	char lx, rx;
+	int i=0;
+
+	// name and module
+	name = trg->value;
+	if (name == NULL) INVALIDAST("no target name in AST");
+
+	m = nowdb_ast_target(trg);
+	if (m == NULL) INVALIDAST("no module in AST 'target'");
+
+	module = m->value;
+	if (module == NULL) INVALIDAST("no module name in AST");
+
+	// language
+	l = nowdb_ast_option(op, NOWDB_AST_LANG);
+	if (l == NULL) INVALIDAST("no language AST");
+
+	lang = l->value;
+	if (lang == NULL) INVALIDAST("no name in language option");
+
+	if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
+	else INVALIDAST("unknown language in AST");
+
+	// return type
+	r = nowdb_ast_option(op, NOWDB_AST_TYPE);
+	if (r == NULL) rx = 0;
+	else {
+		rx = nowdb_ast_type((uint16_t)(uint64_t)r->value);
+	}
+
+	// make proc descriptor
+	pd = calloc(1, sizeof(nowdb_proc_desc_t));
+	if (pd == NULL) NOMEM("allocating proc descriptor");
+
+	pd->name = strdup(name);
+	if (pd->name == NULL) {
+		free(pd);
+		NOMEM("allocating procedure name");
+	}
+
+	pd->module = strdup(module);
+	if (pd->module == NULL) {
+		free(pd->name); free(pd);
+		NOMEM("allocating module name");
+	}
+
+	pd->lang = lx;
+	pd->rtype = rx;
+	pd->type = rx==0?NOWDB_STORED_PROC:NOWDB_STORED_FUN;
+	
+	// arguments
+	pd->argn = 0;
+	pd->args = NULL;
+
+	p = nowdb_ast_declare(op);
+	while(p!=NULL) {
+		pd->argn++;
+		p = nowdb_ast_declare(p);
+	}
+
+	fprintf(stderr, "parameters: %u\n", pd->argn);
+	pd->args = calloc(pd->argn, sizeof(nowdb_proc_arg_t));
+	if (pd->args == NULL) {
+		nowdb_proc_desc_destroy(pd); free(pd);
+		NOMEM("allocating procedure parameters");
+	}
+
+	p = nowdb_ast_declare(op); i=0;
+	while(p!=NULL) {
+		fprintf(stderr, "parameter %s (%d)\n",
+		            (char*)p->value, p->stype);
+
+		pd->args[i].name = strdup(p->value);
+		if (pd->args[i].name == NULL) {
+			nowdb_proc_desc_destroy(pd); free(pd);
+			NOMEM("allocating parameter name");
+		}
+		pd->args[i].typ = nowdb_ast_type(p->stype);
+		pd->args[i].pos = i; // caution!
+
+		p = nowdb_ast_declare(p); i++;
+	}
+	
+	err = nowdb_scope_createProcedure(scope, pd);
+	if (err != NOWDB_OK) {
+		nowdb_proc_desc_destroy(pd); free(pd);
+	}
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Proc
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropProc(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropProcedure(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
  * Load a file
  * TODO:
  * - Should be more versatile,
@@ -935,6 +1078,117 @@ static PyObject *loadPyFun(char *module, char *name) {
 #endif
 
 /* -------------------------------------------------------------------------
+ * Helper: load arguments for python function
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
+                              nowdb_ast_t   *params,
+                              PyObject       **args) {
+	nowdb_err_t err;
+	nowdb_ast_t *p;
+	nowdb_value_t v;
+	double d;
+	uint64_t u;
+	int64_t l;
+	// PyObject *tpl;
+
+	if (params == NULL) return NOWDB_OK;
+
+	*args = PyTuple_New((Py_ssize_t)pd->argn);
+	if (*args == NULL) NOMEM("allocating Python tuple");
+
+	p = params;
+	for(uint16_t i=0; i<pd->argn; i++) {
+		if (p == NULL) {
+			PYTHONERR("not enough parameters");
+			return err;
+		}
+
+		/*
+		fprintf(stderr, "parameter %hu (%hu): %s\n",
+		     pd->args[i].pos,  pd->args[i].typ, (char*)p->value);
+		*/
+
+		if (pd->args[i].typ != NOWDB_TYP_TEXT) {
+			if (nowdb_strtoval(p->value,
+			            pd->args[i].typ,
+                                           &v) != 0)
+			{
+				// dec
+				INVALID("conversion error");
+				return err;
+			}
+		}
+
+		switch(pd->args[i].typ) {
+
+		case NOWDB_TYP_TEXT:
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("s", p->value)) != 0) 
+			{
+				// dec
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+ 
+		case NOWDB_TYP_FLOAT: 
+			memcpy(&d, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("d", d)) != 0) 
+			{
+				// dec
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_UINT: 
+			memcpy(&u, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("K", u)) != 0) 
+			{
+				// dec
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_INT: 
+		case NOWDB_TYP_DATE: 
+		case NOWDB_TYP_TIME: 
+			memcpy(&l, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("L", l)) != 0) 
+			{
+				// dec
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_BOOL:
+			// s[0] = '0';
+			break; // special case!!!
+
+		default:
+			fprintf(stderr, "INVALID TYPE (%hu): %hu\n",
+			        pd->args[i].pos, pd->args[i].typ);
+			INVALID("invalid parameter type");
+			return err;
+		}
+		p = nowdb_ast_param(p);
+	}
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
  * Handle execute statement
  * -------------------------------------------------------------------------
  */
@@ -952,6 +1206,7 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 	PyThreadState *ts;
 	PyObject *f;
 	PyObject *r;
+	PyObject *args=NULL;
 #endif
 
 	lib = nowdb_proc_getLib(rsc);
@@ -978,10 +1233,6 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 		return err;
 	}
 
-	// 
-	// instantiate arguments
-	//
-
 #ifdef _NOWDB_WITH_PYTHON
 	ts = nowdb_proc_getInterpreter(rsc);
 	if (ts == NULL) {
@@ -1004,11 +1255,22 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 		err = nowdb_err_get(nowdb_err_unk_symbol, FALSE, OBJECT,
 		                                               pd->name);
 		nowdb_proc_desc_destroy(pd); free(pd);
+		nowdb_proc_updateInterpreter(rsc);
+		return err;
+	}
+
+	// load arguments
+	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "PY ARGS NOT LOADED\n");
+		nowdb_err_print(err);
+		nowdb_proc_desc_destroy(pd); free(pd);
+		nowdb_proc_updateInterpreter(rsc);
 		return err;
 	}
 
 	fprintf(stderr, "executing %s\n", pname);
-	r = PyObject_CallObject(f, NULL);
+	r = PyObject_CallObject(f, args);
 
 	// get result
 	fprintf(stderr, "result: %p\n", r);
@@ -1016,8 +1278,7 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 	res->resType = NOWDB_QRY_RESULT_NOTHING;
 	res->result  = NULL;
 
-	nowdb_proc_updateInterpreter(rsc, 
-	             PyEval_SaveThread());
+	nowdb_proc_updateInterpreter(rsc);
 
 	return NOWDB_OK;
 #else
@@ -1067,6 +1328,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createType(op, trg->value, scope);
 		case NOWDB_AST_EDGE:
 			return createEdge(op, trg->value, scope);
+		case NOWDB_AST_PROC:
+			return createProc(op, trg, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -1084,6 +1347,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropType(op, trg->value, scope);
 		case NOWDB_AST_EDGE:
 			return dropEdge(op, trg->value, scope);
+		case NOWDB_AST_PROC:
+			return dropProc(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}

@@ -311,7 +311,8 @@ typedef struct {
 	NOWDB_SQL_ADDKID(C, t); \
 	NOWDB_SQL_ADDKID(C, o); \
 	if (r != 0) { \
-		NOWDB_SQL_CREATEAST(&o2, NOWDB_AST_OPTION, r); \
+		NOWDB_SQL_CREATEAST(&o2, NOWDB_AST_OPTION, NOWDB_AST_TYPE); \
+		nowdb_ast_setValue(o2, NOWDB_AST_V_INTEGER, r); \
 		NOWDB_SQL_ADDKID(C,o2); \
 	}\
 	if (P != NULL) { \

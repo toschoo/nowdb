@@ -125,6 +125,52 @@ static inline void setValue(nowdb_vertex_t *v, nowdb_type_t typ,
 	}
 }
 
+int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
+	char *tmp;
+	double d;
+	uint64_t u;
+	int64_t i;
+
+	switch(t) {
+	case NOWDB_TYP_FLOAT:
+		d = strtod(str, &tmp);
+		if (*tmp != 0) return -1;
+		memcpy(value, &d, 8);
+		break;
+
+	case NOWDB_TYP_INT:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_DATE:
+		i = strtol(str, &tmp, 10);
+		if (*tmp != 0) return -1;
+		memcpy(value, &i, 8);
+		break;
+
+	case NOWDB_TYP_UINT:
+		u = strtoul(str, &tmp, 10);
+		if (*tmp != 0) return -1;
+		memcpy(value, &u, 8);
+		break;
+
+	case NOWDB_TYP_BOOL:
+		if (strcasecmp(str, "true") == 0) u=1;
+		else if (strcasecmp(str, "false") == 0) u=0;
+		else return -1;
+		memcpy(value, &u, 8);
+		break;
+
+	case NOWDB_TYP_TEXT:
+	case NOWDB_TYP_LONGTEXT:
+		return 1;
+
+	case NOWDB_TYP_COMPLEX:
+	case NOWDB_TYP_NOTHING:
+	default:
+		return -1;
+	}
+	return 0;
+}
+
 static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
                                     char *value, char what) 
 {
@@ -165,6 +211,14 @@ static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
 			if (what == 0) e->weight = 0; else e->weight2 = 0;
 			return -1;
 		}
+		if (what == 0) memcpy(&e->weight, &u, 8);
+		else memcpy(&e->weight2, &u, 8);
+		break;
+
+	case NOWDB_TYP_BOOL:
+		if (strcasecmp(value, "true") == 0) u=1;
+		else if (strcasecmp(value, "false") == 0) u=0;
+		else return -1;
 		if (what == 0) memcpy(&e->weight, &u, 8);
 		else memcpy(&e->weight2, &u, 8);
 		break;
@@ -211,6 +265,13 @@ static inline int strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value)
 		if (*tmp != 0) {
 			v->value = 0; return -1;
 		}
+		memcpy(&v->value, &u, 8);
+		break;
+
+	case NOWDB_TYP_BOOL:
+		if (strcasecmp(value, "true") == 0) u=1;
+		else if (strcasecmp(value, "false") == 0) u=0;
+		else return -1;
 		memcpy(&v->value, &u, 8);
 		break;
 
