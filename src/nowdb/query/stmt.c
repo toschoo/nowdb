@@ -1030,54 +1030,6 @@ unlock:
 }
 
 /* -------------------------------------------------------------------------
- * Helper: load function from Python
- * -------------------------------------------------------------------------
- */
-#ifdef _NOWDB_WITH_PYTHON
-static PyObject *loadPyFun(char *module, char *name) {
-	PyObject *mn=NULL;
-	PyObject *m=NULL;
-	PyObject *d=NULL;
-	PyObject *f=NULL;
-
-	mn = PyString_FromString(module);
-	if (mn == NULL) {
-		fprintf(stderr, "cannot convert %s to PyString\n", module);
-		PyErr_Print();
-    		return NULL;
-	}
-
-  	m = PyImport_Import(mn); Py_DECREF(mn);
-	if (m == NULL) {
-		fprintf(stderr, "cannot import module\n");
-		PyErr_Print();
-    		return NULL;
-	}
-
-	d = PyModule_GetDict(m);
-	if (d == NULL) {
-		fprintf(stderr, "cannot get dictionary\n");
-		PyErr_Print();
-		Py_DECREF(m);
-    		return NULL;
-	}
-	Py_DECREF(m);
-
-	f = PyDict_GetItemString(d, name);
-	if (f == NULL) {
-		fprintf(stderr, "cannot get function\n");
-		PyErr_Print();
-		return NULL;
-	}
-	if (!PyCallable_Check(f)) {
-		fprintf(stderr, "function not callable\n");
-		return NULL;
-	}
-	return f;
-}
-#endif
-
-/* -------------------------------------------------------------------------
  * Helper: load arguments for python function
  * -------------------------------------------------------------------------
  */
@@ -1224,15 +1176,13 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
                               void               *rsc,
                               nowdb_qry_result_t *res) {
 	nowdb_err_t err;
-	// nowdb_ast_t *params;
 	char *pname;
-	nowdb_scope_t *scope;
 	nowdb_proc_desc_t *pd;
 	nowdb_t *lib;
+	void    *f;
 
 #ifdef _NOWDB_WITH_PYTHON
 	PyThreadState *ts;
-	PyObject *f;
 	PyObject *r;
 	PyObject *args=NULL;
 #endif
@@ -1245,95 +1195,79 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 	pname = ast->value;
 	if (pname == NULL) INVALIDAST("procedure without name");
 
-	scope = nowdb_proc_getScope(rsc);
-	if (scope == NULL) {
-		INVALID("no scope set in session");
-		return err;
-	}
-
-	err = nowdb_scope_getProcedure(scope, pname, &pd);
+	err = nowdb_proc_loadFun(rsc, pname, &pd, &f);
 	if (err != NOWDB_OK) return err;
 
-	if (pd->lang == NOWDB_STORED_PYTHON && !lib->pyEnabled) {
-		nowdb_proc_desc_destroy(pd); free(pd);
-		INVALID("feature not enabled: Python");
-		return err;
-	}
+	switch(pd->lang) {
+	case NOWDB_STORED_PYTHON:
+
+ 		if (!lib->pyEnabled) {
+			INVALID("feature not enabled: Python");
+			return err;
+		}
 
 #ifdef _NOWDB_WITH_PYTHON
-	ts = nowdb_proc_getInterpreter(rsc);
-	if (ts == NULL) {
-		nowdb_proc_desc_destroy(pd); free(pd);
-		INVALID("no interpreter");
-		return err;
-	}
+		ts = nowdb_proc_getInterpreter(rsc);
+		if (ts == NULL) {
+			INVALID("no interpreter");
+			return err;
+		}
 
-	PyEval_RestoreThread(ts);
+		PyEval_RestoreThread(ts);
 	
-	// we should load the module once
-	// and store the function and the dictionary
-	// in two different trees in the proc
-	// this way:
-	// 1) we accelerate the execution
-	// 2) we avoid running the same script
-	//    with different versions of the function!
-	f = loadPyFun(pd->module, pd->name);
-	if (f == NULL) {
-		err = nowdb_err_get(nowdb_err_unk_symbol, FALSE, OBJECT,
-		                                               pd->name);
-		nowdb_proc_desc_destroy(pd); free(pd);
-		nowdb_proc_updateInterpreter(rsc);
-		return err;
-	}
+		// load arguments
+		err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "PY ARGS NOT LOADED\n");
+			nowdb_err_print(err);
+			nowdb_proc_updateInterpreter(rsc);
+			return err;
+		}
 
-	// load arguments
-	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "PY ARGS NOT LOADED\n");
-		nowdb_err_print(err);
-		nowdb_proc_desc_destroy(pd); free(pd);
-		nowdb_proc_updateInterpreter(rsc);
-		return err;
-	}
+		fprintf(stderr, "executing %s\n", pname);
+		r = PyObject_CallObject(f, args);
+		if (args != NULL) Py_DECREF(args);
 
-	fprintf(stderr, "executing %s\n", pname);
-	r = PyObject_CallObject(f, args);
-	if (args != NULL) Py_DECREF(args);
+		res->resType = NOWDB_QRY_RESULT_NOTHING;
+		res->result  = NULL;
 
-	res->resType = NOWDB_QRY_RESULT_NOTHING;
-	res->result  = NULL;
-
-	// get result
-	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
-	if (fst == NULL) {
-		fprintf(stderr, "cannot parse result %p\n", r);
-		PyErr_Print();
-	} else {
-		// this is not 1:1
-		// we need in Python:
-		// status, report, single value, cursor
-		res->resType = (uint16_t)PyLong_AsLong(fst);
-		fprintf(stderr, "RESULT: %hu\n", res->resType);
-	}
-	if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
-		fprintf(stderr, "not nothing\n");
-		PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
-		if (snd == NULL) {
+		// get result
+		PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
+		if (fst == NULL) {
 			fprintf(stderr, "cannot parse result %p\n", r);
 			PyErr_Print();
 		} else {
-			res->result = PyLong_AsVoidPtr(snd);
+			// this is not 1:1
+			// we need in Python:
+			// status, report, single value, cursor
+			res->resType = (uint16_t)PyLong_AsLong(fst);
+			fprintf(stderr, "RESULT: %hu\n", res->resType);
 		}
-	} 
-	Py_DECREF(r);
+		if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
+			fprintf(stderr, "not nothing\n");
+			PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
+			if (snd == NULL) {
+				fprintf(stderr, "cannot parse result %p\n", r);
+				PyErr_Print();
+			} else {
+				res->result = PyLong_AsVoidPtr(snd);
+			}
+		} 
+		Py_DECREF(r);
 
-	nowdb_proc_updateInterpreter(rsc);
+		nowdb_proc_updateInterpreter(rsc);
 
-	return NOWDB_OK;
+		return NOWDB_OK;
 #else
 	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                "python not supported");
 #endif
+
+	default:
+		INVALID("unknown language");
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 /* -------------------------------------------------------------------------

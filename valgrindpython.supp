@@ -84,7 +84,7 @@
    Memcheck:Leak
    fun:realloc
    fun:_PyObject_GC_Resize
-   fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
+   # fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
 }
 
 {
@@ -92,7 +92,7 @@
    Memcheck:Leak
    fun:malloc
    fun:_PyObject_GC_New
-   fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
+   # fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
 }
 
 {
@@ -100,7 +100,7 @@
    Memcheck:Leak
    fun:malloc
    fun:_PyObject_GC_NewVar
-   fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
+   # fun:COMMENT_THIS_LINE_TO_DISABLE_LEAK_WARNING
 }
 
 #
@@ -138,11 +138,11 @@
 }
 
 # added by me, ts
-{
-   ADDRESS_IN_RANGE/528 bytes in 1 blocks are possibly lost in loss record
-   Memcheck:Leak
-   fun:_PyObject_GC_Malloc
-}
+# {
+#    ADDRESS_IN_RANGE/528 bytes in 1 blocks are possibly lost in loss record
+#    Memcheck:Leak
+#    fun:_PyObject_GC_Malloc
+# }
 
 {
    ADDRESS_IN_RANGE/Invalid read of size 4

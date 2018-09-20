@@ -1364,22 +1364,6 @@ static void leaveSession(nowdb_session_t *ses) {
 
 	// fprintf(stderr, "leaving session\n");
 
-	err = nowdb_lock_write(LIB(ses->lib)->lock);
-	if (err != NOWDB_OK) {
-		SETERR();
-		return;
-	}
-
-	// move session from used to free list
-	ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
-	addNode(LIB(ses->lib)->fthreads, ses->node);
-
-	err = nowdb_unlock_write(LIB(ses->lib)->lock);
-	if (err != NOWDB_OK) {
-		SETERR();
-		return;
-	}
-
 	// free resources
 	if (ses->parser != NULL) {
 		nowdbsql_parser_destroy(ses->parser);
@@ -1388,6 +1372,27 @@ static void leaveSession(nowdb_session_t *ses) {
 	if (ses->cursors != NULL) {
 		ts_algo_tree_destroy(ses->cursors);
 		free(ses->cursors); ses->cursors = NULL;
+	}
+
+	err = nowdb_proc_reinit(ses->proc);
+	if (err != NOWDB_OK) {
+		SETERR();
+	}
+
+	// move session from used to free list
+	err = nowdb_lock_write(LIB(ses->lib)->lock);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return;
+	}
+
+	ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
+	addNode(LIB(ses->lib)->fthreads, ses->node);
+
+	err = nowdb_unlock_write(LIB(ses->lib)->lock);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return;
 	}
 }
 
