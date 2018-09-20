@@ -1169,6 +1169,83 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 #endif
 
 /* -------------------------------------------------------------------------
+ * Helper: load arguments for python function
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
+                                     nowdb_proc_t      *proc,
+                                     nowdb_proc_desc_t   *pd,
+                                     PyObject             *f,
+                                     nowdb_qry_result_t *res)
+{
+	nowdb_err_t err;
+	PyThreadState *ts;
+	PyObject *r;
+	PyObject *args=NULL;
+
+	ts = nowdb_proc_getInterpreter(proc);
+	if (ts == NULL) {
+		INVALID("no interpreter");
+		return err;
+	}
+
+	PyEval_RestoreThread(ts);
+	
+	// load arguments
+	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "PY ARGS NOT LOADED\n");
+		nowdb_err_print(err);
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+
+	fprintf(stderr, "executing %s\n", pd->name);
+	r = PyObject_CallObject(f, args);
+	if (args != NULL) Py_DECREF(args);
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
+
+	// get result
+	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
+	if (fst == NULL) {
+		PYTHONERR("cannot parse result");
+		PyErr_Print();
+		Py_DECREF(r);
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+
+	} else {
+		// this is not 1:1
+		// we need in Python:
+		// status, report, single value, cursor
+		res->resType = (uint16_t)PyLong_AsLong(fst);
+		fprintf(stderr, "RESULT: %hu\n", res->resType);
+	}
+	if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
+		fprintf(stderr, "not nothing\n");
+		PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
+		if (snd == NULL) {
+			PYTHONERR("cannot parse result");
+			PyErr_Print();
+			Py_DECREF(r);
+			nowdb_proc_updateInterpreter(proc);
+			return err;
+		} else {
+			res->result = PyLong_AsVoidPtr(snd);
+		}
+	} 
+	Py_DECREF(r);
+
+	nowdb_proc_updateInterpreter(proc);
+
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
  * Handle execute statement
  * -------------------------------------------------------------------------
  */
@@ -1181,11 +1258,6 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 	nowdb_t *lib;
 	void    *f;
 
-#ifdef _NOWDB_WITH_PYTHON
-	PyThreadState *ts;
-	PyObject *r;
-	PyObject *args=NULL;
-#endif
 	lib = nowdb_proc_getLib(rsc);
 	if (lib == NULL) {
 		INVALID("no library in session");
@@ -1207,60 +1279,10 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 		}
 
 #ifdef _NOWDB_WITH_PYTHON
-		ts = nowdb_proc_getInterpreter(rsc);
-		if (ts == NULL) {
-			INVALID("no interpreter");
-			return err;
-		}
-
-		PyEval_RestoreThread(ts);
-	
-		// load arguments
-		err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
-		if (err != NOWDB_OK) {
-			fprintf(stderr, "PY ARGS NOT LOADED\n");
-			nowdb_err_print(err);
-			nowdb_proc_updateInterpreter(rsc);
-			return err;
-		}
-
-		fprintf(stderr, "executing %s\n", pname);
-		r = PyObject_CallObject(f, args);
-		if (args != NULL) Py_DECREF(args);
-
-		res->resType = NOWDB_QRY_RESULT_NOTHING;
-		res->result  = NULL;
-
-		// get result
-		PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
-		if (fst == NULL) {
-			fprintf(stderr, "cannot parse result %p\n", r);
-			PyErr_Print();
-		} else {
-			// this is not 1:1
-			// we need in Python:
-			// status, report, single value, cursor
-			res->resType = (uint16_t)PyLong_AsLong(fst);
-			fprintf(stderr, "RESULT: %hu\n", res->resType);
-		}
-		if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
-			fprintf(stderr, "not nothing\n");
-			PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
-			if (snd == NULL) {
-				fprintf(stderr, "cannot parse result %p\n", r);
-				PyErr_Print();
-			} else {
-				res->result = PyLong_AsVoidPtr(snd);
-			}
-		} 
-		Py_DECREF(r);
-
-		nowdb_proc_updateInterpreter(rsc);
-
-		return NOWDB_OK;
+		return execPython(ast, rsc, pd, f, res);
 #else
-	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
-	                                "python not supported");
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                                        "python not supported");
 #endif
 
 	default:
