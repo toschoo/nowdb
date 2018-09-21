@@ -1375,13 +1375,16 @@ static inline nowdb_err_t setDecomp(nowdb_store_t *store,
 	ZSTD_DCtx     *ctx;
 
 	if (store->comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+	if (list->len == 0) return NOWDB_OK;
 
 	err = nowdb_compctx_getDCtx(store->ctx, &ctx);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_compctx_getDDict(store->ctx, &dict);
-	if (err != NOWDB_OK) return err;
-	
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_compctx_releaseDCtx(store->ctx, ctx));
+		return err;
+	}
 	for(runner=list->head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
 		file->ddict = dict;
