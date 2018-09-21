@@ -80,7 +80,7 @@ static void moduledestroy(void *rsc, void **n) {
 		free(MODULE(*n)->modname);
 	}
 #ifdef _NOWDB_WITH_PYTHON
-	Py_DECREF(MODULE(*n)->m);
+	Py_XDECREF(MODULE(*n)->m);
 	MODULE(*n)->m = NULL;
 	MODULE(*n)->d = NULL;
 #endif
@@ -167,6 +167,11 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 	if (proc == NULL) return NOWDB_OK;
 	if (proc->lib == NULL) return NOWDB_OK;
 
+#ifdef _NOWDB_WITH_PYTHON
+	if (proc->pyIntp != NULL) {
+		PyEval_RestoreThread(proc->pyIntp); // acquire lock
+	}
+#endif
 	if (proc->mods != NULL) {
 		ts_algo_tree_destroy(proc->mods);
 		if (ts_algo_tree_init(proc->mods,
@@ -175,6 +180,7 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 		                      &moduledestroy,
 		                      &moduledestroy) != 0) {
 			NOMEM("tree.init");
+			proc->pyIntp = PyEval_SaveThread(); // release lock
 			return err;
 		}
 	}
@@ -186,11 +192,23 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 		                      &fundestroy,
 		                      &fundestroy) != 0) {
 			NOMEM("tree.init");
+			proc->pyIntp = PyEval_SaveThread(); // release lock
 			return err;
 		}
 	}
 
 #ifdef _NOWDB_WITH_PYTHON
+	/*
+	PyThreadState *ts = PyThreadState_Get();
+	Py_EndInterpreter(ts); // proc->pyIntp);
+	*/
+
+	if (proc->pyIntp != NULL) {
+		Py_EndInterpreter(proc->pyIntp);
+		proc->pyIntp = NULL;
+		PyEval_ReleaseLock();
+		// proc->pyIntp = PyEval_SaveThread(); // release lock
+	}
 	if (LIB(proc->lib)->mst != NULL) {
 		PyEval_RestoreThread(LIB(proc->lib)->mst); // acquire lock
 
@@ -377,7 +395,7 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
     		return err;
 	}
 
-  	m = PyImport_Import(mn); Py_DECREF(mn);
+  	m = PyImport_Import(mn); Py_XDECREF(mn);
 	if (m == NULL) {
 		PYTHONERR("cannot import module");
     		return err;
@@ -386,21 +404,21 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 	d = PyModule_GetDict(m);
 	if (d == NULL) {
 		PYTHONERR("cannot get dictionary");
-		Py_DECREF(m);
+		Py_XDECREF(m);
     		return NULL;
 	}
 
 	*module = calloc(1, sizeof(module_t));
 	if (*module == NULL) {
 		NOMEM("allocating module");
-		Py_DECREF(m);
+		Py_XDECREF(m);
 		return err;
 	}
 
 	(*module)->modname = strdup(mname);
 	if ((*module)->modname == NULL) {
 		NOMEM("allocating module name");
-		Py_DECREF(m); free(*module);
+		Py_XDECREF(m); free(*module);
 		return err;
 	}
 
@@ -409,7 +427,7 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 
 	if (ts_algo_tree_insert(proc->mods, *module) != TS_ALGO_OK) {
 		NOMEM("tree.insert");
-		Py_DECREF(m); free((*module)->modname); free(*module);
+		Py_XDECREF(m); free((*module)->modname); free(*module);
 		return err;
 	}
 #endif

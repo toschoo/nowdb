@@ -45,6 +45,7 @@ char global_feedback = 1;
 char global_timing = 0;
 char global_banner = 1;
 char global_python = 0;
+int global_cpool = 128;
 
 /* -----------------------------------------------------------------------
  * produce some output
@@ -69,11 +70,13 @@ void helptxt(char *progname) {
 	fprintf(stderr, "%s [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
 	fprintf(stderr, "-b: base path (default: ./)\n");
+	fprintf(stderr, "-c: number of connections (0: infinite)\n");
 	fprintf(stderr, "-p: port or service (default: 55505)\n");
 	fprintf(stderr, "-s: bind domain or address (default: any)\n");
 	fprintf(stderr, "-t: timing\n");
 	fprintf(stderr, "-q: quiet\n");
 	fprintf(stderr, "-n: no banner\n");
+	fprintf(stderr, "-y: enable server-side python\n");
 	fprintf(stderr, "-V: version\n");
 	fprintf(stderr, "-?: \n");
 	fprintf(stderr, "-h: help\n");
@@ -92,8 +95,9 @@ void printVersion() {
  * -----------------------------------------------------------------------
  */
 int getOpts(int argc, char **argv) {
-	char *opts = "b:p:s:tqyVh?";
+	char *opts = "b:c:p:s:tqyVh?";
 	char c;
+	char *tmp, *hlp;
 
 	while((c = getopt(argc, argv, opts)) != -1) {
 		switch(c) {
@@ -103,6 +107,23 @@ int getOpts(int argc, char **argv) {
 				fprintf(stderr,
 				"invalid argument for path: %s\n",
 				global_path);
+				return -1;
+			}
+			break;
+
+		case 'c':
+			tmp = optarg;
+			if (tmp[0] == '-') {
+				fprintf(stderr,
+				"invalid value for connections: %s\n",
+				tmp);
+				return -1;
+			}
+			global_cpool = (int)strtoul(tmp, &hlp, 10);
+			if (hlp == NULL || *hlp != 0) {
+				fprintf(stderr,
+				"invalid value for connections: %s\n",
+				tmp);
 				return -1;
 			}
 			break;
@@ -291,6 +312,8 @@ void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 		fprintf(stderr, "cannot get session\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		close(con);
+		return;
 	}
 
 	if (srv->ses_started == 0x7fffffffffffffff) {
@@ -453,7 +476,8 @@ int runServer(int argc, char **argv) {
 
 	err = nowdb_library_init(&lib, global_path,
 	                               global_feedback,
-	                               64, flags);
+	                               global_cpool,
+                                              flags);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot initialise library");
 		nowdb_err_print(err);
@@ -516,6 +540,7 @@ int runServer(int argc, char **argv) {
 	/* make a nice welcome banner and an option to suppress it */
 	// fprintf(stderr, "server running\n");
 	banner(lib, global_path);
+	fprintf(stderr, "connections: %d\n", global_cpool);
 
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;

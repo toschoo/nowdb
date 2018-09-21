@@ -232,7 +232,7 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 	if (flags & NOWDB_ENABLE_PYTHON) {
 		(*lib)->pyEnabled = 1;
 
-		Py_Initialize(); // init python interpreter
+		Py_InitializeEx(0); // init python interpreter
 		PyEval_InitThreads(); // init threads
 		(*lib)->mst = PyEval_SaveThread(); // save thread state
 	}
@@ -344,8 +344,23 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 #ifdef _NOWDB_WITH_PYTHON
 	if (lib->pyEnabled && lib->mst != NULL) {
+		fprintf(stderr, "finalizing python\n");
+
 		PyEval_RestoreThread(lib->mst);
+	
+		// PyThreadState_Clear(lib->mst);
+		// PyThreadState_Delete(lib->mst);
+
+		lib->mst = NULL;
+		
 		Py_Finalize();
+
+		/*
+		if (Py_FinalizeEx() != 0) {
+			fprintf(stderr, "Python finalizer failed:\n");
+			PyErr_Print();
+		}
+		*/
 	}
 #endif
 	free(lib);
@@ -589,7 +604,8 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 	// shall we allow ad-hoc threads?
 	// shall we enforce a limit on living threads?
 	if (lib->fthreads->len == 0) {
-		if (lib->uthreads->len > lib->nthreads) {
+		if (lib->nthreads > 0 &&
+		    lib->nthreads < lib->uthreads->len) {
 			err = nowdb_err_get(nowdb_err_no_rsc,
 			  FALSE, OBJECT, "empty thread pool");
 			goto unlock;
@@ -1377,6 +1393,11 @@ static void leaveSession(nowdb_session_t *ses) {
 	err = nowdb_proc_reinit(ses->proc);
 	if (err != NOWDB_OK) {
 		SETERR();
+	}
+
+	if (ses->istream >= 0) {
+		close(ses->istream);
+		ses->istream = -1;
 	}
 
 	// move session from used to free list
