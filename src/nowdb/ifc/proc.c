@@ -33,9 +33,12 @@ static char *OBJECT = "proc";
 	PyEval_RestoreThread(proc->pyIntp);
 #define UNLOCK() \
 	nowdb_proc_updateInterpreter(proc);
+#define ANNOUNCE(x) \
+	fprintf(stderr, "PYTHONCODE: %s\n", x);
 #else
 #define LOCK()
 #define UNLOCK()
+#define ANNOUNCE(x)
 #endif
 
 /* -------------------------------------------------------------------------
@@ -157,32 +160,42 @@ static void destroyInterpreter(nowdb_proc_t *proc) {
 #endif
 }
 
+#ifdef _NOWDB_WITH_PYTHON
 /* ------------------------------------------------------------------------
- * Helper: create interpreter
+ * Map: reload module
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
+static ts_algo_rc_t reloadModule(void *ignore, void *module) {
+	PyObject *m;
+
+	if (MODULE(module)->m != NULL) {
+		m = PyImport_ReloadModule(MODULE(module)->m);
+		if (m == NULL) {
+			PyErr_Print();
+			return TS_ALGO_NO_MEM;
+		}
+		Py_DECREF(MODULE(module)->m);
+		MODULE(module)->m = m;
+
+		MODULE(module)->d = PyModule_GetDict(m);
+		if (MODULE(module)->d == NULL) {
+			PyErr_Print();
+    			return TS_ALGO_NO_MEM;
+		}
+	}
+	return TS_ALGO_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: reload modules
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 	nowdb_err_t err;
 
-	if (proc == NULL) return NOWDB_OK;
-	if (proc->lib == NULL) return NOWDB_OK;
-
-#ifdef _NOWDB_WITH_PYTHON
-	if (proc->pyIntp != NULL) {
-		PyEval_RestoreThread(proc->pyIntp); // acquire lock
-	}
-#endif
-	if (proc->mods != NULL) {
-		ts_algo_tree_destroy(proc->mods);
-		if (ts_algo_tree_init(proc->mods,
-		                      &modulecompare, NULL,
-		                      &noupdate,
-		                      &moduledestroy,
-		                      &moduledestroy) != 0) {
-			NOMEM("tree.init");
-			proc->pyIntp = PyEval_SaveThread(); // release lock
-			return err;
-		}
+	if (ts_algo_tree_map(proc->mods, &reloadModule) != TS_ALGO_OK) {
+		PYTHONERR("cannot reload modules");
+		return err;
 	}
 	if (proc->funs != NULL) {
 		ts_algo_tree_destroy(proc->funs);
@@ -192,27 +205,72 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 		                      &fundestroy,
 		                      &fundestroy) != 0) {
 			NOMEM("tree.init");
-			proc->pyIntp = PyEval_SaveThread(); // release lock
+			free(proc->funs); proc->funs = NULL;
 			return err;
 		}
 	}
+	return NOWDB_OK;
+}
+#endif
+
+/* ------------------------------------------------------------------------
+ * Helper: reinit interpreter
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
+	nowdb_err_t err = NOWDB_OK;
+
+	if (proc == NULL) return NOWDB_OK;
+	if (proc->lib == NULL) return NOWDB_OK;
 
 #ifdef _NOWDB_WITH_PYTHON
-	/*
-	PyThreadState *ts = PyThreadState_Get();
-	Py_EndInterpreter(ts); // proc->pyIntp);
+	ANNOUNCE("REINIT");
+	
+	/* do we need this???
+	if (LIB(proc->lib)->mst != NULL) {
+		if (rand()%100 == 0) {
+			PyEval_RestoreThread(LIB(proc->lib)->mst);
+			PyGC_Collect();
+			LIB(proc->lib)->mst = PyEval_SaveThread();
+		}
+	}
 	*/
 
+	if (proc->pyIntp != NULL) {
+		PyEval_RestoreThread(proc->pyIntp); // acquire lock
+	}
+
+	err = reloadModules(proc);
+
+	if (proc->pyIntp != NULL) {
+		proc->pyIntp = PyEval_SaveThread(); // release lock
+	}
+#endif
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: create interpreter
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
+
+	if (proc == NULL) return NOWDB_OK;
+	if (proc->lib == NULL) return NOWDB_OK;
+
+#ifdef _NOWDB_WITH_PYTHON
+	ANNOUNCE("CREATE ENTER");
+	/*
 	if (proc->pyIntp != NULL) {
 		Py_EndInterpreter(proc->pyIntp);
 		proc->pyIntp = NULL;
 		PyEval_ReleaseLock();
 		// proc->pyIntp = PyEval_SaveThread(); // release lock
 	}
+	*/
+	fprintf(stderr, "CREATING INTERPRETER\n");
 	if (LIB(proc->lib)->mst != NULL) {
 		PyEval_RestoreThread(LIB(proc->lib)->mst); // acquire lock
-
-		destroyInterpreter(proc); // destroy thread state
 
 		proc->pyIntp = Py_NewInterpreter(); // new thread state
 		if (proc->pyIntp == NULL) {
@@ -321,7 +379,7 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_proc_reinit(nowdb_proc_t *proc) {
-	return createInterpreter(proc);
+	return reinitInterpreter(proc);
 }
 
 /* ------------------------------------------------------------------------
@@ -368,6 +426,7 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc) {
  */
 void nowdb_proc_updateInterpreter(nowdb_proc_t *proc) {
 #ifdef _NOWDB_WITH_PYTHON
+	ANNOUNCE("UPDATE");
 	proc->pyIntp = PyEval_SaveThread();
 #endif
 }
@@ -389,6 +448,7 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 #endif
 
 #ifdef _NOWDB_WITH_PYTHON
+	ANNOUNCE("LOAD MODULE");
 	mn = PyString_FromString(mname);
 	if (mn == NULL) {
 		PYTHONERR("cannot convert module name to PyString");
@@ -450,6 +510,7 @@ static nowdb_err_t loadFun(nowdb_proc_t    *proc,
 #endif
 
 #ifdef _NOWDB_WITH_PYTHON
+	ANNOUNCE("LOAD FUN");
 	f = PyDict_GetItemString(module->d, pd->name);
 	if (f == NULL) {
 		PYTHONERR("cannot find function in module");

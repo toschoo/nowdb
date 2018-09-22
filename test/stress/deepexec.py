@@ -30,17 +30,22 @@ class QThread(threading.Thread):
       print "[%s] cannot connect: %s" % (self.name, x)
 
 THREADS = 100
+IT = 1000
 
-thds = []
+for j in range(IT):
 
-for i in range(THREADS):
-    thds.append(QThread())
+  print "iteration %d of %d" % (j+1,IT)
 
-for t in thds:
-    t.start()
+  thds = []
 
-# time.sleep(1)
+  for i in range(THREADS):
+      thds.append(QThread())
 
-for t in thds:
-    t.join()
+  for t in thds:
+      t.start()
+
+  # time.sleep(1)
+
+  for t in thds:
+      t.join()
   

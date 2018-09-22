@@ -485,6 +485,7 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	srand(time(NULL) ^ (uint64_t)&printf);
 	initServer(&srv, lib);
 
 	/* install stop handler */
