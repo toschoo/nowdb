@@ -41,13 +41,15 @@ static char *OBJECT = "lib";
 	} \
 	err = nowdb_err_get(nowdb_err_server, FALSE, OBJECT, s);
 
-#define LOGERR(err) \
-	nowdb_err_send(err, ses->estream); \
-	nowdb_err_release(err);
-
 #define LOGMSG(m) \
 	if (LIB(ses->lib)->loglvl > 0) { \
 		fprintf(stderr, "[%lu] %s\n", pthread_self(), m); \
+	}
+
+#define LOGERRMSG(err) \
+	if (LIB(ses->lib)->loglvl > 0) { \
+		nowdb_err_print(err); \
+		nowdb_err_release(err); \
 	}
 
 /* -----------------------------------------------------------------------
@@ -431,7 +433,7 @@ nowdb_err_t nowdb_library_shutdown(nowdb_t *lib) {
 	 * stop all sessions 
 	err = stopSessions(lib);
 	if (err != NOWDB_OK) return err;
-	*/
+	 */
 
 	err = waitSessions(lib, 1);
 	if (err != NOWDB_OK) return err;
@@ -871,8 +873,8 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 	}
 	err = nowdb_task_join(ses->task);
 	if (err != NOWDB_OK) { // what to do?
-		LOGMSG("cannot join!\n");
-		return err;
+		LOGERRMSG(err);
+		nowdb_err_release(err);
 	}
 	return NOWDB_OK;
 }
@@ -1358,8 +1360,9 @@ static void runSession(nowdb_session_t *ses) {
 	// negotiate seesion properties
 	err = negotiate(ses);
 	if (err != NOWDB_OK) {
-		SETERR();
+		// SETERR();
 		nowdb_err_print(err);
+		nowdb_err_release(err);
 		return;
 	}
 
@@ -1489,7 +1492,7 @@ static void leaveSession(nowdb_session_t *ses, int stop) {
 #define SIGNALEOS() \
 	err = signalMaster(ses); \
 	if (err != NOWDB_OK) { \
-		LOGERR(err); \
+		LOGERRMSG(err); \
 		break; \
 	}
 
@@ -1512,6 +1515,7 @@ void *nowdb_session_entry(void *session) {
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGINT);
 	sigaddset(&s, SIGABRT);
+	sigaddset(&s, SIGTERM);
 
 	x = pthread_sigmask(SIG_BLOCK, &t, NULL);
 	if (x != 0) {
@@ -1538,7 +1542,7 @@ void *nowdb_session_entry(void *session) {
 
 		// we have an error 
 		if (ses->err != NOWDB_OK) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 			break;
 		}
@@ -1546,7 +1550,7 @@ void *nowdb_session_entry(void *session) {
 		// run session / log error
 		runSession(ses);
 		if (ses->err != NOWDB_OK) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 		}
 
@@ -1563,7 +1567,7 @@ void *nowdb_session_entry(void *session) {
 
 		// set state waiting
 		if (setWaiting(ses) < 0) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 			SIGNALEOS();
 			break;

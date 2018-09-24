@@ -527,6 +527,7 @@ int runServer(int argc, char **argv) {
 	sigemptyset(&b);
 	sigaddset(&b, SIGABRT);
 	sigaddset(&b, SIGINT);
+	sigaddset(&b, SIGTERM);
 	x = pthread_sigmask(SIG_BLOCK, &b, NULL);
 	if (x != 0) {
 		fprintf(stderr, "cannot set signal mask\n");
@@ -538,6 +539,7 @@ int runServer(int argc, char **argv) {
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGABRT);
+	sigaddset(&s, SIGTERM);
 	sigaddset(&s, SIGINT);
 
 	/* start listener */
@@ -579,6 +581,7 @@ int runServer(int argc, char **argv) {
 
 		// user wants us to terminate
 		case SIGABRT:
+		case SIGTERM:
 		case SIGINT:
 			global_stop = 1; 
 			break;
