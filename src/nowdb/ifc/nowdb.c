@@ -341,7 +341,6 @@ static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
 		err = nowdb_task_sleep(DELAY);
 		if (err != NOWDB_OK) return err;
 	}
-	fprintf(stderr, "through\n");
 	return NOWDB_OK;
 }
 
@@ -426,8 +425,13 @@ nowdb_err_t nowdb_library_shutdown(nowdb_t *lib) {
 	if (lib == NULL) INVALID("lib is NULL");
 	if (lib->lock == NULL) INVALID("lib is not open");
 
+	/* for soft shutdown:
+	 * wait until all sessions have terminated.
+	 * for hard shudown, we need a mechanism to
+	 * stop all sessions 
 	err = stopSessions(lib);
 	if (err != NOWDB_OK) return err;
+	*/
 
 	err = waitSessions(lib, 1);
 	if (err != NOWDB_OK) return err;
@@ -1433,8 +1437,6 @@ static void runSession(nowdb_session_t *ses) {
  */
 static void leaveSession(nowdb_session_t *ses, int stop) {
 	nowdb_err_t err;
-
-	LOGMSG("leaving session\n");
 
 	// free resources
 	if (ses->parser != NULL) {
