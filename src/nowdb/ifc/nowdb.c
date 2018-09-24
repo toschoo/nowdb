@@ -1511,7 +1511,7 @@ void *nowdb_session_entry(void *session) {
 	sigemptyset(&t);
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGINT);
-	// sigaddset(&s, SIGABRT);
+	sigaddset(&s, SIGABRT);
 
 	x = pthread_sigmask(SIG_BLOCK, &t, NULL);
 	if (x != 0) {

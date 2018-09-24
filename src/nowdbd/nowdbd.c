@@ -463,7 +463,7 @@ int runServer(int argc, char **argv) {
 	nowdb_t *lib;
 	int rc = EXIT_SUCCESS;
 	srv_t srv;
-	sigset_t s;
+	sigset_t s,b;
 	int sig, x;
 	uint64_t flags = 0;
 
@@ -519,6 +519,17 @@ int runServer(int argc, char **argv) {
 
 	if (sigaction(SIGPIPE, &sact, NULL) != 0) {
 		perror("cannot set signal handler for SIGPIPE");
+		nowdb_library_close(lib);
+		return EXIT_FAILURE;
+	}
+
+	/* signals we block */
+	sigemptyset(&b);
+	sigaddset(&b, SIGABRT);
+	sigaddset(&b, SIGINT);
+	x = pthread_sigmask(SIG_BLOCK, &b, NULL);
+	if (x != 0) {
+		fprintf(stderr, "cannot set signal mask\n");
 		nowdb_library_close(lib);
 		return EXIT_FAILURE;
 	}
