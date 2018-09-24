@@ -33,12 +33,9 @@ static char *OBJECT = "proc";
 	PyEval_RestoreThread(proc->pyIntp);
 #define UNLOCK() \
 	nowdb_proc_updateInterpreter(proc);
-#define ANNOUNCE(x) \
-	fprintf(stderr, "PYTHONCODE: %s\n", x);
 #else
 #define LOCK()
 #define UNLOCK()
-#define ANNOUNCE(x)
 #endif
 
 /* -------------------------------------------------------------------------
@@ -154,8 +151,15 @@ static void destroyInterpreter(nowdb_proc_t *proc) {
 
 #ifdef _NOWDB_WITH_PYTHON
 	if (proc->pyIntp == NULL) return;
+	
+	Py_EndInterpreter(proc->pyIntp);
+	proc->pyIntp = NULL;
+	PyEval_ReleaseLock(); // deprecated
+	
+	/*
 	PyThreadState_Clear(proc->pyIntp);
 	PyThreadState_Delete(proc->pyIntp);
+	*/
 	proc->pyIntp = NULL;
 #endif
 }
@@ -224,7 +228,6 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 	if (proc->lib == NULL) return NOWDB_OK;
 
 #ifdef _NOWDB_WITH_PYTHON
-	ANNOUNCE("REINIT");
 	
 	/* do we need this???
 	if (LIB(proc->lib)->mst != NULL) {
@@ -259,15 +262,6 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 	if (proc->lib == NULL) return NOWDB_OK;
 
 #ifdef _NOWDB_WITH_PYTHON
-	ANNOUNCE("CREATE ENTER");
-	/*
-	if (proc->pyIntp != NULL) {
-		Py_EndInterpreter(proc->pyIntp);
-		proc->pyIntp = NULL;
-		PyEval_ReleaseLock();
-		// proc->pyIntp = PyEval_SaveThread(); // release lock
-	}
-	*/
 	fprintf(stderr, "CREATING INTERPRETER\n");
 	if (LIB(proc->lib)->mst != NULL) {
 		PyEval_RestoreThread(LIB(proc->lib)->mst); // acquire lock
@@ -363,6 +357,11 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
 	if (proc->scope != NULL) {
 		proc->scope = NULL;
 	}
+#ifdef _NOWDB_WITH_PYTHON
+	if (proc->pyIntp != NULL) {
+		PyEval_RestoreThread(proc->pyIntp);
+	}
+#endif
 	if (proc->mods != NULL) {
 		ts_algo_tree_destroy(proc->mods);
 		free(proc->mods); proc->mods = NULL;
@@ -426,7 +425,6 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc) {
  */
 void nowdb_proc_updateInterpreter(nowdb_proc_t *proc) {
 #ifdef _NOWDB_WITH_PYTHON
-	ANNOUNCE("UPDATE");
 	proc->pyIntp = PyEval_SaveThread();
 #endif
 }
@@ -448,7 +446,6 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 #endif
 
 #ifdef _NOWDB_WITH_PYTHON
-	ANNOUNCE("LOAD MODULE");
 	mn = PyString_FromString(mname);
 	if (mn == NULL) {
 		PYTHONERR("cannot convert module name to PyString");
@@ -510,7 +507,6 @@ static nowdb_err_t loadFun(nowdb_proc_t    *proc,
 #endif
 
 #ifdef _NOWDB_WITH_PYTHON
-	ANNOUNCE("LOAD FUN");
 	f = PyDict_GetItemString(module->d, pd->name);
 	if (f == NULL) {
 		PYTHONERR("cannot find function in module");

@@ -580,6 +580,7 @@ int runServer(int argc, char **argv) {
 	}
 
 	// stop listener
+	fprintf(stderr, "stop listener\n");
 	err = stopListener(&srv, listener);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot stop listener: ");
@@ -596,6 +597,7 @@ int runServer(int argc, char **argv) {
 		rc = EXIT_FAILURE;
 	}
 	// shutdown library
+	fprintf(stderr, "shutdown\n");
 	err = nowdb_library_shutdown(lib);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot shutdown library: ");
@@ -604,6 +606,7 @@ int runServer(int argc, char **argv) {
 		rc = EXIT_FAILURE;
 	}
 	// and finally close it
+	fprintf(stderr, "close lib\n");
 	nowdb_library_close(lib);
 
 	// make a nice farewell banner

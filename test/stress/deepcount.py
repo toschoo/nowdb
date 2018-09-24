@@ -4,10 +4,12 @@ from now import *
 import threading
 import time
 import signal
+import sys
 
 class QThread(threading.Thread):
-  def __init__(self):
+  def __init__(self, loops):
     threading.Thread.__init__(self)
+    self.loops = loops
 
   def run(self):
     try:
@@ -17,7 +19,7 @@ class QThread(threading.Thread):
              print "ERROR: %d on use: %s" % (r.code(), r.details())
              return
 
-        for i in range(10):
+        for i in range(self.loops):
           # print "[%s] range %d" % (self.name, i)
           with con.execute("select count(*) from tx") as r:
             if not r.ok():
@@ -26,22 +28,60 @@ class QThread(threading.Thread):
     except ClientError as x:
       print "[%s] cannot connect: %s" % (self.name, x)
 
-THREADS = 100
+# ------------------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------------------
 
-thds = []
+print "%s called with %d arguments" % (sys.argv[0], len(sys.argv)-1)
 
-for i in range(THREADS):
-    thds.append(QThread())
+n = len(sys.argv)
 
-for t in thds:
-    t.start()
+IT = 1
+THREADS = 10
+LOOP = 10
 
-m = THREADS
-while m > 0:
-  time.sleep(1)
-  # print "having %d" % m
+ok = 0
+
+try:
+  if n > 1:
+    IT = abs(int(sys.argv[1]))
+    ok += 1
+
+  if n > 2:
+    THREADS = abs(int(sys.argv[2]))
+    ok += 1
+
+  if n > 3:
+    LOOP = abs(int(sys.argv[3]))
+    ok += 1
+
+except:
+  if ok == 0:
+    x = sys.argv[1]
+  if ok == 1:
+    x = sys.argv[2]
+  if ok == 2:
+    x = sys.argv[3]
+
+  print "%s is not an integer" % x
+  exit(1)
+
+  
+print "iterations: %d, threads: %d, loops per thread: %d"  % \
+      (IT, THREADS, LOOP)
+
+for j in range(IT):
+
+  if IT > 1:
+    print "iteration %d of %d" % (j+1,IT)
+
+  thds = []
+
+  for i in range(THREADS):
+      thds.append(QThread(LOOP))
+
   for t in thds:
-    if t.isAlive():
-      t.join(0.1)
-    else:
-      m -= 1
+      t.start()
+
+  for t in thds:
+      t.join()
