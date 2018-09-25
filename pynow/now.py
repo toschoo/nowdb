@@ -327,7 +327,7 @@ class Result:
         else:
             return None
 
-    # fetch a bunch for rows from cursor
+    # fetch a bunch of rows from cursor
     def fetch(self):
         if self.rType() != CURSOR and self.rType() != ROW:
             raise WrongType("result is not a cursor")

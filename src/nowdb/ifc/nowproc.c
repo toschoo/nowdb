@@ -36,6 +36,26 @@
 #include <errno.h>
 #include <ctype.h>
 
+static char *OBJECT = "PROCIFC";
+
+#define BUFSIZE 0x12000
+#define MAXROW  0x1000
+
+#define PARSERR(m) \
+	err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT, m); \
+	*res = mkErrResult(err);
+
+#define INVALID(m) \
+	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, m); \
+	*res = mkErrResult(err);
+
+#define INVALIDERR(m) \
+	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, m);
+
+#define CURSETERR(rc,m) \
+	CUR(cur)->errcode = rc; \
+	CUR(cur)->err = nowdb_err_get(rc, FALSE, OBJECT, m);
+
 #define PROC(x) \
 	((nowdb_proc_t*) x)
 
@@ -49,9 +69,22 @@
 struct nowdb_dbresult_t {
 	uint16_t         rtype;
 	int            errcode;
-	char           *errmsg;
+	nowdb_err_t        err;
+	char              *buf;
+        uint32_t            sz;
+        int                 lo;
+        int                off;
         nowdb_qry_result_t res;
 };
+
+#define CUR(x) \
+	((nowdb_dbresult_t) x)
+
+#define ROW(x) \
+	((nowdb_dbresult_t) x)
+
+#define NOWDBCUR(x) \
+	CUR(x)->res.result
 
 /* ------------------------------------------------------------------------
  * Result types
@@ -60,6 +93,12 @@ struct nowdb_dbresult_t {
 int nowdb_dbresult_type(nowdb_dbresult_t res) {
 	if (res == NULL) return -1;
 	return res->rtype;
+}
+
+void nowdb_dbresult_result(nowdb_dbresult_t res, nowdb_qry_result_t *r) {
+	if (res == NULL) return;
+	r->resType = res->res.resType;
+	r->result = res->res.result;
 }
 
 /* ------------------------------------------------------------------------
@@ -83,12 +122,22 @@ int nowdb_dbresult_errcode(nowdb_dbresult_t res) {
 }
 
 /* ------------------------------------------------------------------------
+ * Get NOWDB Error
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res) {
+	if (res == NULL) return NULL;
+	return (res->err);
+}
+
+/* ------------------------------------------------------------------------
  * Get Error Details
  * ------------------------------------------------------------------------
  */
 const char *nowdb_dbresult_details(nowdb_dbresult_t res) {
 	if (res == NULL) return NULL;
-	return (res->errmsg);
+	return nowdb_err_describe(res->err, ';');
+	
 }
 
 /* ------------------------------------------------------------------------
@@ -130,10 +179,17 @@ int nowdb_dbresult_eof(nowdb_dbresult_t res) {
  * Destroy result 
  * ------------------------------------------------------------------------
  */
-void nowdb_dbresult_destroy(nowdb_dbresult_t res) {
+void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
 	if (res == NULL) return;
-	if (res->res.result != NULL) {
-		// to be defined
+	if (res->err != NULL) {
+		nowdb_err_release(res->err);
+		res->err = NOWDB_OK;
+	}
+	if (all && res->res.result != NULL) {
+		// switch
+		// report
+		// cursor
+		// row
 	}
 	free(res);
 }
@@ -156,12 +212,55 @@ static nowdb_dbresult_t mkResult(int rtype) {
 
 	r->rtype = rtype;
 	r->errcode = 0;
-	r->errmsg  = NULL;
+	r->err = NOWDB_OK;
 
 	r->res.resType = NOWDB_QRY_RESULT_NOTHING;
 	r->res.result = NULL;
 
 	return r;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: make result from err
+ * ------------------------------------------------------------------------
+ */
+static nowdb_dbresult_t mkErrResult(nowdb_err_t err) {
+	struct nowdb_dbresult_t *r;
+
+	r = mkResult(NOWDB_DBRESULT_STATUS);
+	if (r == NULL) return NULL;
+	if (err == NOWDB_OK) return r;
+	r->errcode = err->errcode;
+	r->err = err;
+	return r; // may NULL!
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: make result from err
+ * ------------------------------------------------------------------------
+ */
+static void qResDestroy(nowdb_qry_result_t *res) {
+	if (res == NULL) return;
+	switch(res->resType) {
+
+	case NOWDB_QRY_RESULT_NOTHING: return;
+
+	case NOWDB_QRY_RESULT_REPORT:
+		if (res->result != NULL) {
+			free(res->result); res->result = NULL;
+		}
+		break;
+
+	case NOWDB_QRY_RESULT_CURSOR:
+		if (res->result != NULL) {
+			nowdb_cursor_destroy(res->result);
+			free(res->result); res->result = NULL;
+		}
+		break;
+
+	default: return;
+		
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -189,7 +288,7 @@ nowdb_dbresult_t nowdb_dbresult_makeError(int errcode,
 	if (r == NULL) return NULL;
 
 	r->errcode = errcode;
-	r->errmsg = strdup(msg); // may be NULL!
+	r->err = nowdb_err_get(errcode, FALSE, "python", msg);
 
 	return r;
 }
@@ -289,21 +388,21 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 
 	s = strnlen(statement, 4097);
 	if (s > 4096) {
-		fprintf(stderr, "string too long!\n");
+		INVALID("string too long! (max: 4096)");
 		return -1;
 	}
 	if (s <= 0) {
-		fprintf(stderr, "invalid string!\n");
+		INVALID("empty string");
 		return -1;
 	}
 	x = nowdbsql_parser_buffer(PROC(db)->parser,
                                    statement, s, &ast);
 	if (x != 0) {
-		fprintf(stderr, "cannot parse statement!\n");
+		PARSERR((char*)nowdbsql_parser_errmsg(PROC(db)->parser));
 		return -1;
 	}
 	if (ast == NULL) {
-		fprintf(stderr, "no ast!\n");
+		PARSERR("unknown parsing error");
 		return -1;
 	}
 
@@ -313,22 +412,18 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 
 	// build error result
 	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+		*res = mkErrResult(err);
 		return -1;
 	}
 
-	// switch result
-	// NOTHING
-	// STATUS*
-	// REPORT
-	// CURSOR
-	// ROW*
-	// *still to be handled in stmt
-
 	fprintf(stderr, "result type: %d\n", r.resType);
 
-	// result
+	*res = nowdb_dbresult_wrap(&r);
+	if (*res == NULL) {
+		qResDestroy(&r);	
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -376,19 +471,158 @@ typedef struct nowdb_dbcur_t* nowdb_dbcur_t;
  * ------------------------------------------------------------------------
  */
 int nowdb_dbcur_open(nowdb_dbresult_t  res,
-                      nowdb_dbcur_t *cur);
+                      nowdb_dbcur_t *cur) {
+	nowdb_err_t err;
+
+	CUR(cur)->buf = malloc(BUFSIZE);
+	if (CUR(cur)->buf == NULL) {
+		CURSETERR(nowdb_err_no_mem, "allocating fetch buffer");
+		return -1;
+	}
+	CUR(cur)->off = 0;
+	CUR(cur)->lo  = 0;
+	CUR(cur)->sz  = 0;
+
+	err = nowdb_cursor_open(NOWDBCUR(cur));
+	if (err != NOWDB_OK) {
+		CUR(cur)->err = err;
+		CUR(cur)->errcode = err->errcode;
+		free(CUR(cur)->buf);
+		CUR(cur)->buf = NULL;
+		return -1;
+	}
+	return 0;
+}
 
 /* ------------------------------------------------------------------------
  * Close cursor
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_close(nowdb_dbcur_t cur);
+void nowdb_dbcur_close(nowdb_dbcur_t cur) {
+	if (CUR(cur)->buf != NULL) {
+		free(CUR(cur)->buf);
+		CUR(cur)->buf = NULL;
+	}
+	if (CUR(cur)->err != NULL) {
+		nowdb_err_release(CUR(cur)->err);
+	}
+	nowdb_cursor_destroy(NOWDBCUR(cur));
+	free(cur);
+}
+
+/* ------------------------------------------------------------------------
+ * End of string
+ * ------------------------------------------------------------------------
+ */
+static inline int findEndOfStr(char *buf, int sz, int idx) {
+	int z;
+	int x = strnlen(buf+idx, 4097);
+	if (x > 4096) return -1;
+	z = idx+x;
+	if (z>=sz) return -1;
+	return (z+1);
+}
+
+/* ------------------------------------------------------------------------
+ * End of row
+ * ------------------------------------------------------------------------
+ */
+static inline int findEORow(nowdb_dbresult_t p, int idx) {
+	int i;
+	for(i=idx; i<ROW(p)->sz;) {
+		if (ROW(p)->buf[i] == NOWDB_EOR) break;
+		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
+			continue;
+		}
+		i+=9;
+	}
+	if (i >= ROW(p)->sz) return -1;
+	return (i+1);
+}
+
+
+/* ------------------------------------------------------------------------
+ * Find last complete row
+ * ------------------------------------------------------------------------
+ */
+static inline int findLastRow(char *buf, int sz) {
+	int i;
+	int l=sz;
+	
+	if (sz == 0) return 0;
+	for(i=0; i<sz;) {
+		if (buf[i] == NOWDB_EOR) {
+			l=i; i++;
+			if (i == sz) break;
+		}
+		if (buf[i] == NOWDB_TYP_TEXT) {
+			i++;
+			i = findEndOfStr(buf, sz, i);
+			if (i < 0) return i;
+			continue;
+		}
+		i+=9;
+	}
+	l++;
+	return l;
+}
+
+/* ------------------------------------------------------------------------
+ * Rescue bytes of incomplete row at end of cursor
+ * ------------------------------------------------------------------------
+ */
+static inline int leftover(nowdb_dbcur_t cur) {
+	int l=0;
+	char *buf = CUR(cur)->buf;
+
+	CUR(cur)->lo = 0;
+	if (CUR(cur)->sz == 0) return 0;
+
+	l = findLastRow(buf, CUR(cur)->sz);
+	if (l < 0) {
+		CURSETERR(nowdb_err_invalid, "now last row");
+		return -1;
+	}
+	if (l >= ROW(cur)->sz) return 0;
+
+	CUR(cur)->lo = CUR(cur)->sz - l;
+	if (CUR(cur)->lo >= MAXROW) {
+		CURSETERR(nowdb_err_too_big, "row too big");
+		return -1;
+	}
+	memcpy(buf, buf+l, CUR(cur)->lo);
+	return 0;
+}
 
 /* ------------------------------------------------------------------------
  * Fetch next bunch of rows from server
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_fetch(nowdb_dbcur_t  cur);
+int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
+	char *buf;
+	nowdb_err_t err;
+	uint32_t cnt=0;
+
+	// already at eof
+	if (CUR(cur)->errcode == nowdb_err_eof) return -1;
+	if (leftover(cur) != 0) return -1;
+
+	buf = CUR(cur)->buf+CUR(cur)->lo;
+
+	// fetch
+	CUR(cur)->sz = 0;
+	err = nowdb_cursor_fetch(NOWDBCUR(cur), buf,
+	                         BUFSIZE-CUR(cur)->lo,
+	                         &CUR(cur)->sz, &cnt);
+	if (err != NOWDB_OK) {
+		CUR(cur)->err = err;
+		CUR(cur)->errcode = err->errcode;
+		return -1;
+	}
+	return 0;
+}
 
 /* ------------------------------------------------------------------------
  * Get first row from cursor
@@ -400,13 +634,19 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur);
  * Get error code from cursor
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_errcode(nowdb_dbcur_t res);
+int nowdb_dbcur_errcode(nowdb_dbcur_t res) {
+	if (res == NULL) return 0;
+	return DBRES(res)->errcode;
+}
 
 /* ------------------------------------------------------------------------
  * Get error details from cursor
  * ------------------------------------------------------------------------
  */
-const char *nowdb_dbcur_details(nowdb_dbcur_t res);
+nowdb_err_t nowdb_dbcur_err(nowdb_dbcur_t res) {
+	if (res == NULL) return NOWDB_OK;
+	return DBRES(res)->err;
+}
 
 /* ------------------------------------------------------------------------
  * Check whether cursor is 'EOF'

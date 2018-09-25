@@ -9,6 +9,7 @@
 #include <nowdb/query/cursor.h>
 #include <nowdb/index/index.h>
 #include <nowdb/ifc/nowdb.h>
+#include <nowdb/nowproc.h>
 
 /* -------------------------------------------------------------------------
  * Macro for the very common error "invalid ast"
@@ -39,6 +40,14 @@
 	err = nowdb_err_get(nowdb_err_python, FALSE, OBJECT, s)
 
 static char *OBJECT = "stmt";
+
+/* -------------------------------------------------------------------------
+ * Predeclaration
+ * -------------------------------------------------------------------------
+ */
+void nowdb_dbresult_result(nowdb_dbresult_t p, nowdb_qry_result_t *q);
+
+nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res);
 
 /* -------------------------------------------------------------------------
  * Create a scope
@@ -1183,6 +1192,10 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 	PyThreadState *ts;
 	PyObject *r;
 	PyObject *args=NULL;
+	nowdb_dbresult_t p;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
 
 	ts = nowdb_proc_getInterpreter(proc);
 	if (ts == NULL) {
@@ -1201,19 +1214,27 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 		return err;
 	}
 
-	fprintf(stderr, "executing %s\n", pd->name);
 	r = PyObject_CallObject(f, args);
 	if (args != NULL) Py_DECREF(args);
-
-	res->resType = NOWDB_QRY_RESULT_NOTHING;
-	res->result  = NULL;
 
 	if (r == NULL) {
 		PYTHONERR("Call failed: result is NULL");
 		nowdb_proc_updateInterpreter(proc);
 		return err;
 	}
+	p = PyLong_AsVoidPtr(r); Py_DECREF(r);
+	if (p == NULL) {
+		nowdb_proc_updateInterpreter(proc);
+		return NOWDB_OK;
+	}
+	if (!nowdb_dbresult_status(p)) {
+		err = nowdb_dbresult_err(p); free(p);
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+	nowdb_dbresult_result(p, res); free(p);
 
+	/*
 	// get result
 	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
 	if (fst == NULL) {
@@ -1242,8 +1263,9 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 		} else {
 			res->result = PyLong_AsVoidPtr(snd);
 		}
-	} 
+	}
 	Py_DECREF(r);
+	*/
 
 	nowdb_proc_updateInterpreter(proc);
 

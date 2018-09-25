@@ -59,6 +59,37 @@ _exec = now.nowdb_dbexec_statement
 _exec.restype = c_long
 _exec.argtypes = [c_void_p, c_char_p, c_void_p]
 
+_wrap = now.nowdb_dbresult_wrap
+_wrap.restype = c_void_p
+_wrap.argtypes = [c_void_p]
+
+_success = now.nowdb_dbresult_success
+_success.restype = c_void_p
+_success.argtypes = []
+
+_mkErr = now.nowdb_dbresult_makeError
+_mkErr.restype = c_void_p
+_mkErr.argtypes = [c_long, c_char_p]
+
+_rDestroy = now.nowdb_dbresult_destroy
+_rDestroy.argtypes = [c_void_p, c_long]
+
+_rStatus = now.nowdb_dbresult_status
+_rStatus.restype = c_long
+_rStatus.argtypes = [c_void_p]
+
+_rCode = now.nowdb_dbresult_errcode
+_rCode.restype = c_long
+_rCode.argtypes= [c_void_p]
+
+_rDetails = now.nowdb_dbresult_details
+_rDetails.restype = c_char_p
+_rDetails.argtypes = [c_void_p]
+
+_rEof = now.nowdb_dbresult_eof
+_rEof.restype = c_long
+_rEof.argtypes = [c_void_p]
+
 def _setDB(db):
   global _db
   print "set DB to %d" % db
@@ -66,10 +97,51 @@ def _setDB(db):
 
 def execute(stmt):
     global _db
-    print "%s" % _db
     r = c_void_p()
     x = _exec(_db, c_char_p(stmt), byref(r))
-    print "EXEC: %d" % x
-    print "RESULT: %s" % r
-    return x
+    return Result(r.value)
 
+def wrapResult(r):
+  return Result(_wrap(r))
+
+def makeError(rc, msg):
+  return Result(_mkErr(c_long(rc), c_char_p(msg)))
+
+def success():
+  return Result(_success())
+
+class Result:
+  def __init__(self, r):
+    self._r = r
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, xt, xv, tb):
+    self.release()
+
+  def release(self):
+    _rDestroy(self._r, 1)
+    self._r = 0
+
+  def toDB(self):
+    return self._r
+
+  def ok(self):
+    return (_rStatus(self._r) == 0)
+
+  def eof(self):
+    return (_rEof(self._r) != 0)
+
+  def code(self):
+    return _rCode(self._r)
+
+  def details(self):
+    return _rDetails(self._r)
+
+class WrongType(Exception):
+  def __init__(self, s):
+    self._str = s
+
+  def __str__(self):
+    return self._str

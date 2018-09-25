@@ -3,7 +3,7 @@ import nowdb
 
 def hello():
   print "hello nowdb!"
-  return (1,None)
+  return nowdb.success()
 
 def sumof2(a,b):
   print "%d" % (a+b)
@@ -52,5 +52,19 @@ def fibreset():
   return (1,None)
 
 def simple(stmt):
-  nowdb.execute(stmt)
-  return (1,None)
+  return nowdb.execute(stmt).toDB()
+
+def happy():
+  return nowdb.success().toDB()
+
+def mycount(edge, origin):
+
+  stmt = "select count(*) from tx "
+  stmt += "where edge = '" + edge + "'"
+  stmt += "  and origin =" + str(origin)
+
+  with nowdb.execute(stmt) as r:
+    if r.ok():
+      return nowdb.success().toDB()
+    else:
+      return nowdb.makeError(r.code(), r.details()).toDB()

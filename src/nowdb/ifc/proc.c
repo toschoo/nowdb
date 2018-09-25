@@ -256,6 +256,7 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 	if (MODULE(module)->m != NULL) {
 		m = PyImport_ReloadModule(MODULE(module)->m);
 		if (m == NULL) {
+			fprintf(stderr, "cannot reload\n");
 			PyErr_Print();
 			return TS_ALGO_NO_MEM;
 		}
@@ -264,6 +265,7 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 
 		MODULE(module)->d = PyModule_GetDict(m);
 		if (MODULE(module)->d == NULL) {
+			fprintf(stderr, "cannot get dictionary\n");
 			PyErr_Print();
     			return TS_ALGO_NO_MEM;
 		}

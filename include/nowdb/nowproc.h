@@ -96,7 +96,7 @@ int nowdb_dbresult_eof(nowdb_dbresult_t res);
  * Destroy result 
  * ------------------------------------------------------------------------
  */
-void nowdb_dbresult_destroy(nowdb_dbresult_t res);
+void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all);
 
 /* ------------------------------------------------------------------------
  * Wrap result
@@ -207,7 +207,7 @@ int nowdb_dbcur_open(nowdb_dbresult_t  res,
  * Close cursor
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_close(nowdb_dbcur_t cur);
+void nowdb_dbcur_close(nowdb_dbcur_t cur);
 
 /* ------------------------------------------------------------------------
  * Fetch next bunch of rows from server
