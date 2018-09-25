@@ -1,4 +1,5 @@
 import random
+import nowdb
 
 def hello():
   print "hello nowdb!"
@@ -49,4 +50,7 @@ def fibreset():
   f2 = 1
 
   return (1,None)
-    
+
+def simple(stmt):
+  nowdb.execute(stmt)
+  return (1,None)

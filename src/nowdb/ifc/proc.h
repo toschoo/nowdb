@@ -27,7 +27,7 @@
  * Stored procedure interface
  * ------------------------------------------------------------------------
  */
-typedef struct {
+typedef struct nowdb_proc_t {
 	void              *lib;    /* server lib                */
 	nowdb_scope_t     *scope;  /* current scope             */
 	nowdbsql_parser_t *parser; /* string parser             */
@@ -93,14 +93,4 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
                                char            *fname,
                                nowdb_proc_desc_t **pd,
                                void             **fun);
-
-// execute sql statement
-// result
-// cursor
-
-
-// execute sql statement
-// result
-// cursor
-
 #endif

@@ -166,10 +166,91 @@ static void destroyInterpreter(nowdb_proc_t *proc) {
 
 #ifdef _NOWDB_WITH_PYTHON
 /* ------------------------------------------------------------------------
+ * Helper: set DB
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t setDB(nowdb_proc_t *proc,
+                         PyObject     *dict) 
+{
+	nowdb_err_t err;
+	PyObject  *args;
+	PyObject  *r;
+	PyObject  *f;
+	PyObject  *m, *d;
+
+	/*
+	PyObject  *k=NULL, *v=NULL;
+	Py_ssize_t pos = 0;
+
+	while(PyDict_Next(dict, &pos, &k, &v)) {
+		PyObject *str = PyObject_Repr(k);
+		if (str == NULL) {
+			fprintf(stderr, "no string\n"); continue;
+		}
+		const char* s = PyString_AsString(str);
+		Py_DECREF(str);
+		fprintf(stderr, "KEY %d: %s\n", (int)pos, s);
+	}
+	*/
+
+	m = PyDict_GetItemString(dict, "nowdb");
+	if (m == NULL) {
+		PYTHONERR("nowdb not imported");
+		return err;
+	}
+
+	d = PyModule_GetDict(m);
+	if (d == NULL) {
+		PYTHONERR("cannot get dictionary");
+    		return err;
+	}
+	
+	f = PyDict_GetItemString(d, "_setDB");
+	if (f == NULL) {
+		PYTHONERR("no _setDB in module");
+		return err;
+	}
+	if (!PyCallable_Check(f)) {
+		PYTHONERR("_setDB not callable");
+		return err;
+	}
+
+	args = PyTuple_New((Py_ssize_t)1);
+	if (args == NULL) {
+		NOMEM("allocating Python tuple");
+		return err;
+	}
+
+	if (PyTuple_SetItem(args,
+	   (Py_ssize_t)0,
+	    Py_BuildValue("K", (uint64_t)proc)) != 0) 
+	{
+		Py_DECREF(args);
+		PYTHONERR("cannot set item to tuple");
+		return err;
+	}
+
+	r = PyObject_CallObject(f, args);
+	if (args != NULL) Py_DECREF(args);
+
+	fprintf(stderr, "%p\n", r);
+
+	if (r != NULL) Py_DECREF(r);
+
+	return NOWDB_OK;
+}
+#endif
+
+#define TREE(x) \
+	((ts_algo_tree_t*)x)
+
+#ifdef _NOWDB_WITH_PYTHON
+/* ------------------------------------------------------------------------
  * Map: reload module
  * ------------------------------------------------------------------------
  */
-static ts_algo_rc_t reloadModule(void *ignore, void *module) {
+static ts_algo_rc_t reloadModule(void *tree, void *module) {
+	nowdb_err_t err;
 	PyObject *m;
 
 	if (MODULE(module)->m != NULL) {
@@ -186,6 +267,13 @@ static ts_algo_rc_t reloadModule(void *ignore, void *module) {
 			PyErr_Print();
     			return TS_ALGO_NO_MEM;
 		}
+
+		err = setDB(TREE(tree)->rsc,MODULE(module)->d);
+		if (err != NOWDB_OK) {
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return TS_ALGO_ERR;
+		}
 	}
 	return TS_ALGO_OK;
 }
@@ -197,6 +285,7 @@ static ts_algo_rc_t reloadModule(void *ignore, void *module) {
 static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 	nowdb_err_t err;
 
+	proc->mods->rsc = proc;
 	if (ts_algo_tree_map(proc->mods, &reloadModule) != TS_ALGO_OK) {
 		PYTHONERR("cannot reload modules");
 		return err;
@@ -462,7 +551,13 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 	if (d == NULL) {
 		PYTHONERR("cannot get dictionary");
 		Py_XDECREF(m);
-    		return NULL;
+    		return err;
+	}
+
+	err = setDB(proc, d);
+	if (err != NOWDB_OK) {
+		Py_XDECREF(m);
+		return err;
 	}
 
 	*module = calloc(1, sizeof(module_t));

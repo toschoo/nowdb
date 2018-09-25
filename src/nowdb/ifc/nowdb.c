@@ -272,10 +272,12 @@ static nowdb_err_t signalSessions(nowdb_t *lib, int what) {
 			nowdb_err_release(err);
 			break;
 		}
+		/*
 		if (what == 2) {
 			// LOGMSG("removing session\n");
 			ts_algo_list_remove(list, runner);
 		}
+		*/
 	}
 	err2 = nowdb_unlock_write(lib->lock);
 	if (err2 != NOWDB_OK) {
@@ -378,9 +380,10 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->lock != NULL) {
 		NOWDB_IGNORE(killSessions(lib));
-		NOWDB_IGNORE(waitSessions(lib,2));
+		// NOWDB_IGNORE(waitSessions(lib,2));
 	}
 	if (lib->fthreads != NULL) {
+		fprintf(stderr, "destroy free threads\n");
 		destroySessionList(lib->fthreads);
 		free(lib->fthreads); lib->fthreads = NULL;
 	}

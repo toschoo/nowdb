@@ -91,6 +91,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
       $(SRC)/ifc/proc.o       \
+      $(SRC)/ifc/nowproc.o    \
       $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/types.h    \
@@ -142,7 +143,8 @@ DEP = $(SRC)/types/types.h    \
 CLIENTDEP = $(HDR)/errcode.h  \
             $(HDR)/nowclient.h
 
-IFC = include/nowdb/nowdb.h
+IFC = include/nowdb/nowdb.h \
+      include/nowdb/nowproc.h
 
 default:	lib 
 

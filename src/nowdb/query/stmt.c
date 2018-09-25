@@ -1208,6 +1208,12 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 	res->resType = NOWDB_QRY_RESULT_NOTHING;
 	res->result  = NULL;
 
+	if (r == NULL) {
+		PYTHONERR("Call failed: result is NULL");
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+
 	// get result
 	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
 	if (fst == NULL) {
