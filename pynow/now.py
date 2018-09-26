@@ -244,7 +244,6 @@ class Result:
 
                     raise DBError(x, d)
 
-                self.NeedNext = False
                 self.rw = self.row()
         else:
             self.needNext = True

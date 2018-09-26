@@ -122,6 +122,10 @@ _rNext = now.nowdb_dbrow_next
 _rNext.restype = c_long
 _rNext.argtypes = [c_void_p]
 
+_rOff = now.nowdb_dbrow_off
+_rOff.restype = c_long
+_rOff.argtypes = [c_void_p]
+
 _rField = now.nowdb_dbrow_field
 _rField.restype = c_void_p
 _rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
@@ -197,12 +201,12 @@ class Result:
 
               raise DBError(x, d)
 
-           self._needNext = False
            self._rw = self.row()
 
       else:
         self._needNext = True
 
+      # print "returning %d" % _rOff(self._rw._r)
       return self._rw
 
   # the python 2 syntax is bad

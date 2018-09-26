@@ -507,6 +507,7 @@ int nowdb_dbrow_next(nowdb_dbrow_t p) {
 	if (j<0) return -1;
 
 	ROW(p)->off = i;
+	
 	/*
 	fprintf(stderr, "advancing to row %d (max: %d)\n",
 	                         ROW(p)->off, ROW(p)->sz);
@@ -520,6 +521,14 @@ int nowdb_dbrow_next(nowdb_dbrow_t p) {
  */
 void nowdb_dbrow_rewind(nowdb_dbrow_t p) {
 	ROW(p)->off = 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Row offset (for debugging)
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_off(nowdb_dbrow_t p) {
+	return ROW(p)->off;
 }
 
 /* ------------------------------------------------------------------------

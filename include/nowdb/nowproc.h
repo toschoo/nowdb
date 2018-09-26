@@ -170,6 +170,12 @@ int nowdb_dbrow_next(nowdb_dbrow_t row);
 void nowdb_dbrow_rewind(nowdb_dbrow_t row);
 
 /* ------------------------------------------------------------------------
+ * Return the row offset (debugging)
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_off(nowdb_dbrow_t row);
+
+/* ------------------------------------------------------------------------
  * Get field from row
  * ---------
  * The 'fieldth' field is selected
