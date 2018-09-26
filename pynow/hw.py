@@ -59,12 +59,57 @@ def happy():
 
 def mycount(edge, origin):
 
-  stmt = "select count(*) from tx "
-  stmt += "where edge = '" + edge + "'"
-  stmt += "  and origin =" + str(origin)
+  try:
 
-  with nowdb.execute(stmt) as r:
-    if r.ok():
-      return nowdb.success().toDB()
-    else:
-      return nowdb.makeError(r.code(), r.details()).toDB()
+    print "mycount(%s, %d)" % (edge, origin)
+
+    stmt = "select count(*) from tx "
+    stmt += "where edge = '" + edge + "'"
+    stmt += "  and origin =" + str(origin)
+
+    with nowdb.execute(stmt) as c:
+
+      if not c.ok():
+        return nowdb.makeError(c.code(), c.details()).toDB()
+
+      cnt1 = 0
+      for row in c:
+        cnt1 = row.field(0)
+
+    stmt = "select destin from tx "
+    stmt += "where edge = '" + edge + "'"
+    stmt += "  and origin =" + str(origin)
+
+    with nowdb.execute(stmt) as c:
+
+      if not c.ok():
+        return nowdb.makeError(c.code(), c.details()).toDB()
+
+      cnt = 0
+      for row in c:
+        dst = row.field(0)
+        print "desintation: %d" % dst
+        cnt += 1
+      
+
+    print "select count(*): %d" % cnt1
+    print "manual count   : %d" % cnt
+
+    if cnt1 != cnt:
+      msg = "counts differ %d != %d" % (cnt1, cnt)
+      print "%s" % msg
+      return nowdb.makeError(1, msg)
+
+  except StopIteration:
+    print "EOF"
+
+  except nowdb.WrongType as w:
+    print "Wrong Type: %s" % w
+
+  except nowdb.DBError as d:
+    print "DB Error: %s" % d
+
+  except Exception as e:
+    print "unexpected exception: %s" % e
+
+  return nowdb.success().toDB()

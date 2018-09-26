@@ -54,6 +54,9 @@ static char *OBJECT = "PROCIFC";
 
 #define CURSETERR(rc,m) \
 	CUR(cur)->errcode = rc; \
+	if (CUR(cur)->err != NOWDB_OK) { \
+		nowdb_err_release(CUR(cur)->err); \
+	} \
 	CUR(cur)->err = nowdb_err_get(rc, FALSE, OBJECT, m);
 
 #define PROC(x) \
@@ -134,7 +137,7 @@ nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res) {
  * Get Error Details
  * ------------------------------------------------------------------------
  */
-const char *nowdb_dbresult_details(nowdb_dbresult_t res) {
+char *nowdb_dbresult_details(nowdb_dbresult_t res) {
 	if (res == NULL) return NULL;
 	return nowdb_err_describe(res->err, ';');
 	
@@ -381,10 +384,12 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 	size_t s;
 	int x;
 
+	/*
 	fprintf(stderr, "exec!\n");
 	fprintf(stderr, "DB    : %p\n", db);
 	fprintf(stderr, "stmt  : %s\n", statement);
 	fprintf(stderr, "result: %p\n", res);
+	*/
 
 	s = strnlen(statement, 4097);
 	if (s > 4096) {
@@ -416,7 +421,7 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 		return -1;
 	}
 
-	fprintf(stderr, "result type: %d\n", r.resType);
+	// fprintf(stderr, "result type: %d\n", r.resType);
 
 	*res = nowdb_dbresult_wrap(&r);
 	if (*res == NULL) {
@@ -425,89 +430,6 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 	}
 
 	return 0;
-}
-
-/* ------------------------------------------------------------------------
- * Get the next row
- * ------------------------------------------------------------------------
- */
-int nowdb_dbrow_next(nowdb_dbrow_t row);
-
-/* ------------------------------------------------------------------------
- * Rewind to first row
- * ------------------------------------------------------------------------
- */
-void nowdb_dbrow_rewind(nowdb_dbrow_t row);
-
-/* ------------------------------------------------------------------------
- * Get field from row
- * ---------
- * The 'fieldth' field is selected
- * indexing starts with 0
- * ------------------------------------------------------------------------
- */
-void *nowdb_dbrow_field(nowdb_dbrow_t row, int field, int *type);
-
-/* ------------------------------------------------------------------------
- * Copy row 
- * ------------------------------------------------------------------------
- */
-nowdb_dbrow_t nowdb_dbrow_copy(nowdb_dbrow_t row);
-
-/* ------------------------------------------------------------------------
- * Write all rows in human-readable form to file
- * ------------------------------------------------------------------------
- */
-int nowdb_dbrow_write(FILE *file, nowdb_dbrow_t row);
-
-/* ------------------------------------------------------------------------
- * Cursor
- * ------------------------------------------------------------------------
- */
-typedef struct nowdb_dbcur_t* nowdb_dbcur_t;
-
-/* ------------------------------------------------------------------------
- * Open cursor from given result
- * ------------------------------------------------------------------------
- */
-int nowdb_dbcur_open(nowdb_dbresult_t  res,
-                      nowdb_dbcur_t *cur) {
-	nowdb_err_t err;
-
-	CUR(cur)->buf = malloc(BUFSIZE);
-	if (CUR(cur)->buf == NULL) {
-		CURSETERR(nowdb_err_no_mem, "allocating fetch buffer");
-		return -1;
-	}
-	CUR(cur)->off = 0;
-	CUR(cur)->lo  = 0;
-	CUR(cur)->sz  = 0;
-
-	err = nowdb_cursor_open(NOWDBCUR(cur));
-	if (err != NOWDB_OK) {
-		CUR(cur)->err = err;
-		CUR(cur)->errcode = err->errcode;
-		free(CUR(cur)->buf);
-		CUR(cur)->buf = NULL;
-		return -1;
-	}
-	return 0;
-}
-
-/* ------------------------------------------------------------------------
- * Close cursor
- * ------------------------------------------------------------------------
- */
-void nowdb_dbcur_close(nowdb_dbcur_t cur) {
-	if (CUR(cur)->buf != NULL) {
-		free(CUR(cur)->buf);
-		CUR(cur)->buf = NULL;
-	}
-	if (CUR(cur)->err != NULL) {
-		nowdb_err_release(CUR(cur)->err);
-	}
-	nowdb_cursor_destroy(NOWDBCUR(cur));
-	free(cur);
 }
 
 /* ------------------------------------------------------------------------
@@ -570,6 +492,109 @@ static inline int findLastRow(char *buf, int sz) {
 }
 
 /* ------------------------------------------------------------------------
+ * Get the next row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_next(nowdb_dbrow_t p) {
+	int i,j;
+
+	/* search start of next */
+	i = findEORow(ROW(p), ROW(p)->off);
+	if (i < 0) return -1;
+
+	/* make sure the row is complete */
+	j = findEORow(ROW(p), i);
+	if (j<0) return -1;
+
+	ROW(p)->off = i;
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Rewind to first row
+ * ------------------------------------------------------------------------
+ */
+void nowdb_dbrow_rewind(nowdb_dbrow_t p) {
+	ROW(p)->off = 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Get nth field in current row
+ * ------------------------------------------------------------------------
+ */
+void *nowdb_dbrow_field(nowdb_dbrow_t p, int field, int *type) {
+	int i;
+	int f=0;
+
+	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != NOWDB_EOR;)  {
+		if (f==field) {
+			*type = (int)ROW(p)->buf[i]; i++;
+			return (ROW(p)->buf+i);
+		}
+		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
+		} else {
+			i+=9;
+		}
+		f++;
+	}
+	return NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * Write all rows in human-readable form to file
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_write(FILE *file, nowdb_dbrow_t row);
+
+/* ------------------------------------------------------------------------
+ * Open cursor from given result
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbcur_open(nowdb_dbresult_t cur) {
+	nowdb_err_t err;
+
+	CUR(cur)->buf = malloc(BUFSIZE);
+	if (CUR(cur)->buf == NULL) {
+		CURSETERR(nowdb_err_no_mem, "allocating fetch buffer");
+		return -1;
+	}
+	CUR(cur)->off = 0;
+	CUR(cur)->lo  = 0;
+	CUR(cur)->sz  = 0;
+
+	err = nowdb_cursor_open(NOWDBCUR(cur));
+	if (err != NOWDB_OK) {
+		if (CUR(cur)->err != NOWDB_OK) {
+			nowdb_err_release(CUR(cur)->err);
+		}
+		CUR(cur)->err = err;
+		CUR(cur)->errcode = err->errcode;
+		free(CUR(cur)->buf);
+		CUR(cur)->buf = NULL;
+		return -1;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Close cursor
+ * ------------------------------------------------------------------------
+ */
+void nowdb_dbcur_close(nowdb_dbcur_t cur) {
+	if (CUR(cur)->buf != NULL) {
+		free(CUR(cur)->buf);
+		CUR(cur)->buf = NULL;
+	}
+	if (CUR(cur)->err != NULL) {
+		nowdb_err_release(CUR(cur)->err);
+	}
+	nowdb_cursor_destroy(NOWDBCUR(cur));
+	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
+}
+
+/* ------------------------------------------------------------------------
  * Rescue bytes of incomplete row at end of cursor
  * ------------------------------------------------------------------------
  */
@@ -617,6 +642,15 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
 	                         BUFSIZE-CUR(cur)->lo,
 	                         &CUR(cur)->sz, &cnt);
 	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			if (CUR(cur)->sz > 0) {
+				nowdb_err_release(err);
+				return 0;
+			}
+		}
+		if (CUR(cur)->err != NOWDB_OK) {
+			nowdb_err_release(CUR(cur)->err);
+		}
 		CUR(cur)->err = err;
 		CUR(cur)->errcode = err->errcode;
 		return -1;
@@ -628,7 +662,21 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
  * Get first row from cursor
  * ------------------------------------------------------------------------
  */
-nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur);
+nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
+	struct nowdb_dbresult_t *cp;
+
+	if (cur == NULL) return NULL;
+
+	cp = mkResult(CUR(cur)->rtype);
+	if (cp == NULL) return NULL;
+
+	ROW(cp)->buf = CUR(cur)->buf;
+        ROW(cp)->sz = CUR(cur)->sz;
+        ROW(cp)->lo = CUR(cur)->lo;
+        ROW(cp)->off = CUR(cur)->off;
+
+	return (nowdb_dbrow_t)cp;
+}
 
 /* ------------------------------------------------------------------------
  * Get error code from cursor
@@ -652,11 +700,14 @@ nowdb_err_t nowdb_dbcur_err(nowdb_dbcur_t res) {
  * Check whether cursor is 'EOF'
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_eof(nowdb_dbcur_t cur);
+int nowdb_dbcur_eof(nowdb_dbcur_t cur) {
+	return nowdb_dbresult_eof(CUR(cur));
+}
 
 /* ------------------------------------------------------------------------
  * Check whether cursor has error
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_ok(nowdb_dbcur_t cur);
-
+int nowdb_dbcur_ok(nowdb_dbcur_t cur) {
+	return nowdb_dbresult_status(CUR(cur));
+}

@@ -55,6 +55,9 @@ utc = tzutc()
 
 _db = None
 
+_free = libc.free
+_free.argtypes = [c_void_p]
+
 _exec = now.nowdb_dbexec_statement
 _exec.restype = c_long
 _exec.argtypes = [c_void_p, c_char_p, c_void_p]
@@ -74,6 +77,10 @@ _mkErr.argtypes = [c_long, c_char_p]
 _rDestroy = now.nowdb_dbresult_destroy
 _rDestroy.argtypes = [c_void_p, c_long]
 
+_rType = now.nowdb_dbresult_type
+_rType.restype = c_long
+_rType.argtypes = [c_void_p]
+
 _rStatus = now.nowdb_dbresult_status
 _rStatus.restype = c_long
 _rStatus.argtypes = [c_void_p]
@@ -83,16 +90,42 @@ _rCode.restype = c_long
 _rCode.argtypes= [c_void_p]
 
 _rDetails = now.nowdb_dbresult_details
-_rDetails.restype = c_char_p
+_rDetails.restype = c_void_p
 _rDetails.argtypes = [c_void_p]
 
 _rEof = now.nowdb_dbresult_eof
 _rEof.restype = c_long
 _rEof.argtypes = [c_void_p]
 
+_rRow = now.nowdb_dbcur_row
+_rRow.restype = c_void_p
+_rRow.argtypes = [c_void_p]
+
+_rFetch = now.nowdb_dbcur_fetch
+_rFetch.restype = c_long
+_rFetch.argtypes = [c_void_p]
+
+_rOpen  = now.nowdb_dbcur_open
+_rOpen.restype = c_long
+_rOpen.argtypes = [c_void_p]
+
+_rClose = now.nowdb_dbcur_close
+_rClose.restype = c_long
+_rClose.argtypes = [c_void_p]
+
+_rRewind = now.nowdb_dbrow_rewind
+_rRewind.argtypes = [c_void_p]
+
+_rNext = now.nowdb_dbrow_next
+_rNext.restype = c_long
+_rNext.argtypes = [c_void_p]
+
+_rField = now.nowdb_dbrow_field
+_rField.restype = c_void_p
+_rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
+
 def _setDB(db):
   global _db
-  print "set DB to %d" % db
   _db = db
 
 def execute(stmt):
@@ -113,6 +146,8 @@ def success():
 class Result:
   def __init__(self, r):
     self._r = r
+    self._rw = None
+    self._needNext = False
 
   def __enter__(self):
     return self
@@ -120,15 +155,69 @@ class Result:
   def __exit__(self, xt, xv, tb):
     self.release()
 
+  # cursor is an iterator
+  def __iter__(self):
+    if self.rType() != CURSOR:
+       raise WrongType("result is not a cursor")
+
+    if _rOpen(self._r) != 0:
+       print "cannot open: %d: %s" % (self.code(), self.details())
+       raise StopIteration
+
+    if _rFetch(self._r) != 0:
+       print "cannot fetch: %d: %s" % (self.code(), self.details())
+       raise StopIteration
+
+    self._rw = self.row()
+    self._needNext = False
+    return self
+
+  def __next__(self):
+      x = self.rType()
+      if x != CURSOR and x != ROW:
+        raise StopIteration
+
+      if not self.ok():
+        raise StopIteration
+
+      if self._needNext:
+        if not self._rw.nextRow():
+           self._rw.release()
+           self._rw = None
+           if not self.fetch() or not self.ok():
+              x = self.code()
+              d = self.details()
+
+              if x == EOF:
+                 _rClose(self._r)
+                 raise StopIteration
+
+              raise DBError(x, d)
+
+           self._needNext = False
+           self._rw = self.row()
+
+      else:
+        self._needNext = True
+
+      return self._rw
+
+  # the python 2 syntax is bad
+  def next(self):
+     return self.__next__()
+
   def release(self):
     _rDestroy(self._r, 1)
     self._r = 0
+
+  def rType(self):
+    return _rType(self._r)
 
   def toDB(self):
     return self._r
 
   def ok(self):
-    return (_rStatus(self._r) == 0)
+    return (_rStatus(self._r) != 0)
 
   def eof(self):
     return (_rEof(self._r) != 0)
@@ -137,7 +226,69 @@ class Result:
     return _rCode(self._r)
 
   def details(self):
-    return _rDetails(self._r)
+    p = _rDetails(self._r)
+    if p is not None:
+      s = cast(p, c_char_p)
+      _free(p)
+      return s
+    return ""
+
+  def fetch(self):
+    return (_rFetch(self._r) == 0)
+
+  def row(self):
+    if self.rType() != CURSOR:
+       raise WrongType("result is not a cursor")
+    r = _rRow(self._r)
+    if r == None:
+      raise DBError(self.code(), self.details())
+    return Result(r)
+
+  def nextRow(self):
+    return (_rNext(self._r) == 0)
+
+  # field from row
+  def field(self, idx):
+        x = self.rType()
+        if x != CURSOR and x != ROW:
+            raise WrongType("result not a cursor nor a row")
+
+        t = c_long()
+        v = _rField(self._r, c_long(idx), byref(t))
+
+        if t.value == TEXT:
+            s = cast(v, c_char_p)
+            return s.value
+
+        elif t.value == TIME or t.value == DATE or t.value == INT:
+            i = cast(v,POINTER(c_longlong))
+            return i[0]
+
+        elif t.value == UINT:
+            u = cast(v,POINTER(c_ulonglong))
+            return u[0]
+
+        elif t.value == FLOAT:
+            f = cast(v,POINTER(c_double))
+            return f[0]
+
+        elif t.value == BOOL:
+            f = cast(v,POINTER(c_byte))
+            if f[0] == 0:
+                return False
+            return True
+
+        else:
+            print "type is %d" % t.value
+            return None
+
+class DBError(Exception):
+  def __init__(self, c, d):
+    self._code = c
+    self._details = d
+
+  def __str__(self):
+    return str(self._code) + ": " + self._details
 
 class WrongType(Exception):
   def __init__(self, s):

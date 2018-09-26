@@ -232,9 +232,6 @@ static nowdb_err_t setDB(nowdb_proc_t *proc,
 
 	r = PyObject_CallObject(f, args);
 	if (args != NULL) Py_DECREF(args);
-
-	fprintf(stderr, "%p\n", r);
-
 	if (r != NULL) Py_DECREF(r);
 
 	return NOWDB_OK;

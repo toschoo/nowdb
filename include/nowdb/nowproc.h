@@ -75,7 +75,7 @@ int nowdb_dbresult_errcode(nowdb_dbresult_t res);
  * Get Error Details
  * ------------------------------------------------------------------------
  */
-const char *nowdb_dbresult_details(nowdb_dbresult_t res);
+char *nowdb_dbresult_details(nowdb_dbresult_t res);
 
 /* ------------------------------------------------------------------------
  * Get Report
@@ -200,8 +200,7 @@ typedef struct nowdb_dbcur_t* nowdb_dbcur_t;
  * Open cursor from given result
  * ------------------------------------------------------------------------
  */
-int nowdb_dbcur_open(nowdb_dbresult_t  res,
-                      nowdb_dbcur_t *cur);
+int nowdb_dbcur_open(nowdb_dbresult_t cur);
 
 /* ------------------------------------------------------------------------
  * Close cursor
@@ -231,7 +230,7 @@ int nowdb_dbcur_errcode(nowdb_dbcur_t res);
  * Get error details from cursor
  * ------------------------------------------------------------------------
  */
-const char *nowdb_dbcur_details(nowdb_dbcur_t res);
+char *nowdb_dbcur_details(nowdb_dbcur_t res);
 
 /* ------------------------------------------------------------------------
  * Check whether cursor is 'EOF'
