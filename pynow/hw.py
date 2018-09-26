@@ -3,19 +3,19 @@ import nowdb
 
 def hello():
   print "hello nowdb!"
-  return nowdb.success()
+  return nowdb.success().toDB()
 
 def sumof2(a,b):
   print "%d" % (a+b)
-  return (1,None)
+  return nowdb.success().toDB()
 
 def sumof3(a,b,c):
   print "%d" % (a+b+c)
-  return (1,None)
+  return nowdb.success().toDB()
 
 def truediv(a,b):
   print "%f" % (a/b)
-  return (1,None)
+  return nowdb.success().toDB()
 
 def lululooping(a,b):
   for i in range(10):
@@ -23,7 +23,7 @@ def lululooping(a,b):
     print "%d + %d = %d" % (a,b,c)
     b = a
     a = c
-  return (1,None)
+  return nowdb.success().toDB()
 
 f1 = 0
 f2 = 1
@@ -40,7 +40,7 @@ def fib(n):
     print "[%d] %d + %d = %d" % (myid,f1,f2,f)
     f1 = f2
     f2 = f 
-  return (1,None)
+  return nowdb.success().toDB()
 
 def fibreset():
   global f1
@@ -49,7 +49,7 @@ def fibreset():
   f1 = 0
   f2 = 1
 
-  return (1,None)
+  return nowdb.success().toDB()
 
 def simple(stmt):
   return nowdb.execute(stmt).toDB()
