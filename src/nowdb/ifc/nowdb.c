@@ -1477,11 +1477,9 @@ static void leaveSession(nowdb_session_t *ses, int stop) {
 	if (LIB(ses->lib)->uthreads->head != NULL) {
 		ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
 		addNode(LIB(ses->lib)->fthreads, ses->node);
-		/*
 		fprintf(stderr, "used: %d, free: %d\n",
 	                LIB(ses->lib)->uthreads->len,
 	                LIB(ses->lib)->fthreads->len);
-		*/
 	}
 
 	err = nowdb_unlock_write(LIB(ses->lib)->lock);

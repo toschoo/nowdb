@@ -51,6 +51,8 @@ BOOL = 9
 
 EOF = 8
 
+USRERR = 73
+
 utc = tzutc()
 
 _db = None
@@ -188,8 +190,9 @@ class Result:
               x = self.code()
               d = self.details()
 
+              _rClose(self._r)
+
               if x == EOF:
-                 _rClose(self._r)
                  raise StopIteration
 
               raise DBError(x, d)

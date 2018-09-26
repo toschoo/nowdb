@@ -32,6 +32,9 @@ class QThread(threading.Thread):
     except ClientError as x:
       print "[%s] cannot connect: %s" % (self.name, x)
 
+    except Exception as x:
+      print "[%s] unexpected exception: %s" % (self.name, x)
+
 # ------------------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------------------

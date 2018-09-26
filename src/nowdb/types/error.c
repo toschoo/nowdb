@@ -308,6 +308,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_addr: return "cannot find address information";
 	case nowdb_err_python: return "python api error";
 	case nowdb_err_unk_symbol: return "unknown symbol";
+	case nowdb_err_usrerr: return "error in stored procedure";
 	default: return "unknown";
 	}
 }

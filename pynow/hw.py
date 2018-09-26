@@ -76,7 +76,7 @@ def mycount(edge, origin):
       for row in c:
         cnt1 = row.field(0)
 
-    stmt = "select destin from tx "
+    stmt = "select origin, destin from tx "
     stmt += "where edge = '" + edge + "'"
     stmt += "  and origin =" + str(origin)
 
@@ -87,8 +87,9 @@ def mycount(edge, origin):
 
       cnt = 0
       for row in c:
-        dst = row.field(0)
-        print "desintation: %d" % dst
+        # org = row.field(0)  
+        # dst = row.field(1)
+        # print "%d --> %d" % (org, dst)
         cnt += 1
       
 
@@ -98,7 +99,7 @@ def mycount(edge, origin):
     if cnt1 != cnt:
       msg = "counts differ %d != %d" % (cnt1, cnt)
       print "%s" % msg
-      return nowdb.makeError(1, msg)
+      return nowdb.makeError(nowdb.USRERR, msg).toDB()
 
   except StopIteration:
     print "EOF"

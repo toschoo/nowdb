@@ -507,6 +507,10 @@ int nowdb_dbrow_next(nowdb_dbrow_t p) {
 	if (j<0) return -1;
 
 	ROW(p)->off = i;
+	/*
+	fprintf(stderr, "advancing to row %d (max: %d)\n",
+	                         ROW(p)->off, ROW(p)->sz);
+	*/
 	return 0;
 }
 
@@ -671,9 +675,9 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
 	if (cp == NULL) return NULL;
 
 	ROW(cp)->buf = CUR(cur)->buf;
-        ROW(cp)->sz = CUR(cur)->sz;
-        ROW(cp)->lo = CUR(cur)->lo;
-        ROW(cp)->off = CUR(cur)->off;
+        ROW(cp)->sz = CUR(cur)->sz + CUR(cur)->lo;
+        ROW(cp)->lo = 0;
+        ROW(cp)->off = 0;
 
 	return (nowdb_dbrow_t)cp;
 }
