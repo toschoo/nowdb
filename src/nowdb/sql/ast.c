@@ -507,7 +507,6 @@ static inline int ad3ata(nowdb_ast_t *n,
  */
 static inline int addsel(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
-	fprintf(stderr, "adding %s\n", (char*)k->value);
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
 	case NOWDB_AST_VALUE: ADDKID(0);

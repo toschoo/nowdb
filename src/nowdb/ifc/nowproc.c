@@ -456,6 +456,7 @@ static inline int findEORow(nowdb_dbresult_t p, int idx) {
 		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
+			if (i < 0) return -1;
 			continue;
 		}
 		i+=9;
@@ -463,7 +464,6 @@ static inline int findEORow(nowdb_dbresult_t p, int idx) {
 	if (i >= ROW(p)->sz) return -1;
 	return (i+1);
 }
-
 
 /* ------------------------------------------------------------------------
  * Find last complete row
@@ -547,6 +547,7 @@ void *nowdb_dbrow_field(nowdb_dbrow_t p, int field, int *type) {
 		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
+			if (i < 0) break;
 		} else {
 			i+=9;
 		}
@@ -620,7 +621,7 @@ static inline int leftover(nowdb_dbcur_t cur) {
 
 	l = findLastRow(buf, CUR(cur)->sz);
 	if (l < 0) {
-		CURSETERR(nowdb_err_invalid, "now last row");
+		CURSETERR(nowdb_err_invalid, "no last row");
 		return -1;
 	}
 	if (l >= ROW(cur)->sz) return 0;
@@ -654,6 +655,7 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
 	err = nowdb_cursor_fetch(NOWDBCUR(cur), buf,
 	                         BUFSIZE-CUR(cur)->lo,
 	                         &CUR(cur)->sz, &cnt);
+	CUR(cur)->sz += CUR(cur)->lo;
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
 			if (CUR(cur)->sz > 0) {

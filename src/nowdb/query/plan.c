@@ -1110,7 +1110,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
-			fprintf(stderr, "FUN: %s\n", (char*)field->value);
+			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 			flags = NOWDB_FIELD_AGG;
 
@@ -1129,7 +1129,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 			f->off = -1;
 			f->typ = nowdb_ast_type(field->stype);
 
-			fprintf(stderr, "type: %d\n", field->vtype);
+			// fprintf(stderr, "type: %d\n", field->vtype);
 			err = getConstValue(f->typ, field->value,
 			                               &f->value);
 			if (err != NOWDB_OK) break;
@@ -1146,8 +1146,10 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 				f->target = NOWDB_TARGET_VERTEX;
 				if (flags == 0) off = -1;
 			} else {
+				/*
 				fprintf(stderr, "STYPE: %d\n",
 				                   trg->stype);
+				*/
 				break;
 			}
 

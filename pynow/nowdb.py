@@ -235,10 +235,14 @@ class Result:
   def details(self):
     p = _rDetails(self._r)
     if p is not None:
-      s = cast(p, c_char_p)
+      x = cast(p, c_char_p)
+      if x is None:
+          _free(p)
+          return "cannot obtain error message"
+      s = x.value
       _free(p)
       return s
-    return ""
+    return "cannot obtain error message"
 
   def fetch(self):
     return (_rFetch(self._r) == 0)
