@@ -16,6 +16,8 @@ static char *OBJECT = "row";
 	if (row == NULL) return nowdb_err_get(nowdb_err_invalid, \
 	                          FALSE, OBJECT, "row is NULL");
 
+#define MAXROW 0x1000
+
 /* ------------------------------------------------------------------------
  * initialise the row
  * ------------------------------------------------------------------------
@@ -569,6 +571,7 @@ nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream) {
 			i++; break;
 
 		default:
+			fprintf(stderr, "unknown type (%d): %d\n", i, (int)t);
 			return nowdb_err_get(nowdb_err_invalid,
 			  FALSE, OBJECT, "unknown type in row");
 		}
@@ -660,4 +663,124 @@ nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
 	}
 	*idx=i;
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Make an empty row buffer
+ * ------------------------------------------------------------------------
+ */
+char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz) {
+	return nowdb_row_addValue(NULL, t, value, sz);
+}
+
+/* ------------------------------------------------------------------------
+ * End of string
+ * ------------------------------------------------------------------------
+ */
+static inline int findEndOfStr(char *buf, int sz, int idx) {
+	int z;
+	int x = strnlen(buf+idx, 4097);
+	if (x > 4096) return -1;
+	z = idx+x;
+	if (z>=sz) return -1;
+	return (z+1);
+}
+
+/* ------------------------------------------------------------------------
+ * End of row
+ * ------------------------------------------------------------------------
+ */
+static inline int findEORow(char *buf, int idx) {
+	int i;
+	for(i=idx; i<MAXROW;) {
+		if (buf[i] == NOWDB_EOR) break;
+		if (buf[i] == NOWDB_TYP_TEXT) {
+			i = findEndOfStr(buf,MAXROW,i);
+			if (i < 0) return -1;
+			continue;
+		}
+		i+=9;
+	}
+	if (i >= MAXROW) return -1;
+	return (i+1);
+}
+	
+
+int nowdb_row_len(char *row) {
+	int i;
+
+	if (row == NULL) return 0;
+	for(i=0;i<MAXROW;) {
+		if (row[i] == NOWDB_EOR) break;
+		if (row[i] == NOWDB_TYP_TEXT) {
+			i = findEndOfStr(row,MAXROW,i);
+			if (i < 0) return -1;
+			continue;
+
+		} else if (row[i] == NOWDB_TYP_BOOL) {
+			i+=2; continue;
+		}
+		i+=9;
+	}
+	if (i >= MAXROW) return -1;
+	return i;
+}
+
+char *nowdb_row_addValue(char *row, nowdb_type_t t,
+                         void *value, uint32_t *sz) {
+	char *row2;
+	size_t s;
+	size_t m;
+	int  l=0;
+
+	l = nowdb_row_len(row);
+	if (l < 0) return NULL;
+
+	switch(t) {
+	case NOWDB_TYP_TEXT:
+	case NOWDB_TYP_LONGTEXT:
+		s = strnlen((char*)value, 4097);
+		if (s > 4096) return NULL;
+
+		s+=2;
+
+		if (row == NULL) {
+			row2 = calloc(1,s+1);
+		} else {
+			row2 = realloc(row, s+l+1);
+		}
+		if (row2 == NULL) return NULL;
+
+		row2[l] = (char)t; row2[s+l-1] = 0; row2[s+l] = 10;
+		memcpy(row2+l+1, value, s-2);
+
+		*sz = s+l+1;
+		return row2;
+	
+	case NOWDB_TYP_UINT:
+	case NOWDB_TYP_INT:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_FLOAT:
+	case NOWDB_TYP_BOOL:
+		s = t==NOWDB_TYP_BOOL?2:9;
+		m = s-1;
+
+		if (row == NULL) {
+			row2 = calloc(1,s+1);
+		} else {
+			row2 = realloc(row, s+l+1);
+		}
+		if (row2 == NULL) return NULL;
+
+		row2[l] = (char)t; // if (l>0) l++;
+		memcpy(row2+l+1, value, m);
+		row2[s+l] = 10;
+
+		*sz = s+l+1;
+		return row2;
+
+	default:
+		return NULL;
+	}
 }

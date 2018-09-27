@@ -119,4 +119,24 @@ nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
  */
 nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
                                    uint32_t field, uint32_t *idx);
+
+/* ------------------------------------------------------------------------
+ * Manually create a row buffer with containing one value
+ * ------------------------------------------------------------------------
+ */
+char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz); 
+
+/* ------------------------------------------------------------------------
+ * Add a value to a row buffer with containing one value
+ * ------------------------------------------------------------------------
+ */
+char *nowdb_row_addValue(char *row, nowdb_type_t t,
+                         void *value, uint32_t *sz);
+
+/* ------------------------------------------------------------------------
+ * Add a value to a row buffer with containing one value
+ * ------------------------------------------------------------------------
+ */
+int nowdb_row_len(char *row);
+
 #endif
