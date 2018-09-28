@@ -109,6 +109,9 @@ nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
 		case NOWDB_TYP_INT: 
 			i+=8; break;
 
+		case NOWDB_TYP_BOOL: 
+			i+=1; break;
+
 		default:
 			return nowdb_err_get(nowdb_err_invalid,
 			  FALSE, OBJECT, "unknown type in row");
@@ -145,13 +148,19 @@ nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
 
 		switch((nowdb_type_t)t) {
 		case NOWDB_TYP_TEXT:
+			// fprintf(stderr, "text at %u (%u)\n", i, f);
 			i+=strlen(buf+i)+1; break;
 
 		case NOWDB_TYP_DATE: 
 		case NOWDB_TYP_TIME: 
 		case NOWDB_TYP_UINT: 
 		case NOWDB_TYP_INT: 
+			// fprintf(stderr, "number at %u (%u)\n", i, f);
 			i+=8; break;
+
+		case NOWDB_TYP_BOOL: 
+			// fprintf(stderr, "bool at %u (%u)\n", i, f);
+			i+=1; break;
 
 		default:
 			return nowdb_err_get(nowdb_err_invalid,

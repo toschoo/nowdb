@@ -315,12 +315,14 @@ int64_t readResult(nowdb_scope_t *scope,
 			if (err != NOWDB_OK) {
 				fprintf(stderr, "error extracting row %d\n", r);
 				nowdb_err_print(err); nowdb_err_release(err);
+				more=0;
 				break;
 			}
 			err = nowdb_row_extractField(buf+i, osz-i, field, &f);
 			if (err != NOWDB_OK) {
-				fprintf(stderr, "error extracting field\n");
+				fprintf(stderr, "error extracting field %u\n", field);
 				nowdb_err_print(err); nowdb_err_release(err);
+				more=0;
 				break;
 			}
 			res += (int64_t)*(uint64_t*)(buf+i+f);
@@ -588,12 +590,14 @@ int main() {
 		CHECKRESULT(5, 0, 0, 0);
 	}
 
+	/*
 	// test count with group
 	fprintf(stderr, "COUNT with GROUP\n");
 	for(int i=0; i<1; i++) {    // RANGE SCAN
 		READRESULT(SQLCOUNT, 2); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
+	*/
 
 	// test count without group
 	fprintf(stderr, "COUNT W/O GROUP\n");
