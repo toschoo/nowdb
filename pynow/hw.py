@@ -7,7 +7,9 @@ def hello():
 
 def sumof2(a,b):
   print "%d" % (a+b)
-  return nowdb.success().toDB()
+  r = nowdb.makeRow()
+  r.add2Row(nowdb.INT, a+b)
+  return r.toDB()
 
 def sumof3(a,b,c):
   print "%d" % (a+b+c)

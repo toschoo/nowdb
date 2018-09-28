@@ -76,6 +76,10 @@ _mkErr = now.nowdb_dbresult_makeError
 _mkErr.restype = c_void_p
 _mkErr.argtypes = [c_long, c_char_p]
 
+_mkRow = now.nowdb_dbresult_makeRow
+_mkRow.restype = c_void_p
+_mkRow.argtypes = []
+
 _rDestroy = now.nowdb_dbresult_destroy
 _rDestroy.argtypes = [c_void_p, c_long]
 
@@ -130,6 +134,10 @@ _rField = now.nowdb_dbrow_field
 _rField.restype = c_void_p
 _rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
 
+_rAdd = now.nowdb_dbresult_add2Row
+_rAdd.restype = c_long
+_rAdd.argtypes = [c_void_p, c_byte, c_void_p]
+
 def _setDB(db):
   global _db
   _db = db
@@ -148,6 +156,26 @@ def makeError(rc, msg):
 
 def success():
   return Result(_success())
+
+def makeRow():
+  return Result(_mkRow())
+
+def convert(t, value):
+  if t == TEXT: 
+    return c_char_p(value)
+  elif t == DATE:
+    return c_longlong(value)
+  elif t == TIME:
+    return c_longlong(value)
+  elif t == FLOAT:
+    return c_double(value)
+  elif t == INT:
+    return c_longlong(value)
+  elif t == UINT:
+    return c_ulonglong(value)
+  elif t == BOOL:
+    return c_longlong(value)
+  raise WrongType("unknown value")
 
 class Result:
   def __init__(self, r):
@@ -246,6 +274,12 @@ class Result:
 
   def fetch(self):
     return (_rFetch(self._r) == 0)
+
+  def add2Row(self, t, value):
+    if self._r is None:
+      return False
+    v = convert(t, value)
+    return (_rAdd(self._r, t, byref(v)) == 0)
 
   def row(self):
     if self.rType() != CURSOR:

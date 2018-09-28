@@ -1234,39 +1234,6 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 	}
 	nowdb_dbresult_result(p, res); free(p);
 
-	/*
-	// get result
-	PyObject *fst = PyTuple_GetItem(r, (Py_ssize_t)0);
-	if (fst == NULL) {
-		PYTHONERR("cannot parse result");
-		PyErr_Print();
-		Py_DECREF(r);
-		nowdb_proc_updateInterpreter(proc);
-		return err;
-
-	} else {
-		// this is not 1:1
-		// we need in Python:
-		// status, report, single value, cursor
-		res->resType = (uint16_t)PyLong_AsLong(fst);
-		fprintf(stderr, "RESULT: %hu\n", res->resType);
-	}
-	if (res->resType != NOWDB_QRY_RESULT_NOTHING) {
-		fprintf(stderr, "not nothing\n");
-		PyObject *snd = PyTuple_GetItem(r, (Py_ssize_t)1);
-		if (snd == NULL) {
-			PYTHONERR("cannot parse result");
-			PyErr_Print();
-			Py_DECREF(r);
-			nowdb_proc_updateInterpreter(proc);
-			return err;
-		} else {
-			res->result = PyLong_AsVoidPtr(snd);
-		}
-	}
-	Py_DECREF(r);
-	*/
-
 	nowdb_proc_updateInterpreter(proc);
 
 	return NOWDB_OK;

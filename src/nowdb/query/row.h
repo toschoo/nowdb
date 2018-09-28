@@ -34,7 +34,6 @@ typedef struct {
 	void           *value; /* constant value                         */
 	uint16_t          typ; /* type of constant value                 */
 	nowdb_bitmap8_t flags; /* what to do with the field              */
-	// uint32_t         func; /* non-aggregate to apply to the field    */
 	uint32_t          agg; /* aggregate function to apply on the row */
 } nowdb_field_t;
 

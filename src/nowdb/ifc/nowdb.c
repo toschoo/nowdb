@@ -1047,6 +1047,36 @@ static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
  * send cursor and rows
  * -----------------------------------------------------------------------
  */
+static int sendRow(nowdb_session_t    *ses,
+                   nowdb_qry_result_t *res) {
+	nowdb_err_t err;
+	char *status=ses->buf;
+	nowdb_qry_row_t *row;
+
+	status[0] = NOWDB_ROW;
+	status[1] = NOWDB_ACK;
+
+	row = res->result;
+
+	memcpy(ses->buf+2, &row->sz, 4);
+	memcpy(ses->buf+6, row->row, row->sz);
+
+	if (write(ses->ostream, ses->buf, row->sz+6) != row->sz+6) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+			                         "writing cursor");
+		SETERR();
+		return -1;
+	}
+	free(row->row);
+	free(res->result); res->result = NULL;
+	LOGMSG("ROW");
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * send cursor and rows
+ * -----------------------------------------------------------------------
+ */
 static int sendCursor(nowdb_session_t   *ses,
                       uint64_t         curid,
                       char *buf, uint32_t sz) {
@@ -1258,6 +1288,9 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 		ses->scope = res.result;
 		nowdb_proc_setScope(ses->proc, ses->scope);
 		return sendOK(ses);
+
+	case NOWDB_QRY_RESULT_ROW:
+		return sendRow(ses, &res);
 
 	case NOWDB_QRY_RESULT_CURSOR:
 		return openCursor(ses, res.result);

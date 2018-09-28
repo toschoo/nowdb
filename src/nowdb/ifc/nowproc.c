@@ -255,6 +255,12 @@ static void qResDestroy(nowdb_qry_result_t *res) {
 		}
 		break;
 
+	case NOWDB_QRY_RESULT_ROW:
+		if (res->result != NULL) {
+			free(res->result); res->result = NULL;
+		}
+		break;
+
 	case NOWDB_QRY_RESULT_CURSOR:
 		if (res->result != NULL) {
 			nowdb_cursor_destroy(res->result);
@@ -322,16 +328,46 @@ nowdb_dbresult_t nowdb_dbresult_makeReport(uint64_t affected,
 }
 
 /* ------------------------------------------------------------------------
- * Create a result from row
+ * Make a row result
  * ------------------------------------------------------------------------
  */
-nowdb_dbresult_t nowdb_dbresult_makeRow(int fields, ...);
+nowdb_dbrow_t nowdb_dbresult_makeRow() {
+	return (nowdb_dbrow_t)mkResult(NOWDB_DBRESULT_ROW);
+}
 
 /* ------------------------------------------------------------------------
- * Create a result from empty row
+ * Add something to a row
  * ------------------------------------------------------------------------
  */
-nowdb_dbresult_t nowdb_dbresult_fromEmptyRow(int fields);
+int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value) 
+{
+	char *tmp = NULL;
+	nowdb_qry_row_t *qr=NULL;
+
+	if (row == NULL) return -1;
+
+	if (ROW(row)->res.result == NULL) {
+		qr = calloc(1,sizeof(nowdb_qry_row_t));
+		if (qr == NULL) return -1;
+
+		ROW(row)->res.resType = NOWDB_QRY_RESULT_ROW;
+	} else {
+		qr = ROW(row)->res.result;
+	}
+
+	tmp = nowdb_row_addValue(qr->row, t, value, &qr->sz);
+	if (tmp == NULL) {
+		if (qr->row != NULL) {
+			free(qr->row); qr->row = NULL;
+		}
+		free(qr); qr = NULL;
+		ROW(row)->res.resType = NOWDB_QRY_RESULT_NOTHING;
+		ROW(row)->res.result  = NULL;
+	}
+	qr->row = tmp;
+	ROW(row)->res.result = qr;
+	return 0;
+}
 
 /* ------------------------------------------------------------------------
  * Wrap result
@@ -347,6 +383,9 @@ nowdb_dbresult_t nowdb_dbresult_wrap(void *result) {
 
 	case NOWDB_QRY_RESULT_REPORT:
 		r = mkResult(NOWDB_DBRESULT_REPORT); break;
+
+	case NOWDB_QRY_RESULT_ROW:
+		r = mkResult(NOWDB_DBRESULT_ROW); break;
 
 	case NOWDB_QRY_RESULT_CURSOR:
 		r = mkResult(NOWDB_DBRESULT_CURSOR); break;
