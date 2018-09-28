@@ -88,6 +88,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sql/parser.o     \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
+      $(SRC)/query/rowutl.o   \
       $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
       $(SRC)/ifc/proc.o       \
@@ -128,6 +129,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/fun/expr.h       \
       $(SRC)/fun/fun.h        \
       $(SRC)/fun/group.h      \
+      $(SRC)/query/rowutl.h   \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -161,8 +163,7 @@ tools:	bin/randomfile    \
 	bin/waitstore     \
 	bin/waitscope     \
 	bin/writecsv      \
-	bin/scopetool     \
-	bin/scopetool2    \
+	bin/scopetool
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -238,7 +239,8 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         $(SRC)/types/types.o \
                         $(SRC)/types/errman.o \
                         $(SRC)/types/error.o \
-                        $(SRC)/types/time.o
+                        $(SRC)/types/time.o \
+                        $(SRC)/query/rowutl.o
 			$(LNKMSG)
 			$(CC) -shared \
 			      -o $(OUTLIB)/libnowdbclient.so \
@@ -246,6 +248,7 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/types/errman.o \
                         	 $(SRC)/types/error.o \
                         	 $(SRC)/types/time.o \
+                        	 $(SRC)/query/rowutl.o \
 			         $(SRL)/nowdbclient.o $(libs)
 
 # Lemon
@@ -574,15 +577,6 @@ $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              $(COM)/cmd.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool.o \
-			              	       $(COM)/bench.o      \
-			              	       $(COM)/cmd.o        \
-			                 $(libs) -lnowdb
-
-$(BIN)/scopetool2:	$(LIB) $(TOOLS)/scopetool2.o \
-			       $(COM)/bench.o      \
-			       $(COM)/cmd.o
-			$(LNKMSG)
-			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/scopetool2.o \
 			              	       $(COM)/bench.o      \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb

@@ -509,6 +509,7 @@ int main() {
 		}
 	}
 	if (!nowdb_cursor_eof(cur)) {
+		fprintf(stderr, "this is not EOF!\n");
 		fprintf(stderr, "ERROR %d: %s\n",
 		        nowdb_cursor_errcode(cur),
 		        nowdb_cursor_details(cur));

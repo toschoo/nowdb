@@ -102,7 +102,7 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
  */
 void printRow(char *buf, uint32_t sz) {
 	// fprintf(stderr, "printing row\n");
-	NOWDB_IGNORE(nowdb_row_write(buf, sz, stdout));
+	nowdb_row_print(buf, sz, stdout);
 }
 
 /* -----------------------------------------------------------------------

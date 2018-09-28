@@ -23,6 +23,7 @@
  * ========================================================================
  */
 #include <nowdb/nowclient.h>
+#include <nowdb/query/rowutl.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -601,12 +602,7 @@ int nowdb_exec_statement(nowdb_con_t     con,
  * ------------------------------------------------------------------------
  */
 static inline int findEndOfStr(char *buf, int sz, int idx) {
-	int z;
-	int x = strnlen(buf+idx, 4097);
-	if (x > 4096) return -1;
-	z = idx+x;
-	if (z>=sz) return -1;
-	return (z+1);
+	return nowdb_row_findEndOfStr(buf, sz, idx);
 }
 
 /* ------------------------------------------------------------------------
@@ -614,18 +610,7 @@ static inline int findEndOfStr(char *buf, int sz, int idx) {
  * ------------------------------------------------------------------------
  */
 static inline int findEORow(nowdb_row_t p, int idx) {
-	int i;
-	for(i=idx; i<ROW(p)->sz;) {
-		if (ROW(p)->buf[i] == EOROW) break;
-		if (ROW(p)->buf[i] == NOWDB_TEXT) {
-			i = findEndOfStr(ROW(p)->buf,
-			                 ROW(p)->sz,i);
-			continue;
-		}
-		i+=9;
-	}
-	if (i >= ROW(p)->sz) return -1;
-	return (i+1);
+	return nowdb_row_findEOR(ROW(p)->buf, ROW(p)->sz, idx);
 }
 
 /* ------------------------------------------------------------------------
@@ -633,25 +618,7 @@ static inline int findEORow(nowdb_row_t p, int idx) {
  * ------------------------------------------------------------------------
  */
 static inline int findLastRow(char *buf, int sz) {
-	int i;
-	int l=sz;
-	
-	if (sz == 0) return 0;
-	for(i=0; i<sz;) {
-		if (buf[i] == EOROW) {
-			l=i; i++;
-			if (i == sz) break;
-		}
-		if (buf[i] == NOWDB_TEXT) {
-			i++;
-			i = findEndOfStr(buf, sz, i);
-			if (i < 0) return i;
-			continue;
-		}
-		i+=9;
-	}
-	l++;
-	return l;
+	return nowdb_row_findLastRow(buf, sz);
 }
 
 /* ------------------------------------------------------------------------

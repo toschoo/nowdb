@@ -15,6 +15,7 @@
 #include <nowdb/mem/ptlru.h>
 #include <nowdb/fun/expr.h>
 #include <nowdb/fun/group.h>
+#include <nowdb/query/rowutl.h>
 
 #include <stdint.h>
 
@@ -99,44 +100,4 @@ nowdb_err_t nowdb_row_group(nowdb_row_t *row);
  */
 nowdb_err_t nowdb_row_toString(char  *buf,
                                char **str);
-
-/* ------------------------------------------------------------------------
- * write (e.g. print) buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream);
-
-/* ------------------------------------------------------------------------
- * Extract a row from the buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
-                                 uint32_t row, uint32_t *idx);
-
-/* ------------------------------------------------------------------------
- * Extract a field from the buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
-                                   uint32_t field, uint32_t *idx);
-
-/* ------------------------------------------------------------------------
- * Manually create a row buffer with containing one value
- * ------------------------------------------------------------------------
- */
-char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz); 
-
-/* ------------------------------------------------------------------------
- * Add a value to a row buffer with containing one value
- * ------------------------------------------------------------------------
- */
-char *nowdb_row_addValue(char *row, nowdb_type_t t,
-                         void *value, uint32_t *sz);
-
-/* ------------------------------------------------------------------------
- * Add a value to a row buffer with containing one value
- * ------------------------------------------------------------------------
- */
-int nowdb_row_len(char *row);
-
 #endif

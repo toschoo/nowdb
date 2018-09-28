@@ -27,6 +27,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/query/stmt.h>
+#include <nowdb/query/row.h>
 #include <nowdb/ifc/proc.h>
 #include <nowdb/ifc/nowdb.h>
 
@@ -437,32 +438,15 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
  * ------------------------------------------------------------------------
  */
 static inline int findEndOfStr(char *buf, int sz, int idx) {
-	int z;
-	int x = strnlen(buf+idx, 4097);
-	if (x > 4096) return -1;
-	z = idx+x;
-	if (z>=sz) return -1;
-	return (z+1);
+	return nowdb_row_findEndOfStr(buf, sz, idx);
 }
 
 /* ------------------------------------------------------------------------
  * End of row
  * ------------------------------------------------------------------------
  */
-static inline int findEORow(nowdb_dbresult_t p, int idx) {
-	int i;
-	for(i=idx; i<ROW(p)->sz;) {
-		if (ROW(p)->buf[i] == NOWDB_EOR) break;
-		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
-			i = findEndOfStr(ROW(p)->buf,
-			                 ROW(p)->sz,i);
-			if (i < 0) return -1;
-			continue;
-		}
-		i+=9;
-	}
-	if (i >= ROW(p)->sz) return -1;
-	return (i+1);
+static inline int findEORow(char *buf, uint32_t sz, int idx) {
+	return nowdb_row_findEOR(buf, sz, idx);
 }
 
 /* ------------------------------------------------------------------------
@@ -470,25 +454,7 @@ static inline int findEORow(nowdb_dbresult_t p, int idx) {
  * ------------------------------------------------------------------------
  */
 static inline int findLastRow(char *buf, int sz) {
-	int i;
-	int l=sz;
-	
-	if (sz == 0) return 0;
-	for(i=0; i<sz;) {
-		if (buf[i] == NOWDB_EOR) {
-			l=i; i++;
-			if (i == sz) break;
-		}
-		if (buf[i] == NOWDB_TYP_TEXT) {
-			i++;
-			i = findEndOfStr(buf, sz, i);
-			if (i < 0) return i;
-			continue;
-		}
-		i+=9;
-	}
-	l++;
-	return l;
+	return nowdb_row_findLastRow(buf, sz);
 }
 
 /* ------------------------------------------------------------------------
@@ -499,11 +465,11 @@ int nowdb_dbrow_next(nowdb_dbrow_t p) {
 	int i,j;
 
 	/* search start of next */
-	i = findEORow(ROW(p), ROW(p)->off);
+	i = findEORow(ROW(p)->buf, ROW(p)->sz, ROW(p)->off);
 	if (i < 0) return -1;
 
 	/* make sure the row is complete */
-	j = findEORow(ROW(p), i);
+	j = findEORow(ROW(p)->buf, ROW(p)->sz, i);
 	if (j<0) return -1;
 
 	ROW(p)->off = i;
@@ -558,9 +524,16 @@ void *nowdb_dbrow_field(nowdb_dbrow_t p, int field, int *type) {
 
 /* ------------------------------------------------------------------------
  * Write all rows in human-readable form to file
+ * TODO: check that print respects leftovers!
  * ------------------------------------------------------------------------
  */
-int nowdb_dbrow_write(FILE *file, nowdb_dbrow_t row);
+int nowdb_dbrow_write(FILE *file, nowdb_dbrow_t row) {
+	int rc;
+
+	rc = nowdb_row_print(ROW(row)->buf, ROW(row)->sz, file);
+	if (rc != 0) return rc;
+	return 0;
+}
 
 /* ------------------------------------------------------------------------
  * Open cursor from given result

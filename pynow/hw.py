@@ -1,6 +1,6 @@
 import random
 import nowdb
-import dbsqltest
+#import dbsqltest
 
 def hello():
   print "hello nowdb!"
@@ -116,5 +116,5 @@ def mycount(edge, origin):
 
   return nowdb.success().toDB()
 
-def count2():
-    return dbsqltest.count2()
+#def count2():
+#    return dbsqltest.count2()

@@ -38,7 +38,7 @@ char *randstr(uint32_t *sz) {
 }
 
 char *testSingle(char *row2) {
-	nowdb_err_t err;
+	int rc;
 	char *row=NULL;
 	uint32_t sz=0;
 	uint32_t s=0;
@@ -137,11 +137,9 @@ char *testSingle(char *row2) {
 		free(row); row=NULL;
 		return NULL;
 	}
-	err = nowdb_row_write(row, sz, stderr);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot write %d (%d, %u) row: \n", t, l, sz);
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_row_print(row, sz, stderr);
+	if (rc != 0) {
+		fprintf(stderr, "cannot write %d (%d, %u) row: %d\n", t, l, sz, rc);
 		if (txt != NULL) fprintf(stderr, "'%s'\n", txt);
 		for(int j=0;j<sz;j++) {
 			fprintf(stderr, "%d ", row[j]);
