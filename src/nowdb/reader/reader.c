@@ -1120,7 +1120,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 			return err;
 		}
 
-		err = nowdb_pplru_init((*reader)->plru, 10000);
+		err = nowdb_pplru_init((*reader)->plru, 100000);
 		if (err != NOWDB_OK) {
 			free((*reader)->plru); (*reader)->plru = NULL;
 			nowdb_reader_destroy(*reader); free(*reader);

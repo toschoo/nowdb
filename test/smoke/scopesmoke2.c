@@ -293,7 +293,7 @@ int64_t readResult(nowdb_scope_t *scope,
 		return -1;
 	}
 
-	buf = malloc(8192);
+	buf = malloc(2*8192);
 	if (buf == NULL) {
 		fprintf(stderr, "out-of-mem\n");
 		closeCursor(cur);
@@ -301,7 +301,7 @@ int64_t readResult(nowdb_scope_t *scope,
 	}
 
 	while(more) {
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
+		err = nowdb_cursor_fetch(cur, buf, 2*8192, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err); err = NOWDB_OK;
@@ -311,6 +311,7 @@ int64_t readResult(nowdb_scope_t *scope,
 		}
 		for(uint32_t r=0; r<cnt; r++) {
 			uint32_t i, f;
+			// extract row does not consider leftovers
 			err = nowdb_row_extractRow(buf, osz, r, &i);
 			if (err != NOWDB_OK) {
 				fprintf(stderr, "error extracting row %d\n", r);
@@ -590,14 +591,12 @@ int main() {
 		CHECKRESULT(5, 0, 0, 0);
 	}
 
-	/*
 	// test count with group
 	fprintf(stderr, "COUNT with GROUP\n");
 	for(int i=0; i<1; i++) {    // RANGE SCAN
 		READRESULT(SQLCOUNT, 2); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
-	*/
 
 	// test count without group
 	fprintf(stderr, "COUNT W/O GROUP\n");
