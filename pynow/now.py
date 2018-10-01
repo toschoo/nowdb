@@ -165,12 +165,15 @@ class Connection:
 
     def __exit__(self, a, b, c):
       if self.con != None:
-          _closeCon(self.con)
+          # x = _closeCon(self.con)
+          self.close()
           
     def close(self):
         x = _closeCon(self.con)
         if x == 0:
             self.con = None
+        else:
+            print "cannot close connection!"
 
     def execute(self, stmt):
         r = c_void_p()
