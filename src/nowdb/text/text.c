@@ -658,6 +658,24 @@ static inline nowdb_err_t getString(nowdb_text_t *txt,
 		free(*str); *str = NULL;
 		return makeBeetError(ber);
 	}
+	if (cache) {
+		res = malloc(sizeof(lrunode_t));
+		if (res == NULL) {
+			NOMEM("allocating lrunode"); return err;
+		}
+		res->str = strdup(*str);
+		if (res->str == NULL) {
+			NOMEM("allocating string");
+			free(res); return err;
+		}
+		res->key = key;
+		err = nowdb_lru_add(txt->num2str, res);
+		if (err != NOWDB_OK) {
+			free(res->str); free(res);
+			return err;
+		}
+	}
+
 	return NOWDB_OK;
 }
 
