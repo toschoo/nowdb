@@ -964,26 +964,23 @@ uint64_t nowdb_cursor_id(nowdb_cursor_t cur) {
  * Wrappers
  * ------------------------------------------------------------------------
  */
-void *nowdb_time_fromString(const char *buf,
-                            const char *frm,
-                            nowdb_time_t *t);
-
-void *nowdb_time_toString(nowdb_time_t  t,
+int nowdb_time_fromString(const char *buf,
                           const char *frm,
-                                char *buf,
-                               size_t max);
+                          nowdb_time_t *t);
+
+int nowdb_time_toString(nowdb_time_t  t,
+                        const char *frm,
+                              char *buf,
+                            size_t max);
 
 void *nowdb_time_now(nowdb_time_t *t);
 
 void nowdb_time_fromSystem(const struct timespec *tp,
-                         nowdb_time_t *t);
+                                     nowdb_time_t *t);
 
-void *nowdb_time_toSystem(nowdb_time_t t,
-                          struct timespec *tp);
+int nowdb_time_toSystem(nowdb_time_t t,
+                  struct timespec *tp);
 
-int nowdb_err_code(void *err);
-void nowdb_err_release(void *err);
-void nowdb_err_print(void *err);
 const char *nowdb_err_desc(int errcode);
 
 /* ------------------------------------------------------------------------
@@ -994,15 +991,10 @@ int nowdb_time_parse(const char *buf,
                      const char *frm,
                      nowdb_time_t *t) {
 
-	void *err;
 	int rc;
 
-	err = nowdb_time_fromString(buf, frm, t);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_fromString(buf, frm, t);
+	if (rc != NOWDB_OK) return rc;
 	return NOWDB_OK;
 }
 	
@@ -1014,15 +1006,10 @@ int nowdb_time_show(nowdb_time_t  t,
                     const char *frm,
                           char *buf,
                          size_t max) {
-	void *err;
 	int rc;
 
-	err = nowdb_time_toString(t, frm, buf, max);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_toString(t, frm, buf, max);
+	if (rc != NOWDB_OK) return rc;
 	return NOWDB_OK;
 }
 
@@ -1054,14 +1041,9 @@ nowdb_time_t nowdb_time_fromUnix(const struct timespec *tp) {
  */
 int nowdb_time_toUnix(nowdb_time_t t,
                       struct timespec *tp) {
-	void *err;
 	int rc;
-	err = nowdb_time_toSystem(t, tp);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_toSystem(t, tp);
+	if (rc != NOWDB_OK) return rc;
 	return 0;
 }
 

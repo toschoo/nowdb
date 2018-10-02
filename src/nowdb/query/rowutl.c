@@ -9,8 +9,6 @@
 #include <nowdb/types/error.h>
 #include <nowdb/query/rowutl.h>
 
-static char *OBJECT = "rowutl";
-
 #define MAXROW 0x1000
 
 /* ------------------------------------------------------------------------
@@ -18,7 +16,6 @@ static char *OBJECT = "rowutl";
  * ------------------------------------------------------------------------
  */
 int nowdb_row_print(char *buf, uint32_t sz, FILE *stream) {
-	nowdb_err_t err;
 	char tmp[32];
 	uint32_t i=0;
 	char t;
@@ -43,14 +40,10 @@ int nowdb_row_print(char *buf, uint32_t sz, FILE *stream) {
 
 		case NOWDB_TYP_DATE: 
 		case NOWDB_TYP_TIME: 
-			err = nowdb_time_toString(*(nowdb_time_t*)(buf+i),
-		                                        NOWDB_TIME_FORMAT,
-		                                                  tmp, 32);
-			if (err != NOWDB_OK) {
-				rc = err->errcode;
-				nowdb_err_release(err);
-				return rc;
-			}
+			rc = nowdb_time_toString(*(nowdb_time_t*)(buf+i),
+		                                       NOWDB_TIME_FORMAT,
+		                                                tmp, 32);
+			if (rc != 0) return rc;
 			fprintf(stream, "%s", tmp); i+=8; break;
 
 		case NOWDB_TYP_INT: 
@@ -81,99 +74,6 @@ int nowdb_row_print(char *buf, uint32_t sz, FILE *stream) {
 	}
 	fflush(stream);
 	return 0;
-}
-
-/* ------------------------------------------------------------------------
- * Extract a row from the buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
-                                 uint32_t row, uint32_t *idx) {
-	char t;
-	uint32_t i=0;
-	uint32_t r=0;
-
-	while(i<sz) {
-		if (r == row) break;
-		t = buf[i]; i++;
-		if (t == '\n') {
-			r++; continue;
-		}
-		switch((nowdb_type_t)t) {
-		case NOWDB_TYP_TEXT:
-			i+=strlen(buf+i)+1; break;
-
-		case NOWDB_TYP_DATE: 
-		case NOWDB_TYP_TIME: 
-		case NOWDB_TYP_UINT: 
-		case NOWDB_TYP_INT: 
-			i+=8; break;
-
-		case NOWDB_TYP_BOOL: 
-			i+=1; break;
-
-		default:
-			return nowdb_err_get(nowdb_err_invalid,
-			  FALSE, OBJECT, "unknown type in row");
-		}
-	}
-	if (r < row) {
-		return nowdb_err_get(nowdb_err_not_found,
-		       FALSE, OBJECT, "not enough rows");
-	}
-	*idx = i;
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Extract a field from the buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
-                                   uint32_t field, uint32_t *idx) {
-	char t;
-	uint32_t i=0;
-	uint32_t f=0;
-
-	if (f == field) {
-		*idx = 1; return NOWDB_OK;
-	}
-	while(i<sz) {
-		t = buf[i]; i++;
-		if (t == '\n') {
-			return nowdb_err_get(nowdb_err_not_found,
-			      FALSE, OBJECT, "not enough fields");
-		}
-		if (f == field) break;
-
-		switch((nowdb_type_t)t) {
-		case NOWDB_TYP_TEXT:
-			// fprintf(stderr, "text at %u (%u)\n", i, f);
-			i+=strlen(buf+i)+1; break;
-
-		case NOWDB_TYP_DATE: 
-		case NOWDB_TYP_TIME: 
-		case NOWDB_TYP_UINT: 
-		case NOWDB_TYP_INT: 
-			// fprintf(stderr, "number at %u (%u)\n", i, f);
-			i+=8; break;
-
-		case NOWDB_TYP_BOOL: 
-			// fprintf(stderr, "bool at %u (%u)\n", i, f);
-			i+=1; break;
-
-		default:
-			return nowdb_err_get(nowdb_err_invalid,
-			  FALSE, OBJECT, "unknown type in row");
-		}
-		f++;
-	}
-	if (f != field) {
-		return nowdb_err_get(nowdb_err_not_found,
-		      FALSE, OBJECT, "not enough fields");
-	}
-	*idx=i;
-	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------

@@ -65,13 +65,12 @@ nowdb_time_t frombroken(struct tm *broken) {
 char *stringtime(nowdb_time_t t) {
 	char *nice;
 	struct tm broken;
-	nowdb_err_t err;
 	nowdb_system_time_t st;
+	int rc;
 
-	err = nowdb_time_toSystem(t, &st);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(t, &st);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return NULL;
 	}
 
@@ -409,16 +408,15 @@ nowdb_time_t myepoch() {
  * -------------------------------------------------------------------------
  */
 nowdb_bool_t unixepochtest() {
-	nowdb_err_t err;
 	nowdb_time_t time1, time2;
 	nowdb_system_time_t tm;
+	int rc;
 
 	fprintf(stderr, "UNIX Epoch Test\n");
 
-	err = nowdb_time_now(&time1);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&time1);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	char *str = stringtime(time1);
@@ -428,10 +426,9 @@ nowdb_bool_t unixepochtest() {
 	}
 	fprintf(stderr, "TEST: %s (%ld)\n", str, time1); free(str);
 
-	err = nowdb_time_toSystem(time1, &tm);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(time1, &tm);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	nowdb_time_fromSystem(&tm, &time2);
@@ -449,9 +446,9 @@ nowdb_bool_t unixepochtest() {
  */
 nowdb_bool_t myepochtest() {
 	nowdb_time_t mepoch;
-	nowdb_err_t err;
 	nowdb_time_t time1, time2;
 	nowdb_system_time_t tm;
+	int rc;
 
 	fprintf(stderr, "My Epoch Test\n");
 
@@ -465,10 +462,9 @@ nowdb_bool_t myepochtest() {
 
 	nowdb_time_setEpoch(-mepoch);
 
-	err = nowdb_time_now(&time1);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&time1);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
 	}
 	str = stringtime(time1);
@@ -478,10 +474,9 @@ nowdb_bool_t myepochtest() {
 	}
 	fprintf(stderr, "TEST: %s (%ld)\n", str, time1); free(str);
 
-	err = nowdb_time_toSystem(time1, &tm);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(time1, &tm);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	nowdb_time_fromSystem(&tm, &time2);
@@ -499,9 +494,9 @@ nowdb_bool_t myepochtest() {
  */
 nowdb_bool_t myunittest() {
 	nowdb_time_t mepoch = 0;
-	nowdb_err_t err;
 	nowdb_time_t time1, time2;
 	nowdb_system_time_t tm;
+	int rc;
 
 	fprintf(stderr, "My Unit Test\n");
 
@@ -515,10 +510,9 @@ nowdb_bool_t myunittest() {
 	nowdb_time_setPerSec(1000);
 	nowdb_time_setEpoch(0);
 
-	err = nowdb_time_now(&time1);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&time1);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
 	}
 	str = stringtime(time1);
@@ -528,10 +522,9 @@ nowdb_bool_t myunittest() {
 	}
 	fprintf(stderr, "TEST: %s (%ld)\n", str, time1); free(str);
 
-	err = nowdb_time_toSystem(time1, &tm);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(time1, &tm);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	nowdb_time_fromSystem(&tm, &time2);
@@ -549,9 +542,9 @@ nowdb_bool_t myunittest() {
  */
 nowdb_bool_t myepochunittest() {
 	nowdb_time_t mepoch = 0;
-	nowdb_err_t err;
 	nowdb_time_t time1, time2;
 	nowdb_system_time_t tm;
+	int rc;
 
 	fprintf(stderr, "My Epoch & Unit Test\n");
 
@@ -566,10 +559,9 @@ nowdb_bool_t myepochunittest() {
 
 	nowdb_time_setEpoch(-mepoch);
 
-	err = nowdb_time_now(&time1);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&time1);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
 	}
 	str = stringtime(time1);
@@ -579,10 +571,9 @@ nowdb_bool_t myepochunittest() {
 	}
 	fprintf(stderr, "TEST: %s (%ld)\n", str, time1); free(str);
 
-	err = nowdb_time_toSystem(time1, &tm);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(time1, &tm);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	nowdb_time_fromSystem(&tm, &time2);
@@ -632,10 +623,10 @@ nowdb_bool_t comparebroken(struct tm *broken1,
  * -------------------------------------------------------------------------
  */
 nowdb_bool_t testbroken(struct tm *broken1) {
-	nowdb_err_t err;
 	nowdb_time_t time1, time2;
 	nowdb_system_time_t st;
 	struct tm broken2;
+	int rc;
 
 	time1 = frombroken(broken1);
 	char *str = stringtime(time1);
@@ -645,10 +636,9 @@ nowdb_bool_t testbroken(struct tm *broken1) {
 	}
 	fprintf(stderr, "TEST : %s (%ld)\n", str, time1); free(str);
 
-	err = nowdb_time_toSystem(time1, &st);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_toSystem(time1, &st);
+	if (rc != 0) {
+		fprintf(stderr, "cannot convert to system: %d\n", rc);
 		return FALSE;
 	}
 	nowdb_time_fromSystem(&st, &time2);
@@ -819,19 +809,18 @@ nowdb_bool_t randombroken() {
  * -------------------------------------------------------------------------
  */
 nowdb_bool_t randomtimeunix() {
-	nowdb_err_t err;
 	nowdb_time_t t1, t2=0;
 	nowdb_system_time_t st;
 	char *str;
+	int rc;
 
 	nowdb_time_setEpoch(0);
 	nowdb_time_setPerSec(NPERSEC);
 
 	for(int i=0;i<100;i++) {
-		err = nowdb_time_now(&t1);
-		if (err != NOWDB_OK) {
-			nowdb_err_print(err);
-			nowdb_err_release(err);
+		rc = nowdb_time_now(&t1);
+		if (rc != 0) {
+			fprintf(stderr, "cannot get timestamp: %d\n", rc);
 			return FALSE;
 		}
 
@@ -878,10 +867,9 @@ nowdb_bool_t randomtimeunix() {
 		}
 		fprintf(stderr, "%s (%ld)\n", str, t2); free(str);
 
-		err = nowdb_time_toSystem(t2, &st);
-		if (err != NOWDB_OK) {
-			nowdb_err_print(err);
-			nowdb_err_release(err);
+		rc = nowdb_time_toSystem(t2, &st);
+		if (rc != 0) {
+			fprintf(stderr, "cannot convert to system: %d\n", rc);
 			return FALSE;
 		}
 		nowdb_time_fromSystem(&st, &t1);
@@ -909,10 +897,10 @@ nowdb_bool_t randomtimeunix() {
  */
 nowdb_bool_t randomtime() {
 	nowdb_time_t mepoch;
-	nowdb_err_t err;
 	nowdb_time_t t1, t2=0;
 	nowdb_system_time_t st;
 	nowdb_time_setEpoch(0);
+	int rc;
 
 	for(nowdb_time_t unit = NPERSEC; unit>0; unit/=1000) {
 
@@ -933,10 +921,9 @@ nowdb_bool_t randomtime() {
 		fprintf(stderr, "ZERO : %s (%ld)\n", str, mepoch); free(str);
 
 		for(int i=0;i<100;i++) {
-			err = nowdb_time_now(&t1);
-			if (err != NOWDB_OK) {
-				nowdb_err_print(err);
-				nowdb_err_release(err);
+			rc = nowdb_time_now(&t1);
+			if (rc != 0) {
+				fprintf(stderr, "cannot get timestamp: %d\n", rc);
 				return FALSE;
 			}
 			
@@ -984,10 +971,9 @@ nowdb_bool_t randomtime() {
 			}
 			fprintf(stderr, "%s (%ld)\n", str, t2); free(str);
 	
-			err = nowdb_time_toSystem(t2, &st);
-			if (err != NOWDB_OK) {
-				nowdb_err_print(err);
-				nowdb_err_release(err);
+			rc = nowdb_time_toSystem(t2, &st);
+			if (rc != 0) {
+				fprintf(stderr, "cannot convert ot system: %d\n", rc);
 				return FALSE;
 			}
 			nowdb_time_fromSystem(&st, &t1);

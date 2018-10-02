@@ -204,7 +204,8 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
                                    int            stype,
                                    void         **value) {
 	char *tmp;
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
+	int rc;
 
 	*value = malloc(sz);
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -243,8 +244,10 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	case NOWDB_TYP_TEXT:
 		if (off == NOWDB_OFF_TMSTMP) {
 			*typ = NOWDB_TYP_TIME;
-			err = nowdb_time_fromString(str,
+			rc = nowdb_time_fromString(str,
 			      NOWDB_TIME_FORMAT, *value);
+			if (rc != 0) err = nowdb_err_get(rc, FALSE,
+		                   OBJECT, "timestamp from string");
 		} else {
 			err = nowdb_text_getKey(scope->text, str, *value);
 		}

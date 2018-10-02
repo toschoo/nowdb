@@ -177,27 +177,25 @@ int getOpts(int argc, char **argv) {
  */
 void banner(nowdb_t *lib, char *path) {
 char tstr[32];
-nowdb_err_t err;
 nowdb_time_t tm;
+int rc;
 
 if (!global_banner) return;
 
-err = nowdb_time_now(&tm);
-if (err != NOWDB_OK) {
+rc = nowdb_time_now(&tm);
+if (rc != 0) {
 	fprintf(stderr, "bad start: we have no banner :-(\n");
-	nowdb_err_print(err);
-	nowdb_err_release(err);
+	fprintf(stderr, "error code %d on get timestamp\n", rc);
 	return;
 }
 
 tm /= 1000000;
 tm *= 1000000;
 
-err = nowdb_time_toString(tm, NOWDB_TIME_FORMAT, tstr, 32);
-if (err != NOWDB_OK) {
+rc = nowdb_time_toString(tm, NOWDB_TIME_FORMAT, tstr, 32);
+if (rc != 0) {
 	fprintf(stderr, "bad start: we have no banner :-(\n");
-	nowdb_err_print(err);
-	nowdb_err_release(err);
+	fprintf(stderr, "error code %d on timestamp to string\n", rc);
 	return;
 }
 

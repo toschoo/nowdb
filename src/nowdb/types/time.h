@@ -109,8 +109,8 @@ void nowdb_time_fromSystem(const nowdb_system_time_t *tm,
  * - Time out of range
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_time_toSystem(nowdb_time_t       time,
-                                nowdb_system_time_t *tm);
+int nowdb_time_toSystem(nowdb_time_t       time,
+                        nowdb_system_time_t *tm);
 
 /* ------------------------------------------------------------------------
  * Standard periods according to unit
@@ -131,24 +131,24 @@ nowdb_time_t nowdb_time_week();
  * - OS Error
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_time_now(nowdb_time_t *time);
+int nowdb_time_now(nowdb_time_t *time);
 
 /* ------------------------------------------------------------------------
  * Get time from string
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_time_fromString(const char *buf,
-                                  const char *frm,
-                                  nowdb_time_t *t);
+int nowdb_time_fromString(const char *buf,
+                          const char *frm,
+                          nowdb_time_t *t);
 
 /* ------------------------------------------------------------------------
  * Write time to string
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_time_toString(nowdb_time_t  t,
-                                const char *frm,
-                                      char *buf,
-                                     size_t max);
+int nowdb_time_toString(nowdb_time_t  t,
+                        const char *frm,
+                              char *buf,
+                            size_t max);
 
 /* ------------------------------------------------------------------------
  * Benchmarking: get monotonic timestamp

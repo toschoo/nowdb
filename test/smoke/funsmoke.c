@@ -52,7 +52,7 @@ void getValue(void *v, nowdb_type_t type) {
 void getTime(int64_t *tm) {
 	int64_t d = rand()%100000000;
 	char x = rand()%2;
-	NOWDB_IGNORE(nowdb_time_now(tm));
+	nowdb_time_now(tm);
 	if (x) *tm += d; else *tm -= d;
 }
 

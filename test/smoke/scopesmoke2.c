@@ -69,7 +69,7 @@ vrtx_t *products = NULL;
 vrtx_t *clients = NULL;
 
 int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
-	nowdb_err_t err;
+	int rc;
 	nowdb_time_t base;
 	nowdb_time_t nsecs;
 	FILE *f;
@@ -94,12 +94,10 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 		return -1;
 	}
 
-	err = nowdb_time_fromString("2018-08-28T00:00:00",
-	                         NOWDB_TIME_FORMAT, &base);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot get time base\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_fromString("2018-08-28T00:00:00",
+	                       NOWDB_TIME_FORMAT, &base);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get time base: %d\n", rc);
 		fclose(f);
 		return -1;
 	}
