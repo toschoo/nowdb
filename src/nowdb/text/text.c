@@ -807,7 +807,7 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 		return NOWDB_OK;
 	}
 
-	err = nowdb_lock_read(&txt->lock);
+	err = nowdb_lock_write(&txt->lock);
 	if (err != NOWDB_OK) return err;
 
 	err = getKey(txt, str, s, key, &x, TRUE);
@@ -815,7 +815,7 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 	if (!x) err = nowdb_err_get(nowdb_err_key_not_found,
 	                                FALSE, OBJECT, NULL);
 unlock:
-	err2 = nowdb_unlock_read(&txt->lock);
+	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err;
 		return err2;
@@ -842,7 +842,7 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 		return NOWDB_OK;
 	}
 
-	err = nowdb_lock_read(&txt->lock);
+	err = nowdb_lock_write(&txt->lock);
 	if (err != NOWDB_OK) return err;
 
 	err = getString(txt, key, str, TRUE);
@@ -850,7 +850,7 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 	if (*str == NULL) err = nowdb_err_get(nowdb_err_key_not_found,
 	                                         FALSE, OBJECT, NULL);
 unlock:
-	err2 = nowdb_unlock_read(&txt->lock);
+	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err;
 		return err2;

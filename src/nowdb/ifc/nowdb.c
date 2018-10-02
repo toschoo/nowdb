@@ -381,11 +381,15 @@ void nowdb_library_close(nowdb_t *lib) {
 	if (lib->lock != NULL) {
 		NOWDB_IGNORE(killSessions(lib));
 		// NOWDB_IGNORE(waitSessions(lib,2));
+		NOWDB_IGNORE(nowdb_lock_write(lib->lock));
 	}
 	if (lib->fthreads != NULL) {
 		fprintf(stderr, "destroy free threads\n");
 		destroySessionList(lib->fthreads);
 		free(lib->fthreads); lib->fthreads = NULL;
+	}
+	if (lib->lock != NULL) {
+		NOWDB_IGNORE(nowdb_unlock_write(lib->lock));
 	}
 	if (lib->scopes != NULL) {
 		ts_algo_tree_destroy(lib->scopes);
@@ -877,7 +881,6 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 	err = nowdb_task_join(ses->task);
 	if (err != NOWDB_OK) { // what to do?
 		LOGERRMSG(err);
-		nowdb_err_release(err);
 	}
 	return NOWDB_OK;
 }
