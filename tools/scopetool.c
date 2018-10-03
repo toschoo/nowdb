@@ -102,7 +102,7 @@ void printEdge(nowdb_edge_t *buf, uint32_t sz) {
  */
 void printRow(char *buf, uint32_t sz) {
 	// fprintf(stderr, "printing row\n");
-	NOWDB_IGNORE(nowdb_row_write(buf, sz, stdout));
+	nowdb_row_print(buf, sz, stdout);
 }
 
 /* -----------------------------------------------------------------------
@@ -130,6 +130,7 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 	nowdb_model_vertex_t *destin=NULL;
 	nowdb_type_t typ;
 	nowdb_err_t err;
+	int rc;
 	char *str;
 	void *w;
 
@@ -169,9 +170,11 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 		} else {
 			fprintf(stdout, "%lu;", buf[i].label);
 		}
-		err = nowdb_time_toString(buf[i].timestamp,
+		rc = nowdb_time_toString(buf[i].timestamp,
 		                          NOWDB_TIME_FORMAT,
 		                          tmp, 32);
+		if (rc != 0) err = nowdb_err_get(rc,
+		     FALSE, "scopetool", "toString");
 		HANDLEERR("cannot convert timestamp");
 		fprintf(stdout, "%s;", tmp);
 
@@ -192,8 +195,10 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 				free(str); break;
 			case NOWDB_TYP_TIME:
 			case NOWDB_TYP_DATE:
-				err = nowdb_time_toString(*(int64_t*)w,
-				            NOWDB_TIME_FORMAT, tmp, 32);
+				rc = nowdb_time_toString(*(int64_t*)w,
+				           NOWDB_TIME_FORMAT, tmp, 32);
+				if (rc != 0) err = nowdb_err_get(rc, FALSE,
+				                   "scopetool", "toString");
 				HANDLEERR("cannot convert time (weight)");
 				fprintf(stdout, "%s;", tmp); break;
 			case NOWDB_TYP_UINT:
@@ -207,7 +212,6 @@ void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
 
 			}
 		}
-
 		fprintf(stdout, "\n");
 	}
 }
@@ -231,7 +235,8 @@ int printReport(nowdb_qry_result_t *res) {
 	return 0;
 }
 
-char buf[8192];
+#define BUFSIZE 0x10000
+char buf[BUFSIZE];
 
 /* -----------------------------------------------------------------------
  * Process Cursor
@@ -258,7 +263,7 @@ int processCursor(nowdb_cursor_t *cur) {
 
 	for(;;) {
 		nowdb_timestamp(&t1);
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
+		err = nowdb_cursor_fetch(cur, buf, BUFSIZE, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);

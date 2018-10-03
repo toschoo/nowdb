@@ -27,7 +27,11 @@
 #define NOWDB_SQL_ERR_PARSER     5
 #define NOWDB_SQL_ERR_STACK      6
 #define NOWDB_SQL_ERR_EOF        7
-#define NOWDB_SQL_ERR_INPUT      8
+#define NOWDB_SQL_ERR_BUFSIZE    8
+#define NOWDB_SQL_ERR_INPUT      9
+#define NOWDB_SQL_ERR_CLOSED    10
+#define NOWDB_SQL_ERR_SIGNAL    11
+#define NOWDB_SQL_ERR_PROTOCOL  12
 #define NOWDB_SQL_ERR_PANIC     99
 #define NOWDB_SQL_ERR_UNKNOWN  100
 
@@ -94,7 +98,7 @@ typedef struct {
 	size_t x; \
 	char *z; \
 	if (s != NULL) { \
-		x = strnlen(s, 255); \
+		x = strnlen(s, 257); \
 		if (x > 2) { \
 			z = malloc(x-1); \
 			if (z == NULL) { \
@@ -194,6 +198,56 @@ typedef struct {
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'FETCH'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_FETCH(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *f; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&f, NOWDB_AST_FETCH, 0); \
+	nowdb_ast_setValue(f, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, f); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'CLOSE'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_CLOSE(u) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *c; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&c, NOWDB_AST_CLOSE, 0); \
+	nowdb_ast_setValue(c, NOWDB_AST_V_STRING, u); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, c); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'EXECUTE'
+ * Parameters:
+ * - u: the integer identifying the cursor
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_EXEC(N,P) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *x; \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_EXEC, 0); \
+	nowdb_ast_setValue(x, NOWDB_AST_V_STRING, N); \
+	if (P != NULL) \
+		NOWDB_SQL_ADDKID(x, P); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, x); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
  * Create and add an option to an ast 
  * Parameters:
  * - C: the ast to add to
@@ -214,8 +268,8 @@ typedef struct {
  * Parameters:
  * - C: the ast representing the CREATE
  * - x: the target subcode
- * - t: the target identifier
- * - v: an option to be added
+ * - I: the target identifier
+ * - O: an option to be added
  * ------------------------------------------------------------------------
  */
 #define NOWDB_SQL_MAKE_CREATE(C,x,I,O) \
@@ -227,6 +281,42 @@ typedef struct {
 	NOWDB_SQL_ADDKID(C, t); \
 	if (O != NULL) { \
 		NOWDB_SQL_ADDKID(C,O); \
+	}
+
+/* ------------------------------------------------------------------------
+ * Make a 'CREATE PROCEDURE' statement
+ * Parameters:
+ * - C: the ast representing the CREATE
+ * - M: the module
+ * - N: the name of the procedure
+ * - L: the language
+ * - r: the return type (0: procedure)
+ * - P: parameter list
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_PROC(C, M, N, L, r, P) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *t; \
+	nowdb_ast_t *m; \
+	nowdb_ast_t *o; \
+	nowdb_ast_t *o2; \
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_CREATE, 0); \
+	NOWDB_SQL_CREATEAST(&t, NOWDB_AST_TARGET, NOWDB_AST_PROC); \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_TARGET, NOWDB_AST_MODULE); \
+	NOWDB_SQL_CREATEAST(&o, NOWDB_AST_OPTION, NOWDB_AST_LANG); \
+	nowdb_ast_setValue(t, NOWDB_AST_V_STRING, N); \
+	nowdb_ast_setValue(m, NOWDB_AST_V_STRING, M); \
+	nowdb_ast_setValue(o, NOWDB_AST_V_STRING, L); \
+	NOWDB_SQL_ADDKID(t, m); \
+	NOWDB_SQL_ADDKID(C, t); \
+	NOWDB_SQL_ADDKID(C, o); \
+	if (r != 0) { \
+		NOWDB_SQL_CREATEAST(&o2, NOWDB_AST_OPTION, NOWDB_AST_TYPE); \
+		nowdb_ast_setValue(o2, NOWDB_AST_V_INTEGER, r); \
+		NOWDB_SQL_ADDKID(C,o2); \
+	}\
+	if (P != NULL) { \
+		NOWDB_SQL_ADDKID(C,P); \
 	}
 
 /* ------------------------------------------------------------------------

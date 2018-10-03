@@ -1,7 +1,7 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Scope: a collection of contexts
+ * Scope: a database with 1 vertex table and n context tables
  * ========================================================================
  *
  * ========================================================================
@@ -19,6 +19,7 @@
 #include <nowdb/index/man.h>
 #include <nowdb/model/model.h>
 #include <nowdb/text/text.h>
+#include <nowdb/scope/procman.h>
 
 #include <tsalgo/tree.h>
 
@@ -27,16 +28,17 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     lock; /* read/write lock */
-	uint32_t          state; /* open or closed  */
-	nowdb_path_t       path; /* base path       */
-	nowdb_path_t    catalog; /* catalog path    */
-	nowdb_version_t     ver; /* db version      */
-	nowdb_store_t  vertices; /* vertices        */
-	ts_algo_tree_t contexts; /* contexts        */
-	nowdb_index_man_t *iman; /* index manager   */
-	nowdb_model_t    *model; /* model           */
-	nowdb_text_t      *text; /* strings         */
+	nowdb_rwlock_t     lock; /* read/write lock   */
+	uint32_t          state; /* open or closed    */
+	nowdb_path_t       path; /* base path         */
+	nowdb_path_t    catalog; /* catalog path      */
+	nowdb_version_t     ver; /* db version        */
+	nowdb_store_t  vertices; /* vertices          */
+	ts_algo_tree_t contexts; /* contexts          */
+	nowdb_index_man_t *iman; /* index manager     */
+	nowdb_model_t    *model; /* model             */
+	nowdb_text_t      *text; /* strings           */
+	nowdb_procman_t   *pman; /* stored procedures */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -148,6 +150,28 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
                                  char          *context,
                                  nowdb_index_keys_t  *k,
                                  nowdb_index_t    **idx);
+
+/* -----------------------------------------------------------------------
+ * Create new stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createProcedure(nowdb_scope_t  *scope,
+                                        nowdb_proc_desc_t *pd);
+
+/* -----------------------------------------------------------------------
+ * Drop stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropProcedure(nowdb_scope_t *scope,
+                                      char          *name);
+
+/* -----------------------------------------------------------------------
+ * Get stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getProcedure(nowdb_scope_t   *scope,
+                                     char             *name,
+                                     nowdb_proc_desc_t **pd);
 
 /* -----------------------------------------------------------------------
  * Create Type

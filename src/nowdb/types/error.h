@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include <nowdb/types/types.h>
+#include <nowdb/errcode.h>
 
 /* ------------------------------------------------------------------------
  * NoWDB Error Code
@@ -25,11 +26,12 @@ typedef uint32_t nowdb_errcode_t;
  * ------------------------------------------------------------------------
  */
 typedef struct nowdb_errdesc_st {
-	nowdb_errcode_t        errcode; /* nowdb error code */
-	int32_t                  oserr; /* OS error code    */
-	char                object[32]; /* nowdb object     */
-	char                     *info; /* additional info  */
-	struct nowdb_errdesc_st *cause; /* previous error   */
+	nowdb_errcode_t        errcode; /* nowdb error code  */
+	int32_t                  oserr; /* OS error code     */
+	char                object[32]; /* nowdb object      */
+	char                     *info; /* additional info   */
+	struct nowdb_errdesc_st *cause; /* previous error    */
+	uint64_t              reserved; /* now it's 64 bytes */
 } nowdb_errdesc_t;
 
 /* ------------------------------------------------------------------------
@@ -159,6 +161,12 @@ inline void NOWDB_IGNORE(nowdb_err_t err) {
 nowdb_bool_t nowdb_err_contains(nowdb_err_t err, nowdb_errcode_t rc);
 
 /* ------------------------------------------------------------------------
+ * Retrieves the errorcode from the error
+ * ------------------------------------------------------------------------
+ */
+nowdb_errcode_t nowdb_err_code(nowdb_err_t err);
+
+/* ------------------------------------------------------------------------
  * Produces a human readable description of the error code
  * ------------------------------------------------------------------------
  */
@@ -201,71 +209,6 @@ void nowdb_err_print(nowdb_err_t err);
  * ------------------------------------------------------------------------
  */
 void nowdb_err_send(nowdb_err_t err, int fd);
-
-/* ------------------------------------------------------------------------
- * Error Codes
- * ------------------------------------------------------------------------
- */
-#define nowdb_err_no_mem           1
-#define nowdb_err_invalid          2
-#define nowdb_err_no_rsc           3
-#define nowdb_err_busy             4
-#define nowdb_err_too_big          5
-#define nowdb_err_lock             6
-#define nowdb_err_ulock            7
-#define nowdb_err_eof              8
-#define nowdb_err_not_supp         9
-#define nowdb_err_bad_path        10
-#define nowdb_err_bad_name        11
-#define nowdb_err_map             12
-#define nowdb_err_umap            13
-#define nowdb_err_read            14
-#define nowdb_err_write           15
-#define nowdb_err_open            16
-#define nowdb_err_close           17
-#define nowdb_err_remove          18
-#define nowdb_err_seek            19
-#define nowdb_err_panic           20
-#define nowdb_err_catalog         21
-#define nowdb_err_time            22
-#define nowdb_err_nosuch_scope    23
-#define nowdb_err_nosuch_context  24
-#define nowdb_err_nosuch_index    25
-#define nowdb_err_key_not_found   26
-#define nowdb_err_dup_key         27
-#define nowdb_err_dup_name        28
-#define nowdb_err_collision       29 
-#define nowdb_err_sync            30
-#define nowdb_err_thread          31
-#define nowdb_err_sleep           32
-#define nowdb_err_queue           33
-#define nowdb_err_enqueue         34
-#define nowdb_err_worker          35
-#define nowdb_err_timeout         36
-#define nowdb_err_reserve         37
-#define nowdb_err_bad_block       38
-#define nowdb_err_bad_filesize    39
-#define nowdb_err_maxfiles        40
-#define nowdb_err_move            41
-#define nowdb_err_index           42
-#define nowdb_err_version         43
-#define nowdb_err_comp            44
-#define nowdb_err_decomp          45
-#define nowdb_err_compdict        46
-#define nowdb_err_store           47
-#define nowdb_err_context         48
-#define nowdb_err_scope           49
-#define nowdb_err_stat            50
-#define nowdb_err_create          51
-#define nowdb_err_drop            52
-#define nowdb_err_magic           53
-#define nowdb_err_loader          54
-#define nowdb_err_trunc           55
-#define nowdb_err_flush           56
-#define nowdb_err_beet            57
-#define nowdb_err_fun             58
-#define nowdb_err_not_found       59
-#define nowdb_err_unknown       9999
 
 #endif
 

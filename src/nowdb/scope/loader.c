@@ -804,7 +804,7 @@ void nowdb_csv_field_vertex(void *data, size_t len, void *ldr) {
  */
 #define HANDLEERR(ldr, err) \
 	nowdb_err_send(err, fileno(ldr->ostream)); \
-	nowdb_err_release(err);
+	nowdb_err_release(err); err = NOWDB_OK;
 
 /* ------------------------------------------------------------------------
  * Convert text to key
@@ -866,8 +866,9 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 	} \
 	memcpy(ldr->csv->txt, data, len); \
 	ldr->csv->txt[len] = 0; \
-	err = nowdb_time_fromString(ldr->csv->txt,frm,target); \
-	if (err != NOWDB_OK) { \
+	rc = nowdb_time_fromString(ldr->csv->txt,frm,target); \
+	if (rc != 0) { \
+		err = nowdb_err_get(rc, FALSE, OBJECT, "time to string"); \
 		HANDLEERR(ldr, err); \
 		return -1; \
 	}
@@ -882,6 +883,7 @@ static inline char getValueAsType(nowdb_loader_t *ldr,
                                   void *target) {
 	nowdb_err_t err;
 	char *hlp=NULL;
+	int rc;
 
 	switch(typ) {
 	case NOWDB_TYP_NOTHING:

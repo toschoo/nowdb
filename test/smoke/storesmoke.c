@@ -144,6 +144,7 @@ nowdb_bool_t testInsert() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
 	nowdb_edge_t    e,k;
+	int rc;
 
 	err = nowdb_store_init(&store, "rsc/teststore", 1, 64,
 	                              NOWDB_MEGA, NOWDB_MEGA);
@@ -168,10 +169,9 @@ nowdb_bool_t testInsert() {
 	e.wtype[0] = NOWDB_TYP_UINT;
 	e.wtype[1] = NOWDB_TYP_NOTHING;
 
-	err = nowdb_time_now(&e.timestamp);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&e.timestamp);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
 	}
 

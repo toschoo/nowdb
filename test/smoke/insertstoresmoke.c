@@ -28,15 +28,15 @@ void makeEdgePattern(nowdb_edge_t *e) {
 }
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
+	int rc;
 	nowdb_err_t err;
 	nowdb_edge_t e;
 	uint64_t max = start + count;
 
 	makeEdgePattern(&e);
-	err = nowdb_time_now(&e.timestamp);
-	if (err != NOWDB_OK) {
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_now(&e.timestamp);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
 	}
 	for(uint64_t i=start; i<max; i++) {

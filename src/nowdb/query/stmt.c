@@ -8,6 +8,8 @@
 #include <nowdb/query/plan.h>
 #include <nowdb/query/cursor.h>
 #include <nowdb/index/index.h>
+#include <nowdb/ifc/nowdb.h>
+#include <nowdb/nowproc.h>
 
 /* -------------------------------------------------------------------------
  * Macro for the very common error "invalid ast"
@@ -23,7 +25,29 @@
 #define NOMEM(s) \
 	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "invalid argument"
+ * -------------------------------------------------------------------------
+ */
+#define INVALID(s) \
+	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s)
+
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "python error"
+ * -------------------------------------------------------------------------
+ */
+#define PYTHONERR(s) \
+	err = nowdb_err_get(nowdb_err_python, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
+
+/* -------------------------------------------------------------------------
+ * Predeclaration
+ * -------------------------------------------------------------------------
+ */
+void nowdb_dbresult_result(nowdb_dbresult_t p, nowdb_qry_result_t *q);
+
+nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res);
 
 /* -------------------------------------------------------------------------
  * Create a scope
@@ -65,12 +89,15 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t dropScope(nowdb_ast_t  *op,
+                             void         *rsc,
                              nowdb_path_t  base,
                              char         *name) {
 	nowdb_ast_t *o;
-	nowdb_path_t p;
-	nowdb_scope_t *scope;
-	nowdb_err_t err;
+	nowdb_path_t p=NULL;
+	nowdb_scope_t *scope=NULL;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_t *lib = nowdb_proc_getLib(rsc);
 
 	p = nowdb_path_append(base, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -83,16 +110,57 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 		}
 	}
 
-	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
-	if (err != NOWDB_OK) return err;
-	
-	err = nowdb_scope_drop(scope);
-	if (err != NOWDB_OK) {
+	if (lib == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);free(p);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) return err;
+
 		nowdb_scope_destroy(scope); free(scope);
+
+		return NOWDB_OK;
+	}
+
+	err = nowdb_lock_write(lib->lock);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR ON LOCK: ");
+		nowdb_err_print(err);
 		return err;
 	}
-	nowdb_scope_destroy(scope); free(scope);
-	return NOWDB_OK;
+
+	err = nowdb_getScope(lib, name, &scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (scope == NULL) {
+		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);
+		if (err != NOWDB_OK) goto unlock;
+
+		err = nowdb_scope_drop(scope);
+		if (err != NOWDB_OK) goto unlock;
+
+		nowdb_scope_destroy(scope); free(scope);
+		goto unlock;
+	}
+
+	err = nowdb_scope_close(scope);
+	if (err != NOWDB_OK) goto unlock;
+	
+	err = nowdb_scope_drop(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	nowdb_dropScope(lib, name);
+
+unlock:
+	if (p != NULL) free(p);
+	if (lib != NULL) {
+		err2 = nowdb_unlock_write(lib->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -482,6 +550,142 @@ static nowdb_err_t dropEdge(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Create Procedure
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createProc(nowdb_ast_t  *op,
+                              nowdb_ast_t *trg,
+                          nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_proc_desc_t *pd;
+	nowdb_ast_t  *l;
+	nowdb_ast_t  *m;
+	nowdb_ast_t  *o;
+	nowdb_ast_t  *p;
+	nowdb_ast_t  *r;
+	char *module;
+	char *name;
+	char *lang;
+	char lx, rx;
+	int i=0;
+
+	// name and module
+	name = trg->value;
+	if (name == NULL) INVALIDAST("no target name in AST");
+
+	m = nowdb_ast_target(trg);
+	if (m == NULL) INVALIDAST("no module in AST 'target'");
+
+	module = m->value;
+	if (module == NULL) INVALIDAST("no module name in AST");
+
+	// language
+	l = nowdb_ast_option(op, NOWDB_AST_LANG);
+	if (l == NULL) INVALIDAST("no language AST");
+
+	lang = l->value;
+	if (lang == NULL) INVALIDAST("no name in language option");
+
+	if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
+	else INVALIDAST("unknown language in AST");
+
+	// return type
+	r = nowdb_ast_option(op, NOWDB_AST_TYPE);
+	if (r == NULL) rx = 0;
+	else {
+		rx = nowdb_ast_type((uint16_t)(uint64_t)r->value);
+	}
+
+	// make proc descriptor
+	pd = calloc(1, sizeof(nowdb_proc_desc_t));
+	if (pd == NULL) NOMEM("allocating proc descriptor");
+
+	pd->name = strdup(name);
+	if (pd->name == NULL) {
+		free(pd);
+		NOMEM("allocating procedure name");
+	}
+
+	pd->module = strdup(module);
+	if (pd->module == NULL) {
+		free(pd->name); free(pd);
+		NOMEM("allocating module name");
+	}
+
+	pd->lang = lx;
+	pd->rtype = rx;
+	pd->type = rx==0?NOWDB_STORED_PROC:NOWDB_STORED_FUN;
+	
+	// arguments
+	pd->argn = 0;
+	pd->args = NULL;
+
+	p = nowdb_ast_declare(op);
+	while(p!=NULL) {
+		pd->argn++;
+		p = nowdb_ast_declare(p);
+	}
+
+	fprintf(stderr, "parameters: %u\n", pd->argn);
+	pd->args = calloc(pd->argn, sizeof(nowdb_proc_arg_t));
+	if (pd->args == NULL) {
+		nowdb_proc_desc_destroy(pd); free(pd);
+		NOMEM("allocating procedure parameters");
+	}
+
+	p = nowdb_ast_declare(op); i=0;
+	while(p!=NULL) {
+		fprintf(stderr, "parameter %s (%d)\n",
+		            (char*)p->value, p->stype);
+
+		pd->args[i].name = strdup(p->value);
+		if (pd->args[i].name == NULL) {
+			nowdb_proc_desc_destroy(pd); free(pd);
+			NOMEM("allocating parameter name");
+		}
+		pd->args[i].typ = nowdb_ast_type(p->stype);
+		pd->args[i].pos = i; // caution!
+
+		p = nowdb_ast_declare(p); i++;
+	}
+	
+	err = nowdb_scope_createProcedure(scope, pd);
+	if (err != NOWDB_OK) {
+		nowdb_proc_desc_destroy(pd); free(pd);
+	}
+	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Drop Proc
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropProc(nowdb_ast_t  *op,
+                            char       *name,
+                        nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	nowdb_ast_t  *o;
+
+	err = nowdb_scope_dropProcedure(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
  * Load a file
  * TODO:
  * - Should be more versatile,
@@ -748,26 +952,29 @@ static nowdb_err_t dropContext(nowdb_ast_t  *op,
 			return NOWDB_OK;
 		}
 	}
-	return NOWDB_OK;
+	return err;
 }
 
 /* -------------------------------------------------------------------------
  * Find scope in list of open scopes
  * -------------------------------------------------------------------------
  */
-static inline void findScope(ts_algo_list_t *scopes,
-                             nowdb_path_t      path,
-                             nowdb_scope_t  **scope) {
-	ts_algo_list_node_t *runner;
-	nowdb_scope_t *tmp;
+static inline nowdb_err_t findScope(nowdb_t        *lib,
+                                    char           *name,
+                                    nowdb_scope_t **scope) {
+	if (lib == NULL) return NOWDB_OK;
+	return nowdb_getScope(lib, name, scope);
+}
 
-	if (scopes == NULL) return;
-	for(runner=scopes->head;runner!=NULL;runner=runner->nxt) {
-		tmp = runner->cont;
-		if (strcmp(tmp->path, path) == 0) {
-			*scope = tmp; break;
-		}
-	}
+/* -------------------------------------------------------------------------
+ * Add tist list of open scopes
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t addScope(nowdb_t       *lib,
+                                   char          *name,
+                                   nowdb_scope_t *scope) {
+	if (lib == NULL) return NOWDB_OK;
+	return nowdb_addScope(lib, name, scope);
 }
 
 /* -------------------------------------------------------------------------
@@ -775,32 +982,308 @@ static inline void findScope(ts_algo_list_t *scopes,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t handleUse(nowdb_ast_t        *ast,
-                             ts_algo_list_t  *scopes,
+                             void               *rsc,
                              nowdb_path_t       base,
                              nowdb_qry_result_t *res) {
 	nowdb_path_t p;
 	nowdb_scope_t *scope = NULL;
-	nowdb_err_t err;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_t *lib = nowdb_proc_getLib(rsc);
 	char *name;
 
 	name = nowdb_ast_getString(ast);
 	if (name == NULL) INVALIDAST("no name in AST");
 
-	p = nowdb_path_append(base, name);
-	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                        FALSE, OBJECT, "path.append");
+	if (lib != NULL) {
+		err = nowdb_lock_write(lib->lock);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "ERROR ON LOCK: ");
+			nowdb_err_print(err);
+			return err;
+		}
+	}
 
-	findScope(scopes, p, &scope);
+	err = findScope(lib, name, &scope);
+	if (err != NOWDB_OK) goto unlock;
+
 	if (scope != NULL) {
-		free(p);
 		res->result = scope;
-		return NOWDB_OK;
+		goto unlock;
+	}
+
+	p = nowdb_path_append(base, name);
+	if (p == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem,
+	                FALSE, OBJECT, "path.append");
+		goto unlock;
 	}
 
 	err = openScope(p, &scope); free(p);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) goto unlock;
+
+	err = addScope(lib, name, scope);
+	if (err != NOWDB_OK) goto unlock;
 
 	res->result = scope;
+
+unlock:
+	if (lib != NULL) {
+		err2 = nowdb_unlock_write(lib->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: load arguments for python function
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
+                              nowdb_ast_t   *params,
+                              PyObject       **args) {
+	nowdb_err_t err;
+	nowdb_ast_t *p;
+	nowdb_value_t v;
+	int x;
+	double d;
+	uint64_t u;
+	int64_t l;
+
+	if (pd->argn == 0) {
+		if (params == NULL) return NOWDB_OK;
+		PYTHONERR("too many arguments");
+		return err;
+	}
+	if (params == NULL) {
+		PYTHONERR("not enough parameters");
+		return err;
+	}
+
+	*args = PyTuple_New((Py_ssize_t)pd->argn);
+	if (*args == NULL) NOMEM("allocating Python tuple");
+
+	p = params;
+	for(uint16_t i=0; i<pd->argn; i++) {
+		if (p == NULL) {
+			Py_DECREF(*args);
+			PYTHONERR("not enough parameters");
+			return err;
+		}
+
+		/*
+		fprintf(stderr, "parameter %hu (%hu): %s\n",
+		     pd->args[i].pos,  pd->args[i].typ, (char*)p->value);
+		*/
+
+		if (pd->args[i].typ != NOWDB_TYP_TEXT) {
+			if (nowdb_strtoval(p->value,
+			            pd->args[i].typ,
+                                           &v) != 0)
+			{
+				Py_DECREF(*args);
+				INVALID("conversion error");
+				return err;
+			}
+		}
+
+		switch(pd->args[i].typ) {
+
+		case NOWDB_TYP_TEXT:
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("s", p->value)) != 0) 
+			{
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+ 
+		case NOWDB_TYP_FLOAT: 
+			memcpy(&d, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("d", d)) != 0) 
+			{
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_UINT: 
+			memcpy(&u, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("K", u)) != 0) 
+			{
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_INT: 
+		case NOWDB_TYP_DATE: 
+		case NOWDB_TYP_TIME: 
+			memcpy(&l, &v, 8);
+			if (PyTuple_SetItem(*args,
+			   (Py_ssize_t)pd->args[i].pos,
+			    Py_BuildValue("L", l)) != 0) 
+			{
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		case NOWDB_TYP_BOOL:
+			if (v) {
+				x = PyTuple_SetItem(*args,
+				    (Py_ssize_t)pd->args[i].pos,
+				     Py_True);
+			} else {
+				x = PyTuple_SetItem(*args,
+				    (Py_ssize_t)pd->args[i].pos,
+				     Py_False);
+			}
+			if (x != 0) {
+				Py_DECREF(*args);
+				PYTHONERR("cannot set item to tuple");
+				return err;
+			}
+			break;
+
+		default:
+			fprintf(stderr, "INVALID TYPE (%hu): %hu\n",
+			        pd->args[i].pos, pd->args[i].typ);
+			Py_DECREF(*args);
+			INVALID("invalid parameter type");
+			return err;
+		}
+		p = nowdb_ast_param(p);
+	}
+	if (p != NULL) {
+		Py_DECREF(*args);
+		PYTHONERR("too many arguments");
+		return err;
+	}
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
+ * Helper: load arguments for python function
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
+                                     nowdb_proc_t      *proc,
+                                     nowdb_proc_desc_t   *pd,
+                                     PyObject             *f,
+                                     nowdb_qry_result_t *res)
+{
+	nowdb_err_t err;
+	PyThreadState *ts;
+	PyObject *r;
+	PyObject *args=NULL;
+	nowdb_dbresult_t p;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
+
+	ts = nowdb_proc_getInterpreter(proc);
+	if (ts == NULL) {
+		INVALID("no interpreter");
+		return err;
+	}
+
+	PyEval_RestoreThread(ts);
+	
+	// load arguments
+	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "PY ARGS NOT LOADED\n");
+		nowdb_err_print(err);
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+
+	r = PyObject_CallObject(f, args);
+	if (args != NULL) Py_DECREF(args);
+
+	if (r == NULL) {
+		PYTHONERR("Call failed: result is NULL");
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+	p = PyLong_AsVoidPtr(r); Py_DECREF(r);
+	if (p == NULL) {
+		nowdb_proc_updateInterpreter(proc);
+		return NOWDB_OK;
+	}
+	if (!nowdb_dbresult_status(p)) {
+		err = nowdb_dbresult_err(p); free(p);
+		nowdb_proc_updateInterpreter(proc);
+		return err;
+	}
+	nowdb_dbresult_result(p, res); free(p);
+
+	nowdb_proc_updateInterpreter(proc);
+
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
+ * Handle execute statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleExec(nowdb_ast_t        *ast,
+                              void               *rsc,
+                              nowdb_qry_result_t *res) {
+	nowdb_err_t err;
+	char *pname;
+	nowdb_proc_desc_t *pd;
+	nowdb_t *lib;
+	void    *f;
+
+	lib = nowdb_proc_getLib(rsc);
+	if (lib == NULL) {
+		INVALID("no library in session");
+		return err;
+	}
+
+	pname = ast->value;
+	if (pname == NULL) INVALIDAST("procedure without name");
+
+	err = nowdb_proc_loadFun(rsc, pname, &pd, &f);
+	if (err != NOWDB_OK) return err;
+
+	switch(pd->lang) {
+	case NOWDB_STORED_PYTHON:
+
+ 		if (!lib->pyEnabled) {
+			INVALID("feature not enabled: Python");
+			return err;
+		}
+
+#ifdef _NOWDB_WITH_PYTHON
+		return execPython(ast, rsc, pd, f, res);
+#else
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                                        "python not supported");
+#endif
+
+	default:
+		INVALID("unknown language");
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -810,6 +1293,7 @@ static nowdb_err_t handleUse(nowdb_ast_t        *ast,
  */
 static nowdb_err_t handleDDL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
+                                   void  *rsc,
                          nowdb_path_t    base,
                       nowdb_qry_result_t *res) 
 {
@@ -827,6 +1311,10 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 
 	if (trg->value == NULL) INVALIDAST("no target name in AST");
 
+	if (trg->stype != NOWDB_AST_SCOPE && scope == NULL) {
+		INVALIDAST("no scope");
+	}
+
 	/* create */
 	if (op->ntype == NOWDB_AST_CREATE) {
 		switch(trg->stype) {
@@ -840,6 +1328,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createType(op, trg->value, scope);
 		case NOWDB_AST_EDGE:
 			return createEdge(op, trg->value, scope);
+		case NOWDB_AST_PROC:
+			return createProc(op, trg, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -848,7 +1338,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	else if (op->ntype == NOWDB_AST_DROP) {
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
-			return dropScope(op, base, trg->value);
+			return dropScope(op, rsc, base, trg->value);
 		case NOWDB_AST_CONTEXT:
 			return dropContext(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
@@ -857,6 +1347,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropType(op, trg->value, scope);
 		case NOWDB_AST_EDGE:
 			return dropEdge(op, trg->value, scope);
+		case NOWDB_AST_PROC:
+			return dropProc(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -928,6 +1420,8 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
                       nowdb_qry_result_t *res) {
 	nowdb_ast_t *op;
 	nowdb_ast_t *trg;
+
+	if (scope == NULL) INVALIDAST("no scope");
 	
 	res->resType = NOWDB_QRY_RESULT_REPORT;
 	res->result = NULL;
@@ -966,6 +1460,8 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
 	nowdb_cursor_t *cur;
 	ts_algo_list_t plan;
 
+	if (scope == NULL) INVALIDAST("no scope");
+
 	/* result is a cursor */
 	res->resType = NOWDB_QRY_RESULT_CURSOR;
 	res->result = NULL;
@@ -995,7 +1491,7 @@ static nowdb_err_t handleDQL(nowdb_ast_t *ast,
  */
 static nowdb_err_t handleMisc(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                        ts_algo_list_t *scopes,
+                          void            *rsc,
                           nowdb_path_t    base,
                        nowdb_qry_result_t *res) {
 	nowdb_ast_t *op;
@@ -1007,7 +1503,19 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 	case NOWDB_AST_USE: 
 		res->resType = NOWDB_QRY_RESULT_SCOPE;
 		res->result = NULL;
-		return handleUse(op, scopes, base, res);
+		return handleUse(op, rsc, base, res);
+
+	case NOWDB_AST_EXEC:
+		return handleExec(op, rsc, res);
+
+	case NOWDB_AST_FETCH: 
+	case NOWDB_AST_CLOSE: 
+
+		if (scope == NULL) INVALIDAST("no scope");
+
+		res->resType = NOWDB_QRY_RESULT_OP;
+		res->result = op;
+		return NOWDB_OK;
 
 	default: INVALIDAST("invalid operation in AST");
 	}
@@ -1019,7 +1527,7 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
  */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                          ts_algo_list_t  *rsc,
+                          void            *rsc,
                           nowdb_path_t    base,
                        nowdb_qry_result_t *res) {
 	if (ast == NULL) return nowdb_err_get(nowdb_err_invalid,
@@ -1027,7 +1535,7 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
 	if (res == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                 FALSE, OBJECT, "result objet is NULL");
 	switch(ast->ntype) {
-	case NOWDB_AST_DDL: return handleDDL(ast, scope, base, res);
+	case NOWDB_AST_DDL: return handleDDL(ast, scope, rsc, base, res);
 	case NOWDB_AST_DLL: return handleDLL(ast, scope, res);
 	case NOWDB_AST_DML: return handleDML(ast, scope, res);
 	case NOWDB_AST_DQL: return handleDQL(ast, scope, res);

@@ -464,7 +464,6 @@ nowdb_err_t nowdb_compctx_releaseDCtx(nowdb_compctx_t *ctx,
 		}
 	}
 	if (!found) ZSTD_freeDCtx(dctx);
-
 	return nowdb_unlock(&ctx->lock);
 }
 
