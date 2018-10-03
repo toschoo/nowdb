@@ -65,10 +65,10 @@ void vertices(FILE *csv, nowdb_vertex_t *buf, uint32_t size) {
  * -----------------------------------------------------------------------
  */
 nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
-	nowdb_err_t err;
 	nowdb_time_t tp;
 	nowdb_edge_t buf[1024];
 	int j = 0;
+	int rc;
 
 	memset(&buf,0,64*1024);
 
@@ -80,11 +80,9 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 		buf[j].weight = (uint64_t)i;
 		buf[j].wtype[0] = NOWDB_TYP_UINT;
 		if (i%10 == 0) {
-			err = nowdb_time_now(&tp);
-			if (err != NOWDB_OK) {
-				fprintf(stderr, "insert error\n");
-				nowdb_err_print(err);
-				nowdb_err_release(err);
+			rc = nowdb_time_now(&tp);
+			if (rc != 0) {
+				fprintf(stderr, "insert error: %d\n", rc);
 				return FALSE;
 			}
 		}

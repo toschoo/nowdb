@@ -24,7 +24,7 @@ with Connection("127.0.0.1", "55505", None, None) as c:
   t = 0.0
   cnt = 0
 
-  with c.execute("select edge, destin, timestamp, weight from tx \
+  with c.execute("select edge, destin, timestamp, weight, true from tx \
                    where edge='buys_product' \
                      and origin=419870620036") as cur:
 
@@ -34,13 +34,14 @@ with Connection("127.0.0.1", "55505", None, None) as c:
       d = row.field(1)
       dt = row.field(2)
       w = row.field(3)
+      y = row.field(4)
       
       ds = now2dt(dt).strftime("%Y-%m-%dT%H:%M:%S")
 
       t += w
       cnt += 1
 
-      print "%s: %d (%s) %.4f" % (s, d, ds, w)
+      print "%s: %d (%s) %.4f %s" % (s, d, ds, w, y)
 
   print "sum: %.4f / count: %d" % (t,cnt)
 

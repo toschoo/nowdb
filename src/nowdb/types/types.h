@@ -23,6 +23,10 @@
 #define popcount64
 #endif
 
+#ifdef _NOWDB_WITH_PYTHON
+#define NOWDB_INC_PYTHON <python2.7/Python.h>
+#endif
+
 #define NOWDB_MAGIC 0x450099db
 
 #define NOWDB_VERSION 1
@@ -81,6 +85,7 @@ typedef uint64_t nowdb_value_t;
 /* context or vertex */
 typedef char nowdb_target_t;
 
+#define NOWDB_TARGET_NULL    0
 #define NOWDB_TARGET_EDGE    1
 #define NOWDB_TARGET_VERTEX  2
 
@@ -96,6 +101,9 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_UINT     6
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
+#define NOWDB_TYP_BOOL     9
+
+int nowdb_strtoval(char *str, nowdb_type_t typ, void *value);
 
 #define NOWDB_EOR       0xa
 

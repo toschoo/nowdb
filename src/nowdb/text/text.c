@@ -658,6 +658,24 @@ static inline nowdb_err_t getString(nowdb_text_t *txt,
 		free(*str); *str = NULL;
 		return makeBeetError(ber);
 	}
+	if (cache) {
+		res = malloc(sizeof(lrunode_t));
+		if (res == NULL) {
+			NOMEM("allocating lrunode"); return err;
+		}
+		res->str = strdup(*str);
+		if (res->str == NULL) {
+			NOMEM("allocating string");
+			free(res); return err;
+		}
+		res->key = key;
+		err = nowdb_lru_add(txt->num2str, res);
+		if (err != NOWDB_OK) {
+			free(res->str); free(res);
+			return err;
+		}
+	}
+
 	return NOWDB_OK;
 }
 
@@ -807,7 +825,7 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 		return NOWDB_OK;
 	}
 
-	err = nowdb_lock_read(&txt->lock);
+	err = nowdb_lock_write(&txt->lock);
 	if (err != NOWDB_OK) return err;
 
 	err = getKey(txt, str, s, key, &x, TRUE);
@@ -815,7 +833,7 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 	if (!x) err = nowdb_err_get(nowdb_err_key_not_found,
 	                                FALSE, OBJECT, NULL);
 unlock:
-	err2 = nowdb_unlock_read(&txt->lock);
+	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err;
 		return err2;
@@ -842,7 +860,7 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 		return NOWDB_OK;
 	}
 
-	err = nowdb_lock_read(&txt->lock);
+	err = nowdb_lock_write(&txt->lock);
 	if (err != NOWDB_OK) return err;
 
 	err = getString(txt, key, str, TRUE);
@@ -850,7 +868,7 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 	if (*str == NULL) err = nowdb_err_get(nowdb_err_key_not_found,
 	                                         FALSE, OBJECT, NULL);
 unlock:
-	err2 = nowdb_unlock_read(&txt->lock);
+	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err;
 		return err2;

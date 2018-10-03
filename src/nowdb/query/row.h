@@ -13,7 +13,9 @@
 #include <nowdb/text/text.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/mem/ptlru.h>
+#include <nowdb/fun/expr.h>
 #include <nowdb/fun/group.h>
+#include <nowdb/query/rowutl.h>
 
 #include <stdint.h>
 
@@ -25,12 +27,13 @@
 #define NOWDB_FIELD_AGG    8
 
 typedef struct {
-	nowdb_target_t target; /* context or vertex                      */
+	nowdb_target_t target; /* context or vertex (or neither)         */
 	uint32_t          off; /* identifies the field for edges         */
 	char            *name; /* name of a property                     */
 	nowdb_key_t    propid; /* propid for this property               */
+	void           *value; /* constant value                         */
+	uint16_t          typ; /* type of constant value                 */
 	nowdb_bitmap8_t flags; /* what to do with the field              */
-	uint32_t         func; /* non-aggregate to apply to the field    */
 	uint32_t          agg; /* aggregate function to apply on the row */
 } nowdb_field_t;
 
@@ -98,22 +101,16 @@ nowdb_err_t nowdb_row_toString(char  *buf,
                                char **str);
 
 /* ------------------------------------------------------------------------
- * write (e.g. print) buffer
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_write(char *buf, uint32_t sz, FILE *stream);
-
-/* ------------------------------------------------------------------------
  * Extract a row from the buffer
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_extractRow(char    *buf, uint32_t   sz,
-                                 uint32_t row, uint32_t *idx);
+		                 uint32_t row, uint32_t *idx);
 
 /* ------------------------------------------------------------------------
  * Extract a field from the buffer
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_extractField(char      *buf, uint32_t   sz,
-                                   uint32_t field, uint32_t *idx);
+		                   uint32_t field, uint32_t *idx);
 #endif

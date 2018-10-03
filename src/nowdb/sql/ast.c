@@ -97,7 +97,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_COMPARE: ASTCALLOC(2);
 
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
-	case NOWDB_AST_VALUE: ASTCALLOC(0);
+	case NOWDB_AST_VALUE: ASTCALLOC(1);
 	case NOWDB_AST_DECL: ASTCALLOC(3);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
 	case NOWDB_AST_FUN: ASTCALLOC(2);
@@ -105,8 +105,9 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_USE: ASTCALLOC(0);
 	case NOWDB_AST_FETCH: ASTCALLOC(0);
 	case NOWDB_AST_CLOSE: ASTCALLOC(0);
+	case NOWDB_AST_EXEC: ASTCALLOC(1);
 
-	case NOWDB_AST_TARGET: ASTCALLOC(0);
+	case NOWDB_AST_TARGET: ASTCALLOC(1);
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
 	case NOWDB_AST_PATH:   ASTCALLOC(0);
 	case NOWDB_AST_DATA:   ASTCALLOC(1);
@@ -168,6 +169,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_FLOAT: return "float value"; 
 		case NOWDB_AST_UINT: return "uint value"; 
 		case NOWDB_AST_INT: return "int value"; 
+		case NOWDB_AST_BOOL: return "bool value"; 
 		default: return "unknown type of value";
 		}
 
@@ -179,6 +181,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_INT: return "int field"; 
 		case NOWDB_AST_DATE: return "date field"; 
 		case NOWDB_AST_TIME: return "time field"; 
+		case NOWDB_AST_BOOL: return "bool field"; 
 		case NOWDB_AST_TYPE: return "user defined"; 
 		default: return "unknown field type";
 		}
@@ -192,6 +195,7 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_USE: return "use";
 	case NOWDB_AST_FETCH: return "fetch";
 	case NOWDB_AST_CLOSE: return "close";
+	case NOWDB_AST_EXEC: return "execute";
 
 	case NOWDB_AST_TARGET:
 		switch(stype) {
@@ -201,6 +205,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_INDEX: return "index";
 		case NOWDB_AST_TYPE: return "type";
 		case NOWDB_AST_EDGE: return "edge";
+		case NOWDB_AST_PROC: return "procedure";
+		case NOWDB_AST_MODULE: return "module";
 		default: return "unknown target";
 		}
 
@@ -227,6 +233,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_USE: return "option use";
 		case NOWDB_AST_PK: return "primary key";
 		case NOWDB_AST_TYPE: return "as type";
+		case NOWDB_AST_LANG: return "language";
 		default: return "unknown option";
 		}
 
@@ -397,6 +404,7 @@ static inline int addmisc(nowdb_ast_t *n,
 	case NOWDB_AST_USE: ADDKID(0);
 	case NOWDB_AST_FETCH: ADDKID(0);
 	case NOWDB_AST_CLOSE: ADDKID(0);
+	case NOWDB_AST_EXEC: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -501,6 +509,7 @@ static inline int addsel(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_VALUE: ADDKID(0);
 	case NOWDB_AST_FUN: ADDKID(0);
 	default: return -1;
 	}
@@ -628,7 +637,7 @@ static inline int ad3ecl(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
- * Add kid to field
+ * Add kid to field (field list)
  * -----------------------------------------------------------------------
  */
 static inline int addfield(nowdb_ast_t *n,
@@ -636,12 +645,13 @@ static inline int addfield(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
 	case NOWDB_AST_FUN: ADDKID(0);
+	case NOWDB_AST_VALUE: ADDKID(0);
 	default: return -1;
 	}
 }
 
 /* -----------------------------------------------------------------------
- * Add kid to fun
+ * Add kid to fun (parameter or function list)
  * -----------------------------------------------------------------------
  */
 static inline int addfun(nowdb_ast_t *n,
@@ -654,6 +664,44 @@ static inline int addfun(nowdb_ast_t *n,
 			ADDKID(1);
 		}
 	case NOWDB_AST_FUN: ADDKID(1);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to value (value list)
+ * -----------------------------------------------------------------------
+ */
+static inline int addval(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+	case NOWDB_AST_FUN:
+	case NOWDB_AST_VALUE: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to exec (parameters)
+ * -----------------------------------------------------------------------
+ */
+static inline int addexec(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_VALUE: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to target (module)
+ * -----------------------------------------------------------------------
+ */
+static inline int addtrg(nowdb_ast_t *n,
+                         nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TARGET: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -693,7 +741,9 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 
 	case NOWDB_AST_COMPARE: return addcompare(n,k);
 
-	case NOWDB_AST_TARGET:   return -1;
+	case NOWDB_AST_EXEC: return addexec(n,k);
+
+	case NOWDB_AST_TARGET: return addtrg(n,k);
 	case NOWDB_AST_ON:       return -1;
 	case NOWDB_AST_OPTION:   return addopt(n,k);
 	case NOWDB_AST_SIZING:   return -1;
@@ -703,6 +753,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_FIELD: return addfield(n,k);
 	case NOWDB_AST_DECL: return ad3ecl(n,k);
 	case NOWDB_AST_FUN: return addfun(n,k);
+	case NOWDB_AST_VALUE: return addval(n,k);
 
 	default: return -1;
 	}
@@ -803,6 +854,8 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_FROM: return ast->kids[0];
 
+	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
+
 	default: return NULL;
 	}
 }
@@ -839,6 +892,7 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
 	case NOWDB_AST_FUN: return ast->kids[1];
+	case NOWDB_AST_VALUE: return ast->kids[0];
 	default: return NULL;
 	}
 }
@@ -851,6 +905,8 @@ nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
 	if (ast == NULL) return NULL;
 	switch(ast->ntype) {
 	case NOWDB_AST_FUN: return ast->kids[0];
+	case NOWDB_AST_EXEC: return ast->kids[0];
+	case NOWDB_AST_VALUE: return ast->kids[0];
 	default: return NULL;
 	}
 }
@@ -1016,6 +1072,7 @@ nowdb_type_t nowdb_ast_type(uint32_t type) {
 	case NOWDB_AST_INT: return NOWDB_TYP_INT;
 	case NOWDB_AST_DATE: return NOWDB_TYP_DATE;
 	case NOWDB_AST_TIME: return NOWDB_TYP_TIME;
+	case NOWDB_AST_BOOL: return NOWDB_TYP_BOOL;
 	default: return NOWDB_TYP_NOTHING;
 	}
 	return NOWDB_TYP_NOTHING;

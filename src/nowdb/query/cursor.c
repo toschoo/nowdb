@@ -263,20 +263,22 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
-		fprintf(stderr, "SEARCH\n");
+		// fprintf(stderr, "SEARCH\n");
 		err = createSeq(cur, rplan->stype, pidx);
 
-	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
-		fprintf(stderr, "FRANGE\n");
-		err = createMerge(cur, rplan->stype, pidx);
+	} else if (rplan->stype == NOWDB_PLAN_FRANGE_ ||
+	          (rplan->stype == NOWDB_PLAN_KRANGE_ && !hasId(pidx))) {
+		// fprintf(stderr, "FRANGE\n");
+		err = createMerge(cur, NOWDB_PLAN_FRANGE_, pidx);
 
+	// KRANGE only allowd with model id
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
-		fprintf(stderr, "KRANGE\n");
+		// fprintf(stderr, "KRANGE\n");
 		cur->hasid = hasId(pidx);
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
-		fprintf(stderr, "CRANGE\n");
+		// fprintf(stderr, "CRANGE\n");
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(&cur->rdr,
 		                          &cur->stf.files,

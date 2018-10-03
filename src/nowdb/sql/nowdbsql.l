@@ -25,6 +25,7 @@
 
 %%
 
+"."			return NOWDB_SQL_DOT;
 ";"			return NOWDB_SQL_SEMICOLON;
 "="			return NOWDB_SQL_EQ;
 ","			return NOWDB_SQL_COMMA;
@@ -57,6 +58,7 @@
 (?i:TABLE)		return NOWDB_SQL_CONTEXT;
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
+(?i:PROCEDURE)		return NOWDB_SQL_PROCEDURE;
 
 (?i:TYPE)		return NOWDB_SQL_TYPE;
 (?i:TEXT)		return NOWDB_SQL_TEXT;
@@ -67,6 +69,8 @@
 (?i:INTEGER)		return NOWDB_SQL_INT;
 (?i:UINT)		return NOWDB_SQL_UINT;
 (?i:UINTEGER)		return NOWDB_SQL_UINT;
+(?i:BOOL)		return NOWDB_SQL_BOOL;
+(?i:BOOLEAN)		return NOWDB_SQL_BOOL;
 (?i:PRIMARY\ KEY)	return NOWDB_SQL_PK;
 (?i:PK)			return NOWDB_SQL_PK;
 
@@ -81,6 +85,8 @@
 (?i:TMSTMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:TSTAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:STAMP)		return NOWDB_SQL_TIMESTAMP;
+(?i:TRUE)		return NOWDB_SQL_TRUE;
+(?i:FALSE)		return NOWDB_SQL_FALSE;
 
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:FROM)		return NOWDB_SQL_FROM;
@@ -91,6 +97,9 @@
 (?i:AND)		return NOWDB_SQL_AND;
 (?i:OR)			return NOWDB_SQL_OR;
 (?i:NOT)		return NOWDB_SQL_NOT;
+(?i:EXECUTE)		return NOWDB_SQL_EXECUTE;
+(?i:EXEC)		return NOWDB_SQL_EXECUTE;
+(?i:LANGUAGE)		return NOWDB_SQL_LANGUAGE;
 
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
