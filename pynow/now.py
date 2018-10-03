@@ -46,6 +46,7 @@ TIME = 3
 FLOAT = 4
 INT = 5
 UINT = 6
+BOOL = 9
 
 EOF = 8
 
@@ -164,12 +165,15 @@ class Connection:
 
     def __exit__(self, a, b, c):
       if self.con != None:
-          _closeCon(self.con)
+          # x = _closeCon(self.con)
+          self.close()
           
     def close(self):
         x = _closeCon(self.con)
         if x == 0:
             self.con = None
+        else:
+            print "cannot close connection!"
 
     def execute(self, stmt):
         r = c_void_p()
@@ -243,7 +247,6 @@ class Result:
 
                     raise DBError(x, d)
 
-                self.NeedNext = False
                 self.rw = self.row()
         else:
             self.needNext = True
@@ -317,10 +320,16 @@ class Result:
             f = cast(v,POINTER(c_double))
             return f[0]
 
+        elif t.value == BOOL:
+            f = cast(v,POINTER(c_byte))
+            if f[0] == 0:
+                return False
+            return True
+
         else:
             return None
 
-    # fetch a bunch for rows from cursor
+    # fetch a bunch of rows from cursor
     def fetch(self):
         if self.rType() != CURSOR and self.rType() != ROW:
             raise WrongType("result is not a cursor")

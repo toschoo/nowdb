@@ -169,6 +169,22 @@ int processReport(nowdb_result_t res) {
 }
 
 /* -----------------------------------------------------------------------
+ * process row
+ * -----------------------------------------------------------------------
+ */
+int processRow(nowdb_result_t res) {
+	int err;
+	err = nowdb_row_write(stdout, (nowdb_row_t)res);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot write row: %d\n", err);
+		nowdb_result_destroy(res);
+		return -1;
+	}
+	nowdb_result_destroy(res);
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
  * process cursor
  * -----------------------------------------------------------------------
  */
@@ -245,9 +261,12 @@ int handleQuery(nowdb_con_t con, char *buf, int n) {
 	switch(nowdb_result_type(res)) {
 	case NOWDB_RESULT_STATUS:
 		rc = processStatus(res); break;
-		
+
 	case NOWDB_RESULT_REPORT:
 		rc = processReport(res); break;
+
+	case NOWDB_RESULT_ROW:
+		rc = processRow(res); break;
 
 	case NOWDB_RESULT_CURSOR:
 		rc = processCursor(con, res); break;

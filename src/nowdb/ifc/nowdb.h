@@ -14,9 +14,14 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/sql/parser.h>
 #include <nowdb/query/cursor.h>
+#include <nowdb/ifc/proc.h>
 
 #include <tsalgo/tree.h>
 #include <tsalgo/list.h>
+
+#ifdef _NOWDB_WITH_PYTHON
+#include NOWDB_INC_PYTHON
+#endif
 
 /* ------------------------------------------------------------------------
  * session options
@@ -37,6 +42,10 @@ typedef struct {
 #define NOWDB_SES_NOACK 0
 
 #define NOWDB_SES_TIMING 1
+
+#define NOWDB_ENABLE_PYTHON 2
+#define NOWDB_ENABLE_C      4
+#define NOWDB_ENABLE_LUA    8
 
 /* ------------------------------------------------------------------------
  * session cursor
@@ -63,8 +72,9 @@ typedef struct {
 	ts_algo_list_node_t *node; /* where to find us                    */
 	char                 *buf; /* result buffer                       */
 	ts_algo_tree_t   *cursors; /* open cursors                        */
-	uint32_t            bufsz; /* result buffer size                  */
+	nowdb_proc_t        *proc; /* stored procedure interface          */
 	uint64_t            curid; /* next free cursorid                  */
+	uint32_t            bufsz; /* result buffer size                  */
 	int               istream; /* incoming stream                     */
 	int               ostream; /* outgoing stream (may be == istream) */
 	int               estream; /* error stream (may be == ostream)    */
@@ -86,6 +96,12 @@ typedef struct {
 	ts_algo_list_t *uthreads; /* list of used sessions  */
 	int             nthreads; /* max number of sessions */
 	int               loglvl; /* max number of sessions */
+	char           pyEnabled; /* enable python          */
+
+#ifdef _NOWDB_WITH_PYTHON
+	PyThreadState       *mst; /* python thread state    */
+#endif
+
 } nowdb_t;
 
 /* ------------------------------------------------------------------------
@@ -93,7 +109,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
-                                int loglvl, int nthreads);
+                                int loglvl, int nthreads,
+                                uint64_t flags);
 
 /* ------------------------------------------------------------------------
  * close library (called only once per process)

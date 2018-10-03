@@ -41,12 +41,16 @@ static char *OBJECT = "lib";
 	} \
 	err = nowdb_err_get(nowdb_err_server, FALSE, OBJECT, s);
 
-#define LOGERR(err) \
-	nowdb_err_send(err, ses->estream); \
-	nowdb_err_release(err);
-
 #define LOGMSG(m) \
-	if (LIB(ses->lib)->loglvl > 0) fprintf(stderr, "%s\n", m);
+	if (LIB(ses->lib)->loglvl > 0) { \
+		fprintf(stderr, "[%lu] %s\n", pthread_self(), m); \
+	}
+
+#define LOGERRMSG(err) \
+	if (LIB(ses->lib)->loglvl > 0) { \
+		nowdb_err_print(err); \
+		nowdb_err_release(err); \
+	}
 
 /* -----------------------------------------------------------------------
  * Scope Descriptor
@@ -151,7 +155,8 @@ static inline nowdb_err_t readN(int sock, char *buf, int sz) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
-                                int loglvl, int nthreads) {
+                                int loglvl, int nthreads,
+                                uint64_t flags) {
 	nowdb_err_t err;
 	sigset_t s;
 	int x;
@@ -226,6 +231,17 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		NOMEM("tree.new");
 		return err;
 	}
+
+#ifdef _NOWDB_WITH_PYTHON
+	if (flags & NOWDB_ENABLE_PYTHON) {
+		(*lib)->pyEnabled = 1;
+
+		Py_InitializeEx(0); // init python interpreter
+		// Py_Initialize(); // init python interpreter
+		PyEval_InitThreads(); // init threads
+		(*lib)->mst = PyEval_SaveThread(); // save thread state
+	}
+#endif
 	return NOWDB_OK;
 }
 
@@ -243,22 +259,25 @@ static nowdb_err_t signalSessions(nowdb_t *lib, int what) {
 	err = nowdb_lock_write(lib->lock);
 	if (err != NOWDB_OK) return err;
 
-	int m = what==1?1:2;
-	for(int i=0; i<m; i++) {
-		list=i==0?lib->uthreads:lib->fthreads;
-		for(runner=list->head;runner!=NULL;runner=runner->nxt) {
-			ses = runner->cont;
-			switch(what) {
-			case 1: err = nowdb_session_stop(ses); break;
-			case 2: err = nowdb_session_shutdown(ses); break;
-			} 
-			if (err != NOWDB_OK) {
-				fprintf(stderr, "cannot stop session\n");
-				nowdb_err_print(err);
-				nowdb_err_release(err);
-				break;
-			}
+	list=what==1?lib->uthreads:lib->fthreads;
+	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
+		ses = runner->cont;
+		switch(what) {
+		case 1: err = nowdb_session_stop(ses); break;
+		case 2: err = nowdb_session_shutdown(ses); break;
+		} 
+		if (err != NOWDB_OK) {
+			LOGMSG("cannot stop session\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			break;
 		}
+		/*
+		if (what == 2) {
+			// LOGMSG("removing session\n");
+			ts_algo_list_remove(list, runner);
+		}
+		*/
 	}
 	err2 = nowdb_unlock_write(lib->lock);
 	if (err2 != NOWDB_OK) {
@@ -268,7 +287,7 @@ static nowdb_err_t signalSessions(nowdb_t *lib, int what) {
 }
 
 /* -----------------------------------------------------------------------
- * Kill all ongoing sessions
+ * Terminate all living sessions
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t killSessions(nowdb_t *lib) {
@@ -281,6 +300,52 @@ static nowdb_err_t killSessions(nowdb_t *lib) {
  */
 static nowdb_err_t stopSessions(nowdb_t *lib) {
 	return signalSessions(lib, 1);
+}
+
+/* -----------------------------------------------------------------------
+ * Wait until there are not more sessions ongoing
+ * -----------------------------------------------------------------------
+ */
+#define DELAY 10000000l
+static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
+	ts_algo_list_t *list;
+	nowdb_err_t err=NOWDB_OK;
+	int x, i=9;
+	int t=0;
+
+	list = what==1?lib->uthreads:lib->fthreads;
+	for(;;) {
+		err = nowdb_lock_read(lib->lock);
+		if (err != NOWDB_OK) return err;
+
+		x = list->len;
+		t = list->head != NULL;
+
+		err = nowdb_unlock_read(lib->lock);
+		if (err != NOWDB_OK) return err;
+		
+		if (x <= 0) break;
+		if (t == 0) break;
+
+		fprintf(stderr, "waiting %d: %d (%d)\n", what, x, t);
+
+		i--;
+
+		if (i==0) {
+			if (what == 1) {
+				err = stopSessions(lib);
+				if (err != NOWDB_OK) return err;
+			} else {
+				err = killSessions(lib);
+				if (err != NOWDB_OK) return err;
+			}
+			i=9;
+		}
+
+		err = nowdb_task_sleep(DELAY);
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -309,16 +374,22 @@ void nowdb_library_close(nowdb_t *lib) {
 	if (lib == NULL) {
 		nowdb_close(); return;
 	}
-	if (lib->lock != NULL) {
-		NOWDB_IGNORE(killSessions(lib));
-	}
 	if (lib->uthreads != NULL) {
 		destroySessionList(lib->uthreads);
 		free(lib->uthreads); lib->uthreads = NULL;
 	}
+	if (lib->lock != NULL) {
+		NOWDB_IGNORE(killSessions(lib));
+		// NOWDB_IGNORE(waitSessions(lib,2));
+		NOWDB_IGNORE(nowdb_lock_write(lib->lock));
+	}
 	if (lib->fthreads != NULL) {
+		fprintf(stderr, "destroy free threads\n");
 		destroySessionList(lib->fthreads);
 		free(lib->fthreads); lib->fthreads = NULL;
+	}
+	if (lib->lock != NULL) {
+		NOWDB_IGNORE(nowdb_unlock_write(lib->lock));
 	}
 	if (lib->scopes != NULL) {
 		ts_algo_tree_destroy(lib->scopes);
@@ -331,6 +402,24 @@ void nowdb_library_close(nowdb_t *lib) {
 		nowdb_rwlock_destroy(lib->lock);
 		free(lib->lock); lib->lock = NULL;
 	}
+#ifdef _NOWDB_WITH_PYTHON
+	if (lib->pyEnabled && lib->mst != NULL) {
+		fprintf(stderr, "finalizing python\n");
+
+		PyEval_RestoreThread(lib->mst);
+	
+		lib->mst = NULL;
+		
+		Py_Finalize();
+
+		/*
+		if (Py_FinalizeEx() != 0) {
+			fprintf(stderr, "Python finalizer failed:\n");
+			PyErr_Print();
+		}
+		*/
+	}
+#endif
 	free(lib);
 	nowdb_close();
 }
@@ -340,11 +429,23 @@ void nowdb_library_close(nowdb_t *lib) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_shutdown(nowdb_t *lib) {
+	nowdb_err_t err;
 
 	if (lib == NULL) INVALID("lib is NULL");
 	if (lib->lock == NULL) INVALID("lib is not open");
 
-	return stopSessions(lib);
+	/* for soft shutdown:
+	 * wait until all sessions have terminated.
+	 * for hard shudown, we need a mechanism to
+	 * stop all sessions 
+	err = stopSessions(lib);
+	if (err != NOWDB_OK) return err;
+	 */
+
+	err = waitSessions(lib, 1);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -500,6 +601,13 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 	}
 	(*ses)->bufsz = BUFSIZE;
 
+	err = nowdb_proc_create(&(*ses)->proc, lib, NULL);
+	if (err != NOWDB_OK) {
+		nowdb_session_destroy(*ses);
+		free(*ses); *ses = NULL;
+		return err;
+	}
+
 	err = initSession(*ses, master, istream, ostream, estream);
 	if (err != NOWDB_OK) {
 		nowdb_session_destroy(*ses);
@@ -565,7 +673,8 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 	// shall we allow ad-hoc threads?
 	// shall we enforce a limit on living threads?
 	if (lib->fthreads->len == 0) {
-		if (lib->uthreads->len > lib->nthreads) {
+		if (lib->nthreads > 0 &&
+		    lib->nthreads < lib->uthreads->len) {
 			err = nowdb_err_get(nowdb_err_no_rsc,
 			  FALSE, OBJECT, "empty thread pool");
 			goto unlock;
@@ -679,7 +788,7 @@ static int setStop(nowdb_session_t *ses, int stop) {
 		return -1;
 	}
 
-	ses->stop = stop;
+	if (ses->stop != 2) ses->stop = stop;
 
 	err = nowdb_unlock(ses->lock);
 	if (err != NOWDB_OK) {
@@ -771,8 +880,7 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 	}
 	err = nowdb_task_join(ses->task);
 	if (err != NOWDB_OK) { // what to do?
-		fprintf(stderr, "cannot join!\n");
-		return err;
+		LOGERRMSG(err);
 	}
 	return NOWDB_OK;
 }
@@ -793,6 +901,10 @@ void nowdb_session_destroy(nowdb_session_t *ses) {
 	if (ses->cursors != NULL) {
 		ts_algo_tree_destroy(ses->cursors);
 		free(ses->cursors); ses->cursors = NULL;
+	}
+	if (ses->proc != NULL) {
+		nowdb_proc_destroy(ses->proc);
+		free(ses->proc); ses->proc = NULL;
 	}
 	if (ses->lock != NULL) {
 		nowdb_lock_destroy(ses->lock);
@@ -931,6 +1043,36 @@ static int sendReport(nowdb_session_t *ses, nowdb_qry_result_t *res) {
 	}
 	free(res->result); res->result = NULL;
 	LOGMSG("REPORT");
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * send cursor and rows
+ * -----------------------------------------------------------------------
+ */
+static int sendRow(nowdb_session_t    *ses,
+                   nowdb_qry_result_t *res) {
+	nowdb_err_t err;
+	char *status=ses->buf;
+	nowdb_qry_row_t *row;
+
+	status[0] = NOWDB_ROW;
+	status[1] = NOWDB_ACK;
+
+	row = res->result;
+
+	memcpy(ses->buf+2, &row->sz, 4);
+	memcpy(ses->buf+6, row->row, row->sz);
+
+	if (write(ses->ostream, ses->buf, row->sz+6) != row->sz+6) {
+		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
+			                         "writing cursor");
+		SETERR();
+		return -1;
+	}
+	free(row->row);
+	free(res->result); res->result = NULL;
+	LOGMSG("ROW");
 	return 0;
 }
 
@@ -1137,7 +1279,7 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	// it would be nice if we could distinguish between
 	// internal errors and errors specific to this query
 	// unfortunately, we cannot; so we may leak internals
-	err = nowdb_stmt_handle(ast, ses->scope, ses->lib, path, &res);
+	err = nowdb_stmt_handle(ast, ses->scope, ses->proc, path, &res);
 	if (err != NOWDB_OK) return sendErr(ses, err, ast);
 
 	switch(res.resType) {
@@ -1146,7 +1288,12 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_REPORT: return sendReport(ses, &res);
 
 	case NOWDB_QRY_RESULT_SCOPE:
-		ses->scope = res.result; return sendOK(ses);
+		ses->scope = res.result;
+		nowdb_proc_setScope(ses->proc, ses->scope);
+		return sendOK(ses);
+
+	case NOWDB_QRY_RESULT_ROW:
+		return sendRow(ses, &res);
 
 	case NOWDB_QRY_RESULT_CURSOR:
 		return openCursor(ses, res.result);
@@ -1252,8 +1399,9 @@ static void runSession(nowdb_session_t *ses) {
 	// negotiate seesion properties
 	err = negotiate(ses);
 	if (err != NOWDB_OK) {
-		SETERR();
+		// SETERR();
 		nowdb_err_print(err);
+		nowdb_err_release(err);
 		return;
 	}
 
@@ -1272,13 +1420,13 @@ static void runSession(nowdb_session_t *ses) {
 
 		// broken pipe: close session
 		if (rc == NOWDB_SQL_ERR_CLOSED) {
-			fprintf(stderr, "SOCKET CLOSED\n");
+			LOGMSG("SOCKET CLOSED\n");
 			rc = 0; break;
 		}
 
 		// EOF: continue, there may come more
 		if (rc == NOWDB_SQL_ERR_EOF) {
-			fprintf(stderr, "EOF\n");
+			LOGMSG("EOF\n");
 			rc = 0; continue;
 		}
 
@@ -1292,7 +1440,7 @@ static void runSession(nowdb_session_t *ses) {
 
 		// this should not happen
 		if (ast == NULL) {
-			fprintf(stderr, "no error, no ast :-(\n");
+			LOGMSG("no error, no ast :-(\n");
 			err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT,
 			            "unknown error occurred during parsing");
 			rc = sendErr(ses, err, ast);
@@ -1307,7 +1455,7 @@ static void runSession(nowdb_session_t *ses) {
 		rc = handleAst(ses, ast);
 		if (rc != 0) {
 			nowdb_ast_destroy(ast); free(ast);
-			fprintf(stderr, "cannot handle ast\n");
+			LOGMSG("cannot handle ast\n");
 			/* only severe errors are passed through.
 			 * other errors are handled internally.
 			 * therefore: */
@@ -1329,26 +1477,8 @@ static void runSession(nowdb_session_t *ses) {
  * leave session
  * -----------------------------------------------------------------------
  */
-static void leaveSession(nowdb_session_t *ses) {
+static void leaveSession(nowdb_session_t *ses, int stop) {
 	nowdb_err_t err;
-
-	// fprintf(stderr, "leaving session\n");
-
-	err = nowdb_lock_write(LIB(ses->lib)->lock);
-	if (err != NOWDB_OK) {
-		SETERR();
-		return;
-	}
-
-	// move session from used to free list
-	ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
-	addNode(LIB(ses->lib)->fthreads, ses->node);
-
-	err = nowdb_unlock_write(LIB(ses->lib)->lock);
-	if (err != NOWDB_OK) {
-		SETERR();
-		return;
-	}
 
 	// free resources
 	if (ses->parser != NULL) {
@@ -1359,12 +1489,47 @@ static void leaveSession(nowdb_session_t *ses) {
 		ts_algo_tree_destroy(ses->cursors);
 		free(ses->cursors); ses->cursors = NULL;
 	}
+
+	err = nowdb_proc_reinit(ses->proc);
+	if (err != NOWDB_OK) {
+		SETERR();
+	}
+
+	if (ses->istream >= 0) {
+		close(ses->istream);
+		ses->istream = -1;
+	}
+
+	if (stop == 2) return;
+
+	// move session from used to free list
+	// LOGMSG("locking ses->lib\n");
+	err = nowdb_lock_write(LIB(ses->lib)->lock);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return;
+	}
+
+	if (LIB(ses->lib)->uthreads->head != NULL) {
+		ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
+		addNode(LIB(ses->lib)->fthreads, ses->node);
+		fprintf(stderr, "used: %d, free: %d\n",
+	                LIB(ses->lib)->uthreads->len,
+	                LIB(ses->lib)->fthreads->len);
+	}
+
+	err = nowdb_unlock_write(LIB(ses->lib)->lock);
+	if (err != NOWDB_OK) {
+		SETERR();
+		return;
+	}
+	// fprintf(stderr, "left session\n");
 }
 
 #define SIGNALEOS() \
 	err = signalMaster(ses); \
 	if (err != NOWDB_OK) { \
-		LOGERR(err); \
+		LOGERRMSG(err); \
 		break; \
 	}
 
@@ -1382,6 +1547,18 @@ void *nowdb_session_entry(void *session) {
 	sigemptyset(&s);
         sigaddset(&s, SIGUSR1);
 
+	sigset_t t;
+	sigemptyset(&t);
+	sigaddset(&s, SIGUSR1);
+	sigaddset(&s, SIGINT);
+	sigaddset(&s, SIGABRT);
+	sigaddset(&s, SIGTERM);
+
+	x = pthread_sigmask(SIG_BLOCK, &t, NULL);
+	if (x != 0) {
+		ses->err = nowdb_err_getRC(nowdb_err_sigwait,
+		                             x, OBJECT, NULL);
+	}
 	for(;;) {
 		// waiting for something to happen
 		x = sigwait(&s, &sig);
@@ -1393,13 +1570,16 @@ void *nowdb_session_entry(void *session) {
 
 		// what shall we do?
 		stop = getStop(ses);
+
+		// fprintf(stderr, "STOP: %d\n", stop);
+
 		if (stop < 0) break;
 		if (stop == 2) break;
 		if (stop == 1) continue;
 
 		// we have an error 
 		if (ses->err != NOWDB_OK) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 			break;
 		}
@@ -1407,21 +1587,24 @@ void *nowdb_session_entry(void *session) {
 		// run session / log error
 		runSession(ses);
 		if (ses->err != NOWDB_OK) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 		}
 
 		// was stop set while we were busy?
 		stop = getStop(ses);
+
+		// fprintf(stderr, "STOP (2): %d\n", stop);
+
 		if (stop < 0) break;
 		if (stop == 2) break;
 
 		// leave session
-		leaveSession(ses);
+		leaveSession(ses,stop);
 
 		// set state waiting
 		if (setWaiting(ses) < 0) {
-			LOGERR(ses->err);
+			LOGERRMSG(ses->err);
 			ses->err = NOWDB_OK;
 			SIGNALEOS();
 			break;

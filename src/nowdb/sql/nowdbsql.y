@@ -9,6 +9,7 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
+ * - expression in select and where
  * - qualified names
  * - aliases
  * - joins
@@ -116,6 +117,9 @@
 
 %type pj {nowdb_ast_t*}
 %destructor pj {nowdb_ast_destroyAndFree($$);}
+
+%type val_list {nowdb_ast_t*}
+%destructor val_list {nowdb_ast_destroyAndFree($$);}
 
 %type fun {nowdb_ast_t*}
 %destructor fun {nowdb_ast_destroyAndFree($$);}
@@ -272,6 +276,15 @@ misc ::= CLOSE UINTEGER(I). {
 	NOWDB_SQL_MAKE_CLOSE(I);	
 }
 
+/* val_list shall be expression list! */
+misc ::= EXECUTE IDENTIFIER(I) LPAR RPAR. {
+	NOWDB_SQL_MAKE_EXEC(I,NULL);
+}
+
+misc ::= EXECUTE IDENTIFIER(I) LPAR val_list(V) RPAR. {
+	NOWDB_SQL_MAKE_EXEC(I,V);
+}
+
 /* ------------------------------------------------------------------------
  *  Create Clause
  * ------------------------------------------------------------------------
@@ -325,6 +338,15 @@ create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
 create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
 	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
 	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR RPAR LANGUAGE IDENTIFIER(L). {
+	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, NULL);
+}
+
+/* field_decl_list also allows PK! */
+create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR field_decl_list(P) RPAR LANGUAGE IDENTIFIER(L). {
+	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, P);
 }
 
 index_target(T) ::= IDENTIFIER(I). {
@@ -408,6 +430,9 @@ type(T) ::= INT. {
 type(T) ::= UINT. {
 	T=NOWDB_AST_UINT;
 }
+type(T) ::= BOOL. {
+	T=NOWDB_AST_BOOL;
+}
 type ::= LONGTEXT.
 
 /* ------------------------------------------------------------------------
@@ -432,6 +457,10 @@ drop_clause(C) ::= DROP TYPE IDENTIFIER(I). {
 
 drop_clause(C) ::= DROP EDGE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_EDGE,I,NULL);
+}
+
+drop_clause(C) ::= DROP PROCEDURE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_PROC,I,NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -647,8 +676,12 @@ pj(P) ::= field(F). {
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
 }
 
+pj(P) ::= value(V). {
+        P=V;
+}
+
 pj(P) ::= fun(F). {
-	P = F;
+	P=F;
 }
 
 fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
@@ -669,6 +702,20 @@ fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
 fun(F) ::= IDENTIFIER(I) LPAR RPAR. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+}
+
+/* ------------------------------------------------------------------------
+ * value list
+ * ------------------------------------------------------------------------
+ */
+val_list(L) ::= value(V). {
+	L=V;
+}
+
+val_list(L) ::= value(V) COMMA val_list(L2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(V,L2);
+	L = V;
 }
 
 /* ------------------------------------------------------------------------
@@ -841,5 +888,15 @@ value(V) ::= INTEGER(I). {
 value(V) ::= FLOAT(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_FLOAT);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
+}
+value(V) ::= TRUE(T). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
+	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, T);
+}
+value(V) ::= FALSE(F). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
 	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
 }

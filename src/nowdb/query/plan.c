@@ -204,7 +204,8 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
                                    int            stype,
                                    void         **value) {
 	char *tmp;
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
+	int rc;
 
 	*value = malloc(sz);
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -243,8 +244,10 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	case NOWDB_TYP_TEXT:
 		if (off == NOWDB_OFF_TMSTMP) {
 			*typ = NOWDB_TYP_TIME;
-			err = nowdb_time_fromString(str,
+			rc = nowdb_time_fromString(str,
 			      NOWDB_TIME_FORMAT, *value);
+			if (rc != 0) err = nowdb_err_get(rc, FALSE,
+		                   OBJECT, "timestamp from string");
 		} else {
 			err = nowdb_text_getKey(scope->text, str, *value);
 		}
@@ -1015,6 +1018,69 @@ static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get const value
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getConstValue(uint16_t typ,
+                                        char    *str,
+                                        void **value) {
+	nowdb_err_t err;
+	char x;
+	char *tmp;
+
+	if (typ != NOWDB_TYP_TEXT) {
+		*value = malloc(sizeof(nowdb_key_t));
+		if (value == NULL) {
+			NOMEM("allocatin value");
+			return err;
+		}
+	}
+	switch(typ) {
+	case NOWDB_TYP_TEXT:
+		*value = strdup(str);
+		if (*value == NULL) {
+			NOMEM("allocating value");
+			return err;
+		}
+		return NOWDB_OK;
+
+	case NOWDB_TYP_BOOL:
+		if (strcasecmp(str, "true") == 0) x=1;
+		else if (strcasecmp(str, "false") == 0) x=0;
+		else {
+			free(*value); *value = NULL;
+			return nowdb_err_get(nowdb_err_invalid,
+			                         FALSE, OBJECT,
+			                     "invalid boolean");
+		}
+		memcpy(*value, &x, 1);
+		return NOWDB_OK;
+
+	case NOWDB_TYP_FLOAT:
+		**(double**)value = (double)strtod(str, &tmp);
+		break;
+
+	case NOWDB_TYP_UINT:
+		**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
+		break;
+
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_INT:
+		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
+		break;
+
+	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	                                          "unexpected type");
+	}
+	if (*tmp != 0) {
+		free(*value); *value = NULL;
+		return nowdb_err_get(nowdb_err_invalid,
+	           FALSE, OBJECT, "conversion failed");
+	}
+	return NOWDB_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Get fields for projection, grouping and ordering 
  * -----------------------------------------------------------------------
@@ -1045,8 +1111,9 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		flags = 0;
 
+		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
-			fprintf(stderr, "FUN: %s\n", (char*)field->value);
+			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 			flags = NOWDB_FIELD_AGG;
 
@@ -1059,32 +1126,50 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 			NOMEM("allocating field");
 			break;
 		}
-		/* we need to distinguish the target! */
-		if (trg->stype == NOWDB_AST_CONTEXT) {
-			f->target = NOWDB_TARGET_EDGE;
-			if (flags == 0) {
-				off = nowdb_edge_offByName(field->value);
-			}
-		} else if (trg->stype == NOWDB_AST_TYPE) {
-			f->target = NOWDB_TARGET_VERTEX;
-			if (flags == 0) off = -1;
-		} else {
-			fprintf(stderr, "STYPE: %d\n", trg->stype);
-			break;
-		}
-		if (flags == 0 && off < 0) {
-			f->name = strdup(field->value);
-			if (f->name == NULL) {
-				NOMEM("allocating field name");
-				free(f); break;
-			}
-		} else {
-			f->off = (uint32_t)off;
+		if (field->ntype == NOWDB_AST_VALUE) {
+			f->target = NOWDB_TARGET_NULL;
 			f->name = NULL;
+			f->off = -1;
+			f->typ = nowdb_ast_type(field->stype);
+
+			// fprintf(stderr, "type: %d\n", field->vtype);
+			err = getConstValue(f->typ, field->value,
+			                               &f->value);
+			if (err != NOWDB_OK) break;
+
+		} else {
+			/* we need to distinguish the target! */
+			if (trg->stype == NOWDB_AST_CONTEXT) {
+				f->target = NOWDB_TARGET_EDGE;
+				if (flags == 0) {
+					off = nowdb_edge_offByName(
+					              field->value);
+				}
+			} else if (trg->stype == NOWDB_AST_TYPE) {
+				f->target = NOWDB_TARGET_VERTEX;
+				if (flags == 0) off = -1;
+			} else {
+				/*
+				fprintf(stderr, "STYPE: %d\n",
+				                   trg->stype);
+				*/
+				break;
+			}
+
+			/* name or offset */
+			if (flags == 0 && off < 0) {
+				f->name = strdup(field->value);
+				if (f->name == NULL) {
+					NOMEM("allocating field name");
+					free(f); break;
+				}
+			} else {
+				f->off = (uint32_t)off;
+				f->name = NULL;
+			}
 		}
 
 		f->flags = flags | NOWDB_FIELD_SELECT;
-		f->func   = 0;
 		f->agg    = 0;
 
 		if (ts_algo_list_append(*fields, f) != TS_ALGO_OK) {

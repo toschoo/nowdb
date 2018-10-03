@@ -412,7 +412,7 @@ int main() {
 	EXECDLL("load 'rsc/edge100.csv' into sales as edge");
 
 	fprintf(stderr, "wait a second!\n");
-	sleep(1);
+	sleep(5);
 
 	sprintf(q, "select count(*), sum(weight) from sales\
 	             where edge = 'buys' and origin=%lu", wanted);
@@ -509,6 +509,7 @@ int main() {
 		}
 	}
 	if (!nowdb_cursor_eof(cur)) {
+		fprintf(stderr, "this is not EOF!\n");
 		fprintf(stderr, "ERROR %d: %s\n",
 		        nowdb_cursor_errcode(cur),
 		        nowdb_cursor_details(cur));

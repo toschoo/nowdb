@@ -23,6 +23,7 @@
  * ========================================================================
  */
 #include <nowdb/nowclient.h>
+#include <nowdb/query/rowutl.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,6 +59,7 @@
 #define NOWDB_UINT     6
 #define NOWDB_COMPLEX  7
 #define NOWDB_LONGTEXT 8
+#define NOWDB_BOOL     9
 
 #define EOROW 0xa
 
@@ -600,12 +602,7 @@ int nowdb_exec_statement(nowdb_con_t     con,
  * ------------------------------------------------------------------------
  */
 static inline int findEndOfStr(char *buf, int sz, int idx) {
-	int z;
-	int x = strnlen(buf+idx, 4097);
-	if (x > 4096) return -1;
-	z = idx+x;
-	if (z>=sz) return -1;
-	return (z+1);
+	return nowdb_row_findEndOfStr(buf, sz, idx);
 }
 
 /* ------------------------------------------------------------------------
@@ -613,18 +610,7 @@ static inline int findEndOfStr(char *buf, int sz, int idx) {
  * ------------------------------------------------------------------------
  */
 static inline int findEORow(nowdb_row_t p, int idx) {
-	int i;
-	for(i=idx; i<ROW(p)->sz;) {
-		if (ROW(p)->buf[i] == EOROW) break;
-		if (ROW(p)->buf[i] == NOWDB_TEXT) {
-			i = findEndOfStr(ROW(p)->buf,
-			                 ROW(p)->sz,i);
-			continue;
-		}
-		i+=9;
-	}
-	if (i >= ROW(p)->sz) return -1;
-	return (i+1);
+	return nowdb_row_findEOR(ROW(p)->buf, ROW(p)->sz, idx);
 }
 
 /* ------------------------------------------------------------------------
@@ -632,25 +618,7 @@ static inline int findEORow(nowdb_row_t p, int idx) {
  * ------------------------------------------------------------------------
  */
 static inline int findLastRow(char *buf, int sz) {
-	int i;
-	int l=sz;
-	
-	if (sz == 0) return 0;
-	for(i=0; i<sz;) {
-		if (buf[i] == EOROW) {
-			l=i; i++;
-			if (i == sz) break;
-		}
-		if (buf[i] == NOWDB_TEXT) {
-			i++;
-			i = findEndOfStr(buf, sz, i);
-			if (i < 0) return i;
-			continue;
-		}
-		i+=9;
-	}
-	l++;
-	return l;
+	return nowdb_row_findLastRow(buf, sz);
 }
 
 /* ------------------------------------------------------------------------
@@ -759,6 +727,14 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 		case NOWDB_FLOAT: 
 			fprintf(stream, "%.4f", *(double*)(buf+i));
 			i+=8; break;
+
+		case NOWDB_BOOL: 
+			if (*(char*)(buf+i) == 0) {
+				fprintf(stream, "false");
+			} else {
+				fprintf(stream, "true");
+			}
+			i++; break;
 
 		case NOWDB_NOTHING:
 			i+=8; break;
@@ -988,26 +964,23 @@ uint64_t nowdb_cursor_id(nowdb_cursor_t cur) {
  * Wrappers
  * ------------------------------------------------------------------------
  */
-void *nowdb_time_fromString(const char *buf,
-                            const char *frm,
-                            nowdb_time_t *t);
-
-void *nowdb_time_toString(nowdb_time_t  t,
+int nowdb_time_fromString(const char *buf,
                           const char *frm,
-                                char *buf,
-                               size_t max);
+                          nowdb_time_t *t);
+
+int nowdb_time_toString(nowdb_time_t  t,
+                        const char *frm,
+                              char *buf,
+                            size_t max);
 
 void *nowdb_time_now(nowdb_time_t *t);
 
 void nowdb_time_fromSystem(const struct timespec *tp,
-                         nowdb_time_t *t);
+                                     nowdb_time_t *t);
 
-void *nowdb_time_toSystem(nowdb_time_t t,
-                          struct timespec *tp);
+int nowdb_time_toSystem(nowdb_time_t t,
+                  struct timespec *tp);
 
-int nowdb_err_code(void *err);
-void nowdb_err_release(void *err);
-void nowdb_err_print(void *err);
 const char *nowdb_err_desc(int errcode);
 
 /* ------------------------------------------------------------------------
@@ -1018,15 +991,10 @@ int nowdb_time_parse(const char *buf,
                      const char *frm,
                      nowdb_time_t *t) {
 
-	void *err;
 	int rc;
 
-	err = nowdb_time_fromString(buf, frm, t);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_fromString(buf, frm, t);
+	if (rc != NOWDB_OK) return rc;
 	return NOWDB_OK;
 }
 	
@@ -1038,15 +1006,10 @@ int nowdb_time_show(nowdb_time_t  t,
                     const char *frm,
                           char *buf,
                          size_t max) {
-	void *err;
 	int rc;
 
-	err = nowdb_time_toString(t, frm, buf, max);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_toString(t, frm, buf, max);
+	if (rc != NOWDB_OK) return rc;
 	return NOWDB_OK;
 }
 
@@ -1078,14 +1041,9 @@ nowdb_time_t nowdb_time_fromUnix(const struct timespec *tp) {
  */
 int nowdb_time_toUnix(nowdb_time_t t,
                       struct timespec *tp) {
-	void *err;
 	int rc;
-	err = nowdb_time_toSystem(t, tp);
-	if (err != NULL) {
-		rc = nowdb_err_code(err);
-		nowdb_err_release(err);
-		return rc;
-	}
+	rc = nowdb_time_toSystem(t, tp);
+	if (rc != NOWDB_OK) return rc;
 	return 0;
 }
 

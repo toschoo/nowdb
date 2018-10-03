@@ -302,8 +302,8 @@ int nowdbsql_parser_runStream(nowdbsql_parser_t *p, nowdb_ast_t **ast) {
 			if (size <= 0) RETERR(NOWDB_SQL_ERR_PROTOCOL);
 
 			x = readN(p->sock, p->buf, size);
-			if (x <= 0) RETERR(NOWDB_SQL_ERR_CLOSED);
-			if (x != size) RETERR(NOWDB_SQL_ERR_PROTOCOL);
+			if (x != size) RETERR(NOWDB_SQL_ERR_CLOSED);
+			// if (x != size) RETERR(NOWDB_SQL_ERR_PROTOCOL);
 
 			SIGON();
 

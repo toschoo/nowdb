@@ -44,6 +44,8 @@ char *global_db = NULL;
 char global_feedback = 1;
 char global_timing = 0;
 char global_banner = 1;
+char global_python = 0;
+int global_cpool = 128;
 
 /* -----------------------------------------------------------------------
  * produce some output
@@ -68,11 +70,13 @@ void helptxt(char *progname) {
 	fprintf(stderr, "%s [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
 	fprintf(stderr, "-b: base path (default: ./)\n");
+	fprintf(stderr, "-c: number of connections (0: infinite)\n");
 	fprintf(stderr, "-p: port or service (default: 55505)\n");
 	fprintf(stderr, "-s: bind domain or address (default: any)\n");
 	fprintf(stderr, "-t: timing\n");
 	fprintf(stderr, "-q: quiet\n");
 	fprintf(stderr, "-n: no banner\n");
+	fprintf(stderr, "-y: enable server-side python\n");
 	fprintf(stderr, "-V: version\n");
 	fprintf(stderr, "-?: \n");
 	fprintf(stderr, "-h: help\n");
@@ -91,8 +95,9 @@ void printVersion() {
  * -----------------------------------------------------------------------
  */
 int getOpts(int argc, char **argv) {
-	char *opts = "b:p:s:tqVh?";
+	char *opts = "b:c:p:s:tqyVh?";
 	char c;
+	char *tmp, *hlp;
 
 	while((c = getopt(argc, argv, opts)) != -1) {
 		switch(c) {
@@ -102,6 +107,23 @@ int getOpts(int argc, char **argv) {
 				fprintf(stderr,
 				"invalid argument for path: %s\n",
 				global_path);
+				return -1;
+			}
+			break;
+
+		case 'c':
+			tmp = optarg;
+			if (tmp[0] == '-') {
+				fprintf(stderr,
+				"invalid value for connections: %s\n",
+				tmp);
+				return -1;
+			}
+			global_cpool = (int)strtoul(tmp, &hlp, 10);
+			if (hlp == NULL || *hlp != 0) {
+				fprintf(stderr,
+				"invalid value for connections: %s\n",
+				tmp);
 				return -1;
 			}
 			break;
@@ -126,6 +148,13 @@ int getOpts(int argc, char **argv) {
 			}
 			break;
 
+		case 'y':
+
+#ifdef _NOWDB_WITH_PYTHON
+			global_python=1;
+#endif
+			break;
+
 		case 't': global_timing=1; break;
 		case 'q': global_feedback=0; break;
 		case 'n': global_banner=0; break;
@@ -146,29 +175,27 @@ int getOpts(int argc, char **argv) {
  * banner
  * -----------------------------------------------------------------------
  */
-void banner(char *path) {
+void banner(nowdb_t *lib, char *path) {
 char tstr[32];
-nowdb_err_t err;
 nowdb_time_t tm;
+int rc;
 
 if (!global_banner) return;
 
-err = nowdb_time_now(&tm);
-if (err != NOWDB_OK) {
+rc = nowdb_time_now(&tm);
+if (rc != 0) {
 	fprintf(stderr, "bad start: we have no banner :-(\n");
-	nowdb_err_print(err);
-	nowdb_err_release(err);
+	fprintf(stderr, "error code %d on get timestamp\n", rc);
 	return;
 }
 
 tm /= 1000000;
 tm *= 1000000;
 
-err = nowdb_time_toString(tm, NOWDB_TIME_FORMAT, tstr, 32);
-if (err != NOWDB_OK) {
+rc = nowdb_time_toString(tm, NOWDB_TIME_FORMAT, tstr, 32);
+if (rc != 0) {
 	fprintf(stderr, "bad start: we have no banner :-(\n");
-	nowdb_err_print(err);
-	nowdb_err_release(err);
+	fprintf(stderr, "error code %d on timestamp to string\n", rc);
 	return;
 }
 
@@ -179,6 +206,16 @@ fprintf(stdout, " \n");
 fprintf(stdout, "  UTC %s\n", tstr);
 fprintf(stdout, " \n");
 fprintf(stdout, "  The server is ready\n");
+#ifdef _NOWDB_WITH_PYTHON
+fprintf(stdout, " \n");
+fprintf(stdout, "    - with python support ");
+if (lib->pyEnabled) {
+	fprintf(stdout, "enabled\n");
+} else {
+	fprintf(stdout, "disabled\n");
+}
+fprintf(stdout, " \n");
+#endif
 fprintf(stdout, " \n");
 fprintf(stdout, " \n");
 fprintf(stdout, "+---------------------------------------------------------------+\n");
@@ -273,6 +310,8 @@ void handleConnection(srv_t *srv, int con, struct sockaddr_in adr) {
 		fprintf(stderr, "cannot get session\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		close(con);
+		return;
 	}
 
 	if (srv->ses_started == 0x7fffffffffffffff) {
@@ -422,14 +461,21 @@ int runServer(int argc, char **argv) {
 	nowdb_t *lib;
 	int rc = EXIT_SUCCESS;
 	srv_t srv;
-	sigset_t s;
+	sigset_t s,b;
 	int sig, x;
+	uint64_t flags = 0;
 
 	x = getOpts(argc, argv);
 	if (x > 0) return EXIT_SUCCESS;
 	if (x < 0) return EXIT_FAILURE;
 
-	err = nowdb_library_init(&lib, global_path, global_feedback, 64);
+	if (global_python)
+		flags |= NOWDB_ENABLE_PYTHON;
+
+	err = nowdb_library_init(&lib, global_path,
+	                               global_feedback,
+	                               global_cpool,
+                                              flags);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot initialise library");
 		nowdb_err_print(err);
@@ -437,6 +483,7 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	srand(time(NULL) ^ (uint64_t)&printf);
 	initServer(&srv, lib);
 
 	/* install stop handler */
@@ -474,10 +521,23 @@ int runServer(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	/* signals we block */
+	sigemptyset(&b);
+	sigaddset(&b, SIGABRT);
+	sigaddset(&b, SIGINT);
+	sigaddset(&b, SIGTERM);
+	x = pthread_sigmask(SIG_BLOCK, &b, NULL);
+	if (x != 0) {
+		fprintf(stderr, "cannot set signal mask\n");
+		nowdb_library_close(lib);
+		return EXIT_FAILURE;
+	}
+
 	/* signals we actively waiting for */
 	sigemptyset(&s);
 	sigaddset(&s, SIGUSR1);
 	sigaddset(&s, SIGABRT);
+	sigaddset(&s, SIGTERM);
 	sigaddset(&s, SIGINT);
 
 	/* start listener */
@@ -491,7 +551,8 @@ int runServer(int argc, char **argv) {
 
 	/* make a nice welcome banner and an option to suppress it */
 	// fprintf(stderr, "server running\n");
-	banner(global_path);
+	banner(lib, global_path);
+	fprintf(stderr, "connections: %d\n", global_cpool);
 
 	for(;;) {
 		if (srv.err != NOWDB_OK) break;
@@ -518,6 +579,7 @@ int runServer(int argc, char **argv) {
 
 		// user wants us to terminate
 		case SIGABRT:
+		case SIGTERM:
 		case SIGINT:
 			global_stop = 1; 
 			break;
@@ -530,6 +592,7 @@ int runServer(int argc, char **argv) {
 	}
 
 	// stop listener
+	fprintf(stderr, "stop listener\n");
 	err = stopListener(&srv, listener);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot stop listener: ");
@@ -546,6 +609,7 @@ int runServer(int argc, char **argv) {
 		rc = EXIT_FAILURE;
 	}
 	// shutdown library
+	fprintf(stderr, "shutdown\n");
 	err = nowdb_library_shutdown(lib);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot shutdown library: ");
@@ -554,6 +618,7 @@ int runServer(int argc, char **argv) {
 		rc = EXIT_FAILURE;
 	}
 	// and finally close it
+	fprintf(stderr, "close lib\n");
 	nowdb_library_close(lib);
 
 	// make a nice farewell banner
