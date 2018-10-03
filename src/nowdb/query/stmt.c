@@ -1438,6 +1438,47 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 }
 
 /* -------------------------------------------------------------------------
+ * Handle insert statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleInsert(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_qry_result_t *res) {
+
+	// check whether target is context or vertex
+	// get model for that context/vertex
+	// check that we have a field list
+	// check that values and fields correspond
+	// insert
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Handle update statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleUpdate(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_qry_result_t *res) {
+	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                          "update not yet implemented");
+}
+
+/* -------------------------------------------------------------------------
+ * Handle delete statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleDelete(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_qry_result_t *res) {
+	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                          "delete not yet implemented");
+}
+
+/* -------------------------------------------------------------------------
  * Handle DML statement
  * TODO
  * -------------------------------------------------------------------------
@@ -1445,8 +1486,28 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 static nowdb_err_t handleDML(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
-	return nowdb_err_get(nowdb_err_not_supp,
-	            FALSE, OBJECT, "handleDML");
+	nowdb_err_t err;
+	nowdb_ast_t *op;
+	nowdb_ast_t *trg;
+
+	if (scope == NULL) INVALIDAST("no scope");
+
+	/* result is a report */
+	res->resType = NOWDB_QRY_RESULT_REPORT;
+	res->result = NULL;
+
+	op = nowdb_ast_operation(ast);
+	if (op == NULL) INVALIDAST("no operation in AST");
+	
+	trg = nowdb_ast_target(op);
+	if (trg == NULL) INVALIDAST("no target in AST");
+
+	switch(op->ntype) {
+	case NOWDB_AST_INSERT: return handleInsert(op, trg, scope, res);
+	case NOWDB_AST_UPDATE: return handleUpdate(op, trg, scope, res);
+	case NOWDB_AST_DELETE: return handleDelete(op, trg, scope, res);
+	default: INVALIDAST("invalid operation");
+	}
 }
 
 /* -------------------------------------------------------------------------
