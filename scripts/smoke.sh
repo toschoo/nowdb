@@ -143,6 +143,14 @@ then
 	exit 1
 fi
 
+echo "running pmansmoke" >> log/test.log
+test/smoke/pmansmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: pmansmoke failed"
+	exit 1
+fi
+
 echo "running textsmoke" >> log/test.log
 test/smoke/textsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
@@ -159,6 +167,14 @@ then
 	exit 1
 fi
 
+echo "running rowsmoke" >> log/test.log
+test/smoke/rowsmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: rowsmoke failed"
+	exit 1
+fi
+
 echo "running funsmoke" >> log/test.log
 test/smoke/funsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
@@ -172,14 +188,6 @@ test/smoke/mergesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
 	echo "FAILED: mergesmoke failed"
-	exit 1
-fi
-
-echo "running scopesmoke2" >> log/test.log
-test/smoke/scopesmoke2 >> log/test.log 2>&1
-if [ $? -ne 0 ]
-then
-	echo "FAILED: scopesmoke2 failed"
 	exit 1
 fi
 

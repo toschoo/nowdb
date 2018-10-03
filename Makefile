@@ -17,13 +17,21 @@ FLGMSG = @printf "CFLAGS: $(CFLAGS)\nLDFLAGS: $(LDFLAGS)\n"
 
 INSMSG = @printf ". setenv.sh"
 
-CFLAGS = -O3 -g -Wall -std=c99 -fPIC -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
+CFLAGS = -O3 -g -Wall -std=c99 -fPIC \
+         -D_GNU_SOURCE \
+         -D_POSIX_C_SOURCE=200809L \
+         -D_NOWDB_WITH_PYTHON
+
 LDFLAGS = -L./lib
 
 INC = -I./include -I./test -I./src -I./
 LIB = lib
+CLIENTLIB = nowclientlib 
 
 SRC = src/nowdb
+SRD = src/nowdbd
+SRL = src/nowdbclient
+PYC = pynow
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -31,12 +39,15 @@ COM = common
 BENCH= bench
 SMK = test/smoke
 STRESS = test/stress
+CMK = test/client
 BIN = bin
 LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
-libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv
+LIBPY = python2.7
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
+clibs = -lm -lpthread -ltsalgo
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -60,6 +71,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/context.o  \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
+      $(SRC)/scope/procman.o  \
       $(SRC)/index/index.o    \
       $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
@@ -69,18 +81,23 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
       $(SRC)/fun/group.o      \
-      $(SRC)/query/stmt.o     \
-      $(SRC)/query/row.o      \
-      $(SRC)/query/plan.o     \
-      $(SRC)/query/cursor.o   \
       $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
-      $(SRC)/sql/parser.o
+      $(SRC)/sql/parser.o     \
+      $(SRC)/query/stmt.o     \
+      $(SRC)/query/row.o      \
+      $(SRC)/query/rowutl.o   \
+      $(SRC)/query/plan.o     \
+      $(SRC)/query/cursor.o   \
+      $(SRC)/ifc/proc.o       \
+      $(SRC)/ifc/nowproc.o    \
+      $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
+      $(HDR)/errcode.h        \
       $(SRC)/types/error.h    \
       $(SRC)/types/time.h     \
       $(SRC)/io/dir.h         \
@@ -101,6 +118,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/context.h  \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
+      $(SRC)/scope/procman.h  \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
@@ -108,8 +126,10 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
+      $(SRC)/fun/expr.h       \
       $(SRC)/fun/fun.h        \
       $(SRC)/fun/group.h      \
+      $(SRC)/query/rowutl.h   \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
       $(SRC)/query/plan.h     \
@@ -118,11 +138,23 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sql/lex.h        \
       $(SRC)/sql/nowdbsql.h   \
       $(SRC)/sql/state.h      \
-      $(SRC)/sql/parser.h
+      $(SRC)/sql/parser.h     \
+      $(SRC)/ifc/proc.h       \
+      $(SRC)/ifc/nowdb.h
+
+CLIENTDEP = $(HDR)/errcode.h  \
+            $(HDR)/nowclient.h
+
+IFC = include/nowdb/nowdb.h \
+      include/nowdb/nowproc.h
 
 default:	lib 
 
-all:	default tools tests bench
+all:	default tools tests bench server client
+
+server:	$(BIN)/nowdbd
+
+client:	$(BIN)/nowclient
 
 tools:	bin/randomfile    \
 	bin/readfile      \
@@ -153,6 +185,8 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/readersmoke             \
 	$(SMK)/filtersmoke             \
 	$(SMK)/funsmoke                \
+	$(SMK)/rowsmoke                \
+	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
 	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
@@ -164,9 +198,11 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/sortsmoke               \
 	$(SMK)/sqlsmoke
 
+clientsmoke:	$(CMK)/clientsmoke
+
 stress:	$(STRESS)/deepscope
 
-tests: smoke stress
+tests: smoke stress clientsmoke
 
 debug:	CFLAGS += -g
 debug:	default
@@ -195,6 +231,25 @@ lib/libnowdb.so:	$(OBJ) $(DEP)
 			$(CC) -shared \
 			      -o $(OUTLIB)/libnowdb.so \
 			         $(OBJ) $(libs)
+
+# Client Library 
+nowclientlib:		lib/libnowdbclient.so
+
+lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
+                        $(SRC)/types/types.o \
+                        $(SRC)/types/errman.o \
+                        $(SRC)/types/error.o \
+                        $(SRC)/types/time.o \
+                        $(SRC)/query/rowutl.o
+			$(LNKMSG)
+			$(CC) -shared \
+			      -o $(OUTLIB)/libnowdbclient.so \
+                        	 $(SRC)/types/types.o \
+                        	 $(SRC)/types/errman.o \
+                        	 $(SRC)/types/error.o \
+                        	 $(SRC)/types/time.o \
+                        	 $(SRC)/query/rowutl.o \
+			         $(SRL)/nowdbclient.o $(libs)
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
@@ -312,6 +367,16 @@ $(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/funsmoke:	$(LIB) $(DEP) $(SMK)/funsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/rowsmoke:	$(LIB) $(DEP) $(SMK)/rowsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/pmansmoke:	$(LIB) $(DEP) $(SMK)/pmansmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -460,7 +525,7 @@ $(BIN)/parserbench:	$(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SQL)/lex.o $(SQL)/nowdbsql.o \
 			         $(SRC)/sql/ast.o $(SQL)/state.o \
 			         $(SQL)/parser.o $(COM)/bench.o \
-			         $(BENCH)/parserbench.o -lnowdb
+			         $(BENCH)/parserbench.o $(libs) -lnowdb
 		
 # Tools
 $(BIN)/randomfile:	$(LIB) $(DEP) $(TOOLS)/randomfile.o \
@@ -516,9 +581,46 @@ $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              	       $(COM)/cmd.o        \
 			                 $(libs) -lnowdb
 
+$(BIN)/nowdbd:		$(IFC) $(LIB) $(SRD)/nowdbd.o \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(SRD)/nowdbd.o \
+			              	       $(COM)/cmd.o      \
+			                 $(libs) -lnowdb
+
+$(BIN)/nowclient:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(TOOLS)/nowclient.o \
+			$(COM)/cmd.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/nowclient.o \
+			              	       $(COM)/cmd.o      \
+			              	       $(COM)/bench.o      \
+			                 $(clibs) -lnowdbclient
+
+$(CMK)/clientsmoke:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(CMK)/clientsmoke.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(CMK)/clientsmoke.o \
+			              	       $(COM)/bench.o      \
+			                 $(clibs) -lnowdbclient
+
+
+$(CMK)/clientsmoke2:	$(CLIENTDEP) $(CLIENTLIB) \
+			$(CMK)/clientsmoke2.o \
+			$(COM)/bench.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(CMK)/clientsmoke2.o \
+			              	       $(COM)/bench.o      \
+			                 $(clibs) -lnowdbclient
+
 # Clean up
 clean:
 	rm -f $(SRC)/*/*.o
+	rm -f $(SRD)/*.o
+	rm -f $(SRL)/*.o
+	rm -f $(PYC)/*.pyc
 	rm -f $(TST)/*/*.o
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
@@ -531,6 +633,7 @@ clean:
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
+	rm -f $(OUTLIB)/libnowdbclient.so
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
 	rm -f $(RSC)/*.dbz
@@ -547,7 +650,9 @@ clean:
 	rm -rf $(RSC)/scope?
 	rm -rf $(RSC)/scope??
 	rm -rf $(RSC)/scope???
+	rm -rf $(RSC)/client???
 	rm -rf $(RSC)/iman??
+	rm -rf $(RSC)/pman??
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
@@ -566,6 +671,8 @@ clean:
 	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/funsmoke
+	rm -f $(SMK)/rowsmoke
+	rm -f $(SMK)/pmansmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/scopesmoke2
@@ -577,6 +684,8 @@ clean:
 	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sortsmoke
 	rm -f $(SMK)/sqlsmoke
+	rm -f $(CMK)/clientsmoke
+	rm -f $(CMK)/clientsmoke2
 	rm -f $(STRESS)/deepscope
 	rm -f $(BIN)/compileme
 	rm -f $(BIN)/readfile
@@ -591,6 +700,9 @@ clean:
 	rm -f $(BIN)/waitscope
 	rm -f $(BIN)/writecsv
 	rm -f $(BIN)/scopetool
+	rm -f $(BIN)/scopetool2
 	rm -f $(BIN)/qstress
 	rm -f $(BIN)/catalog
+	rm -f $(BIN)/nowdbd
+	rm -f $(BIN)/nowclient
 

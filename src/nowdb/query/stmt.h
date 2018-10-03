@@ -32,7 +32,9 @@
 #define NOWDB_QRY_RESULT_REPORT  2
 #define NOWDB_QRY_RESULT_PLAN    3
 #define NOWDB_QRY_RESULT_SCOPE   4
-#define NOWDB_QRY_RESULT_CURSOR  5
+#define NOWDB_QRY_RESULT_ROW     5
+#define NOWDB_QRY_RESULT_CURSOR  6
+#define NOWDB_QRY_RESULT_OP      7
 
 /* -----------------------------------------------------------------------
  * Result
@@ -56,7 +58,7 @@ typedef struct {
  */
 nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
                           nowdb_scope_t *scope,
-                          ts_algo_list_t  *rsc,
+                          void            *rsc,
                           nowdb_path_t    base,
                       nowdb_qry_result_t *res);
 
@@ -69,5 +71,14 @@ typedef struct {
 	uint64_t      errors; /* number of errors    */
 	nowdb_time_t runtime; /* running times in us */
 } nowdb_qry_report_t;
+
+/* -----------------------------------------------------------------------
+ * A row
+ * -----------------------------------------------------------------------
+ */
+typedef struct nowdb_qry_row_t {
+	char     *row; /* row buffer */
+	uint32_t   sz; /* size       */
+} nowdb_qry_row_t;
 
 #endif

@@ -312,6 +312,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->iman = NULL;
 	scope->model = NULL;
 	scope->text = NULL;
+	scope->pman = NULL;
 	scope->ver  = ver;
 	scope->state = NOWDB_SCOPE_CLOSED;
 
@@ -383,6 +384,11 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		nowdb_scope_destroy(scope);
 		return err;
 	}
+	err = nowdb_procman_new(&scope->pman, path);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -409,6 +415,10 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope->text != NULL) {
 		nowdb_text_destroy(scope->text);
 		free(scope->text); scope->text = NULL;
+	}
+	if (scope->pman != NULL) {
+		nowdb_procman_destroy(scope->pman);
+		free(scope->pman); scope->pman = NULL;
 	}
 	nowdb_rwlock_destroy(&scope->lock);
 	nowdb_store_destroy(&scope->vertices);
@@ -1073,6 +1083,9 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	err = initIndexMan(scope);
 	if (err != NOWDB_OK) goto unlock;
 
+	err = nowdb_procman_load(scope->pman);
+	if (err != NOWDB_OK) goto unlock;
+
 	err = nowdb_store_open(&scope->vertices);
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
@@ -1508,6 +1521,91 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
 		goto unlock;
 	}
 	*idx = desc->idx;
+
+unlock:
+	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create new stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createProcedure(nowdb_scope_t  *scope,
+                                        nowdb_proc_desc_t *pd) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (pd == NULL) return nowdb_err_get(nowdb_err_invalid,
+	              FALSE, OBJECT, "proc descriptor is NULL");
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_procman_add(scope->pman, pd);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropProcedure(nowdb_scope_t *scope,
+                                      char          *name) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_procman_remove(scope->pman, name);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Get stored procedure/function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getProcedure(nowdb_scope_t   *scope,
+                                     char             *name,
+                                     nowdb_proc_desc_t **pd) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_procman_get(scope->pman, name, pd);
+	if (err != NOWDB_OK) goto unlock;
 
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);

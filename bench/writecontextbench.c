@@ -35,6 +35,7 @@ void helptxt(char *progname) {
 nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 	nowdb_err_t err;
 	nowdb_edge_t e;
+	int rc;
 
 	memset(&e,0,64);
 	e.wtype[0] = NOWDB_TYP_UINT;
@@ -47,11 +48,9 @@ nowdb_bool_t insertEdges(nowdb_context_t *ctx, uint64_t count) {
 		e.weight = (uint64_t)i;
 		// do e.label  = rand()%10; while(e.label == 0);
 		if (i%10 == 0) {
-			err = nowdb_time_now(&e.timestamp);
-			if (err != NOWDB_OK) {
-				fprintf(stderr, "insert error\n");
-				nowdb_err_print(err);
-				nowdb_err_release(err);
+			rc = nowdb_time_now(&e.timestamp);
+			if (rc != 0) {
+				fprintf(stderr, "insert error: %d\n", rc);
 				return FALSE;
 			}
 		}

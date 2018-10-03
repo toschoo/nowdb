@@ -69,7 +69,7 @@ vrtx_t *products = NULL;
 vrtx_t *clients = NULL;
 
 int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
-	nowdb_err_t err;
+	int rc;
 	nowdb_time_t base;
 	nowdb_time_t nsecs;
 	FILE *f;
@@ -94,12 +94,10 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 		return -1;
 	}
 
-	err = nowdb_time_fromString("2018-08-28T00:00:00",
-	                         NOWDB_TIME_FORMAT, &base);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot get time base\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
+	rc = nowdb_time_fromString("2018-08-28T00:00:00",
+	                       NOWDB_TIME_FORMAT, &base);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get time base: %d\n", rc);
 		fclose(f);
 		return -1;
 	}
@@ -293,7 +291,7 @@ int64_t readResult(nowdb_scope_t *scope,
 		return -1;
 	}
 
-	buf = malloc(8192);
+	buf = malloc(2*8192);
 	if (buf == NULL) {
 		fprintf(stderr, "out-of-mem\n");
 		closeCursor(cur);
@@ -301,7 +299,7 @@ int64_t readResult(nowdb_scope_t *scope,
 	}
 
 	while(more) {
-		err = nowdb_cursor_fetch(cur, buf, 8192, &osz, &cnt);
+		err = nowdb_cursor_fetch(cur, buf, 2*8192, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err); err = NOWDB_OK;
@@ -311,16 +309,19 @@ int64_t readResult(nowdb_scope_t *scope,
 		}
 		for(uint32_t r=0; r<cnt; r++) {
 			uint32_t i, f;
+			// extract row does not consider leftovers
 			err = nowdb_row_extractRow(buf, osz, r, &i);
 			if (err != NOWDB_OK) {
 				fprintf(stderr, "error extracting row %d\n", r);
 				nowdb_err_print(err); nowdb_err_release(err);
+				more=0;
 				break;
 			}
 			err = nowdb_row_extractField(buf+i, osz-i, field, &f);
 			if (err != NOWDB_OK) {
-				fprintf(stderr, "error extracting field\n");
+				fprintf(stderr, "error extracting field %u\n", field);
 				nowdb_err_print(err); nowdb_err_release(err);
+				more=0;
 				break;
 			}
 			res += (int64_t)*(uint64_t*)(buf+i+f);

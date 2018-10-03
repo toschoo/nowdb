@@ -44,6 +44,7 @@ typedef struct {
 	char          *fromkey; /* range: fromkey                */
 	char            *tokey; /* range:   tokey                */
 	char             hasid; /* has id to identify model      */
+	char               eof; /* end of file was reached       */
 } nowdb_cursor_t;
 
 /* ------------------------------------------------------------------------
@@ -88,4 +89,9 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
  */
 nowdb_err_t nowdb_cursor_rewind(nowdb_cursor_t *cur);
 
+/* ------------------------------------------------------------------------
+ * Check for eof
+ * ------------------------------------------------------------------------
+ */
+char nowdb_cursor_eof(nowdb_cursor_t *cur);
 #endif

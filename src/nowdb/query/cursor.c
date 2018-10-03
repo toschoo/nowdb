@@ -263,20 +263,22 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
-		fprintf(stderr, "SEARCH\n");
+		// fprintf(stderr, "SEARCH\n");
 		err = createSeq(cur, rplan->stype, pidx);
 
-	} else if (rplan->stype == NOWDB_PLAN_FRANGE_) {
-		fprintf(stderr, "FRANGE\n");
-		err = createMerge(cur, rplan->stype, pidx);
+	} else if (rplan->stype == NOWDB_PLAN_FRANGE_ ||
+	          (rplan->stype == NOWDB_PLAN_KRANGE_ && !hasId(pidx))) {
+		// fprintf(stderr, "FRANGE\n");
+		err = createMerge(cur, NOWDB_PLAN_FRANGE_, pidx);
 
+	// KRANGE only allowd with model id
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
-		fprintf(stderr, "KRANGE\n");
+		// fprintf(stderr, "KRANGE\n");
 		cur->hasid = hasId(pidx);
 		err = createMerge(cur, rplan->stype, pidx);
 
 	} else if (rplan->stype == NOWDB_PLAN_CRANGE_) {
-		fprintf(stderr, "CRANGE\n");
+		// fprintf(stderr, "CRANGE\n");
 		cur->hasid = hasId(pidx);
 		err = nowdb_reader_crange(&cur->rdr,
 		                          &cur->stf.files,
@@ -610,6 +612,9 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	char x;
 	
 	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
+
+	cur->eof = 1;
+
 	if (cur->group == NULL && cur->nogrp == NULL) return old;
 
 	if (cur->nogrp != NULL) {
@@ -773,3 +778,11 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_cursor_rewind(nowdb_cursor_t *cur);
+
+/* ------------------------------------------------------------------------
+ * EOF
+ * ------------------------------------------------------------------------
+ */
+char nowdb_cursor_eof(nowdb_cursor_t *cur) {
+	return cur->eof;
+}

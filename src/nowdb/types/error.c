@@ -222,6 +222,15 @@ void nowdb_err_send(nowdb_err_t err, int fd) {
 }
 
 /* ------------------------------------------------------------------------
+ * Retrieves the errorcode from the error
+ * ------------------------------------------------------------------------
+ */
+nowdb_errcode_t nowdb_err_code(nowdb_err_t err) {
+	if (err == NOWDB_OK) return 0;
+	return err->errcode;
+}
+
+/* ------------------------------------------------------------------------
  * Human readable error descriptions
  * ------------------------------------------------------------------------
  */
@@ -286,6 +295,20 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_beet: return "beet library error";
 	case nowdb_err_fun: return "unknown function";
 	case nowdb_err_not_found: return "resource not found";
+	case nowdb_err_parser: return "parser error";
+	case nowdb_err_sigwait: return "operation sigwait failed";
+	case nowdb_err_signal: return "operation pthread_kill failed";
+	case nowdb_err_sigset: return "operation sigmask failed";
+	case nowdb_err_socket: return "operation sigmask failed";
+	case nowdb_err_bind: return "operation bind failed";
+	case nowdb_err_listen: return "operation listen failed";
+	case nowdb_err_accept: return "operation accept failed";
+	case nowdb_err_protocol: return "protocol error";
+	case nowdb_err_server: return "internal server error";
+	case nowdb_err_addr: return "cannot find address information";
+	case nowdb_err_python: return "python api error";
+	case nowdb_err_unk_symbol: return "unknown symbol";
+	case nowdb_err_usrerr: return "error in stored procedure";
 	default: return "unknown";
 	}
 }

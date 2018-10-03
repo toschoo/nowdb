@@ -474,13 +474,14 @@ static inline nowdb_fileid_t getFileId(nowdb_store_t *store) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t makeFileName(nowdb_store_t *store, char *name) {
-	nowdb_err_t err;
+	int rc = 0;
 	nowdb_time_t  t;
 	nowdb_path_t  p;
 
 	for(;;) {
-		err = nowdb_time_now(&t);
-		if (err != NOWDB_OK) return err;
+		rc = nowdb_time_now(&t);
+		if (rc != 0) return nowdb_err_get(rc, FALSE,
+		                OBJECT, "getting timestamp");
 		sprintf(name, "%lu.db", t);
 		p = nowdb_path_append(store->path, name);
 		if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
@@ -1375,13 +1376,16 @@ static inline nowdb_err_t setDecomp(nowdb_store_t *store,
 	ZSTD_DCtx     *ctx;
 
 	if (store->comp == NOWDB_COMP_FLAT) return NOWDB_OK;
+	if (list->len == 0) return NOWDB_OK;
 
 	err = nowdb_compctx_getDCtx(store->ctx, &ctx);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_compctx_getDDict(store->ctx, &dict);
-	if (err != NOWDB_OK) return err;
-	
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_compctx_releaseDCtx(store->ctx, ctx));
+		return err;
+	}
 	for(runner=list->head; runner!=NULL; runner=runner->nxt) {
 		file = runner->cont;
 		file->ddict = dict;
