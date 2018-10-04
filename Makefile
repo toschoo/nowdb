@@ -626,6 +626,7 @@ clean:
 	rm -f $(SRL)/*.o
 	rm -f $(PYC)/*.pyc
 	rm -f $(TST)/*/*.o
+	rm -f $(TST)/*/*.pyc
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
 	rm -f $(TOOLS)/*.o
@@ -660,6 +661,7 @@ clean:
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
+	rm -rf $(RSC)/db???
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
