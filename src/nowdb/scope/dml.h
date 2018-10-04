@@ -12,7 +12,7 @@
 #include <nowdb/store/store.h>
 #include <nowdb/model/model.h>
 #include <nowdb/text/text.h>
-#include <nowdb/mem/ptlru.h>
+#include <nowdb/mem/pklru.h>
 #include <nowdb/scope/scope.h>
 
 #include <tsalgo/list.h>
@@ -22,7 +22,7 @@ typedef struct {
         nowdb_scope_t    *scope; /* current scope                      */
 	nowdb_target_t   target; /* least recently used target         */
 	nowdb_store_t    *store; /* least recently used store          */
-	nowdb_ptlru_t     *tlru; /* private text cache                 */
+	nowdb_pklru_t     *tlru; /* private text cache                 */
 	nowdb_model_vertex_t *v; /* least recently used vertex model   */
 	nowdb_model_prop_t  **p; /* least recently used prop model     */
 	nowdb_model_edge_t   *e; /* least recently used edge model     */

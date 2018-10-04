@@ -236,7 +236,9 @@ dml ::= INSERT INTO dml_target(T) LPAR field_list(F) RPAR LPAR val_list(V) RPAR.
 	NOWDB_SQL_MAKE_INSERT(T,F,V);
 }
 
-dml ::= INSERT INTO dml_target LPAR val_list RPAR.
+dml ::= INSERT INTO dml_target(T) LPAR val_list(V) RPAR. {
+	NOWDB_SQL_MAKE_INSERT(T,NULL,V);
+}
 
 /* ------------------------------------------------------------------------
  * DQL

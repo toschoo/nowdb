@@ -36,12 +36,12 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 	dml->d = NULL;
 
 	if (withCache) {
-		dml->tlru = calloc(1,sizeof(nowdb_ptlru_t));
+		dml->tlru = calloc(1,sizeof(nowdb_pklru_t));
 		if (dml->tlru == NULL) {
 			NOMEM("allocating lru cache");
 			return err;
 		}
-		err = nowdb_ptlru_init(dml->tlru, 1000000);
+		err = nowdb_pklru_init(dml->tlru, 1000000);
 		if (err != NOWDB_OK) {
 			free(dml->tlru); dml->tlru = NULL;
 			return err;
@@ -57,7 +57,7 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 		free(dml->trgname); dml->trgname = NULL;
 	}
 	if (dml->tlru != NULL) {
-		nowdb_ptlru_destroy(dml->tlru);
+		nowdb_pklru_destroy(dml->tlru);
 		free(dml->tlru ); dml->tlru = NULL;
 	}
 	if (dml->p != NULL) {
@@ -137,30 +137,35 @@ nowdb_err_t nowdb_dml_insertRow(nowdb_dml_t *dml,
  * TODO!
  * ------------------------------------------------------------------------
  */
-/*
 static inline nowdb_err_t getKey(nowdb_dml_t *dml,
                                  char        *str,
                                  nowdb_key_t *key) {
 	nowdb_err_t err;
+	char *mystr;
+	char found=0;
 
-	err = nowdb_ptlru_get(dml->tlru, key, str);
+	err = nowdb_pklru_get(dml->tlru, str, key, &found);
 	if (err != NOWDB_OK) return err;
 
-	if (*str != NULL) return NOWDB_OK;
+	if (found) return NOWDB_OK;
 
-	err = nowdb_text_getText(dml->scope->text, key, str);
+	err = nowdb_text_insert(dml->scope->text, str, key);
 	if (err != NOWDB_OK) return err;
 
-	return nowdb_ptlru_add(dml->tlru, key, *str);
+	mystr = strdup(str);
+	if (mystr == NULL) {
+		NOMEM("allocating string");
+		return err;
+	}
+	return nowdb_pklru_add(dml->tlru, mystr, *key);
 }
-*/
 
 static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
                                        char       *edge) {
 	nowdb_err_t err;
 	nowdb_key_t eid;
 
-	err = nowdb_text_getKey(dml->scope->text, edge, &eid);
+	err = getKey(dml, edge, &eid);
 	if (err != NOWDB_OK) return err;
 
 	if (dml->e != NULL) {
@@ -189,11 +194,13 @@ static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
 	nowdb_simple_value_t *val;
 
 	vrun = values->head;
-	for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
-		if (strcasecmp(frun->cont, "edge") == 0) break;
-		vrun = vrun->nxt;
+	if (fields != NULL) {
+		for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
+			if (strcasecmp(frun->cont, "edge") == 0) break;
+			vrun = vrun->nxt;
+		}
 	}
-	if (frun != NULL && vrun != NULL) {
+	if (vrun != NULL) {
 		val = vrun->cont;
 		err = setEdgeModel(dml, val->value);
 		if (err != NOWDB_OK) return err;
@@ -274,16 +281,6 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 }
 
 /* ------------------------------------------------------------------------
- * Convert text to key
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t getKeyFromText(nowdb_dml_t *dml,
-                                         char *txt,
-                                         void *target) {
-	return nowdb_text_insert(dml->scope->text, txt, target);
-}
-
-/* ------------------------------------------------------------------------
  * String to int or uint
  * ------------------------------------------------------------------------
  */
@@ -332,7 +329,7 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 
 	case NOWDB_TYP_TEXT:
 		fprintf(stderr, "TEXT: %s\n", (char*)val->value);
-		return getKeyFromText(dml, val->value, target);
+		return getKey(dml, val->value, target);
 
 	case NOWDB_TYP_DATE:
 		STRTOTIME(NOWDB_DATE_FORMAT);
@@ -376,29 +373,34 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
                                      ts_algo_list_t *values) 
 {
 	nowdb_err_t err = NOWDB_OK;
-	ts_algo_list_node_t *frun, *vrun;
+	ts_algo_list_node_t *vrun, *frun=NULL;
 	nowdb_simple_value_t *val;
 	nowdb_edge_t edge;
-	int off;
-
-	fprintf(stderr, "INSERTING EDGE FIELD\n");
+	int off=0;
 
 	err = getEdgeModel(dml, fields, values);
 	if (err != NOWDB_OK) return err;
 
 	memset(&edge, 0, NOWDB_EDGE_SIZE);
-	vrun = values->head;
-	for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
+
+	if (fields != NULL) {
+		frun = fields->head;
+	}
+	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 
 		// get offset from name
-		off = nowdb_edge_offByName(frun->cont);
-		if (off < 0) {
-			INVALIDVAL("unknown field name");
-			break;
+		if (fields != NULL) {
+			off = nowdb_edge_offByName(frun->cont);
+			if (off < 0) {
+				INVALIDVAL("unknown field name");
+				break;
+			}
 		}
 
-		fprintf(stderr, "getting value for %s (=%d)\n",
-		                        (char*)frun->cont, off);
+		if (off > NOWDB_OFF_WEIGHT2) {
+			INVALIDVAL("too many fields");
+			break;
+		}
 
 		val = vrun->cont;
 		if (val == NULL) {
@@ -420,18 +422,27 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 			edge.wtype[1] = val->type;
 		}
 		
-		vrun = vrun->nxt;
+		if (fields != NULL) {
+			frun = frun->nxt;
+		} else {
+			off += 8;
+		}
 	}
-	if (err == NOWDB_OK) {
-		fprintf(stderr, "INSERTING %lu-%lu-%lu @%ld\n",
-		                 edge.edge,
-		                 edge.origin,
-		                 edge.destin,
-		                 edge.timestamp);
+	if (err != NOWDB_OK) return err;
+	if (fields == NULL && off < NOWDB_OFF_WTYPE) {
+		INVALIDVAL("not enough fields");
+		return err;
+	}
 
-		return nowdb_store_insert(dml->store, &edge);
-	}
-	return err;
+	/*
+	fprintf(stderr, "INSERTING %lu-%lu-%lu @%ld\n",
+	                 edge.edge,
+	                 edge.origin,
+	                 edge.destin,
+	                 edge.timestamp);
+	*/
+
+	return nowdb_store_insert(dml->store, &edge);
 }
 
 static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,

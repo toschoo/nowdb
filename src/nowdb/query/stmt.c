@@ -1465,7 +1465,7 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
                                 nowdb_proc_t     *proc,
                                 nowdb_qry_result_t *res) {
 	nowdb_err_t err=NOWDB_OK;
-	ts_algo_list_t fields;
+	ts_algo_list_t fields, *fptr=NULL;
 	ts_algo_list_t values;
 	nowdb_simple_value_t *val;
 	nowdb_ast_t *f, *v;
@@ -1473,16 +1473,14 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 	nowdb_qry_report_t *rep;
 	struct timespec t1, t2;
 
-	fprintf(stderr, "handle insert\n");
-
 	nowdb_timestamp(&t1);
 
 	ts_algo_list_init(&fields);
 	ts_algo_list_init(&values);
 
 	f = nowdb_ast_field(op);
+	if (f != NULL) fptr = &fields;
 	while (f != NULL) {
-		fprintf(stderr, "adding field: %s\n", (char*)f->value);
 		if (ts_algo_list_append(&fields, f->value) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&fields);
 			NOMEM("fields.append");
@@ -1496,7 +1494,6 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 		if (v->value == NULL) {
 			v = nowdb_ast_value(v); continue;
 		}
-		fprintf(stderr, "adding value: %s\n", (char*)v->value);
 		val = malloc(sizeof(nowdb_simple_value_t));
 		if (val == NULL) {
 			NOMEM("allocating simplified value");
@@ -1521,11 +1518,10 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 			      OBJECT, "no scope in session");
 		goto cleanup;
 	}
-	err = nowdb_dml_setTarget(dml, trg->value,
-			         &fields, &values);
+	err = nowdb_dml_setTarget(dml, trg->value, fptr, &values);
 	if (err != NOWDB_OK) goto cleanup;
 
-	err = nowdb_dml_insertFields(dml, &fields, &values);
+	err = nowdb_dml_insertFields(dml, fptr, &values);
 	if (err != NOWDB_OK) goto cleanup;
 
 	nowdb_timestamp(&t2);
