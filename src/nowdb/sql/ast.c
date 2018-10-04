@@ -835,9 +835,9 @@ nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
 
 	switch(ast->ntype) {
 	case NOWDB_AST_DDL:
+	case NOWDB_AST_DML:
 	case NOWDB_AST_DLL: return ast->kids[0];
 
-	case NOWDB_AST_DML:
 	case NOWDB_AST_DQL: return NULL;
 
 	case NOWDB_AST_MISC: return ast->kids[0];

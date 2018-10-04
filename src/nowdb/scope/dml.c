@@ -11,8 +11,12 @@ static char *OBJECT = "dml";
 #define INVALID(m) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, m);
 
+#define INVALIDVAL(m) \
+	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, m);
+
 #define NOMEM(m) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, m);
+
 
 nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml, 
                            nowdb_scope_t *scope,
@@ -20,7 +24,6 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 	nowdb_err_t err;
 
 	if (dml ==NULL) INVALID("dml is NULL");
-	if (scope==NULL) INVALID("scope is NULL");
 
 	dml->trgname = NULL;
 	dml->scope = scope;
@@ -96,13 +99,21 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
+	fprintf(stderr, "SETTING TARGET %s\n", trgname);
+
 	// check fields == values
 	if (fields != NULL && values != NULL) {
 		if (fields->len != values->len) {
 			INVALID("field list and value list differ");
 		}
 	}
-
+	if (dml->trgname != NULL) {
+		if (strcasecmp(dml->trgname,
+	                            trgname) == 0) {
+			return NOWDB_OK;
+		}
+		free(dml->trgname); dml->trgname = NULL;
+	}
 	dml->trgname = strdup(trgname);
 	if (dml->trgname == NULL) {
 		NOMEM("allocating target name");
@@ -121,24 +132,306 @@ nowdb_err_t nowdb_dml_insertRow(nowdb_dml_t *dml,
                                 char        *row,
                                 uint32_t     sz);
 
+/* ------------------------------------------------------------------------
+ * Helper: get key and cache it
+ * TODO!
+ * ------------------------------------------------------------------------
+ */
+/*
+static inline nowdb_err_t getKey(nowdb_dml_t *dml,
+                                 char        *str,
+                                 nowdb_key_t *key) {
+	nowdb_err_t err;
+
+	err = nowdb_ptlru_get(dml->tlru, key, str);
+	if (err != NOWDB_OK) return err;
+
+	if (*str != NULL) return NOWDB_OK;
+
+	err = nowdb_text_getText(dml->scope->text, key, str);
+	if (err != NOWDB_OK) return err;
+
+	return nowdb_ptlru_add(dml->tlru, key, *str);
+}
+*/
+
+static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
+                                       char       *edge) {
+	nowdb_err_t err;
+	nowdb_key_t eid;
+
+	err = nowdb_text_getKey(dml->scope->text, edge, &eid);
+	if (err != NOWDB_OK) return err;
+
+	if (dml->e != NULL) {
+		if (dml->e->edgeid == eid) return NOWDB_OK;
+	}
+
+	err = nowdb_model_getEdgeById(dml->scope->model, eid, &dml->e);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_model_getVertexById(dml->scope->model,
+	                          dml->e->origin, &dml->o);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_model_getVertexById(dml->scope->model,
+	                          dml->e->destin, &dml->d);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
+                                 ts_algo_list_t *fields,
+                                 ts_algo_list_t *values) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *frun, *vrun;
+	nowdb_simple_value_t *val;
+
+	vrun = values->head;
+	for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
+		if (strcasecmp(frun->cont, "edge") == 0) break;
+		vrun = vrun->nxt;
+	}
+	if (frun != NULL && vrun != NULL) {
+		val = vrun->cont;
+		err = setEdgeModel(dml, val->value);
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
+}
+
+static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
+                                         uint32_t              off,
+                                         nowdb_simple_value_t *val) {
+	switch(off) {
+	case NOWDB_OFF_EDGE:
+		if (val->type != NOWDB_TYP_TEXT) {
+			INVALID("edge must be text");
+		}
+		break;
+
+	case NOWDB_OFF_ORIGIN:
+		if (dml->o->vid == NOWDB_MODEL_TEXT &&
+		    val->type != NOWDB_TYP_TEXT) {
+			INVALID("origin must be text");
+		} else if (dml->o->vid != NOWDB_MODEL_TEXT &&
+		           val->type != NOWDB_TYP_UINT) {
+			INVALID("origin must be unsigned integer");
+		}
+		break;
+
+	case NOWDB_OFF_DESTIN:
+		if (dml->d->vid == NOWDB_MODEL_TEXT &&
+		    val->type != NOWDB_TYP_TEXT) {
+			INVALID("destination must be text");
+		} else if (dml->d->vid != NOWDB_MODEL_TEXT &&
+		           val->type != NOWDB_TYP_UINT) {
+			INVALID("destination must be unsigned integer");
+		}
+		break;
+
+	case NOWDB_OFF_LABEL:
+		if (dml->e->label == NOWDB_MODEL_TEXT &&
+		    val->type != NOWDB_TYP_TEXT) {
+			INVALID("label must be text");
+		} else if (dml->e->label != NOWDB_MODEL_TEXT &&
+		           val->type != NOWDB_TYP_UINT) {
+			INVALID("label must be unsigned integer");
+		}
+		break;
+
+	case NOWDB_OFF_TMSTMP:
+		if (val->type != NOWDB_TYP_TEXT) {
+			INVALID("not a valid timestamp");
+		}
+		val->type = NOWDB_TYP_TIME; break;
+
+	case NOWDB_OFF_WEIGHT:
+		if (dml->e->weight == NOWDB_TYP_INT &&
+		    val->type == NOWDB_TYP_UINT) {
+			val->type = NOWDB_TYP_INT;
+		} else if (dml->e->weight != val->type) {
+			INVALID("wrong type in weight");
+		}
+		break;
+		
+
+	case NOWDB_OFF_WEIGHT2:
+		if (dml->e->weight2 == NOWDB_TYP_INT &&
+		    val->type == NOWDB_TYP_UINT) {
+			val->type = NOWDB_TYP_INT;
+		} else if (dml->e->weight2 != val->type) {
+			INVALID("wrong type in weight2");
+		}
+		break;
+
+	default:
+		INVALID("unknown type");
+
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Convert text to key
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getKeyFromText(nowdb_dml_t *dml,
+                                         char *txt,
+                                         void *target) {
+	return nowdb_text_insert(dml->scope->text, txt, target);
+}
+
+/* ------------------------------------------------------------------------
+ * String to int or uint
+ * ------------------------------------------------------------------------
+ */
+#define STROX(t,to) \
+	*((t*)target) = to(val->value, &hlp, 10); \
+	if (*hlp != 0) {  \
+		err = nowdb_err_get(nowdb_err_invalid, \
+		      FALSE, OBJECT, "string to int"); \
+	}
+
+/* ------------------------------------------------------------------------
+ * String to double
+ * ------------------------------------------------------------------------
+ */
+#define STROD() \
+	*((double*)target) = strtod(val->value, &hlp); \
+	if (*hlp != 0) {  \
+		err = nowdb_err_get(nowdb_err_invalid, \
+		      FALSE, OBJECT, "string to double"); \
+	}
+
+/* ------------------------------------------------------------------------
+ * String to time
+ * ------------------------------------------------------------------------
+ */
+#define STRTOTIME(frm) \
+	rc = nowdb_time_fromString(val->value,frm,target); \
+	if (rc != 0) { \
+		err = nowdb_err_get(rc, FALSE, OBJECT, "string to time"); \
+	}
+	
+/* ------------------------------------------------------------------------
+ * Convert property value from string
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
+                                nowdb_simple_value_t *val,
+                                         void     *target) {
+	nowdb_err_t err=NOWDB_OK;
+	char *hlp=NULL;
+	int rc;
+
+	switch(val->type) {
+	case NOWDB_TYP_NOTHING:
+		memset(target, 0, sizeof(nowdb_key_t)); break;
+
+	case NOWDB_TYP_TEXT:
+		fprintf(stderr, "TEXT: %s\n", (char*)val->value);
+		return getKeyFromText(dml, val->value, target);
+
+	case NOWDB_TYP_DATE:
+		STRTOTIME(NOWDB_DATE_FORMAT);
+		break;
+
+	case NOWDB_TYP_TIME:
+		fprintf(stderr, "TIME: %s\n", (char*)val->value);
+		STRTOTIME(NOWDB_TIME_FORMAT);
+		break;
+
+	case NOWDB_TYP_FLOAT:
+		fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
+		STROD();
+		break;
+
+	case NOWDB_TYP_INT:
+		STROX(int64_t, strtol);
+		break;
+
+	case NOWDB_TYP_UINT:
+		fprintf(stderr, "UINT: %s\n", (char*)val->value);
+		STROX(uint64_t, strtoul);
+		break;
+
+	// bool
+
+	default: INVALID("unknown type");
+	}
+	return err;
+}
+
+static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
+                                        nowdb_edge_t *edge,
+                                        uint32_t       off,
+                                 nowdb_simple_value_t *val) {
+	return getValueAsType(dml, val, ((char*)edge)+off);
+}
+
 static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
                                      ts_algo_list_t *fields,
                                      ts_algo_list_t *values) 
 {
+	nowdb_err_t err = NOWDB_OK;
 	ts_algo_list_node_t *frun, *vrun;
+	nowdb_simple_value_t *val;
+	nowdb_edge_t edge;
+	int off;
 
+	fprintf(stderr, "INSERTING EDGE FIELD\n");
+
+	err = getEdgeModel(dml, fields, values);
+	if (err != NOWDB_OK) return err;
+
+	memset(&edge, 0, NOWDB_EDGE_SIZE);
 	vrun = values->head;
 	for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
+
 		// get offset from name
+		off = nowdb_edge_offByName(frun->cont);
+		if (off < 0) {
+			INVALIDVAL("unknown field name");
+			break;
+		}
+
+		fprintf(stderr, "getting value for %s (=%d)\n",
+		                        (char*)frun->cont, off);
+
+		val = vrun->cont;
+		if (val == NULL) {
+			INVALIDVAL("value descriptor is NULL");
+			break;
+		}
 
 		// check and correct value type
-
+		err = checkEdgeValue(dml, off, val);
+		if (err != NOWDB_OK) break;
+		
 		// write to edge (get edge model like in row)
+		err = copyEdgeValue(dml, &edge, off, val);
+		if (err != NOWDB_OK) break;
+
+		if (off == NOWDB_OFF_WEIGHT) {
+			edge.wtype[0] = val->type;
+		} else if (off == NOWDB_OFF_WEIGHT2) {
+			edge.wtype[1] = val->type;
+		}
 		
 		vrun = vrun->nxt;
 	}
-	// insert into store
-	return NOWDB_OK;
+	if (err == NOWDB_OK) {
+		fprintf(stderr, "INSERTING %lu-%lu-%lu @%ld\n",
+		                 edge.edge,
+		                 edge.origin,
+		                 edge.destin,
+		                 edge.timestamp);
+
+		return nowdb_store_insert(dml->store, &edge);
+	}
+	return err;
 }
 
 static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,

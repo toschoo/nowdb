@@ -30,6 +30,11 @@ typedef struct {
 	nowdb_model_vertex_t *d; /* least recently used destin         */
 } nowdb_dml_t;
 
+typedef struct {
+	void       *value;
+	nowdb_type_t type;
+} nowdb_simple_value_t;
+
 nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml, 
                            nowdb_scope_t *scope,
                            char       withCache);

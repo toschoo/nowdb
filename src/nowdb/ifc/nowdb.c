@@ -1289,7 +1289,8 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 
 	case NOWDB_QRY_RESULT_SCOPE:
 		ses->scope = res.result;
-		nowdb_proc_setScope(ses->proc, ses->scope);
+		err = nowdb_proc_setScope(ses->proc, ses->scope);
+		if (err != NOWDB_OK) return sendErr(ses, err, ast);
 		return sendOK(ses);
 
 	case NOWDB_QRY_RESULT_ROW:
