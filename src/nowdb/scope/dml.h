@@ -28,6 +28,7 @@ typedef struct {
 	nowdb_model_edge_t   *e; /* least recently used edge model     */
 	nowdb_model_vertex_t *o; /* least recently used origin         */
 	nowdb_model_vertex_t *d; /* least recently used destin         */
+	int                 num; /* number of properties               */
 } nowdb_dml_t;
 
 typedef struct {

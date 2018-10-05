@@ -34,6 +34,7 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 	dml->e = NULL;
 	dml->o = NULL;
 	dml->d = NULL;
+	dml->num = 0;
 
 	if (withCache) {
 		dml->tlru = calloc(1,sizeof(nowdb_pklru_t));
@@ -61,7 +62,7 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 		free(dml->tlru ); dml->tlru = NULL;
 	}
 	if (dml->p != NULL) {
-		free(dml->p); dml->p = NULL;
+		free(dml->p); dml->p = NULL; dml->num = 0;
 	}
 }
 
@@ -83,10 +84,95 @@ static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
 	if (err2 != NOWDB_OK) {
 		err2->cause = err1; return err2;
 	}
+
+	nowdb_err_release(err1);
+
 	dml->target = NOWDB_TARGET_VERTEX;
 	dml->store = &dml->scope->vertices;
 
 	return NOWDB_OK;
+}
+
+static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
+                                 ts_algo_list_t *fields) {
+	nowdb_err_t err;
+	char havePK = fields==NULL;
+	ts_algo_list_t props;
+	ts_algo_list_node_t *run;
+	int len;
+	int i;
+
+	if (dml->p != NULL) {
+		free(dml->p); dml->p = NULL; dml->num = 0;
+	}
+	if (fields == NULL) {
+		ts_algo_list_init(&props);
+		err = nowdb_model_getProperties(dml->scope->model,
+			                        dml->v->roleid,
+			                        &props);
+		if (err != NOWDB_OK) {
+			ts_algo_list_destroy(&props);
+			return err;
+		}
+		len = props.len;
+	} else {
+		len = fields->len;
+	}
+
+	dml->p = calloc(len, sizeof(nowdb_model_prop_t*));
+	if (dml->p == NULL) {
+		NOMEM("allocating properties");
+		if (fields == NULL) ts_algo_list_destroy(&props);
+		return err;
+	}
+	dml->num = len;
+	i = 0;
+	for(run=fields==NULL?props.head:fields->head;
+	    run!=NULL; run=run->nxt) {
+		if (fields == NULL) {
+			dml->p[i] = run->cont;
+		} else {
+			err = nowdb_model_getPropByName(dml->scope->model,
+			                                dml->v->roleid,
+			                                run->cont,
+			                                dml->p+i);
+			if (err != NOWDB_OK) break;
+			if (dml->p[i]->pk) havePK = 1;
+		}
+		i++;
+	}
+	if (fields == NULL) ts_algo_list_destroy(&props);
+	if (err != NOWDB_OK) {
+		free(dml->p); dml->p = NULL; dml->num = 0;
+		return err;
+	}
+	if (!havePK) {
+		free(dml->p); dml->p = NULL; dml->num = 0;
+		INVALIDVAL("PK not in list");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+static char vertexComplete(nowdb_dml_t *dml,
+                     ts_algo_list_t *fields, 
+                     ts_algo_list_t *values) 
+{
+	ts_algo_list_node_t *run;
+	int i=0;
+
+	if (dml->p == NULL) return 0;
+	if (fields == NULL) {
+		return (values->len == dml->num);
+	}
+	if (dml->num != fields->len) return 0;
+	for(run=fields->head; run!=NULL; run=run->nxt) {
+		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
+			return 0;
+		}
+		i++;
+	}
+	return 1;
 }
 
 nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
@@ -110,7 +196,13 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->trgname != NULL) {
 		if (strcasecmp(dml->trgname,
 	                            trgname) == 0) {
-			return NOWDB_OK;
+			if (dml->target == NOWDB_TARGET_EDGE) {
+				return NOWDB_OK;
+			} else if (vertexComplete(dml, fields, values)) {
+				return NOWDB_OK;
+			} else {
+				return getVertexProperties(dml, fields);
+			}
 		}
 		free(dml->trgname); dml->trgname = NULL;
 	}
@@ -124,8 +216,11 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	err = getContextOrVertex(dml, trgname);
 	if (err != NOWDB_OK) return err;
 
+	if (dml->target == NOWDB_TARGET_VERTEX) {
+		err = getVertexProperties(dml, fields);
+		if (err != NOWDB_OK) return err;
+	}
 	return NOWDB_OK;
-
 }
 
 nowdb_err_t nowdb_dml_insertRow(nowdb_dml_t *dml,
@@ -445,10 +540,55 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	return nowdb_store_insert(dml->store, &edge);
 }
 
+static inline nowdb_err_t insertVertexProperty(nowdb_dml_t *dml, int idx,
+                                               nowdb_simple_value_t *val) {
+	return NOWDB_OK;
+}
+
 static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
                                        ts_algo_list_t *fields,
                                        ts_algo_list_t *values) {
-	return NOWDB_OK;
+	nowdb_err_t err;
+	ts_algo_list_node_t *vrun;
+	nowdb_simple_value_t *val;
+	nowdb_vertex_t vrtx;
+	int i=0;
+
+	memset(&vrtx, 0, sizeof(nowdb_vertex_t));
+	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
+		val = vrun->cont;
+		if (dml->p[i]->value != val->type) {
+			INVALIDVAL("types differ");
+			return err;
+		}
+		if (dml->p[i]->pk) {
+			err = getValueAsType(dml, val, &vrtx.vertex);
+			if (err != NOWDB_OK) return err;
+		}
+		i++;
+	}
+	if (vrtx.vertex == 0) {
+		INVALIDVAL("no pk in vertex");
+		return err;
+	}
+	i=0;
+	vrtx.role = dml->v->roleid;
+	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
+		val = vrun->cont;
+		vrtx.property = dml->p[i]->propid;
+		vrtx.vtype = dml->p[i]->value;
+		err = getValueAsType(dml, val, &vrtx.value);
+		if (err != NOWDB_OK) break;
+
+		fprintf(stderr, "inserting vertex %u / %lu / %lu / %u\n",
+		                 vrtx.role, vrtx.vertex,
+		                 vrtx.property, vrtx.vtype);
+
+		err = nowdb_store_insert(dml->store, &vrtx);
+		if (err != NOWDB_OK) break;
+		i++;
+	}
+	return err;
 }
 
 nowdb_err_t nowdb_dml_insertFields(nowdb_dml_t *dml,

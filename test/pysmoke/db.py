@@ -66,6 +66,35 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create edge buys")
 
+def addRandomData(c, ps, cs, es):
+    products = createProducts(ps)
+    clients = createClients(cs)
+    edges = createEdges(es, clients, products)
+
+    storeProducts(c, products)
+    storeClients(c, clients)
+    storeEdges(c, edges)
+
+    return (products, clients, edges)
+
+def db2csv(p,c,e):
+    products2csv("rsc/products.csv", p)
+    clients2csv("rsc/clients.csv", c)
+    edges2csv("rsc/edges.csv", e)
+
+def loadFromCsv():
+    with c.execute("load 'rsc/products.csv' into vertex use header as product") as r:
+        if not r.ok():
+            raise FailedCreation("cannot load products: %s" % r.details())
+
+    with c.execute("load 'rsc/clients.csv' into vertex use header as client") as r:
+        if not r.ok():
+             raise FailedCreateion("cannot load clients: %s" % r.details())
+
+    with c.execute("load 'rsc/edges.csv' into sales as edge") as r:
+        if not r.ok():
+             raise FailedCreateion("cannot load edges: %s" % r.details())
+
 def storeProducts(conn, ps):
     for p in ps:
         p.store(conn)
@@ -76,19 +105,24 @@ def products2csv(csv, ps):
         for p in ps:
             p.tocsv(f)
 
+def storeClients(conn, cs):
+    for c in cs:
+        c.store(conn)
+
 def clients2csv(csv, cs):
    with open(csv, 'w') as f:
         f.write("client_key;client_name\n");
         for c in cs:
             c.tocsv(f)
 
-def storeClients(conn, cs):
-    for c in cs:
-        c.store(conn)
-
 def storeEdges(conn, es):
     for e in es:
         e.store(conn)
+
+def edges2csv(csv, es):
+   with open(csv, 'w') as f:
+        for e in es:
+            e.tocsv(f)
 
 class Product:
     def __init__(self, key, desc, price):
@@ -98,12 +132,14 @@ class Product:
 
     def store(self, c):
         stmt = "insert into product ("
+        stmt += "prod_key, prod_desc, prod_price) ("
         stmt += str(self.key) + ", "
         stmt += "'" + self.desc + "', "
         stmt += str(self.price) + ")"
         with c.execute(stmt) as r:
             if not r.ok():
-               raise FailedCreation("cannot insert product")
+               raise FailedCreation("cannot insert product -- %s" 
+                                                   % r.details())
 
     def tocsv(self, csv):
         line = ""
@@ -119,11 +155,13 @@ class Client:
 
     def store(self, c):
         stmt = "insert into client ("
+        stmt += "client_key, client_name) ("
         stmt += str(self.key) + ", "
         stmt += "'" + self.name + "')"
         with c.execute(stmt) as r:
             if not r.ok():
-               raise FailedCreation("cannot insert client")
+               raise FailedCreation("cannot insert client -- %s" 
+                                                  % r.details())
 
     def tocsv(self, csv):
         line = ""
@@ -153,6 +191,17 @@ class BuyEdge:
        with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert sales -- %s" % r.details())
+
+    def tocsv(self, csv):
+        line = ""
+        line += self.edge + ";"
+        line += str(self.origin) + ";"
+        line += str(self.destin) + ";"
+        line += ";"
+        line += self.tp.strftime(now.TIMEFORMAT) + ";"
+        line += str(self.weight) + ";"
+        line += str(self.weight2) + "\n"
+        csv.write(line)
 
 def createProducts(no):
     p = []
