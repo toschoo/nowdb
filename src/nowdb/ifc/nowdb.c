@@ -1129,20 +1129,26 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		}
 		goto cleanup;
 	}
-	err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (osz == 0) {
-				if (sendEOF(ses) != 0) goto cleanup;
+
+	// the reason for this loop is a bug in row.project
+	// for vertices. we should fix that instead of leaving
+	// the otherwise meaningless loop here!
+	do { 
+		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				if (osz == 0) {
+					if (sendEOF(ses) != 0) goto cleanup;
+				}
+			} else {
+				// internal error
+				INTERNAL("fetching first row");
+				sendErr(ses, err, NULL);
+				goto cleanup;
 			}
-		} else {
-			// internal error
-			INTERNAL("fetching first row");
-			sendErr(ses, err, NULL);
-			goto cleanup;
 		}
-	}
+	} while(osz==0);
 
 	// insert cursor into tree
 	ses->curid++;
