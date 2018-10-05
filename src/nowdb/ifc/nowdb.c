@@ -1201,17 +1201,23 @@ static int fetch(nowdb_session_t    *ses,
 	if (nowdb_cursor_eof(scur->cur)) return sendEOF(ses);
 
 	// fetch
-	err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (osz == 0) return sendEOF(ses);
-		} else {
-			INTERNAL("fetching cursor");
-			sendErr(ses, err, NULL);
-			return -1;
+	// the reason for this loop is a bug in row.project
+	// for vertices. we should fix that instead of leaving
+	// the otherwise meaningless loop here!
+	do { 
+		err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				if (osz == 0) return sendEOF(ses);
+			} else {
+				INTERNAL("fetching cursor");
+				sendErr(ses, err, NULL);
+				return -1;
+			}
 		}
-	}
+	} while(osz==0);
+
 	scur->count += cnt;
 
 	// debugging...

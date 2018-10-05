@@ -82,6 +82,34 @@ def db2csv(p,c,e):
     clients2csv("rsc/clients.csv", c)
     edges2csv("rsc/edges.csv", e)
 
+def loadDB(c):
+    return (loadProducts(c), loadClients(c), loadEdges(c))
+
+def loadProducts(c):
+    ps = []
+    with c.execute("select prod_key, prod_desc, prod_price from vertex as product") as cur:
+        for row in cur:
+            ps.append(Product(row.field(0), row.field(1), row.field(2)))
+    return ps
+
+def loadClients(c):
+    cs = []
+    with c.execute("select client_key, client_name from vertex as client") as cur:
+        for row in cur:
+            cs.append(Client(row.field(0), row.field(1)))
+    return cs
+
+def loadEdges(c):
+    es = []
+    with c.execute("select origin, destin, timestamp, weight, weight2 from sales") as cur:
+        for row in cur:
+           es.append(BuyEdge(row.field(0),
+                             row.field(1),
+                             now.now2dt(row.field(2)),
+                             row.field(3),
+                             row.field(4)))
+    return es
+
 def loadFromCsv():
     with c.execute("load 'rsc/products.csv' into vertex use header as product") as r:
         if not r.ok():
@@ -187,7 +215,7 @@ class BuyEdge:
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
        stmt += str(self.weight) + ", "
        stmt += str(self.weight2) + ")"
-       print "executing %s" % stmt
+       # print "executing %s" % stmt
        with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert sales -- %s" % r.details())
