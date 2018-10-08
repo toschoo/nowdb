@@ -156,6 +156,12 @@ default:	lib
 
 all:	default tools tests bench server client
 
+install:	lib server client tools
+		cp lib/*.so /usr/local/lib
+		cp bin/nowdbd /usr/local/bin
+		cp bin/nowclient /usr/local/bin
+		cp -r pynow /usr/local/
+
 server:	$(BIN)/nowdbd
 
 client:	$(BIN)/nowclient
