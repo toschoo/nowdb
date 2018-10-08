@@ -52,6 +52,9 @@ EOF = 8
 
 utc = tzutc()
 
+TIMEFORMAT = "%Y-%m-%dT%H:%M:%S"
+DATEFORMAT = "%Y-%m-%d"
+
 # ---- C functions --------------------------------------------------------
 _explainError = now.nowdb_err_explain
 _explainError.restype = c_char_p
@@ -217,6 +220,8 @@ class Result:
     # cursor is an iterator
     def __iter__(self):
         if self.rType() == STATUS:
+            if self.code() == EOF:
+               return self
             raise DBError(self.code(), self.details())
           
         if self.cur == None:

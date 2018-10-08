@@ -80,7 +80,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 
 	case NOWDB_AST_LOAD:  ASTCALLOC(2); 
 
-	case NOWDB_AST_INSERT: ASTCALLOC(2);
+	case NOWDB_AST_INSERT: ASTCALLOC(3);
+	case NOWDB_AST_DELETE: ASTCALLOC(2);
 	case NOWDB_AST_UPDATE: UNDEFINED(ntype);
 
 	case NOWDB_AST_FROM:
@@ -140,6 +141,7 @@ static inline char *tellType(int ntype, int stype) {
 
 	case NOWDB_AST_INSERT: return "insert";
 	case NOWDB_AST_UPDATE: return "update";
+	case NOWDB_AST_DELETE: return "delete";
 
 	case NOWDB_AST_FROM: return "from";
 	case NOWDB_AST_SELECT: 
@@ -472,7 +474,20 @@ static inline int addins(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_TARGET: ADDKID(0);
-	case NOWDB_AST_DATA: ADDKID(1);
+	case NOWDB_AST_VALUE: ADDKID(1);
+	case NOWDB_AST_FIELD: ADDKID(2);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to a delete node
+ * -----------------------------------------------------------------------
+ */
+static inline int ad3el(nowdb_ast_t *n,
+                        nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TARGET: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -726,6 +741,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_LOAD:  return addload(n,k);
 
 	case NOWDB_AST_INSERT: return addins(n,k);
+	case NOWDB_AST_DELETE: return ad3el(n,k);
 	case NOWDB_AST_UPDATE: return -1;
 
 	case NOWDB_AST_FROM: return addfrom(n,k);
@@ -819,9 +835,9 @@ nowdb_ast_t *nowdb_ast_operation(nowdb_ast_t *ast) {
 
 	switch(ast->ntype) {
 	case NOWDB_AST_DDL:
+	case NOWDB_AST_DML:
 	case NOWDB_AST_DLL: return ast->kids[0];
 
-	case NOWDB_AST_DML:
 	case NOWDB_AST_DQL: return NULL;
 
 	case NOWDB_AST_MISC: return ast->kids[0];
@@ -853,6 +869,9 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	                           nowdb_ast_from(ast));
 
 	case NOWDB_AST_FROM: return ast->kids[0];
+	case NOWDB_AST_INSERT: return ast->kids[0];
+	case NOWDB_AST_UPDATE: return ast->kids[0];
+	case NOWDB_AST_DELETE: return ast->kids[0];
 
 	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
 
@@ -888,10 +907,24 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_CREATE: return ast->kids[3];
 	case NOWDB_AST_SELECT: return ast->kids[0];
+	case NOWDB_AST_INSERT: return ast->kids[2];
 	case NOWDB_AST_GROUP: return ast->kids[0];
 	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
 	case NOWDB_AST_FUN: return ast->kids[1];
+	case NOWDB_AST_VALUE: return ast->kids[0];
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get value
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_value(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_INSERT: return ast->kids[1];
 	case NOWDB_AST_VALUE: return ast->kids[0];
 	default: return NULL;
 	}

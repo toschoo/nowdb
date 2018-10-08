@@ -15,6 +15,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/scope/scope.h>
+#include <nowdb/scope/dml.h>
 #include <nowdb/sql/parser.h>
 
 #include <tsalgo/tree.h>
@@ -30,6 +31,7 @@
 typedef struct nowdb_proc_t {
 	void              *lib;    /* server lib                */
 	nowdb_scope_t     *scope;  /* current scope             */
+	nowdb_dml_t       *dml;    /* dml helper                */
 	nowdbsql_parser_t *parser; /* string parser             */
 	ts_algo_tree_t    *mods;   /* imported modules          */
 	ts_algo_tree_t    *funs;   /* loaded functions          */
@@ -56,8 +58,8 @@ void nowdb_proc_destroy(nowdb_proc_t *proc);
  * Set current scope to proc interface
  * ------------------------------------------------------------------------
  */
-void nowdb_proc_setScope(nowdb_proc_t  *proc, 
-                         nowdb_scope_t *scope);
+nowdb_err_t nowdb_proc_setScope(nowdb_proc_t  *proc, 
+                                nowdb_scope_t *scope);
 
 /* ------------------------------------------------------------------------
  * Reinit interpreter
@@ -70,6 +72,12 @@ nowdb_err_t nowdb_proc_reinit(nowdb_proc_t *proc);
  * ------------------------------------------------------------------------
  */
 nowdb_scope_t *nowdb_proc_getScope(nowdb_proc_t *proc);
+
+/* ------------------------------------------------------------------------
+ * Get DML helper
+ * ------------------------------------------------------------------------
+ */
+nowdb_dml_t *nowdb_proc_getDML(nowdb_proc_t *proc);
 
 /* ------------------------------------------------------------------------
  * Get lib from proc interface

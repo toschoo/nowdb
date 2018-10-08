@@ -9,6 +9,7 @@
 #include <nowdb/query/cursor.h>
 #include <nowdb/index/index.h>
 #include <nowdb/ifc/nowdb.h>
+#include <nowdb/scope/dml.h>
 #include <nowdb/nowproc.h>
 
 /* -------------------------------------------------------------------------
@@ -1438,15 +1439,169 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: destroy list of values
+ * -------------------------------------------------------------------------
+ */
+static inline void destroyValues(ts_algo_list_t *values) {
+	ts_algo_list_node_t *runner, *tmp;
+
+	runner=values->head;
+	while(runner!=NULL) {
+		tmp = runner->nxt;
+		ts_algo_list_remove(values, runner);
+		free(runner->cont);
+		free(runner);
+		runner=tmp;
+	}
+}
+
+/* -------------------------------------------------------------------------
+ * Handle insert statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleInsert(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_proc_t     *proc,
+                                nowdb_qry_result_t *res) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_t fields, *fptr=NULL;
+	ts_algo_list_t values;
+	nowdb_simple_value_t *val;
+	nowdb_ast_t *f, *v;
+	nowdb_dml_t *dml;
+	nowdb_qry_report_t *rep;
+	struct timespec t1, t2;
+
+	nowdb_timestamp(&t1);
+
+	ts_algo_list_init(&fields);
+	ts_algo_list_init(&values);
+
+	f = nowdb_ast_field(op);
+	if (f != NULL) fptr = &fields;
+	while (f != NULL) {
+		if (ts_algo_list_append(&fields, f->value) != TS_ALGO_OK) {
+			ts_algo_list_destroy(&fields);
+			NOMEM("fields.append");
+			return err;
+		}
+		f = nowdb_ast_field(f);
+	}
+
+	v = nowdb_ast_value(op);
+	while(v != NULL) {
+		if (v->value == NULL) {
+			v = nowdb_ast_value(v); continue;
+		}
+		val = malloc(sizeof(nowdb_simple_value_t));
+		if (val == NULL) {
+			NOMEM("allocating simplified value");
+			break;
+		}
+
+		val->value = v->value;
+		val->type = nowdb_ast_type(v->stype);
+
+		if (ts_algo_list_append(&values, val) != TS_ALGO_OK) {
+			NOMEM("values.append");
+			break;
+		}
+		v = nowdb_ast_value(v);
+	}
+	
+	if (err != NOWDB_OK) goto cleanup;
+
+	dml = nowdb_proc_getDML(proc);
+	if (dml == NULL) {
+		err = nowdb_err_get(nowdb_err_no_rsc, FALSE,
+			      OBJECT, "no scope in session");
+		goto cleanup;
+	}
+	err = nowdb_dml_setTarget(dml, trg->value, fptr, &values);
+	if (err != NOWDB_OK) goto cleanup;
+
+	err = nowdb_dml_insertFields(dml, fptr, &values);
+	if (err != NOWDB_OK) goto cleanup;
+
+	nowdb_timestamp(&t2);
+
+	/* create a report */
+	rep = calloc(1, sizeof(nowdb_qry_report_t));
+	if (rep == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                               "allocating report");
+	} else {
+		rep->affected = 1;
+		rep->errors = 0;
+		rep->runtime = nowdb_time_minus(&t2, &t1)/1000;
+		res->result = rep;
+	}
+
+cleanup:
+	ts_algo_list_destroy(&fields);
+	destroyValues(&values);
+
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Handle update statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleUpdate(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_qry_result_t *res) {
+	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                          "update not yet implemented");
+}
+
+/* -------------------------------------------------------------------------
+ * Handle delete statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleDelete(nowdb_ast_t      *op,
+                                nowdb_ast_t      *trg,
+                                nowdb_scope_t    *scope,
+                                nowdb_qry_result_t *res) {
+	return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+	                          "delete not yet implemented");
+}
+
+/* -------------------------------------------------------------------------
  * Handle DML statement
  * TODO
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t handleDML(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
+                             void        *rsc,
                       nowdb_qry_result_t *res) {
-	return nowdb_err_get(nowdb_err_not_supp,
-	            FALSE, OBJECT, "handleDML");
+	nowdb_ast_t *op;
+	nowdb_ast_t *trg;
+
+	if (scope == NULL) INVALIDAST("no scope");
+
+	/* result is a report */
+	res->resType = NOWDB_QRY_RESULT_REPORT;
+	res->result = NULL;
+
+	op = nowdb_ast_operation(ast);
+	if (op == NULL) INVALIDAST("no operation in AST");
+	
+	trg = nowdb_ast_target(op);
+	if (trg == NULL) INVALIDAST("no target in AST");
+
+	switch(op->ntype) {
+	case NOWDB_AST_INSERT:
+		return handleInsert(op, trg, scope, rsc, res);
+	case NOWDB_AST_UPDATE:
+		return handleUpdate(op, trg, scope, res);
+	case NOWDB_AST_DELETE: 
+		return handleDelete(op, trg, scope, res);
+	default: INVALIDAST("invalid operation");
+	}
 }
 
 /* -------------------------------------------------------------------------
@@ -1537,7 +1692,7 @@ nowdb_err_t nowdb_stmt_handle(nowdb_ast_t *ast,
 	switch(ast->ntype) {
 	case NOWDB_AST_DDL: return handleDDL(ast, scope, rsc, base, res);
 	case NOWDB_AST_DLL: return handleDLL(ast, scope, res);
-	case NOWDB_AST_DML: return handleDML(ast, scope, res);
+	case NOWDB_AST_DML: return handleDML(ast, scope, rsc, res);
 	case NOWDB_AST_DQL: return handleDQL(ast, scope, res);
 	case NOWDB_AST_MISC: return handleMisc(ast, scope, rsc, base, res);
 	default: return nowdb_err_get(nowdb_err_invalid,
