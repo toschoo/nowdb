@@ -417,6 +417,7 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 			row->fields[i].propid,
 			v->property);
 		*/
+		if (row->fields[i].target != NOWDB_TARGET_VERTEX) continue;
 		if (row->fields[i].propid == v->property) return i;
 	}
 	return -1;
@@ -488,7 +489,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		}
 		if (!row->dirty) row->dirty = 1;
 	}
-	if (recsz == sizeof(nowdb_vertex_t)) {
+	if (*ok && recsz == sizeof(nowdb_vertex_t)) {
 		err = projectVertex(row, buf, sz, osz, &nsp);
 		if (err != NOWDB_OK) return err;
 		if (nsp) return NOWDB_OK;

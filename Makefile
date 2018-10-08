@@ -62,6 +62,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/mem/lru.o        \
       $(SRC)/mem/ptlru.o      \
+      $(SRC)/mem/pklru.o      \
       $(SRC)/mem/pplru.o      \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
@@ -72,6 +73,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/scope/procman.o  \
+      $(SRC)/scope/dml.o      \
       $(SRC)/index/index.o    \
       $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
@@ -109,6 +111,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/mem/lru.h        \
       $(SRC)/mem/ptlru.h      \
+      $(SRC)/mem/pklru.h      \
       $(SRC)/mem/pplru.h      \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
@@ -119,6 +122,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
       $(SRC)/scope/procman.h  \
+      $(SRC)/scope/dml.h      \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
@@ -622,6 +626,7 @@ clean:
 	rm -f $(SRL)/*.o
 	rm -f $(PYC)/*.pyc
 	rm -f $(TST)/*/*.o
+	rm -f $(TST)/*/*.pyc
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
 	rm -f $(TOOLS)/*.o
@@ -656,6 +661,7 @@ clean:
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
+	rm -rf $(RSC)/db???
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??

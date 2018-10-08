@@ -178,6 +178,8 @@ sql ::= ddl SEMICOLON.
 
 sql ::= dll SEMICOLON.
 
+sql ::= dml SEMICOLON.
+
 sql ::= dql SEMICOLON. 
 
 sql ::= misc SEMICOLON. 
@@ -224,6 +226,18 @@ dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS EDGE(E). {
 
 dll ::= LOAD STRING(S) INTO dml_target(T) AS EDGE(E). {
 	NOWDB_SQL_MAKE_LOAD(S,T,NULL,E)
+}
+
+/* ------------------------------------------------------------------------
+ * DML
+ * ------------------------------------------------------------------------
+ */
+dml ::= INSERT INTO dml_target(T) LPAR field_list(F) RPAR LPAR val_list(V) RPAR. {
+	NOWDB_SQL_MAKE_INSERT(T,F,V);
+}
+
+dml ::= INSERT INTO dml_target(T) LPAR val_list(V) RPAR. {
+	NOWDB_SQL_MAKE_INSERT(T,NULL,V);
 }
 
 /* ------------------------------------------------------------------------
