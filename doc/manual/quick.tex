@@ -280,7 +280,7 @@ cat create\_retail.sql | nowclient
 
 which would create the retail database.
 
-The script shows some of peculiarities of \nowdb.
+The script shows some of the peculiarities of \nowdb.
 The beginning is quite regular \sql:
 \code{
 drop schema retail if exists;
@@ -292,15 +292,14 @@ from disk. The \term{if exists} part
 is included to avoid an error 
 (and hence the termination of the script)
 in the case
-the database does indeed not exist.
+the database does indeed exist.
 
-The keyword \term{schema} is just to
+The keyword \term{schema} is intended to 
 make the \nowdb\ \sql\ dialect more
 approachable for people with experience
 in other \sql\ dialects. Instead of
 \term{schema}, one could also say
-\term{database}. That is a keyword too
-and it's synonym with \term{schema}.
+\term{database}. 
 Yet another way to say the same thing
 in \nowdb\ is \term{scope}, which
 means the scope in which a set of
@@ -319,8 +318,8 @@ create schema retail if not exists;
 }
 
 In that case, we would maintain the database
-if it exists already, but abandon the
-script in that case.
+if it exists already. The script, however,
+would continue, because no error would occur.
 
 The third statement (still in the second line)
 instructs the \nowdb\ to use the newly created
@@ -420,6 +419,192 @@ Using a serialisation system like Avro eases
 interoperability of the database with other
 external systems and applications and it
 significantly eases version management should data formats
-change over the time (what they always do!). 
+change over time (what they always do!). 
 For more details on data loaders, please refer to chapters
 \ref{chpt_sql} and \ref{chpt_loader}.
+
+The alternative to loading data is, of course, the conventional
+\term{insert} statement:
+
+\code{
+insert into client(9000001, 'Popeye the Sailor'); \\
+insert into product(100001, 'Spinach, 450g net', 1.99);
+}
+
+These two statements insert a client and a product respectively.
+We can also name the attributes explicitly, like:
+
+\code{
+insert into product(prod\_key, prod\_desc, prod\_price) \\
+\hspace*{3.7cm}     (100002, 'Candy Cigarettes, 20', 2.49);
+}
+
+Now we insert a bunch of edges:
+
+\begin{verbatim}
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-17T09:35:12', 1, 1.99)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-19T10:15:01', 2, 3.98)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-20T17:12:55', 3, 5.97)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-22T08:27:32', 1, 1.99)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-25T12:09:59', 1, 1.99)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100001, '1929-01-26T21:19:44', 2, 3.98)
+insert into sales (edge, origin, destin, timestamp, weight, weight2)
+                  ('buys', 9000001, 100002, '1929-01-22T08:27:51', 1, 2.49)
+\end{verbatim}
+
+Worth noticing here is the time format,
+which follows \acronym{iso}-8601.
+
+The format is
+\begin{itemize}
+\item 4 digits for the year and hyphen
+\item 2 digits for the month and hyphen
+\item 2 digits for the day of month
+\item `T' to mark the beginning of the time section
+\item 2 digits for the hour and colon
+\item 2 digits for the minute and colon
+\item 2 digits for the second and,
+\item if finer grain is necessary,
+a dot followed by up to 9 digits
+for the nanosecond
+\end{itemize}
+
+This format can be used anywhere in \nowdb\ \sql.
+However, it is also possible to define custom
+date and time formats. How to do this is discussed
+in chapter \ref{chpt_sql}.
+
+Now that we have inserted some data
+into our database, we are able to perform selects, \eg:
+
+\ignore{
+select a product!
+some comments on vertices!
+}
+
+\code{
+nowclient -d retail -Q
+"select count(*) from sales $\backslash$ \\
+\hspace*{4.7cm} where edge='buys' $\backslash$ \\
+\hspace*{4.7cm} and origin=9000001"
+}
+
+which would give us 7 and would count Popeye's visits to the supermarket.
+But we could also count how often Spinach was bought:
+
+\begin{verbatim}
+select count(*) from sales
+ where edge='buys'
+   and destin=100001
+\end{verbatim}
+
+which would give us 6.
+Or we could ask how much Popeye bought and paid per type of product:
+
+\begin{verbatim}
+select edge, destin, count(*), sum(weight), sum(weight2)
+  from sales 
+ where edge='buys' 
+   and origin=9000001 
+ group by edge, destin
+\end{verbatim}
+
+which would give us:
+
+\begin{verbatim}
+buys;100001;6;10;19.9000
+buys;100002;1;1;1.9900
+\end{verbatim}
+
+Two aspects are worth mentioning here:
+First, the statement with the group clause above
+would use the index we defined on sales
+with fields $(edge, destin)$.
+To force the use of an index in a group clause
+there must be an exact match between the fields
+in the group clause and the index; also the order
+of keys in the index and in the clause must be the same.
+For instance, \code{group by destin, edge} would
+not have forced the use of the index.
+Whether using an index or not for grouping
+is an advantage 
+depends on many factors.
+For a detailed discussion of indices and
+optimising queries please refer to chapter \ref{chpt_opt}.
+
+Second, you may have noticed that the output
+of the client tool does not resemble the classical
+pretty-printed output produced by most database
+clients today. The advantage of such output is
+that it is easier for humans to read.
+The \acronym{csv}-like output shown above, however,
+is easer to read for machines, especially
+when you want to send the output through pipes
+to other programs, like this:
+
+\code{
+nowclient -q -d retail -Q "select * from sales" | cut -d";" -f2 | $\dots$
+}
+
+On the other hand, there are tools that
+produce more readable output from \acronym{csv} input,
+such as \tech{csvlook} from the \tech{csvkit} package.\footnote{Have
+a look at
+\url{https://github.com/jeroenjanssens/data-science-at-the-command-line}}
+To obtain a traditional pretty-printed output you could do:
+
+\code{
+cat query.sql | nowclient | csvformat -d";" | $\backslash$ \\
+    header -a 'edge,product,count,amount,price' | csvlook
+}
+
+and would obtain for the grouping query used above:
+
+\begin{verbatim}
+|----------+---------+-------+--------+---------|
+|  edge    | product | count | amount | price   |
+|----------+---------+-------+--------+---------|
+|  buys    | 100001  | 6     | 10     | 19.9000 |
+|  buys    | 100002  | 1     | 1      | 2.4900  |
+|----------+---------+-------+--------+---------|
+\end{verbatim}
+
+Here is a more typical time series query illustrating
+the advantage of the pretty printer:
+
+\begin{verbatim}
+select destin, timestamp, weight, weight2
+  from sales 
+ where edge='buys' 
+   and origin=9000001 
+ order by timestamp
+\end{verbatim}
+
+which, with the same technique used above, shows:
+
+\begin{verbatim}
+|----------+---------------------+---------+---------|
+|  product | timestamp           | amount  | price   |
+|----------+---------------------+---------+---------|
+|  100001  | 1929-01-17T09:35:12 | 1       | 1.9900  |
+|  100001  | 1929-01-19T10:15:01 | 2       | 3.9800  |
+|  100001  | 1929-01-20T17:12:55 | 3       | 5.9700  |
+|  100001  | 1929-01-22T08:27:32 | 1       | 1.9900  |
+|  100002  | 1929-01-22T08:27:51 | 1       | 2.4900  |
+|  100001  | 1929-01-25T12:09:59 | 1       | 1.9900  |
+|  100001  | 1929-01-26T21:19:44 | 2       | 3.9800  |
+|----------+---------------------+---------+---------|
+\end{verbatim}
+
+\ignore{
+- joins
+- label
+- python client
+- python in the DB
+}
