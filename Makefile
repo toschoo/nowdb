@@ -45,6 +45,8 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
+DOC=doc
+MAN=doc/manual
 LIBPY = python2.7
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
 clibs = -lm -lpthread -ltsalgo
@@ -717,4 +719,9 @@ clean:
 	rm -f $(BIN)/catalog
 	rm -f $(BIN)/nowdbd
 	rm -f $(BIN)/nowclient
+	rm -f $(MAN)/*.aux
+	rm -f $(MAN)/*.log
+	rm -f $(MAN)/*.out
+	rm -f $(MAN)/*.toc
+	rm -f $(MAN)/*.pdf
 

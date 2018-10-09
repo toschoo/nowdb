@@ -1,0 +1,67 @@
+%% =======================================================
+%% (c) Tobias Schoofs
+%% =======================================================
+%% Commands 4 Programmers
+%% =======================================================
+
+%include lhs2TeX.fmt
+%include lhs2TeX.sty
+
+\usepackage[pdftex]{graphicx}
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc} 
+\usepackage{tabto}
+\usepackage[portuguese,german,english]{babel}
+\usepackage{amsfonts}
+\usepackage{amsfonts}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amscd}
+
+\usepackage{siunitx}
+
+\usepackage{tikz}
+\usepackage{pgfplots}
+
+\usepackage{relsize}
+\usepackage{xcolor}
+
+\long\def\ignore#1{}
+
+\newcommand{\acronym}[1]{\textsc{#1}}
+
+\newcommand{\term}[1]{\textit{#1}}
+\newcommand{\tech}[1]{{\ttfamily #1}}
+\newcommand{\latin}[1]{\textit{#1}}
+\newcommand{\speech}[1]{\textit{#1}}
+
+\newcommand{\ie}{\textit{i.e.}}
+\newcommand{\eg}{\textit{e.g.}}
+\newcommand{\etc}{\textit{etc.}}
+\newcommand{\viz}{\textit{viz.}}
+\newcommand{\vs}{\textit{vs.}}
+
+\newcommand{\sql}{\acronym{sql}}
+
+\newcommand{\code}[1]{{\ttfamily #1}}
+
+\newcommand{\Rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
+
+\newcommand{\CC}{C\nolinebreak[4]\hspace{-.05em}\raisebox{.3ex}{\relsize{-2}{\textbf{++}}}}
+\newcommand\csharp{C\nolinebreak[4]\hspace{-.02em}\raisebox{.3ex}{\relsize{-1}{\#}}}
+
+\newcommand{\comment}[1]{\textcolor{red}{#1}}
+
+\newcommand{\nowdb}{\textsc{n}o\textsc{wdb}}
+
+\newcommand{\connect}[2]{
+  \draw [-,color=black] (#1) to (#2)
+}
+
+% tikz
+% \newcommand{\drawDataPoint}{\draw circle (0.2)}
+% \drawDataGroup
+
+% \renewcommand{\gcd}{\textsc{gcd}}

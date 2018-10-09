@@ -1,0 +1,425 @@
+The easiest way to get started
+is to use the \nowdb\ docker containing
+the database server.
+
+\comment{more instructions of how to get it $\dots$}
+
+The docker does not start the database by itself.
+You need to start it explicitly. There is a script
+called \tech{nowstart.sh} in the root of the docker
+that does that.
+(You may want to adapt this script to your specific needs!)
+Here is a reasonable way to start the docker:
+
+\code{
+docker run --rm -p 55505:55505 $\backslash$\\
+\hspace*{2cm} -v /opt/dbs:/dbs -v /var/log:/log $\backslash$\\
+\hspace*{2cm} -d nowdbdocker /bin/bash -c "/nowstart.sh"
+}
+
+The docker command is \term{run}.
+It create a docker container and starts it.
+We add a number of parameters:
+\begin{itemize}
+\item \tech{--rm}
+instructs the docker daemon to remove
+the docker immediately after it will have been stopped.
+
+\item \tech{-p 55505:55505} binds the host port \term{55505}
+to the same docker port.
+
+\item \tech{-v} maps a host path
+(namely, the path \tech{/opt/dbs}) to a docker path
+(namely, to \tech{/dbs}) and
+the path \tech{/var/log} to \tech{/log}.
+
+\item \tech{-d} means the docker runs in the background
+(\term{detached}).
+
+\item \tech{nowdbdocker} is the name of the docker.
+
+\item \tech{/bin/bash} is the command to be executed
+within the docker; \tech{-c} passes a command
+to be executed,
+namely \tech{/nowstart.sh},
+to the \tech{bash}.
+\end{itemize}
+
+The script \tech{nowstart.sh}, contains the
+instructions to start the nowdb daemon (whose name is
+\tech{nowdbd}).
+
+It first sets some environment variables:
+
+\code{
+export LD\_LIBRARY\_PATH=/lib:/usr/lib:/usr/local/lib
+}
+
+This sets the search path for shared libraries.
+
+\code{
+export PYTHONPATH=/pynow:\$PYTHONPATH
+}
+
+This sets the search path for Python modules
+(we will discuss that later).
+
+Then the script starts the daemon iself:
+
+\code{
+nowdbd -b /dbs -y 2>/log/nowdbd.log
+}
+
+The script passes two options to the daemon:
+the base directory where all databases
+managed by this daemon live (\tech{-b /dbs})
+and the \tech{-y} switch, which activates
+server-side Python support.
+
+Now the daemon is listening to port 55505
+and ready to respond to database requests.
+The daemann starts by printing a welcome banner
+to standard output:
+
+\begingroup
+\small
+\begin{verbatim}
++---------------------------------------------------------------+ 
+ 
+  UTC 2018-10-09T12:03:21.631000000
+ 
+  The server is ready
+ 
+    - with python support enabled
+ 
++---------------------------------------------------------------+ 
+  nnnn   nnnn          nnnn    nnnnnn       nnnnnn       nnnnnn  
+    wi  i   wi       i      i    iw           iw           er   
+    wi i     wi     n        n    iw         e  wi        e    
+    wii      wi    wi        iw    iw       e    wi      e        
+    wi       wi    wi        iw     iw     e      wi    e        
+    wi       wi     n        n       iw   e        wi  e        
+    wi       wi      i      i         iw e          wie          
+   nnnn     nnnn       nnnn             n            n            
++---------------------------------------------------------------+ 
+
+connections: 128
+port       : 55505
+domain     : any
+\end{verbatim}
+\endgroup
+
+Here are some more options provided by
+the \term{nowdbd} tool:
+
+\begin{itemize}
+\item \tech{-b} The base directory,
+where databases are stored.
+(default is the current working directory).
+
+\item \tech{-s} the binding domain, default:
+any. If set to a host or a domain, the server
+will accept only connections from that host
+or domain. Example: \tech{-s localhost} does
+only accept connections from the server.
+The host or domain can be given as name (\term{localhost})
+or as \acronym{ip} address (\tech{127.0.0.1});
+
+\item \tech{-p} the port the server to which
+the server will listen; default is 55505,
+but any other (free) port may be used.
+ 
+\item \tech{-c} size of the connection pool.
+If the argument is 0, the connection pool grows
+indefinitely; otherwise, for \tech{-c n},
+$n$ being a positive integer,
+the server will create a connection pool
+up to $n$ sessions and then refuse to accept
+more connections. The default pool size is 128;
+\comment{Notice that due to a memory leak
+in the Python interpreter, there is no way
+to instruct the server to accept indefinitely
+many connections, but to only maintain $n$
+in the pool.}
+
+\item \tech{-q} runs in quiet mode
+(\ie\ no debug messages are printed to standard error);
+\item \tech{-n} does not print the starting banner;
+\item \tech{-y} activate server-side Python support;
+\item \tech{-l} activates server-side Lua support;
+\item \tech{-V} prints version information to standard output;
+\item \tech{-?} or \tech{-h} prints a help message to standard output.
+\end{itemize}
+
+Once \term{nowdbd} is running, we can connect to pass
+queries to the server. There is a tool to do this from the commandline
+called \term{nowclient}.
+
+\comment{how to install the client tools???}
+
+To send a query to the server
+the client tool can be used like this:
+
+\code{
+nowclient -d retail -Q "select count(*) from sales where customer=12345"
+}
+
+In this form, the client will try to connect to a server
+running on the same host and listening to port 55505.
+Furthermore, it will request to use the database \term{retail}
+and send the query indicated by the \tech{-Q} parameter.
+
+If the connection is successful, the client will print some
+processing information to standard error and the query result
+to standard output, \eg:
+
+\code{
+executing "use retail" \\
+OK \\
+executing "select count(*) from sales where customer=12345" \\
+59
+}
+
+The option \tech{-q} would suppress the processing information.
+We would then only see:
+
+\code{
+59
+}
+
+Here are more options supported by the client tool:
+\begin{itemize}
+\item \tech{-s} 
+The server address or name, \eg\ \tech{myserver.mydomain.org} or
+\tech{127.0.0.1}. Default is \tech{127.0.0.1};
+
+\item \tech{-p}
+the port to which the database is listening. Default: 55505;
+
+\item \tech{-d}
+the database to which we want to connect. 
+Default: no database at all, which means
+that we cannot send queries without naming a database.
+Below we will look at alternatives to using this parameter;
+
+\item \tech{-Q}
+the query we want the database to process;
+
+\item \tech{-t}
+print some (server-side) timing information to standard error;
+
+\item \tech{-q}
+quiet mode: don't print processing information to standard error.
+
+\item \tech{-V} prints version information to standard output;
+\item \tech{-?} or \tech{-h} prints a help message to standard output.
+\end{itemize}
+
+The client tool is able to read from standard input;
+this way, more than one query can be processed at a time.
+The following command processes the same query as the one above,
+but uses standard input instead of the options \tech{-d} and \tech{-Q}:
+
+\code{
+echo "use retail;select count(*) from sales where customer=12345;" $| \backslash$ \\
+\hspace*{2cm} nowclient
+}
+
+Notice that, using standard input,
+we need to terminate single \sql\ statements
+by a semicolon. This is even true for the last statement.
+Leaving the semicolon out would lead to an error.
+
+Of course, we can do much more useful things than just
+getting rid of the options.
+The main point of reading from standard input is
+that we can put \sql\ statements into a file and
+cat it to nowclient. A useful example may be:
+
+\begingroup
+\small
+\begin{verbatim}
+drop schema retail if exists;
+create schema retail; use retail;
+
+create large table sales set stress=constant;
+create table statistics;
+
+create medium index idx_sales_eds on sales (edge, destin);
+create index idx_sales_eor on sales (edge, origin);
+
+create type product (
+        prod_key uint primary key,
+        prod_desc text,
+        prod_price float
+);
+create type client (
+        client_key uint primary key,
+        client_name text
+);
+create edge buys (
+        origin client,
+        dest product,
+        weight uint,
+        weight2 float
+);
+load '/opt/data/products.csv' into vertex use header as product;
+load '/opt/data/clients.csv' into vertex use header as client;
+load '/opt/data/sales.csv' into sales;
+}
+\end{verbatim}
+\endgroup
+
+Let's assume we had this code in a file called
+\tech{create\_retail.sql}; then we could
+send it to the nowdbclient:
+
+\code{
+cat create\_retail.sql | nowclient
+}
+
+which would create the retail database.
+
+The script shows some of peculiarities of \nowdb.
+The beginning is quite regular \sql:
+\code{
+drop schema retail if exists;
+create schema retail; use retail;
+}
+The first line drops the database retail,
+\ie\ it removes all its data physically
+from disk. The \term{if exists} part
+is included to avoid an error 
+(and hence the termination of the script)
+in the case
+the database does indeed not exist.
+
+The keyword \term{schema} is just to
+make the \nowdb\ \sql\ dialect more
+approachable for people with experience
+in other \sql\ dialects. Instead of
+\term{schema}, one could also say
+\term{database}. That is a keyword too
+and it's synonym with \term{schema}.
+Yet another way to say the same thing
+in \nowdb\ is \term{scope}, which
+means the scope in which a set of
+vertices is valid.
+
+In the second line the schema
+(or database or scope) `retail'
+is created. Since we have dropped it
+if it already had existed before,
+this statement will not cause
+an error when the database already exists.
+An alternative way of doing things is:
+
+\code{
+create schema retail if not exists;
+}
+
+In that case, we would maintain the database
+if it exists already, but abandon the
+script in that case.
+
+The third statement (still in the second line)
+instructs the \nowdb\ to use the newly created
+schema `retail' in everything that follows.
+
+The next line is a bit uncommon:
+
+\code{
+create large table sales set stress=constant;
+}
+
+The statement creates a table called `sales';
+however, since \nowdb\ is not a relational,
+but a graph database, there are no 
+`tables' with the meaning of that term
+in the relational world.
+In fact, tables are just units of storage 
+for edges. \comment{A better naming convention
+would probably be `tablespace'.}
+
+The statement explicitly says that we
+want a \emph{large} table and that there
+will be \emph{constant} stress (\ie\ ingestion load
+on that table). The \term{create table} statement,
+hence, is much more oriented to storage
+and processing details than to the logical structure
+of the table (as it would be in a relational database).
+
+A similar is true for the index creation:
+
+\code{
+create medium index idx\_sales\_eds on sales (edge, destin);
+}
+
+This statement creates a \emph{medium} index on table sales
+with the fields `edge' and `destination' as index keys.
+Index sizing is a difficult topic and will be discussed
+in chapter \ref{chpt_sizing}.
+As a rule of thumb, it is almost always better to assume
+small sizing. Large indices have large storage nodes
+and those nodes are very often read from and written
+to disk. Only when we know that our index will have
+many keys and many data points per key, it is advisable
+to use index sizing. The default sizing (used in the next
+line) indicatively is \term{small}.
+
+The next two blocks of code create the types
+`product' and `client'. This should look a lot like
+what you probably know as \term{tables}. Indeed types
+are vertices stored as \term{column-oriented} tables.
+\comment{Well, not entirely true at the moment.
+In fact, completely column-oriented tables would cause
+some more work in the underlying mechanisms. Anyway,
+that is the direction to go and sooner or later
+the statement will be true $\dots$}
+
+Notice that every type needs a primary key that consists
+of one attribute.
+
+The attribute types are \term{uint}, \term{float} and \term{text}.
+The first is a 64bit unsigned integer;
+the second is a 64bit floating point number
+(a.k.a. \term{double} in languages like C);
+\term{text} is a string of up to 255 \acronym{utf8} characters.
+For more information on \sql\ types, please refer to chapter
+\ref{chpt_sql}.
+
+The next block defines an edge. Remember
+that edges, contrary to vertices, have a fixed layout.
+However, we can define the types of the fields of an edge
+and we can rename them. \comment{Renaming is not yet possible.}
+Here, we define four of the fields of the edge.
+The origin has type \term{client} (which we have defined just above)
+and the destination has type \term{product}.
+The edge has two weights: one is uint and the other float.
+
+Finally, the script loads data from three different \acronym{csv}s
+into the database. Loaders have the same effect as the \sql\
+\term{insert} statement, but are much more efficient.
+The drawback of \term{insert} is that each statement
+needs the whole cycle of \sql\ parsing and execution,
+while loaders only need one cycle. Since a data source
+can contain millions or even billions of rows,
+loading is way more efficient than inserting in most cases.
+
+The first two \acronym{csv}s in the script contain vertices.
+As such they need to have a header and we need to instruct
+the loader of how to interpret the data (\tech{use header as client}).
+Since edges always have the same format, they don't need a header
+and we do not give any instructions of how to interpret the data.
+
+\acronym{csv} is only one format supported by the database loader.
+There are many more and the loader even allows users to define
+their own (binary) formats using Apache Avro. Loading binary data 
+can be much faster than loading textual formats such as \acronym{csv}.
+Using a serialisation system like Avro eases
+interoperability of the database with other
+external systems and applications and it
+significantly eases version management should data formats
+change over the time (what they always do!). 
+For more details on data loaders, please refer to chapters
+\ref{chpt_sql} and \ref{chpt_loader}.
