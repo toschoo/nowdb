@@ -236,9 +236,8 @@ The main point of reading from standard input is
 that we can put \sql\ statements into a file and
 cat it to nowclient. A useful example may be:
 
-\begingroup
-\small
-\begin{verbatim}
+\begin{sqlcode}
+\begin{lstlisting}
 drop schema retail if exists;
 create schema retail; use retail;
 
@@ -266,9 +265,8 @@ create edge buys (
 load '/opt/data/products.csv' into vertex use header as product;
 load '/opt/data/clients.csv' into vertex use header as client;
 load '/opt/data/sales.csv' into sales;
-}
-\end{verbatim}
-\endgroup
+\end{lstlisting}
+\end{sqlcode}
 
 Let's assume we had this code in a file called
 \tech{create\_retail.sql}; then we could
@@ -282,10 +280,14 @@ which would create the retail database.
 
 The script shows some of the peculiarities of \nowdb.
 The beginning is quite regular \sql:
-\code{
+
+\begin{sqlcode}
+\begin{lstlisting}
 drop schema retail if exists;
 create schema retail; use retail;
-}
+\end{lstlisting}
+\end{sqlcode}
+
 The first line drops the database retail,
 \ie\ it removes all its data physically
 from disk. The \term{if exists} part
@@ -313,9 +315,11 @@ this statement will not cause
 an error when the database already exists.
 An alternative way of doing things is:
 
-\code{
+\begin{sqlcode}
+\begin{lstlisting}
 create schema retail if not exists;
-}
+\end{lstlisting}
+\end{sqlcode}
 
 In that case, we would maintain the database
 if it exists already. The script, however,
@@ -327,9 +331,11 @@ schema `retail' in everything that follows.
 
 The next line is a bit uncommon:
 
-\code{
+\begin{sqlcode}
+\begin{lstlisting}
 create large table sales set stress=constant;
-}
+\end{lstlisting}
+\end{sqlcode}
 
 The statement creates a table called `sales';
 however, since \nowdb\ is not a relational,
@@ -350,9 +356,11 @@ of the table (as it would be in a relational database).
 
 A similar is true for the index creation:
 
-\code{
-create medium index idx\_sales\_eds on sales (edge, destin);
-}
+\begin{sqlcode}
+\begin{lstlisting}
+create medium index idx_sales_eds on sales (edge, destin);
+\end{lstlisting}
+\end{sqlcode}
 
 This statement creates a \emph{medium} index on table sales
 with the fields `edge' and `destination' as index keys.
@@ -426,37 +434,43 @@ For more details on data loaders, please refer to chapters
 The alternative to loading data is, of course, the conventional
 \term{insert} statement:
 
-\code{
-insert into client(9000001, 'Popeye the Sailor'); \\
+\begin{sqlcode}
+\begin{lstlisting}
+insert into client(9000001, 'Popeye the Sailor');
 insert into product(100001, 'Spinach, 450g net', 1.99);
-}
+\end{lstlisting}
+\end{sqlcode}
 
 These two statements insert a client and a product respectively.
 We can also name the attributes explicitly, like:
 
-\code{
-insert into product(prod\_key, prod\_desc, prod\_price) \\
-\hspace*{3.7cm}     (100002, 'Candy Cigarettes, 20', 2.49);
-}
+\begin{sqlcode}
+\begin{lstlisting}
+insert into product(prod_key, prod_desc, prod_price)
+              (100002, 'Candy Cigarettes, 20', 2.49);
+\end{lstlisting}
+\end{sqlcode}
 
 Now we insert a bunch of edges:
 
-\begin{verbatim}
+\begin{sqlcode}
+\begin{lstlisting}
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-17T09:35:12', 1, 1.99)
+           ('buys', 9000001, 100001, '1929-01-17T09:35:12', 1, 1.99)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-19T10:15:01', 2, 3.98)
+           ('buys', 9000001, 100001, '1929-01-19T10:15:01', 2, 3.98)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-20T17:12:55', 3, 5.97)
+           ('buys', 9000001, 100001, '1929-01-20T17:12:55', 3, 5.97)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-22T08:27:32', 1, 1.99)
+           ('buys', 9000001, 100001, '1929-01-22T08:27:32', 1, 1.99)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-25T12:09:59', 1, 1.99)
+           ('buys', 9000001, 100001, '1929-01-25T12:09:59', 1, 1.99)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100001, '1929-01-26T21:19:44', 2, 3.98)
+           ('buys', 9000001, 100001, '1929-01-26T21:19:44', 2, 3.98)
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
-                  ('buys', 9000001, 100002, '1929-01-22T08:27:51', 1, 2.49)
-\end{verbatim}
+           ('buys', 9000001, 100002, '1929-01-22T08:27:51', 1, 2.49)
+\end{lstlisting}
+\end{sqlcode}
 
 Worth noticing here is the time format,
 which follows \acronym{iso}-8601.
@@ -483,11 +497,6 @@ in chapter \ref{chpt_sql}.
 Now that we have inserted some data
 into our database, we are able to perform selects, \eg:
 
-\ignore{
-select a product!
-some comments on vertices!
-}
-
 \code{
 nowclient -d retail -Q
 "select count(*) from sales $\backslash$ \\
@@ -498,28 +507,32 @@ nowclient -d retail -Q
 which would give us 7 and would count Popeye's visits to the supermarket.
 But we could also count how often Spinach was bought:
 
-\begin{verbatim}
+\begin{sqlcode}
+\begin{lstlisting}
 select count(*) from sales
  where edge='buys'
    and destin=100001
-\end{verbatim}
+\end{lstlisting}
+\end{sqlcode}
 
 which would give us 6.
 Or we could ask how much Popeye bought and paid per type of product:
 
-\begin{verbatim}
+\begin{sqlcode}
+\begin{lstlisting}
 select edge, destin, count(*), sum(weight), sum(weight2)
   from sales 
  where edge='buys' 
    and origin=9000001 
  group by edge, destin
-\end{verbatim}
+\end{lstlisting}
+\end{sqlcode}
 
 which would give us:
 
 \begin{verbatim}
 buys;100001;6;10;19.9000
-buys;100002;1;1;1.9900
+buys;100002;1;1;2.4900
 \end{verbatim}
 
 Two aspects are worth mentioning here:
@@ -561,50 +574,383 @@ To obtain a traditional pretty-printed output you could do:
 
 \code{
 cat query.sql | nowclient | csvformat -d";" | $\backslash$ \\
-    header -a 'edge,product,count,amount,price' | csvlook
+    header -a 'edge,product,count,quantity,price' | csvlook
 }
 
 and would obtain for the grouping query used above:
 
 \begin{verbatim}
-|----------+---------+-------+--------+---------|
-|  edge    | product | count | amount | price   |
-|----------+---------+-------+--------+---------|
-|  buys    | 100001  | 6     | 10     | 19.9000 |
-|  buys    | 100002  | 1     | 1      | 2.4900  |
-|----------+---------+-------+--------+---------|
+|----------+---------+-------+----------+---------|
+|  edge    | product | count | quantity | price   |
+|----------+---------+-------+----------+---------|
+|  buys    | 100001  | 6     | 10       | 19.9000 |
+|  buys    | 100002  | 1     | 1        | 2.4900  |
+|----------+---------+-------+----------+---------|
 \end{verbatim}
 
 Here is a more typical time series query illustrating
 the advantage of the pretty printer:
 
-\begin{verbatim}
+\begin{sqlcode}
+\begin{lstlisting}
 select destin, timestamp, weight, weight2
   from sales 
  where edge='buys' 
    and origin=9000001 
  order by timestamp
-\end{verbatim}
+\end{lstlisting}
+\end{sqlcode}
 
 which, with the same technique used above, shows:
 
 \begin{verbatim}
-|----------+---------------------+---------+---------|
-|  product | timestamp           | amount  | price   |
-|----------+---------------------+---------+---------|
-|  100001  | 1929-01-17T09:35:12 | 1       | 1.9900  |
-|  100001  | 1929-01-19T10:15:01 | 2       | 3.9800  |
-|  100001  | 1929-01-20T17:12:55 | 3       | 5.9700  |
-|  100001  | 1929-01-22T08:27:32 | 1       | 1.9900  |
-|  100002  | 1929-01-22T08:27:51 | 1       | 2.4900  |
-|  100001  | 1929-01-25T12:09:59 | 1       | 1.9900  |
-|  100001  | 1929-01-26T21:19:44 | 2       | 3.9800  |
-|----------+---------------------+---------+---------|
+|----------+---------------------+----------+---------|
+|  product | timestamp           | quantity | price   |
+|----------+---------------------+----------+---------|
+|  100001  | 1929-01-17T09:35:12 | 1        | 1.9900  |
+|  100001  | 1929-01-19T10:15:01 | 2        | 3.9800  |
+|  100001  | 1929-01-20T17:12:55 | 3        | 5.9700  |
+|  100001  | 1929-01-22T08:27:32 | 1        | 1.9900  |
+|  100002  | 1929-01-22T08:27:51 | 1        | 2.4900  |
+|  100001  | 1929-01-25T12:09:59 | 1        | 1.9900  |
+|  100001  | 1929-01-26T21:19:44 | 2        | 3.9800  |
+|----------+---------------------+----------+---------|
 \end{verbatim}
 
+We can also select from vertices,
+but instead of a table, we use the type:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select prod_price from product
+ where prod_key = 100001;
+\end{lstlisting}
+\end{sqlcode}
+
+would give
+\begin{verbatim}
+1.99
+\end{verbatim}
+
+and
+
+\begin{sqlcode}
+\begin{lstlisting}
+select client_name from client
+ where client_key = 9000001;
+\end{lstlisting}
+\end{sqlcode}
+
+would give
+\begin{verbatim}
+Popeye the Sailor
+\end{verbatim}
+
+\comment{
+This is as it should be.
+Unfortunately, there are some inconsistencies stemming 
+from the fact that vertices are column-oriented.
+The syntax is currently `select field from vertex as type',
+which is ugly and pointless.
+Even worse, grouping, ordering and aggregates
+are not yet implemented for vertices.
+That must be corrected \acronym{asap}.
+}
+
+Much more typical for \nowdb, however,
+is to use vertices together with edges. Edges connect vertices
+and can therefore be seen as the `relations' in \nowdb.
+What we typically want is either find the vertex
+at the other end of the edge (\eg\ find the destination
+for a given origin) or to look at edges with the attributes
+of the vertices added to them.
+
+Both patterns are, in \sql, instances of \term{joins}.
+An instance of the first pattern would be:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select timestamp, prod_desc, prod_price
+  from sales join product
+    on prod_key = destin
+ where edge = 'buys'
+   and origin = 9000001;
+\end{lstlisting}
+\end{sqlcode}
+
+\begin{verbatim}
+|---------------------+----------------------+---------|
+| timestamp           | product              | price   |
+|---------------------+----------------------+---------|
+| 1929-01-17T09:35:12 | Spinach, 450g net    | 1.9900  |
+| 1929-01-19T10:15:01 | Spinach, 450g net    | 1.9900  |
+| 1929-01-20T17:12:55 | Spinach, 450g net    | 1.9900  |
+| 1929-01-22T08:27:32 | Spinach, 450g net    | 1.9900  |
+| 1929-01-25T12:09:59 | Spinach, 450g net    | 1.9900  |
+| 1929-01-26T21:19:44 | Spinach, 450g net    | 1.9900  |
+| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900  |
+|---------------------+----------------------+---------|
+\end{verbatim}
+
+Note the difference in the price column.
+In the previous query we used \term{weight2} of sales,
+which (as you may have realised)
+is the multiplication of the product price and the value
+in \term{weight}, which, in its turn,
+represents the number of items.
+Here, however, we use the value in \term{prod\_price}
+which is the base price of one unit of that product.
+
+We can, of course, combine joins with grouping:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select edge, destin, count(*), sum(prod_price)
+  from sales join product
+    on prod_key = destin
+ where edge = 'buys'
+   and origin = 9000001
+ group by edge, destin;
+\end{lstlisting}
+\end{sqlcode}
+
+\begin{verbatim}
+|----------+---------+-------+---------|
+|  edge    | product | count | price   |
+|----------+---------+-------+---------|
+|  buys    | 100001  | 6     | 11.9400 |
+|  buys    | 100002  | 1     | 2.4900  |
+|----------+---------+-------+---------|
+\end{verbatim}
+
+Note again the sum of the price which, here,
+is just the sum of the base price per unit of the product.
+
+The point about the first joining pattern
+is that it joins only one of the two vertices
+with the edge. The second pattern is somewhat more complex:
+it joins both vertices, like:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select timestamp, prod_desc, prod_price, client_name
+  from sales
+  join product
+    on prod_key = destin
+  join client
+    on client_key = origin
+ where edge = 'buys'
+   and origin = 9000001;
+\end{lstlisting}
+\end{sqlcode}
+
+The result of this query would be:
+
+\begin{verbatim}
+|---------------------+----------------------+---------+-------------------|
+| timestamp           | product              | price   | client            |
+|---------------------+----------------------+---------+-------------------|
+| 1929-01-17T09:35:12 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-19T10:15:01 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-20T17:12:55 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-22T08:27:32 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-25T12:09:59 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-26T21:19:44 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
+| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900  | Popeye the Sailor |
+|---------------------+----------------------+---------+-------------------|
+\end{verbatim}
+
+\comment{
+Unfortunately, joins are not yet available :-(
+}
+
+Edges have one more important field that we have not yet discussed,
+namely the \term{label}. The \term{label} is intended to create a connection
+between edges that are inherently related. In our example, we see
+that at one day Popeye bought two different things:
+spinach and candy cigarettes.
+That was at Jan, 22.
+
+These two edges, hence, relate to the same visit at the supermarket.
+We could link these edges using a label. The edge would then be created
+as, for instance:
+
+\begin{sqlcode}
+\begin{lstlisting}
+create edge buys (
+        origin client,
+        dest product,
+        label text,
+        weight uint,
+        weight2 float
+);
+\end{lstlisting}
+\end{sqlcode}
+
+The label text would correspond to a token generated by
+the cashpoint when a customer starts the check-out.
+We would then insert edges as follows:
+
+\begin{sqlcode}
+\begin{lstlisting}
+insert into sales (edge, origin, destin, timestamp,
+                            label, weight, weight2)
+   ('buys', 9000001, 100001, '1929-01-22T08:27:32',
+                      'tx-19290122082731', 1, 1.99)
+insert into sales (edge, origin, destin, timestamp,
+                            label, weight, weight2)
+   ('buys', 9000001, 100002, '1929-01-22T08:27:51', 
+                      'tx-19290122082731', 1, 2.49)
+\end{lstlisting}
+\end{sqlcode}
+
+We could now select edges according to this label:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select destin, timestamp, weight, weight2
+  from sales 
+ where label = 'tx-19290122082731'
+ order by timestamp
+\end{lstlisting}
+\end{sqlcode}
+
+This query would result in:
+
+\begin{verbatim}
+|----------+---------------------+----------+---------|
+|  product | timestamp           | quantity | price   |
+|----------+---------------------+----------+---------|
+|  100001  | 1929-01-22T08:27:32 | 1        | 1.9900  |
+|  100002  | 1929-01-22T08:27:51 | 1        | 2.4900  |
+|----------+---------------------+----------+---------|
+\end{verbatim}
+
+Until here we always used the client \emph{tool}
+to perform queries.
+That is certainly an important use case.
+Much more typical, however, is to develop application code
+that needs a client \acronym{api} to connect to the database.
+
+\nowdb\ comes with a native client \acronym{api}
+that is available in different languages, among others
+C, \CC, \csharp, Go, Python and Lua.
+\comment{Only Python is currently available.
+There is a low-level \acronym{api} for C,
+but that is not for developing applications,
+but for developing \acronym{api}s.}
+Here, we will have a quick look at the Python \acronym{api}.
+
+The module implementing the Python \nowdb\ \acronym{api}
+is called \term{now.py} and must be imported into the client program.
+For the Python interpreter to find this module,
+it must be in a directory in the \acronym{pythonpath}.
+There may be different ideas on how to install python modules.
+The \nowdb\ installation will copy all \nowdb-related modules
+to one specific folder and add this folder to the
+\acronym{pythonpath}. But you also may install
+the \nowdb\ Python \acronym{api} using \term{pip}.
+Then, everything is handled by the Python environment
+and you don't need to care about these things.
+For more details on installation, please refer
+to chapter \ref{chpt_install}.
+
+Anyway, here is a simple Python program:
+
+\begin{python}
+\begin{lstlisting}
+import now
+
+with now.Connection("localhost", "55505", None, None) as c:
+   with c.execute("use retail") as r:
+       if not r.ok():
+          print "cannot use retail: %s" % r.details()
+          exit(1)
+
+   with c.execute("select count(*), sum(weight), avg(weight) \
+                     from sales where edge='buys'") as cur:
+       if not cur.ok():
+          print "ERROR: %s" % cur.details()
+          exit(1)
+       for row in cur:
+           print "count: %d, sum: %d, avg: %.2f" %
+                 (row.field(0), row.field(1), row.field(2))
+\end{lstlisting}
+\end{python}
+
+The program first creates a \term{Connection}
+to a database listening on port 55505 on `localhost'.
+It then executes a \term{use} statement on this connection
+to indicate the database towards which
+the following statements are directed.
+
+The result of a \term{use} statement is a \term{status}.
+A status is either \acronym{ok} or an error.
+The details of the can be obtained by means of the method
+\term{details()}, which returns a string.
+Results also support the method \term{code()},
+which would return a numeric error code.
+It is often useful to know the error code to decide
+what to do programmatically (abandon the program,
+retry, try something else, \etc)
+
+Results are also resource managers. That means
+that they can be used inside a \term{with} statement.
+\term{with} assures that all resources (in this case
+the result) are freed before the control leaves
+the \term{with}-block even if an exception is raised.
+
+The program then executes a query.
+This time the execution returns a \term{cursor} (`cur').
+The program checks whether the cursor is
+in a good state. The statement may have
+failed on the server side. The cursor would
+then be in a state that is not \acronym{ok}.
+In that case, the program prints the error details
+and exits with return code 1.
+
+Otherwise, if the result was fine,
+it iterates over the cursor
+printing for each row the fields 1-3.
+Cursors, indeed, are iterators
+that allow simple iteration using \term{for}.
+
+Here is an example of an \term{insert} statement
+(we assume that the connection, `c', was already established):
+
+\begin{python}
+\begin{lstlisting}
+with c.execute("insert into edge (edge, origin, product, timestamp) \
+                                 ('complains', 9000001, 100002, \
+                                  '1929-01-23T08:45:00')") as rep:
+       if not rep.ok():
+          print "ERROR: %s" % cur.details()
+          exit(1)
+       else:
+          print "rows affected: %d" % rep.affected()
+          print "running time : %d" % rep.runTime()
+\end{lstlisting}
+\end{python}
+
+In the case of data manipulation (\acronym{dml})
+or data loading (\acronym{dll}) statements,
+the result may be a status (as with all statements),
+namely when the statement fails,
+or a report.
+A report has the methods \term{affected()},
+which indicates the number of rows affected by this statement,
+\term{runTime()},
+which indicates the running time of the statement in microseconds,
+and \term{errors()},
+which, in the case of \term{load},
+indicates the number of rows that resulted in an error.
+
+For more details on the Python client,
+please refer to chapter \ref{chpt_pythonclient}.
+The other client \acronym{api}s are described
+in chapters \ref{chpt_ccpp}, \ref{chpt_goclient} and
+\ref{chpt_luaclient}.
+
 \ignore{
-- joins
-- label
-- python client
 - python in the DB
 }

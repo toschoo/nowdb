@@ -20,6 +20,8 @@
 \usepackage{amsthm}
 \usepackage{amscd}
 
+\usepackage{listings}
+
 \usepackage{siunitx}
 
 \usepackage{tikz}
@@ -46,6 +48,24 @@
 \newcommand{\sql}{\acronym{sql}}
 
 \newcommand{\code}[1]{{\ttfamily #1}}
+
+\newenvironment{sqlcode}{
+\small
+\lstset{language=sql,
+        keepspaces=true,
+        showspaces=false,
+        showstringspaces=false}
+}{
+}
+
+\newenvironment{python}{
+\small
+\lstset{language=python,
+        keepspaces=true,
+        showspaces=false,
+        showstringspaces=false}
+}{
+}
 
 \newcommand{\Rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
 

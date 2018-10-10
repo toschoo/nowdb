@@ -1,7 +1,8 @@
 use db100;
 
--- insert into client(9000001, 'Popeye the Sailor');
--- insert into product(100001, 'Spinach, 450g net', 1.99);
+insert into client(client_key, client_name) (9000001, 'Popeye the Sailor');
+insert into product(prod_key, prod_desc, prod_price) (100001, 'Spinach, 450g net', 1.99);
+insert into product(prod_key, prod_desc, prod_price) (100002, 'Candy Cigarettes, 20', 2.49);
 
 insert into sales (edge, origin, destin, timestamp, weight, weight2)
                   ('buys', 9000001, 100001, '1929-01-17T09:35:12', 1, 1.99);
