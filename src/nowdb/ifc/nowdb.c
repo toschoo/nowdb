@@ -1120,13 +1120,11 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		if (err->errcode == nowdb_err_eof) {
 			nowdb_err_release(err);
 			if (sendEOF(ses) != 0) goto cleanup;
-			return 0; // OK
+			goto cleanup;
 		}
 		// internal error
 		INTERNAL("open cursor");
-		if (sendErr(ses, err, NULL) != 0) {
-			goto cleanup;
-		}
+		sendErr(ses, err, NULL);
 		goto cleanup;
 	}
 
