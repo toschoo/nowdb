@@ -1,0 +1,163 @@
+\section{Types}
+\subsection{Static Types}
+The static types constitute the \nowdb\ \sql\ type system.
+The static types can be used in \sql\ statements.
+The declaration form is used in \acronym{ddl} statements
+to define types, edges, procedure and functions.
+In \acronym{dml}, \acronym{dll} and \acronym{dql} statements,
+instances of the types are used, \ie\
+types are not explicitly declared, but used implicitly
+by means of their constructors.
+
+\begin{minipage}{\textwidth}
+\textbf{Integer}\\
+Declaration: int, integer \\
+Values: $-2^{63} \dots 2^{63}-1$ \\
+Constructors: $\pm n$, where $n$ is an unsigned integer.\\
+Examples: $-1, +0, +1$
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Unsigned Integer} \\
+Declaration: uint, uinteger, unsigend integer \\
+Values: $0 \dots 2^{64}-1$  \\
+Constructors: any sequence of digits ($0\dots9$). \\
+Examples: $0, 1, 2$ 
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Float} \\
+Declaration: float \\
+Represents a binary64 \acronym{ieee}-754 floating point number.
+For possible values, please refer to the standard or to the table in
+\url{https://en.wikipedia.org/wiki/IEEE\_754#Basic\_and\_interchange\_formats}.\\
+Constructors: any integer followed by a dot and a sequence of digits,
+              optionally followed by $e$ followed by an integer.
+              \comment{The exponential form is not yet available.} \\
+Examples: $-1.0, 0.0, 1.0, 3.14159, 1.797693e308$ 
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Time} \\
+Declaration: time, date \\
+Values:  \acronym{utc} 1677-09-21T00:12:44 --
+         \acronym{utc} 2262-04-11T23:47:16 \\
+Precision: nanosecond. \\
+Note, however, that range and precision depend on server configuration.
+With less precision, a higher range can be reached.
+Please refer to the database configuration guide. \\
+Timezone: \acronym{utc} \\
+Constructor: any integer or any string following \acronym{iso}-8601 
+or any string following a locally defined time format. \\
+Examples:\\
+1535284617906179393, \\
+'1940-12-21', \\
+'1904-06-16T11:43:10', \\
+'2011-11-11T11:11:11.123456789'
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Bool} \\
+Declaration: bool \\
+Values: true, false
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Text} \\
+Declaration: text \\
+Values: \acronym{utf}-8 string with up to 255 bytes\\
+Constructor: string enclosed by ' \\
+Examples:\\
+'',\\
+'hello world',\\
+\begin{CJK}{UTF8}{gbsn}
+'鎮州臨濟慧照禪師語錄序。'
+\end{CJK}
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Longtext} \\
+Declaration: text \\
+Values: \acronym{utf}-8 string with up to 4096 bytes\\
+\end{minipage}
+\begin{minipage}{\textwidth}
+\textbf{Blob} \\
+\end{minipage}
+
+\subsection{Dynamic Types}
+Dynamic types are not used in \sql\ statements,
+but rather describe the return values of \sql\
+statements. As such, they live in the context
+of a host language (C, Python, Lua, \etc).
+There concrete implementation, therefore,
+depends on that language and any language
+functioning as either client or server-side language
+needs to implement these types.
+For more information on concrete implementation
+of dynamic types, please refer to the
+host language \acronym{api} specifications.
+
+\begin{minipage}{\textwidth}
+\textbf{Status}\\
+Values: \acronym{ok}, \acronym{nok}\\
+In the case of error (\acronym{nok}), \nowdb\ provides:
+\begin{itemize}
+\item an error code
+\item a detailed error message
+\end{itemize}
+Error codes together with a brief description
+of their meaning can be found in \ref{chpt_errors}.
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Report}\\
+Reports consist of up to three values:
+\begin{itemize}
+\item number of affected rows
+(returned by all \acronym{dml} and \acronym{dll} statements)
+\item number of errors
+(returned only by \acronym{dll} statements)
+\item running time
+(returned by most \acronym{dml} and \acronym{dll} statements)
+\end{itemize}
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Row}\\
+A row is the result of a projection;
+it consists of an array of values
+with type information called fields.
+A row result consists of one or many rows.
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{Cursor}\\
+A cursor is an iterable collection of rows.
+The iteration directive is \term{fetch}.
+Each fetch may return one or many rows.
+A cursor is a server-side resource
+and shall be closed using the directive \term{close}.
+\end{minipage}
+
+\section{Data Definition}
+\subsection{Schema}
+\subsection{Table}
+\subsection{Type}
+\subsection{Edge}
+\subsection{Index}
+\subsection{Procedure}
+\subsection{Function}
+\subsection{Period}
+
+\section{Data Manipulation}
+\subsection{Insert}
+\subsection{Update}
+\subsection{Delete}
+
+\section{Data Loading}
+
+\section{Data Query}
+
+\section{Miscellaneous}
+\subsection{Use}
+\subsection{Exec}
