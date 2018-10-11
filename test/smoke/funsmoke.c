@@ -17,7 +17,7 @@
 #include <limits.h>
 #include <float.h>
 
-#define ITER 10
+#define ITER 1000
 
 nowdb_edge_t *edges;
 
@@ -58,7 +58,7 @@ void getTime(int64_t *tm) {
 
 int prepare(nowdb_type_t type, char calm) {
 	int x;
-	do x = calm?rand()%10:rand()%1000; while (x==0);
+	x = calm?rand()%10:rand()%1000;
 	edges = calloc(x, sizeof(nowdb_edge_t));
 	if (edges == NULL) {
 		fprintf(stderr, "out-of-mem\n");
@@ -66,7 +66,11 @@ int prepare(nowdb_type_t type, char calm) {
 	}
 	for(int i=0; i<x; i++) {
 		getValue(&edges[i].weight, type);
-		// fprintf(stderr, "%lu\n", edges[i].weight);
+		/*
+		double d;
+		memcpy(&d,&edges[i].weight, 8);
+		fprintf(stderr, "%.4f\n", d);
+		*/
 		getValue(&edges[i].weight2, type);
 		getTime(&edges[i].timestamp);
 	}
@@ -89,6 +93,7 @@ double medianf(int n) {
 	qsort(edges, n, NOWDB_EDGE_SIZE, &wcompare);
 
 	h = n/2;
+	if (n%2 == 0) h--;
 
 	memcpy(&w1, &edges[h].weight, 8);
 
@@ -247,18 +252,28 @@ int checkResult(uint32_t ftype,
 	}
 	switch(ftype) {
 	case NOWDB_FUN_SPREAD:
+		if (mx < 2) {
+			u = 0;  break;
+		}
 		op(SUB, &u, &h, dtype); break;
 
 	case NOWDB_FUN_AVG:
+		if (mx < 1) {
+			u = 0;  break;
+		}
 		doAvg(dtype, &u, &h, &r);
 		memcpy(&u, &r, 8);
 		mytype = NOWDB_TYP_FLOAT;
 		break;
 
 	case NOWDB_FUN_MEDIAN: 
-			r = medianf(mx);
-			memcpy(&u, &r, 8);
-			break;
+		if (mx < 1) {
+			u = 0;  break;
+		}
+		r = medianf(mx);
+		memcpy(&u, &r, 8);
+		mytype = NOWDB_TYP_FLOAT;
+		break;
 
 	case NOWDB_FUN_STDDEV:
 		if (mx < 2) {
