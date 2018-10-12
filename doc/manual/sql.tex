@@ -178,8 +178,8 @@ Examples: $-1, +0, +1$
 \textbf{Unsigned Integer} \\
 Declaration: $uint$, $uinteger$ \\
 Values: $0 \dots 2^{64}-1$  \\
-Constructors: One digit from the range $0\dot 9$
-or one digit from range $1\dot 9$ followed by
+Constructors: One digit from the range $0\dots 9$
+or one digit from range $1\dots 9$ followed by
 a sequence of digits ($0\dots9$). \\
 Null: $0$ \\
 Examples: $0, 1, 2, 1024$, but not: $01$.
@@ -347,10 +347,7 @@ It has the following form:
 
 \keyword{create schema} \identifier{mydb}
 
-This would create the directory `mydb'
-immediately below the base path (with which
-the \nowdb\ daemon was started) and
-within that directory all objects necessary
+This would create all objects necessary
 to manage that database.
 
 The following forms are equivalent:
@@ -382,8 +379,7 @@ which are all equivalent:
 \keyword{drop scope} \identifier{mydb}
 
 The statement removes all objects and data
-belonging to the database `mydb' and
-the directory `mydb' from the disk.
+belonging to the database `mydb' from disk.
 
 All \keyword{drop} clauses can be combined
 with the clause \keyword{if exists}, \eg:
@@ -485,18 +481,430 @@ It has the form:
 \subsubsection{ALTER}
 
 \subsection{Type}
+\term{Types} are user-defined types
+stored as vertices in the database.
+The syntax resembles very much
+the \term{create table} syntax
+in traditional \sql:
 
+\keyword{create type} \identifier{product} \{ \\
+\hspace*{1cm}\identifier{prod\_key} \keyword{uint} \keyword{primary key}, \\
+\hspace*{1cm}\identifier{prod\_desc} \keyword{text}, \\
+\hspace*{1cm}\identifier{prod\_price} \keyword{float} \\
+\}
+
+This creates a type called \term{product}
+with three attributes:
+\term{prod\_key}, \term{prod\_desc} and \term{prod\_price}.
+
+There is no limit on the number of attributes
+a type may have. Indeed, vertices with hundreds
+of attributes are not uncommon.
+
+Attributes may have any static type with one exception:
+Each type needs a unique primary key and the field
+that is primary key must be either
+\keyword{uint} or \keyword{text}.
+
+The order in which attributes are declared
+determines the \term{canonical} order for this type.
+The canonical order plays a role for the \term{insert}
+statement.
+
+\comment{
+I am not happy with some of the design decisions
+and the naming to be honest.
+\term{Types} should be called \term{tables} and
+what now is called \term{tables} should be called
+\term{edgestore} or something like that.
+Furthermore, there is this hidden thing \term{vertex}
+that is felt in his impact, but (mostly) invisible.
+In the future types (which, then, will be called tables),
+will be stored per attribute (a.k.a. column)
+and all the delicateness concerning
+tables versus types and edges versus vertices
+will go away just by itself.
+}
+
+\subsubsection{DROP}
+The \term{drop type} statement removes a type
+from the database. \comment{
+At the moment, drop type removes only the type definition,
+not the corresponding data;
+in the future, that will certainly change.
+}
+It has the form:
+
+\keyword{drop type} \identifier{product}
 
 \subsection{Edge}
+\subsubsection{CREATE}
+The \term{create edge} statement defines the layout
+of a specific edge type in the database.
+Example:
+
+\keyword{create edge} \identifier{buys} \{ \\
+\hspace*{1cm} \keyword{origin} \identifier{client} \keyword{as} \identifier{client}, \\
+\hspace*{1cm} \keyword{destin} \identifier{product} \keyword{as} \identifier{product}, \\
+\hspace*{1cm} \keyword{label} \keyword{text}, \\
+\hspace*{1cm} \keyword{weight} \keyword{int} \keyword{as} \identifier{quantity}, \\
+\hspace*{1cm} \keyword{weight2} \keyword{float} \keyword{as} \identifier{paid} \\
+\}
+
+Edges have seven fields (in canonical order):
+\keyword{edge},
+\keyword{origin}, \keyword{destin},
+\keyword{label}, \keyword{timestamp},
+\keyword{weight} and \keyword{weight2}.
+
+The type of the field `edge' is predefined.
+It is always a string and corresponds to the
+name of that edge (\eg\ `buys').
+The reason that it exists at all
+is that edges of different types can be stored
+in the same table.
+This makes especially sense for groups of edges
+with few instances or for groups of edges
+that are often read together.
+Think for instance of \term{follow} and \term{unfollow}
+in a social media application.
+We might want to read \term{follow} and \term{unfollow}
+events together ordered by timestamp to determine
+what the current state is.
+
+Likewise is the type of the timestamp predefined
+and cannot change.
+
+All other types can be defined.
+The types of \keyword{origin} and \keyword{destin}
+are usually \keyword{type}s, since they refer
+to vertices which are connected by this specific edge.
+Stored in the database is the value of the primary key
+of the specific type (\ie\ \keyword{uint} for product).
+
+But they also may have static types, namely
+\keyword{uint} or \keyword{text}.
+
+The field \keyword{label} as well may be of type
+\keyword{uint} or \keyword{text}.
+
+The fields \keyword{weight} and \keyword{weight2}
+may have any static type.
+
+Fields that are not mentioned in the edge definition
+are invisible and cannot be used.
+
+\comment{
+Some aspects of the design are centred around the idea
+that it should be possible to insert \textit{ad-hoc}
+data, in particular edges,
+that were not previously defined in terms of \acronym{ddl}.
+More recent design decisions (like the one above)
+foreclose this possibility.
+This is still an ongoing design process and
+some details may change...
+}
+
+It is also possible to rename edge fields
+according to their real purpose in a concrete
+application (\eg\ naming \keyword{weight} \identifier{quantity}).
+All fields that may appear in an edge definition
+may be renamed in this way.
+\comment{Not yet available!}
+
+\subsubsection{DROP}
+The \term{drop edge} statement removes an edge definition,
+but not the data described by this definition,
+from the database.
+It has the form:
+
+\keyword{drop edge} \identifier{buys}
+
 \subsection{Index}
+\subsubsection{CREATE}
+The \term{create index} statement
+creates an index physically on disk.
+It has the form:
+
+\keyword{create index} \identifier{myidx} \keyword{on} \identifier{mytable}
+(\identifier{field1}, \identifier{field2})
+
+\comment{
+It is possible to create indices on vertex.
+But that is a mess and is not documented here.
+In fact, currently, indices on vertex are
+not on the user-defined attributes, but on
+internal attributes
+(like \term{roleid}, \term{property}, \etc).
+That, obviously, does not make any sense.
+Instead there will be internal indices
+that are created, when the database is created,
+and user-defined indices, which will then be
+defined on the type attributes.
+}
+
+The fields (``field1'', ``field2'', \etc)
+are edge fields. Any combination of fields
+can be used in index definitions.
+It is not recommended, however,
+to create indices on fields that are defined as \keyword{float}
+or \keyword{time} (\eg\ \keyword{timestamp}).
+
+\comment{
+There will be the possibility to define indices over ranges
+of \keyword{float} fields and periods
+of \keyword{time} fields. But that is not yet available.
+}
+
+The \keyword{index} keyword can be decorated with a sizing
+indication, \eg:
+
+\keyword{create tiny index} \identifier{myidx} \keyword{on} \identifier{mytable}
+(\identifier{field1}, \identifier{field2})
+
+The default sizing is \keyword{small}.
+
+It rarely makes sense to create 
+\keyword{big}, 
+\keyword{large} or 
+\keyword{huge} indices.
+It actually makes sense,
+when the index from the beginning
+has many keys with many data points.
+More details on this can be found in \ref{chpt_sizing}.
+
+\subsubsection{DROP}
+The \term{drop index} statement removes an index physically from disk.
+Example:
+
+\keyword{drop index} \identifier{myidx}
+
 \subsection{Procedure}
+\subsubsection{CREATE}
+The \term{create procedure} statement
+creates procedure interface in the database.
+It has the form:
+
+\keyword{create procedure} \identifier{mymodule}.\identifier{myfun}(
+                           \identifier{param1} \keyword{uint},
+                           \identifier{param2} \keyword{text})
+                           \keyword{language} \identifier{python}
+
+A procedure may have no parameters.
+The definition then simplifies to
+
+\keyword{create procedure} \identifier{mymodule}.\identifier{myfun}()
+                           \keyword{language} \identifier{python}
+
+Any number of parameters is allowed and parameters may have
+any static type.
+
+Known languages are \identifier{python} and \identifier{lua}.
+\comment{Lua is not yet available.}
+
+\subsubsection{DROP}
+The \term{drop procedure} statement
+drops a procedure interface from the database.
+It has the form:
+
+\keyword{drop procedure} \identifier{myfun}
+
 \subsection{Function}
+\comment{Not yet available}
+
 \subsection{Period}
+\term{Period} is not a \term{first-class citizens}
+like types, edges, procedures, \etc\
+In particular, periods cannot be created or altered.
+They evolve as an effect of inserting edges into
+the database. However, periods can be identified
+and they can be dropped.
+
+Dropping data according to timestamps is an important
+feature in timeseries databases.
+Without this feature, databases would grow
+to an extent that would make efficient queries difficult
+or even impossible. Deleting data by means of the
+\term{delete} statement is not efficient for large
+amounts of data. In the case of \nowdb\
+(but also with other databases), deleting
+the data would not solve the problem,
+because \term{delete} does not physically remove
+the data, but just makes them invisible.
+
+Dropping, by contrast, removes all data files 
+that contain only data belonging to that period.
+Removing files, however, is a very efficient
+operation on most platforms, since it only
+declares the disk space free.
+
+The syntax is:
+
+\keyword{drop period on} \identifier{mytable} \\
+\keyword{where timestamp} $\ge$ '2018-01-01' \\
+\hspace*{0.45cm}\keyword{and timestamp} $<$  '2018-04-01'
+
+This would drop all data files of table `mytable'
+that contain data between Jan, 1, 2018 (inclusive) and
+April, 1, 2018 (exclusive). 
+
+Two remarks are in place. First,
+\term{drop period} must have a \term{where} clause.
+There must be at most two conditions in the \term{where} clause
+and, if there are two, they must be connected by \keyword{and}.
+All conditions must refer to \keyword{timestamp} and there
+must be precisely one condition that
+determines an \emph{end date}
+for the period, \ie\ there must be a non-negated expression
+that contains \keyword{timestamp} and a constant date
+and one of the operations $<$ or $\le$.
+
+The rationale for this restrictions is
+to avoid accidentally dropping entire tables
+using too complex or incomplete \term{drop} statements.
+The keyword \keyword{between} is not used with \term{drop period}
+because \keyword{between} makes constructions
+without a start date somewhat artificial.
+Furthermore, \keyword{between} does not allow
+distinguishing between \emph{in}clusive and
+\emph{ex}clusive selections of period limits.
+
+To illustrate that, the following example 
+is legal and it drops all data
+before a given date (which is very common
+for timeseries databases, that often represent gliding
+time windows):
+
+\keyword{drop period on} \identifier{mytable} \\
+\keyword{where timestamp} $<$ '2018-04-01'
+
+Second, \term{drop period} does not guarantee
+to drop all data that lie in the period in question --
+in fact, it does not even guarantee to drop any data at all.
+It guarantees, however, to remove all files
+that \emph{only} data that lie that period.
+In other words, the behaviour is conservative
+and prefers dropping less data than possible over
+dropping too many data.
+On the long run, however, with a consistent dropping policy
+old data will by removed consistently and the database
+won't grow (except when the periods themselves grow).
 
 \section{Data Manipulation}
 \subsection{Insert}
+The \term{insert} statements inserts one or more rows
+to a given table or type.
+The basic form is
+
+\keyword{insert into} \identifier{mytable} 
+                      (\identifier{myfield1},
+                       \identifier{myfield2})
+                      (value1, value2)
+
+A more concrete example is
+
+\keyword{insert into} \identifier{product} 
+                      (\identifier{prod\_key},
+                       \identifier{prod\_desc},
+                       \identifier{prod\_price})
+                      (100001, 'Spinach', 1.99)
+
+For an edge, this would be:
+
+\keyword{insert into} \identifier{sales} 
+                      (\keyword{edge},
+                       \keyword{origin},
+                       \keyword{destin},
+                       \keyword{timestamp},
+                       \keyword{weight},
+                       \keyword{weight2})
+                      (\\
+                       'buys', 9000001, 100001,
+                       '1929-01-22T08:53:22',
+                       3, 5.97)
+
+When the list of values insert is complete,
+\ie\ covers all fields in the type or table,
+and respects the canonical order,
+a shortened form can be used, \eg:
+
+\keyword{insert into} \identifier{product} 
+                      (100001, 'Spinach', 1.99)
+
+Note that for the shorthand form on edges,
+all typeable edge fields must be declared
+in the edge definition. 
+
+It is also possible \comment{(not yet!)} to insert data from
+a query, \eg:
+
+\keyword{insert into} \identifier{sales} ( \\
+                      \keyword{edge},
+                      \keyword{origin},
+                      \keyword{destin},
+                      \keyword{timestamp},
+                      \keyword{weight},
+                      \keyword{weight2}) (\\
+\hspace*{0.2cm}\keyword{select} 'buys', \keyword{origin}, 
+                         \keyword{destin},
+                         \keyword{timestamp},
+                         \keyword{weight},
+                         \keyword{weight2} \\
+\hspace*{0.35cm}\keyword{from} \identifier{another\_table} \\
+\hspace*{0.2cm}\keyword{where} $\dots$)
+
+For details on the \term{where} clause,
+please refer to the \acronym{dql} section.
+
 \subsection{Update}
+The \term{update} statement changes the values
+of fields in rows in tables or types.
+Its general form is
+
+\keyword{update} \identifier{mytable} \\
+\hspace*{0.7cm} \keyword{set} field = value,\\
+\hspace*{0.7cm} \keyword{set} field = value \\
+\hspace*{0.1cm} \keyword{where} $\dots$
+
+For instance:
+
+\keyword{update} \identifier{product} \\
+\hspace*{0.7cm} \keyword{set} \identifier{prod\_price} = 1.89 \\
+\hspace*{0.1cm}  \keyword{where} \identifier{prod\_key} = 100001
+
+For details on the \term{where} clause,
+please refer to the \acronym{dql} section.
+
+\comment{update has still many unsolved issues.
+For instance, when changing primary keys
+and other indexed fields, we need to delete
+that particular row from the index and add it
+again with the new value.
+That, however, is quite expensive.
+It therefore may take still some time
+to make update available :-(}
+
 \subsection{Delete}
+The \term{delete} statement eliminates single
+data points from tables or types.
+Its general form is
+
+\keyword{delete from} \identifier{mytable} \keyword{where} $\dots$
+
+A more concrete example:
+
+\keyword{delete from} \identifier{product}
+\keyword{where} \identifier{prod\_key = 100001}
+
+For details on the \term{where} clause,
+please refer to the \acronym{dql} section.
+
+It is worth mentioning that delete
+does not physically remove data from disk.
+It marks the corresponding rows as deleted,
+so they won't be selected by other statements.
+
+\comment{delete still has bugs and is therefore not yet available :-(}
 
 \section{Data Loading}
 
