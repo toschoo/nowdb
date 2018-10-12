@@ -1,3 +1,143 @@
+\section{Outline}
+\sql\ is a language to store, manipulate
+and query data in a database; traditionally
+\sql\ is used with relational databases.
+In recent years, however, people have
+started to use \sql\ also in other context,
+such as \term{graph} and \term{timeseries}
+databases and new patterns are evolving
+in the language to better address those
+data models.
+
+\sql\ consists of statements that,
+in their turn, consist of clauses.
+A statement is a piece of \sql\ code
+that by itself constitutes a meaningful
+action in the database. Statements are
+distinguished in
+
+\begin{itemize}
+\item \acronym{ddl}:
+Statements that manipulate entities
+in the database that hold or define
+data
+like tables, types, edges, indices,
+functions or procedures.
+
+\item \acronym{dml}:
+Statements that manipulate data,
+\eg\ \term{insert}, \term{update} and
+\term{delete}.
+
+\item \acronym{dll}:
+Statements that load large volumes of data into the database
+or retrieve large volumes of data from the database.
+
+\item \acronym{dql}:
+Statements that read data from the database.
+
+\item Miscellaneous:
+Statements that do not fall into any
+those categories, in particular
+\term{use} and \term{exec}.
+\end{itemize}
+
+Clauses are parts of statements;
+a \acronym{dql} statement, for instance,
+typically has a \term{select} clause and
+a \term{from} clause and may have
+additional clauses (\term{where},
+\term{order by}, \etc).
+
+Some clauses can appear in more than
+one type of statement. \term{update}
+and \term{delete} statements, typically,
+have a \term{where} clause, but no
+\term{select} clause.
+
+Clauses can be seen as logical building blocks
+of \sql. But they cannot live alone.
+It is not possible to execute an isolated \term{where}
+clause or an isolated \term{from} clause.
+The smallest executable unit is therefore the statement.
+
+Clauses are made of keywords, identifiers, numbers
+and text strings. Keywords and identifiers are mutually
+exclusive, that is, if $k$ is a keyword,
+it cannot be an identifier.
+\comment{This rule is relaxed in most
+\sql\ dialects -- and that makes a lot of sense,
+because \sql\ has an extraordinary large
+number of keywords which sometimes makes the choice
+of meaningful identifiers a non-trivial task.
+At the time of writing, the \nowdb\ parser
+does not relax this rule, but it will do so
+in the future.}
+Keywords are defined by the language,
+identifiers are chosen by the user
+and refer to entities in the database,
+such as tables, types, indices, \etc\
+
+In this specification,
+keywords are typeset in boldface
+(\eg\ \keyword{table});
+identifiers are typeset in italics
+(like `mytable' in 
+``\keyword{create table} \identifier{mytable}'').
+
+\sql\ is a textual interface.
+All statements that are passed to the database
+have a textual form. The results produced
+by the database, however, are not. They are
+binary data which may or may not
+contain textual parts.
+
+In \nowdb\ \sql\ statements are strings
+of \acronym{utf}-8 characters.
+Keywords, identifiers and numbers, however,
+must contain only characters
+from the \acronym{ascii} subset.
+Text, by contrast, may contain any
+\acronym{utf}-8 character.
+\comment{It is already possible to store
+\acronym{utf}-8 in the database.
+But comparison and sorting are not yet
+\acronym{utf}-compliant. This is an
+urgent to-do.}
+
+Keywords and identifiers are case-insensitive.
+There is no difference in
+\term{SELECT}, \term{select} or \term{Select}
+and so on.
+Text, by contrast, is case-sensitive;
+\term{'hello world'} and \term{hello World}
+are not the same!
+
+\sql\ is a \term{guest} language
+that needs some kind of framework
+to support it. One way to provide this
+framework is the \nowdb\ client,
+which provides two means to execute
+\sql\ \term{statements} in the database,
+\ie\ by means of the \tech{-Q} parameter
+and by means of standard input.
+
+Another way is a guest language
+that provides means to pass \sql\ statements
+to the database and means to receive
+and interpret the results produced by such statements.
+
+The protocol that defines how data are exchanged
+between the database and the host system
+is not part of this specification.
+Currently, native client and server libraries
+exist that implement this protocol
+without exposing it to the user.
+To support open standards in the future, such as
+\acronym{odbc} and \acronym{jdbc},
+parts of this protocol must be documented
+and published.
+
 \section{Types}
 \subsection{Static Types}
 The static types constitute the \nowdb\ \sql\ type system.
@@ -7,39 +147,60 @@ to define types, edges, procedure and functions.
 In \acronym{dml}, \acronym{dll} and \acronym{dql} statements,
 instances of the types are used, \ie\
 types are not explicitly declared, but used implicitly
-by means of their constructors.
+by means of their constructors, which are sufficient
+to determine the type uniquely.
+
+In the case of numeric types
+(integers, unsigned integers and floats),
+\nowdb\ silently corrects type mismatches where possible.
+An unsigned integer inserted into a field where
+a signed integer is expected, is implicitly converted
+to an integer; correspondingly a signed integer
+is converted to an unsigned integer if possible.
+If the unsigned integer is out of range or
+the signed integer is negative, the statement
+is rejected with a type error.
+Likewise, signed or unsigned integers are converted to floats
+if necessary (and possible) and a float might be converted
+to an integer (or unsigned integer) if it actually
+represents an integer.
 
 \begin{minipage}{\textwidth}
 \textbf{Integer}\\
-Declaration: int, integer \\
+Declaration: $int$, $integer$ \\
 Values: $-2^{63} \dots 2^{63}-1$ \\
 Constructors: $\pm n$, where $n$ is an unsigned integer.\\
+Null: $+0$ \\
 Examples: $-1, +0, +1$
 \end{minipage}
 
 \begin{minipage}{\textwidth}
 \textbf{Unsigned Integer} \\
-Declaration: uint, uinteger, unsigend integer \\
+Declaration: $uint$, $uinteger$ \\
 Values: $0 \dots 2^{64}-1$  \\
-Constructors: any sequence of digits ($0\dots9$). \\
-Examples: $0, 1, 2$ 
+Constructors: One digit from the range $0\dot 9$
+or one digit from range $1\dot 9$ followed by
+a sequence of digits ($0\dots9$). \\
+Null: $0$ \\
+Examples: $0, 1, 2, 1024$, but not: $01$.
 \end{minipage}
 
 \begin{minipage}{\textwidth}
 \textbf{Float} \\
-Declaration: float \\
-Represents a binary64 \acronym{ieee}-754 floating point number.
+Declaration: $float$ \\
+Represents a \term{binary64} \acronym{ieee}-754 floating point number.
 For possible values, please refer to the standard or to the table in
 \url{https://en.wikipedia.org/wiki/IEEE\_754#Basic\_and\_interchange\_formats}.\\
 Constructors: any integer followed by a dot and a sequence of digits,
               optionally followed by $e$ followed by an integer.
               \comment{The exponential form is not yet available.} \\
+Null: $0.0$ \\
 Examples: $-1.0, 0.0, 1.0, 3.14159, 1.797693e308$ 
 \end{minipage}
 
 \begin{minipage}{\textwidth}
 \textbf{Time} \\
-Declaration: time, date \\
+Declaration: $time$, $date$ \\
 Values:  \acronym{utc} 1677-09-21T00:12:44 --
          \acronym{utc} 2262-04-11T23:47:16 \\
 Precision: nanosecond. \\
@@ -49,6 +210,15 @@ Please refer to the database configuration guide. \\
 Timezone: \acronym{utc} \\
 Constructor: any integer or any string following \acronym{iso}-8601 
 or any string following a locally defined time format. \\
+Null: $0$ \\
+\comment{It should be possible to perform arithmetic
+with time units and timestamps
+in \sql, \eg: \\
+\term{where timestamp = today + 7*day}.\\
+That is, why a null type makes sense for time.
+Currently, arithmetic with time is not possible in \sql.
+(It is possible with the date and time types in host languages, though,
+and therefore not urgent.)} \\
 Examples:\\
 1535284617906179393, \\
 '1940-12-21', \\
@@ -58,30 +228,40 @@ Examples:\\
 
 \begin{minipage}{\textwidth}
 \textbf{Bool} \\
-Declaration: bool \\
-Values: true, false
+Declaration: $bool$ \\
+Values: $true$, $false$ \\
+Null: $false$
 \end{minipage}
 
 \begin{minipage}{\textwidth}
 \textbf{Text} \\
-Declaration: text \\
+Declaration: $text$ \\
 Values: \acronym{utf}-8 string with up to 255 bytes\\
 Constructor: string enclosed by ' \\
+Null: '' (the empty string),\\
 Examples:\\
-'',\\
 'hello world',\\
 \begin{CJK}{UTF8}{gbsn}
-'鎮州臨濟慧照禪師語錄序。'
-\end{CJK}
+'鎮州臨濟慧照禪師語錄序。' 
+\end{CJK} \\
+\comment{An important detail is not yet handled:
+text that \emph{contains} the character '.
+This is important for recursive \sql, \eg\ \\
+\term{exec metaquery('select * from myedge 
+       where a = $\backslash$'some text$\backslash$'')}}
 \end{minipage}
 
 \begin{minipage}{\textwidth}
 \textbf{Longtext} \\
 Declaration: text \\
 Values: \acronym{utf}-8 string with up to 4096 bytes\\
+\comment{Longtext is not yet available.}
 \end{minipage}
+
 \begin{minipage}{\textwidth}
 \textbf{Blob} \\
+\comment{Blob is nice to have, but there are currently
+no concrete plans to add such a datatype.}
 \end{minipage}
 
 \subsection{Dynamic Types}
@@ -126,8 +306,15 @@ Reports consist of up to three values:
 \textbf{Row}\\
 A row is the result of a projection;
 it consists of an array of values
-with type information called fields.
+with type information called \term{fields}.
+In the host language, one would access a field
+typically by an expression of the form:
+$row.field(i);$
+which would return a tuple $(value,type)$.
+
 A row result consists of one or many rows.
+The host language shall provide means
+to iterate over rows.
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -140,9 +327,166 @@ and shall be closed using the directive \term{close}.
 \end{minipage}
 
 \section{Data Definition}
+\comment{Due to some time pressure in producing this document,
+there are no syntax diagrams, which would make things much
+clearer. Instead, examples are given. Examples are easier
+to understand quickly, but they are much less precise.}
+
+\comment{For almost all \acronym{ddl} subtypes,
+\term{alter} is not yet implemented.}
+
 \subsection{Schema}
+The keywords
+\term{schema}, \term{database} and \term{scope}
+are interchangeable.
+
+\subsubsection{CREATE}
+The \term{create schema} statement
+creates an empty database physically on disk.
+It has the following form:
+
+\keyword{create schema} \identifier{mydb}
+
+This would create the directory `mydb'
+immediately below the base path (with which
+the \nowdb\ daemon was started) and
+within that directory all objects necessary
+to manage that database.
+
+The following forms are equivalent:
+
+\keyword{create database} \identifier{mydb}\\
+\keyword{create scope} \identifier{mydb}
+
+All \keyword{create} clauses can be combined
+with the clause \keyword{if not exists}, \eg:
+
+\keyword{create schema} \identifier{mydb} \keyword{if not exists}
+
+The \keyword{if not exists}-clause
+suppresses the `duplicate key' error
+in case the schema
+already exists.
+It is a convenient way to avoid
+that a \sql\ script is abandoned
+in such a situation.
+
+\subsubsection{DROP}
+The \term{drop schema} statement
+removes a database physically from disk.
+It has one of the following forms,
+which are all equivalent:
+
+\keyword{drop schema} \identifier{mydb}\\
+\keyword{drop database} \identifier{mydb}\\
+\keyword{drop scope} \identifier{mydb}
+
+The statement removes all objects and data
+belonging to the database `mydb' and
+the directory `mydb' from the disk.
+
+All \keyword{drop} clauses can be combined
+with the clause \keyword{if exists}, \eg:
+
+\keyword{drop schema} \identifier{mydb} \keyword{if exists}
+
+The \keyword{if exists}-clause
+suppresses the `key not found' error
+in case the schema
+does not exist.
+It is a convenient way to avoid
+that a \sql\ script is abandoned
+in such a situation.
+
+\subsubsection{ALTER}
+
 \subsection{Table}
+\subsubsection{CREATE}
+The \term{create table} statement
+creates a new storage entity for edges
+physically on disk.
+
+The simplest form is:
+
+\keyword{create table} \identifier{mytable}
+
+The keyword table may be decorated
+with a sizing option:
+
+\keyword{create big table} \identifier{mytable}
+
+Valid sizing keywords are:
+\keyword{tiny, small, medium, big, large, huge}.
+
+Sizing keywords affect the allocation units
+of disk space. The concrete meaning is not
+part of this specification and may change
+in the future.
+
+It is also possible to add options to
+to a \term{create table} statement.
+Options have the general form
+
+\term{\keyword{set} option = value, option = value}.
+
+Valid options and values are listed in the following table:
+
+\bgroup
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\begin{tabular}{||c||c||c||c||}\hline
+Option & Values & Meaning & Default \\\hline\hline
+\keyword{stress} & \keyword{moderate} & Low ingestion volume with occasional peaks & X \\\cline{2-4}
+                 & \keyword{constant} & Constant ingestion of high volume          &   \\\cline{2-4}
+                 & \keyword{insane} & Constant ingestion of very high volume       &   \\\hline\hline
+\keyword{disk} & \keyword{hdd}  & Disk space is allocated in large chunks          & X \\\cline{2-4}
+               & \keyword{ssd}  & Disk space is allocated in small chunks          &   \\\cline{2-4}
+               & \keyword{raid} & Currently, no effect                             &   \\\hline\hline
+\keyword{compression} & 'zstd'  & zstd is used for compression                     & X \\\cline{2-4}
+                      & 'lz4'   & lz4 is used for compression (\comment{not available}) &   \\\cline{2-4}
+                      & ''      & Data in this table are not compressed at all     &   \\\cline{1-4}
+\end{tabular}
+\end{center}
+\egroup
+
+The option \keyword{stress} affects the number of threads
+allocated to perform ingestion tasks
+like compression, sorting and indexing.
+How many threads are allocated
+is not part of this specification
+and may vary between platforms.
+
+The user may decide on the compression algorithm to use.
+The standard compression algorithm is \term{zstd},
+which is fast, but has also very good compression ratio.
+It is recommended to use \term{zstd} in most cases.
+\term{lz4} (\comment{not yet available}) is faster than \term{zstd},
+in particular on decompression,
+but has a weaker compression ratio.
+Finally, no compression at all (empty string)
+makes sense on small tables
+that are known never to grow beyond some megabyte in size
+(or beyond some million edges).
+
+An example of a \term{create table} statement with options is
+
+\keyword{create table} \identifier{mytable}
+\keyword{set} \keyword{stress} = \keyword{constant},
+              \keyword{compression} = 'zstd'
+
+\subsubsection{DROP}
+The \term{drop table} statement removes
+an existing storage entity for edges
+physically from disk.
+It has the form:
+
+\keyword{drop table} \identifier{mytable}
+
+\subsubsection{ALTER}
+
 \subsection{Type}
+
+
 \subsection{Edge}
 \subsection{Index}
 \subsection{Procedure}
