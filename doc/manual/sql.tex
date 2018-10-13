@@ -1394,6 +1394,173 @@ namely
 \comment{Not yet available}
 
 \subsection{Group Clause}
+Grouping partitions the result set
+according to a set of \term{keys}.
+The result set will then presented
+according to these partitions.
+The keys used to partition the set
+are defined in the \term{group} clause.
+A simple \term{group} clause could be:
+
+\keyword{group by} \keyword{edge, destin}
+
+This clause would partition the result
+according to \keyword{ege} and \keyword{destin}.
+
+In the simpleplest from a statement with
+group statement could look like this:
+
+\keyword{select} \keyword{edge},
+                 \keyword{destin}
+\keyword{from} \identifier{sales}
+\keyword{group by} \keyword{edge, destin}
+
+Let's consider the following set of data
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|----------+---------+--------------|
+| edge     | destin  | timestamp    |
+|----------+---------+--------------|
+| 'buys'   | 100001  | '2018-03-15' |
+| 'buys'   | 100002  | '2018-03-15' |
+| 'buys'   | 100001  | '2018-04-15' |
+| 'buys'   | 100002  | '2018-04-15' |
+| 'buys'   | 100001  | '2018-05-15' |
+| 'buys'   | 100002  | '2018-05-15' |
+| 'buys'   | 100001  | '2018-06-15' |
+| 'steals' | 100002  | '2018-06-15' |
+|----------+----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+The group above would produce the following set
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|----------+---------|
+| edge     | destin  |
+|----------+---------|
+| 'buys'   | 100001  |
+| 'buys'   | 100002  |
+| 'steals' | 100002  |
+|----------+---------|
+\end{verbatim}
+\end{minipage}
+
+It, hence, produces a distinct set of the key values.
+One could say that grouping abstracts or reduces 
+the data set according to the keys.
+This, in itself is often a useful feature,
+\viz\ when we want to apply a certain processing
+only once per key. As an aside it may be mentioned
+that this kind of grouping is extremely fast in \nowdb;
+for performance considerations in general, however, please
+refer to chapter \ref{chpt_opt}.
+
+The real power of grouping, however, becomes evident
+when we let the database do the processing.
+This is the purpose of aggregate functions.
+Aggregates produce a result per group (\ie\ per partition).
+Aggregates are for example
+\term{count}, \term{sum},
+\term{max} and \term{min} or \term{avg}.
+A complete list of aggregates supported in \nowdb\
+can be found below in sections \ref{sec_agg}.
+
+The aggregate function goes to the \term{select} clause
+behind the grouping keys:
+
+\keyword{select} \keyword{edge},
+                 \keyword{destin},
+                 \keyword{count}(*)
+\keyword{from} \identifier{sales}
+\keyword{group by} \keyword{edge, destin}
+
+This would now produce:
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|----------+---------|-------|
+| edge     | destin  | count |
+|----------+---------|-------|
+| 'buys'   | 100001  |  4    |
+| 'buys'   | 100002  |  3    |
+| 'steals' | 100002  |  1    |
+|----------+---------|-------|
+\end{verbatim}
+\end{minipage}
+
+The \term{group} clause has strong interdependencies
+with the \term{select} clause.
+In particular, the \term{select} clause must
+contain precisely those fields mentioned in the
+\term{group} clause and the order of the fields
+must be identical. The only things allowed in
+the \term{select} clause besides the grouping keys
+are aggregates.
+
+The following statements are therefore wrong:
+
+\keyword{select} \keyword{edge}, 
+                 \keyword{count}(*)
+\keyword{from} \identifier{sales}
+\keyword{group by} \keyword{edge, destin}
+
+\keyword{select} \keyword{destin},
+                 \keyword{edge}, 
+                 \keyword{count}(*)
+\keyword{from} \identifier{sales}
+\keyword{group by} \keyword{edge, destin}
+
+\keyword{select} \keyword{edge}, 
+                 \keyword{destin},
+                 'hello world'
+\keyword{from} \identifier{sales}
+\keyword{group by} \keyword{edge, destin}
+
+Notice that aggregates without grouping
+are applied on the the whole result set.
+For instance, to count all rows in \identifier{sales},
+one could say:
+
+\keyword{select} \keyword{count}(*)
+\keyword{from} \identifier{sales}
+
+The partition on which \keyword{count} is applied here
+is the whole result set.
+
+Syntactically, even this is \acronym{ok}:
+
+\keyword{select} \keyword{edge},
+                 \keyword{destin},
+                 \keyword{count}(*)
+\keyword{from} \identifier{sales}
+
+The values shown for \keyword{edge} and \keyword{destin},
+however, have no relation whatsoever to the \keyword{count}
+result. Those are values correspond
+to a any of the rows in the result set.
+It may be the first or the last or any other.
+That is unspecified.
+
+\comment{
+Currently, grouping is only possible for combinations of keys
+for which an index exists. That is to say:
+the index must be defined over the same set of keys
+and the order of the keys must be the same.
+Otherwise, when there is not matching index,
+the query fails with error.
+I do not consider this a huge issue.
+Grouping is an expensive operation and if,
+in an application, grouping is frequently needed,
+it should be considered in database design.
+However, there a some cases where I am concerned
+about performance. In general, the performance
+is good or even fantastic. But there are cases
+that could motivate alternative grouping techniques.
+}
+
 \subsection{Order Clause}
 
 \subsection{Expressions}
@@ -1412,7 +1579,7 @@ $=,<,>,\le,\ge,\neq$
 \subsection{Simple Functions}
 \comment{Not yet available}
 
-\subsection{Aggregates}
+\subsection{Aggregates}\label{sec_agg}
 \subsubsection{count}
 \subsubsection{sum}
 \subsubsection{max and min}
