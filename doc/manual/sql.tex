@@ -62,18 +62,18 @@ clause or an isolated \term{from} clause.
 The smallest executable unit is therefore the statement.
 
 Clauses are made of keywords, identifiers, numbers
-and text strings. Keywords and identifiers are mutually
+and text. Keywords and identifiers are mutually
 exclusive, that is, if $k$ is a keyword,
-it cannot be an identifier.
+$k$ cannot be an identifier at the same time.
 \comment{This rule is relaxed in most
-\sql\ dialects -- and that makes a lot of sense,
+\sql\ dialects -- and that is a great relief for users,
 because \sql\ has an extraordinary large
 number of keywords which sometimes makes the choice
 of meaningful identifiers a non-trivial task.
 At the time of writing, the \nowdb\ parser
 does not relax this rule, but it will do so
 in the future.}
-Keywords are defined by the language,
+Keywords are defined by the \sql\ specification,
 identifiers are chosen by the user
 and refer to entities in the database,
 such as tables, types, indices, \etc\
@@ -90,7 +90,7 @@ All statements that are passed to the database
 have a textual form. The results produced
 by the database, however, are not. They are
 binary data which may or may not
-contain textual parts.
+contain textual elements.
 
 In \nowdb\ \sql\ statements are strings
 of \acronym{utf}-8 characters.
@@ -111,21 +111,23 @@ There is no difference in
 and so on.
 Text, by contrast, is case-sensitive;
 \term{'hello world'} and \term{hello World}
-are not the same!
+are not the same thing!
 
 \sql\ is a \term{guest} language
 that needs some kind of framework
 to support it. One way to provide this
 framework is the \nowdb\ client,
 which provides two means to execute
-\sql\ \term{statements} in the database,
+\sql\ statements in the database,
 \ie\ by means of the \tech{-Q} parameter
 and by means of standard input.
 
-Another way is a guest language
+Another way is a host language
 that provides means to pass \sql\ statements
 to the database and means to receive
 and interpret the results produced by such statements.
+For \nowdb, Python, C and Lua (\comment{Lua not yet})
+are available as host languages.
 
 The protocol that defines how data are exchanged
 between the database and the host system
@@ -139,9 +141,34 @@ parts of this protocol must be documented
 and published.
 
 \section{Types}
+A fundamental part of most languages
+it their type system. \nowdb\ \sql\
+has a very simple type system,
+which is static and save.
+This type system is used to design
+the database and to word
+\sql\ statements.
+This fundamental type system is called
+\sql\ Static Types.
+
+However, since \sql\ is executed
+in a host environment, there is a second
+type system to describe the \term{results}
+of \sql\ statements.
+This other type system is even simpler --
+it, in fact, consists of only one type.
+This other type system, however, is dynamic.
+It is therefore called \sql\ Dynamic Types.
+
+In the following, we first present
+the Static System and then the Dynamic System.
+
 \subsection{Static Types}
 The static types constitute the \nowdb\ \sql\ type system.
 The static types can be used in \sql\ statements.
+Each type is equipped with a declaration form and
+type constructors that create instances of those types.
+
 The declaration form is used in \acronym{ddl} statements
 to define types, edges, procedure and functions.
 In \acronym{dml}, \acronym{dll} and \acronym{dql} statements,
@@ -160,6 +187,7 @@ is converted to an unsigned integer if possible.
 If the unsigned integer is out of range or
 the signed integer is negative, the statement
 is rejected with a type error.
+
 Likewise, signed or unsigned integers are converted to floats
 if necessary (and possible) and a float might be converted
 to an integer (or unsigned integer) if it actually
@@ -269,9 +297,9 @@ Dynamic types are not used in \sql\ statements,
 but rather describe the return values of \sql\
 statements. As such, they live in the context
 of a host language (C, Python, Lua, \etc).
-There concrete implementation, therefore,
+Their concrete implementation, therefore,
 depends on that language and any language
-functioning as either client or server-side language
+functioning as either client or server-side host
 needs to implement these types.
 For more information on concrete implementation
 of dynamic types, please refer to the
@@ -518,10 +546,13 @@ and the naming to be honest.
 what now is called \term{tables} should be called
 \term{edgestore} or something like that.
 Furthermore, there is this hidden thing \term{vertex}
-that is felt in his impact, but (mostly) invisible.
+that is felt in its impact, but remains (mostly) invisible.
 In the future types (which, then, will be called tables),
 will be stored per attribute (a.k.a. column)
-and all the delicateness concerning
+and edges will be stored in edgestores
+(which are tables with a fixed structure).
+With this
+all the delicateness concerning
 tables versus types and edges versus vertices
 will go away just by itself.
 }
@@ -908,7 +939,489 @@ so they won't be selected by other statements.
 
 \section{Data Loading}
 
-\section{Data Query}
+\section{Data Querying}
+There is only one type of \acronym{dql} statement.
+However, this statement is much more complex
+than the statements we have seen so far.
+
+A \acronym{dql} statement consists of at least
+a \term{select} clause (also called \term{projection} clause
+and a \term{from} clause, which in itself my contain
+a \term{join} clause.
+It may additionally contain
+a \term{where} clause,
+a \term{group} clause and
+an \term{order} clause.
+
+\subsection{Select Clause}
+The basic form of a \term{select} clause is
+
+\keyword{select} \identifier{projectable1}, \identifier{projectable2}, $\dots$
+
+Where the \term{projectables} may be fields of the entity (edge or type)
+referenced in the \term{from} clause.
+
+If all fields of that entity are selected,
+the statement can be simplified to
+
+\keyword{select} \keyword{*}
+
+It is also possible to refer explicitly to the data source
+(which is identified in the \term{from} clause), \eg:
+
+\keyword{select} \identifier{product}.\identifier{prod\_price}
+
+In the \term{from} clause, we can define aliases for data source
+and then refer to the data source by this alias, \eg:
+
+\keyword{select} \identifier{p}.\identifier{prod\_price}
+
+where $p$ is an alias defined in the \term{from} clause.
+This is especially useful with joins.
+
+Projectables are not necessary fields.
+They also may be functions, constants or complex expressions.
+The following are, for instance, valid \term{select} clauses:
+
+\keyword{select} \identifier{true} \\
+\keyword{select} 'X' \\
+\keyword{select} 3.14159 \\
+\keyword{select} \keyword{count}(*), \keyword{sum}(\keyword{weight})
+
+The first three clauses may appear pointless.
+Why select constant values from the database?
+There are, however, very common use cases
+for selecting constant values, in particular
+in combination with the \term{exist} operator,
+but also for \acronym{dql} used within an
+\term{insert} statement. A concrete example
+of the latter already appeared in the section
+on \term{insert}, namely:
+
+\keyword{select} 'buys', \keyword{origin},
+                         \keyword{destin}, 
+                         \keyword{timestamp}, 
+                         \keyword{weight},
+                         \keyword{weight2}
+
+where a constant expression, namely 'buys',
+is combined with a number of fields.
+
+\nowdb\ provides \term{functions} that can be used
+on fields \comment{or, in the future, on more than
+one field at once; see the comment below!},
+for instance:
+
+\keyword{select} substr('hello world', 1, 5)
+
+\comment{None of such functions is implemented yet.}
+
+A special form of functions are \term{aggregates}.
+Aggregates do not operate on one row, but
+on \term{groups} of rows. A group may be defined
+by adding a \term{group} clause. If not \term{group} clause
+is present, the group consists of all rows produced
+by the \acronym{dql} statement.
+
+The following are valid \term{select} clauses:
+
+\keyword{select} \keyword{count}(*) \\
+\keyword{select} \keyword{sum}(\keyword{weight}) \\
+\keyword{select} \keyword{avg}(\keyword{weight}) \\
+\keyword{select} \keyword{median}(\keyword{weight}) \\
+\keyword{select} \keyword{stddev}(\keyword{weight})
+
+The freedom of the \term{select} clause
+is restricted by other clauses, in particular
+the \term{from} clause and the \term{group} clause.
+In the \term{select} clause, only
+those fields may appear that are actually
+part of the entity chosen in the \term{from} clause.
+The interdependencies with the \term{group} clause
+are more subtle and will be discussed there.
+
+\comment{
+Concerning expressions:
+Those are recursive combinations
+of fields, constants, functions and operators
+that can be nested together.
+Most \sql\ dialect support a wide range of
+arithmetic expressions, \eg\ $+, -, \times, \div, \sqrt{a} $,
+boolean expressions, \keyword{and}, \keyword{or}, \keyword{not}, \etc\
+string operations like concatenation, substring, length and so on.
+Since expressions are recursive, they can be composed, \eg:
+$(a+b)/n, (weight-w)^2$ and so on.
+On the long run, we need to address expressions
+in projection and \term{where} clause, but also in
+updates and inserts.
+The point of the prototype, however, is not
+to prove that \sql\ is possible,
+but that designing special-purpose database technology
+for specific data models
+can improve performance and usability.
+Full-fledged \sql\ support will therefore be added,
+when the main argument is made.
+}
+
+\subsection{From Clause}
+The \term{from} clause determines the data source
+of the \acronym{dql} statement. The simplest form
+of a \term{from} clause is
+
+\keyword{from} \identifier{mytable}
+
+The identifier must refer to a table or a type.
+Valid \term{from} clauses are for instance:
+
+\keyword{from} \identifier{sales} \\
+\keyword{from} \identifier{product} \\
+\keyword{from} \identifier{client}
+
+\comment{
+The latter two, unfortunately, do not work right now.
+The current syntax is quite esoteric (and will go
+away very soon). Since \term{product} and \term{client}
+are vertex types, the current form is
+\keyword{from vertex as} \identifier{product}.
+That is quite ugly and, indeed, pointless.
+}
+
+Here is a first example of a complete \acronym{dql} statement:
+
+\keyword{select} 'buys', \keyword{origin},
+                         \keyword{destin}, 
+                         \keyword{timestamp}, 
+                         \keyword{weight},
+                         \keyword{weight2} \\
+\hspace*{0.2cm}\keyword{from} \identifier{sales}
+
+It is possible to define an alias for the data source:
+
+\keyword{from} \identifier{sales} \keyword{as} \identifier{s}
+
+The table \identifier{sales} can now be referred to
+in the \term{select} clause as ``s''.
+This technique is especially interesting in combination
+with joins.
+
+In most \sql\ dialects,
+it is common to select data from different
+data sources at once, \eg:
+
+\keyword{from} \identifier{product}, \identifier{client}
+
+This form is not supported by \nowdb.
+Whenever, more than one data source is addressed,
+a join has to be used.
+
+\subsection{Join Clause}
+A join combines an edge with a vertex.
+\comment{I am very proud of this wording.
+It describes clearly what a join is
+and it makes the difference
+with relational databases very clear:
+there is not way to combine vertices
+other than by using an edge.
+This said, I am not sure whether other
+kinds of joins will be needed in the future.
+Many graph databases offer additional links
+between vertices, which are not edges.
+Usually, these links are used for connections
+that are part of the characteristic of the
+vertex. One could say that such links express
+``o que \'e'', while edges express
+``o que est\'a''.
+}
+The basic form is:
+
+\keyword{join} \identifier{mytype} \keyword{on}
+               (\keyword{edgefield}, \identifier{typefield})
+
+To make this more concrete:
+
+\keyword{from} \identifier{sales} 
+\keyword{join} \identifier{client} \keyword{on} 
+               (\keyword{origin}, \identifier{client\_key})
+
+This would produce an \term{inner join} 
+between \identifier{sales} and \identifier{mytype}.
+Joins in \nowdb\ are in fact always inner joins.
+There are no \term{outer joins}. \comment{Do we need them?}
+In consequence, there is not difference between
+\term{left} and \term{right}; one could say,
+joins in \nowdb\ are \term{abelian} and, indeed,
+the order of edge and type is irrelevant.
+
+Since the primary key of a type is known
+and there is always exactly one field,
+which is primary key, it is possible to simplify:
+
+\keyword{from} \identifier{sales}
+\keyword{join} \identifier{client} \keyword{on} \keyword{origin}
+
+Each edge links two vertices.
+A join, therefore, consists of at most two joins.
+The syntax is straightforward:
+
+\keyword{from} \identifier{sales}
+\keyword{join} \identifier{client} \keyword{on} \keyword{origin} \\
+\hspace*{2cm}\keyword{join} \identifier{product} \keyword{on} \keyword{destin}
+
+With this join, all attributes
+from \identifier{sales}, \identifier{client} and \identifier{product}
+are available in the \term{select} clause.
+
+But these entities may have fields with the same name,
+\eg\ we could have named the primary key in both,
+\identifier{client} and \identifier{product},
+\identifier{key}, instead of
+\identifier{client\_key} and \identifier{prod\_key}.
+To distinguish the fields,
+one has to use the entity name together with the field name
+in the \term{select} clause and (as we will see) in all
+other clauses that refer to fields.
+Example:
+
+\keyword{select} \identifier{client}.\identifier{key}
+
+Here, using aliases comes in handy, \eg:
+
+\keyword{from} \identifier{sales} \keyword{as} \identifier{s}
+\keyword{join} \identifier{client} \keyword{as} \identifier{c} 
+               \keyword{on} \keyword{origin} \\
+\hspace*{2.8cm}\keyword{join} \identifier{product} \keyword{as} \identifier{p}
+                              \keyword{on} \keyword{destin}
+
+In the \term{select} clause, we can now refer to fields
+with the alias instead of the full entity name, \eg:
+
+\keyword{select} \identifier{c}.\identifier{key},
+                 \identifier{p}.\identifier{key}
+
+\comment{
+Joins are the very heart of any database technology --
+and, as this section show, the design is already quite advanced.
+In a first approach I tried to make joins work
+by always using index range scans.
+Unfortunately, it turned out that index range scans
+are not very efficient in most (or at least many) cases.
+I am therefore now looking for alternatives.
+The most promising appears to be the \term{hash join} technique,
+which is applied in many databases.
+Two avoid wasting weeks of programming
+I prefer to use a higher-level programming language like Python.
+There is a technique (described in \ref{chpt_pythonemb})
+called \term{functional cursors} that I want to use for that purpose.
+To cut a long story short: joins are not yet available.
+There are workarounds, but, indeed, we will need joins \acronym{asap}.
+}
+
+\subsection{Correlation} 
+A correlation combines two or more edges.
+\comment{Not yet available}
+
+\subsection{Where Clause}
+The \term{where} clause adds criteria for the selection
+of specific rows. \term{where} clauses can be very complex.
+Indeed, a \term{where} clause is one complex \term{Boolean} expression.
+\comment{Currently, this is simplified in \nowdb.
+The \term{where} clause is indeed a Boolean expression,
+but the leaves of those expressions are always
+comparisons of the form \identifier{field} = \term{value}.
+It is currently not possible to compare fields with fields
+or values with values; it is also not possible to say,
+for instance,
+\keyword{where} \keyword{true}.}
+
+A very simple \term{where} clause would be:
+
+\keyword{where} \identifier{prod\_key} = 100001
+
+Which evaluates to true for all rows that have $100001$
+as \identifier{prod\_key}.
+
+Since \term{where} clauses are Boolean expressions,
+it is possible to use the Boolean operators
+\keyword{and}, \keyword{or} and \keyword{not}.
+The first two operators are binary, \ie\
+they expect two operands (which again are
+Boolean expressions), while \keyword{not}
+is unary and expects one operand (which again
+is a Boolean expression).
+
+The Boolean operators combine comparisons
+with each other. Comparison operators are
+$=, <, >, \le, \ge, \ne$.
+There are two forms to express the $\ne$
+operator, namely ``$<>$'' and ``!=''. 
+
+For instance:
+
+\keyword{where} \identifier{destin} = 100001
+\keyword{and} \identifier{timestamp} $\le$ '2018-04-01'
+
+Before we look at more interesting cases,
+let's assume the following set of data:
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|---------+--------------|
+| destin  | timestamp    |
+|---------+--------------|
+| 100001  | '2018-03-15' |
+| 100002  | '2018-03-15' |
+| 100001  | '2018-04-15' |
+| 100002  | '2018-04-15' |
+| 100001  | '2018-05-15' |
+| 100002  | '2018-05-15' |
+| 100001  | '2018-06-15' |
+| 100002  | '2018-06-15' |
+|----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+Here is a tricky \keyword{where} clause:
+
+\keyword{where} \identifier{destin} = 100001
+\keyword{and} \identifier{timestamp} $<$ '2018-04-01'
+\keyword{or} \identifier{timestamp} $\ge$ '2018-05-01'
+
+\keyword{or} has precedence over \keyword{and}.
+Both, \keyword{or} and \keyword{and} bind to the left,
+\ie\ the first operand is the one in front of the operator.
+
+That means, here, that \keyword{or} is at the top-level:
+The clause selects all rows that have \keyword{timestamp}
+$\ge$ May, 1, and those that have \keyword{destination} $100001$
+and \keyword{timestamp} less than April, 1.
+In other words, what we see is
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|---------+--------------|
+| destin  | timestamp    |
+|---------+--------------|
+| 100001  | '2018-03-15' |
+| 100001  | '2018-05-15' |
+| 100002  | '2018-05-15' |
+| 100001  | '2018-06-15' |
+| 100002  | '2018-06-15' |
+|----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+This might be surprising at the first glance.
+But, indeed, most \sql\ dialects follow this convention.
+
+To force another binding, parentheses can be used:
+
+\keyword{where} \keyword{destin} = 100001
+\keyword{and} (\keyword{timestamp} $<$ '2018-04-01'
+\keyword{or} \keyword{timestamp} $\ge$ '2018-05-01')
+
+This clause would now select all rows
+that have \keyword{destination} $100001$ and
+a \keyword{timestamp} that is not in April,
+like this:
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|---------+--------------|
+| destin  | timestamp    |
+|---------+--------------|
+| 100001  | '2018-03-15' |
+| 100001  | '2018-05-15' |
+| 100001  | '2018-06-15' |
+|----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+Equivalent to this second clause is
+
+\keyword{where} \identifier{destin} = 100001 \\
+\hspace*{0.45cm}\keyword{and} \keyword{not} 
+(\keyword{timestamp} $\ge$ '2018-04-01'
+\keyword{and} \keyword{timestamp} $<$ '2018-05-01')
+
+\keyword{or} and \keyword{and} have precedence
+over \keyword{not}; \keyword{not} binds to the right,
+\ie\ \keyword{not} is a \term{prefix}.
+
+Would we again leave out the parentheses,
+like this:
+
+\keyword{where} \identifier{destin} = 100001 \\
+\hspace*{0.45cm}\keyword{and} \keyword{not} 
+\keyword{timestamp} $\ge$ '2018-04-01'
+\keyword{and} \keyword{timestamp} $<$ '2018-05-01'
+
+we would select all rows that have \keyword{destination}
+$100001$ and not a \keyword{timestamp} greater April
+and that are before May, hence:
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|---------+--------------|
+| destin  | timestamp    |
+|---------+--------------|
+| 100001  | '2018-03-15' |
+|----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+Besides the basic comparison operators
+there are some more very useful operators,
+namely
+\keyword{between},
+\keyword{in},
+\keyword{having},
+\keyword{exists} and
+\keyword{any} and \keyword{all}.
+
+\subsubsection{between}
+\comment{Not yet available}
+
+\subsubsection{in}
+\comment{Not yet available}
+
+\subsubsection{having}
+\comment{Not yet available}
+
+\subsubsection{exists}
+\comment{Not yet available}
+
+\subsubsection{any and all}
+\comment{Not yet available}
+
+\subsection{Group Clause}
+\subsection{Order Clause}
+
+\subsection{Expressions}
+\comment{Not yet available}
+
+\subsection{Operators}
+\subsubsection{Arithmetic}
+\comment{Not yet available}
+
+\subsubsection{Boolean}
+$=,<,>,\le,\ge,\neq$
+
+\subsubsection{Text}
+\comment{Not yet available}
+
+\subsection{Simple Functions}
+\comment{Not yet available}
+
+\subsection{Aggregates}
+\subsubsection{count}
+\subsubsection{sum}
+\subsubsection{max and min}
+\subsubsection{spread}
+\subsubsection{avg}
+\subsubsection{median}
+\subsubsection{mode}
+\subsubsection{stddev}
+\subsubsection{integral}
 
 \section{Miscellaneous}
 \subsection{Use}
