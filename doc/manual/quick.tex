@@ -1017,44 +1017,33 @@ in chapters \ref{chpt_ccpp}, \ref{chpt_goclient} and
 
 \section{Python in the Database}
 Like many other databases,
-\nowdb\ has the concept of
+\nowdb\ supports
 stored procedures and stored functions,
 \ie\ code that is executed within the database.
 This code can be written in several languages.
 Currently Python and Lua are supported.
 \comment{Lua is not yet available.}
+
 The major advantage of Python is the huge
-number of libraries available for Python,
+number of libraries available,
 in particular for mathematics,
 data science and machine learning.
-The disadvantage of Python is mainly
-related to its limitations when it comes
-to integration with C (that is to say
-Python integrated into C, not the other way round).
-
-The design of the Python interpreter limits
-it concurrent usage in a C program, which is essential
-for the purpose of running Python code in the database;
-but there are also issues like memory leaks
-that make the Python interpreter difficult to deal with.
-In consequence, there are some limitations
-for programs running in the database.
-Especially, that many Python programs executing
-in parallel will compete for the same interpreter.
-In other words: running many sessions executing
-Python code may get very slow.
-
+But the poor design of the Python interpreter
+imposes some limitations in concurrency.
+(Please refer to chapter \ref{chpt_pythonemb}
+for details.)
 It is therefore recommended to use Python
 in the database where it is strongest,
-\ie\ for data science and similar tasks.
-For `normal' database tasks like \acronym{dba}
-jobs or simple computations that do not demand
-higher math, it is recommended to use one of
-the light-weight languages, such as Lua.
+\ie\ for higher math and data science.
+For `normal' \acronym{dba}
+jobs or simple computations that do not require
+sophisticated math libraries, the use one of
+the light-weight languages,
+such as Lua, is recommended.
 
 The difference between stored procedures
 and stored functions is that stored functions
-run inside an \sql\ context. They, hence,
+run inside an \sql\ context. They
 can be used in a \term{select} clause,
 for instance. They are not allowed, however,
 to execute whatever they want.
@@ -1064,7 +1053,7 @@ execute \term{updates} or \term{inserts} for instance.
 It would indeed be very strange when
 a \term{select} would change the database.
 
-Stored procedures on the other hand
+Stored procedures, on the other hand,
 cannot run in \sql\ context. They are
 executed explicitly by the \term{exec}
 statement. In exchange for this limitation,
@@ -1099,16 +1088,16 @@ called `revenue' that takes two arguments:
 Furthermore, the procedure is written in Python and
 it lives in the module `sales'.
 The statement does not define a return value for the procedure.
-But all procedures in \nowdb\ return a \term{result},
-\ie\ a status, a cursor, a report or a row (which we have not
-yet encountered).
+But all procedures in \nowdb\ return a \term{result type},
+that is polymorphic type that
+can be either a status, a report, a row or a cursor.
 
-The module `sales' must be in a directory that is
+The module `sales' must be located in a directory that is
 known to the Python interpreter. Typically, it will
 be in a directory in the \acronym{pythonpath}.
 Note that the \acronym{pythonpath} must be set
 in the environment of the server before it is started.
-This is actually security feature:
+This is actually a security feature:
 it is not possible to smuggle executable code
 into the database. To get code to run in the database
 context one needs control over the filesystem.
@@ -1117,13 +1106,15 @@ The database does not introduce a new attack vector.
 Once the function $revenue$ is created
 and its code is accessible to the database, it
 can be executed by an \term{exec} statement:
+
 \begin{sqlcode}
 \begin{lstlisting}
 exec revenue(9000001, '1929-01-25')
 \end{lstlisting}
 \end{sqlcode}
 
-Let's have a look at the module \term{sales}
+\begin{minipage}{\textwidth}
+Let's look into the module \term{sales}
 to see how the procedure is implemented:
 
 \begin{python}
@@ -1149,7 +1140,7 @@ def revenue(pClient, pDay):
         return nowdb.makeError(c.code(), c.details()).toDB()
 
       r = makeRow()
-      with row in c: # there is only one row
+      for row in c: # there is only one row
          r.add2row(INT, row.field(0))
 
       return r.toDB()
@@ -1162,10 +1153,11 @@ def cleanup():
 
 \end{lstlisting}
 \end{python}
+\end{minipage}
 
-Notice first that we import the module \term{nowdb}.
+First, we import the module \term{nowdb}.
 This is the equivalent to the \term{now} module
-that we imported on the client side.
+that we imported on client side.
 Note, however, that on server side
 it is necessary to import the module in this format,
 \ie: \term{import nowdb}, not: \term{from nowdb import $\dots$}
@@ -1190,34 +1182,30 @@ will be passed as timestamp.
 
 The entire code of the procedure is encapsulated
 in a \term{try/execpt}-block. This, indeed, is
-good practice, since, without exception handling,
+good practice, since otherwise
 an exception would terminate the procedure without
 passing a result back to the database and without
 detailed error information.
 
-In the \term{except}-part, we just create
-an error with error code 'user error' and
+In the \term{except}-part, we create
+an error with error code `user error' and
 the exception string as detailed information.
-We return the result of the $toDB()$
-method of the error. All result types have this
-method and what is returned to the database context
-is indeed what $toDB()$ returns, not the result
-type itself.
+Notice that we call the $toDB()$ method
+and that we in fact return the result of that
+method, not the result itself.
 The purpose of the method is to separate
 the C part and the Python part of the result.
 The C part goes back to the database,
-the Python part goes to the
-Python garbage collector (\acronym{gc}).
+the Python part stays in the Python world
+to be collected by the Python garbage collector.
 Returning a result without calling its $toDB()$
 method would pass Python stuff
 to the database which would not know how to handle
-that. In consequence, the $exec$ statement
-would fail with an error
-and the C memory within the database context
-would not be freed.
+that.
 
-In the \term{try}-part,
-we convert the \nowdb-timestamp
+The main logic of the function
+is in the \term{try}-part.
+We start by converting the \nowdb-timestamp
 into the Python \term{datetime} object \term{today}
 using the \term{now2dt} function
 (which, by the way,
@@ -1228,17 +1216,17 @@ By adding one day to \term{today} we get
 With these values and the \term{pClient}
 variable, we construct an \sql\ statement,
 which is then passed to the \term{execute}
-function. Notice that on server-side code,
+function. Notice that on server-side,
 \term{execute} is not a method of another
 object or class like \term{connection}.
 Indeed, we already are inside the database.
 We don't need a connection to talk to it.
 
-Since the \sql\ statement we construct
+Since the \sql\ statement
 is a \term{select}, the result we get
 back is a cursor. We check that the cursor
 is \acronym{ok} and, if so, we work on
-its rows using a \term{with} statement.
+its rows using a \term{for} loop.
 In fact, we have only
 one row -- since we issued a \term{count}
 without a \term{group by} clause.
@@ -1254,11 +1242,11 @@ Note that we could have returned the cursor itself --
 since a cursor is also a result type and, as such,
 a valid object to be returned by a stored procedure.
 We return the row only for the purpose of illustrating
-how rows can be constructed in Python.
+how rows can be created in Python.
 \comment{The whole example is quite trivial to be honest.}
 
 The database will then send the result,
-that is the row we constructed,
+that is the row we created,
 back to the caller (the \term{exec} statement),
 which, in its turn, can handle this result.
 When we call the \term{exec} statement
@@ -1269,13 +1257,13 @@ nowclient -d retail -Q "exec revenue(9000001, '1929-01-25')"
 }
 
 the result would look like this:
-
 \begin{verbatim}
 1.9900
 \end{verbatim}
 
-But, of course, we can call \term{exec}
-also from a Python client an then handle
+\begin{minipage}{\textwidth}
+Of course, we can call \term{exec}
+also from a Python client and then handle
 the result as row, \eg:
 
 \begin{python}
@@ -1288,11 +1276,12 @@ with Connection("127.0.0.1", "55505", None, None) as c:
     print "revenue from client 9000001: %d" % row.field(0)
 \end{lstlisting}
 \end{python}
+\end{minipage}
 
-But we need to come back to the server side once again.
+But we have to come back to the server side once again.
 There is still a detail that we have not discussed,
 namely the $cleanup()$ function at the end of the module.
-Modules that contain server-side code may contain this
+Modules may (but do not need to) contain this
 function. If it is present in the module, it is automatically
 called by the database when the session terminates.
 For simple code like the one we used
@@ -1312,12 +1301,50 @@ in global variables, the user needs to provide code
 to release this memory.
 
 One interesting use case is \term{functional cursors}.
-Functional cursors can enrich normal cursors
+Functional cursors behave like normal cursors,
+but they can use the power of the embedded language
+to enrich results
 using functionality
 not available in \sql.
 This is discussed in chapter \ref{chpt_pythonemb}.
 
-\section{Lua in the Database}
-tbc
-
 \section{What's Next?}
+This chapter was only a brief introduction
+to some important features and the general flavour 
+of \nowdb. The remainder of this manual will
+discuss the main features more deeply.
+
+The next chapter discusses the \nowdb\ \sql\ dialect.
+
+Chapters \ref{chpt_nowdbd} and \ref{chpt_clienttool}
+present the command line tools \tech{nowdbd}
+and \tech{nowclient} respectively.
+
+Chapters \ref{chpt_ccp} -- \ref{chpt_luaclient}
+discuss the available native clients in different
+languages and \ref{chpt_llc} presents the low-level
+C \acronym{api} mainly used to implement
+native clients.
+
+The next two chapters, \ref{chpt_pythonemb} and
+\ref{chpt_luaemb}, present the server-side
+language bindings at more depth.
+
+Chapter \ref{chpt_install} provides detailed information
+on installation of server and client on different
+platforms.
+
+The next chapters present more features,
+namely the loader (\ref{chpt_loader}) and
+server-side techniques such as publish and subscribe and
+filters (\ref{chpt_pubsub}).
+
+The following chapters 
+\ref{chpt_opt} and \ref{chpt_sizing}
+discuss technical insight
+for application designers and \acronym{dba}s.
+
+Finally, the appendix \ref{chpt_errors} lists server-side
+error codes.
+
+
