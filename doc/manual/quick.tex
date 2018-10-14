@@ -2,7 +2,7 @@
 
 The easiest way to get started
 is to use the \nowdb\ docker containing
-the database server.
+the database server and clients.
 
 \comment{more instructions of how to get it $\dots$}
 
@@ -11,55 +11,53 @@ You need to start it explicitly. There is a script
 called \tech{nowstart.sh} in the root of the docker
 that does that.
 (You may want to adapt this script to your specific needs!)
-Here is a reasonable way to start the docker:
 
-\code{
+Here is one way to start the docker:
+
+\cmdline{
 docker run --rm -p 55505:55505 $\backslash$\\
 \hspace*{2cm} -v /opt/dbs:/dbs -v /var/log:/log $\backslash$\\
 \hspace*{2cm} -d nowdbdocker /bin/bash -c "/nowstart.sh"
 }
 
-The docker command is \term{run}.
-It create a docker container and starts it.
-We add a number of parameters:
+This command is creates the docker container and starts it.
+The parameters are
 \begin{itemize}
 \item \tech{--rm}
 instructs the docker daemon to remove
-the docker immediately after it will have been stopped.
+the container immediately after it will have stopped.
 
 \item \tech{-p 55505:55505} binds the host port \term{55505}
 to the same docker port.
 
-\item \tech{-v} maps a host path
-(namely, the path \tech{/opt/dbs}) to a docker path
-(namely, to \tech{/dbs}) and
-the path \tech{/var/log} to \tech{/log}.
+\item \tech{-v} maps the host path
+\tech{/opt/dbs} to the docker path \tech{/dbs} and
+the host path \tech{/var/log} to the docker path \tech{/log}.
 
 \item \tech{-d} means the docker runs in the background
 (\term{detached}).
 
-\item \tech{nowdbdocker} is the name of the docker.
+\item \tech{nowdbdocker} is the name of the docker image.
 
 \item \tech{/bin/bash} is the command to be executed
 within the docker; \tech{-c} passes a command
-to be executed,
-namely \tech{/nowstart.sh},
-to the \tech{bash}.
+to be executed to \tech{bash},
+namely \tech{/nowstart.sh}.
 \end{itemize}
 
 The script \tech{nowstart.sh}, contains the
-instructions to start the nowdb daemon (whose name is
-\tech{nowdbd}).
+instructions to start the \nowdb\ daemon.
 
-It first sets some environment variables:
+Looking into the script,
+we see it first sets some environment variables:
 
-\code{
+\cmdline{
 export LD\_LIBRARY\_PATH=/lib:/usr/lib:/usr/local/lib
 }
 
 This sets the search path for shared libraries.
 
-\code{
+\cmdline{
 export PYTHONPATH=/pynow:\$PYTHONPATH
 }
 
@@ -68,7 +66,7 @@ This sets the search path for Python modules
 
 Then the script starts the daemon iself:
 
-\code{
+\cmdline{
 nowdbd -b /dbs -y 2>/log/nowdbd.log
 }
 
@@ -80,11 +78,12 @@ server-side Python support.
 
 Now the daemon is listening to port 55505
 and ready to respond to database requests.
-The daemann starts by printing a welcome banner
+The daemon starts by printing a welcome banner
 to standard output:
 
 \begingroup
 \small
+\begin{minipage}{\textwidth}
 \begin{verbatim}
 +---------------------------------------------------------------+ 
  
@@ -109,10 +108,12 @@ connections: 128
 port       : 55505
 domain     : any
 \end{verbatim}
+\end{minipage}
 \endgroup
 
+\begin{minipage}{\textwidth}
 Here are some more options provided by
-the \term{nowdbd} tool:
+the \nowdb\ daemon:
 
 \begin{itemize}
 \item \tech{-b} The base directory,
@@ -152,18 +153,14 @@ in the pool.}
 \item \tech{-V} prints version information to standard output;
 \item \tech{-?} or \tech{-h} prints a help message to standard output.
 \end{itemize}
+\end{minipage}
 
 \section{First Steps}
 Once \term{nowdbd} is running, we can connect to pass
 queries to the server. There is a tool to do this from the command line
-called \term{nowclient}.
+called \term{nowclient}. Here is a usage example:
 
-\comment{how to install the client tools???}
-
-To send a query to the server
-the client tool can be used like this:
-
-\code{
+\cmdline{
 nowclient -d retail -Q "select count(*) from sales where customer=12345"
 }
 
@@ -172,24 +169,29 @@ running on the same host and listening to port 55505.
 Furthermore, it will request to use the database \term{retail}
 and send the query indicated by the \tech{-Q} parameter.
 
-If the connection is successful, the client will print some
+\begin{minipage}{\textwidth}
+If successful, the client will print some
 processing information to standard error and the query result
 to standard output, \eg:
 
-\code{
+\cmdline{
 executing "use retail" \\
 OK \\
 executing "select count(*) from sales where customer=12345" \\
 59
 }
+\end{minipage}
 
-The option \tech{-q} would suppress the processing information.
+\begin{minipage}{\textwidth}
+With option \tech{-q} we suppress the processing information.
 We would then only see:
 
-\code{
+\cmdline{
 59
 }
+\end{minipage}
 
+\begin{minipage}{\textwidth}
 Here are more options supported by the client tool:
 \begin{itemize}
 \item \tech{-s} 
@@ -217,13 +219,15 @@ quiet mode: don't print processing information to standard error.
 \item \tech{-V} prints version information to standard output;
 \item \tech{-?} or \tech{-h} prints a help message to standard output.
 \end{itemize}
+\end{minipage}
 
 The client tool is able to read from standard input;
-this way, more than one query can be processed at a time.
+this way, more than one query can be processed by one call
+to \term{nowclient}.
 The following command processes the same query as the one above,
 but uses standard input instead of the options \tech{-d} and \tech{-Q}:
 
-\code{
+\cmdline{
 echo "use retail;select count(*) from sales where customer=12345;" $| \backslash$ \\
 \hspace*{2cm} nowclient
 }
@@ -273,9 +277,9 @@ load '/opt/data/sales.csv' into sales;
 
 Let's assume we had this code in a file called
 \tech{create\_retail.sql}; then we could
-send it to the nowdbclient:
+send it to \term{nowclient}:
 
-\code{
+\cmdline{
 cat create\_retail.sql | nowclient
 }
 
@@ -297,40 +301,13 @@ from disk. The \term{if exists} part
 is included to avoid an error 
 (and hence the termination of the script)
 in the case
-the database does indeed exist.
+the database does not yet exist.
 
-The choice of the keyword \term{schema} is intended to 
-make the \nowdb\ \sql\ dialect more
-approachable for people with experience
-in other \sql\ dialects. Instead of
-\term{schema}, one could also say
-\term{database}. 
-Yet another way to say the same thing
-in \nowdb\ is \term{scope}, which
-means the scope in which a set of
-vertices is valid.
-
-In the second line the schema
-(or database or scope) `retail'
-is created. Since we have dropped it
-if it already had existed before,
-this statement will not cause
-an error when the database already exists.
-An alternative way of doing things is:
-
-\begin{sqlcode}
-\begin{lstlisting}
-create schema retail if not exists;
-\end{lstlisting}
-\end{sqlcode}
-
-In that case, we would maintain the database
-if it exists already. The script, however,
-would continue, because no error would occur.
-
+In the second line the schema `retail'
+is created.
 The third statement (still in the second line)
 instructs \nowdb\ to use the newly created
-schema `retail' in everything that follows.
+schema `retail' in all following statements.
 
 The next line is a bit uncommon:
 
@@ -341,18 +318,19 @@ create large table sales set stress=constant;
 \end{sqlcode}
 
 The statement creates a table called `sales';
-however, since \nowdb\ is not a relational,
-but a graph database, there are no 
+\nowdb, however, is not a relational database.
+There are no  
 `tables' with the meaning of that term
 in the relational world.
 In fact, tables are just units of storage 
 for edges. \comment{A better naming convention
-would probably be `tablespace'.}
+would probably be `tablespace'. The first name,
+by the way, was \term{context} $\dots$}
 
 The statement explicitly says that we
 want a \emph{large} table and that there
-will be \emph{constant} stress (\ie\ ingestion load
-on that table). The \term{create table} statement,
+will be \emph{constant} stress (\ie\ ingestion load)
+on that table. The \term{create table} statement,
 hence, is much more oriented to storage
 and processing details than to the logical structure
 of the table (as it would be in a relational database).
@@ -365,7 +343,7 @@ create medium index idx_sales_eds on sales (edge, destin);
 \end{lstlisting}
 \end{sqlcode}
 
-This statement creates a \emph{medium} index on table sales
+This statement creates a \emph{medium} index on table \term{sales}
 with the fields `edge' and `destination' as index keys.
 Index sizing is a difficult topic and will be discussed
 in chapter \ref{chpt_sizing}.
@@ -373,43 +351,132 @@ As a rule of thumb, it is almost always better to assume
 small sizing. Large indices have large storage nodes
 and those nodes are very often read from and written
 to disk. Only when we know that our index will have
-many keys and many data points per key, it is advisable
+many data points per key, it is advisable
 to use larger index sizing. The default sizing (used in the next
 line) indicatively is \term{small}.
 
 The next two blocks of code create the types
-`product' and `client'. This should look a lot like
-what you probably know as \term{tables}. Indeed types
-are vertices stored as \term{column-oriented} tables.
-\comment{Well, not entirely true at the moment.
-In fact, completely column-oriented tables would cause
-some more work in the underlying mechanisms. Anyway,
-that is the direction to go and sooner or later
+`product' and `client'.
+Types describe vertices.
+Each database has a set
+of vertices that can be connected to form graphs.
+The graphs structure all data
+in our specific application.
+The vertex types thus describe the universe of discourse.
+Technically, vertices are stored in
+\term{column-oriented} tables (which are
+invisible to the user).
+\comment{Well, not entirely true at the moment,
+but it is the direction to go -- sooner or later
 the statement will be true $\dots$}
 
-Notice that every type needs a primary key that consists
-of one attribute.
-
-The attribute types are \term{uint}, \term{float} and \term{text}.
+The attribute types used in the script
+are \term{uint}, \term{float} and \term{text}.
 The first is a 64bit unsigned integer;
 the second is a 64bit floating point number
 (a.k.a. \term{double} in languages like C);
-\term{text} is a string of up to 255 \acronym{utf8} characters.
-For more information on \sql\ types, please refer to chapter
+\term{text} is a string of up to 255 bytes,
+which represent \acronym{utf}-8 characters.
+For more information on \sql\ types,
+please refer to chapter
 \ref{chpt_sql}.
 
-The next block defines an edge. Remember
-that edges, contrary to vertices, have a fixed layout.
-However, we can define the types of the fields of an edge
-and we can rename them. \comment{Renaming is not yet possible.}
-Here, we define four of the fields of the edge.
-The origin has type \term{client} (which we have defined just above)
-and the destination has type \term{product}.
-The edge has two weights: one is $uint$ and the other $float$.
+Each type needs a \term{primary key} and
+that primary key must consist of only one attribute.
+There are no composed keys like in relational
+databases.
 
-Finally, the script loads data from three different \acronym{csv}s
-into the database. Loaders have the same effect as the \sql\
-\term{insert} statement, but are much more efficient.
+The next block defines an edge.
+Edges are links between vertices.
+Contrary to vertices, edges have a fixed structure
+with up to seven fields:
+\term{edge}, \term{origin}, \term{destination},
+\term{label}, \term{timestamp},
+\term{weight} and \term{weight2}.
+
+The first field \term{edge} identifies the edge type.
+This appears somewhat redundant (from the relational perspective),
+but it is indeed necessary, because
+edges of different types can be stored in the same table.
+The type of the \term{edge} field is \term{text}
+and cannot be changed. It is therefore not mentioned in
+the script. However, it is always present.
+
+The next two fields, \term{origin} and \term{destination}
+(usually shortened to \term{destin} or even \term{dest})
+refer to the vertices that are linked by this edge.
+The types of \term{origin} and \term{destin} are defined
+by the user. The types are restricted to vertex types.
+In the script, the types are
+\term{client} and \term{product},
+which we defined above.
+
+The next field is \term{label}.
+Labels can be used
+to identify inherent relations between edges.
+The type of the label field is defined by the user.
+It may be either \term{uint} or \term{text}.
+Since we have not defined the label field in the script above,
+the label would not be available in this specific edge type.
+A useful example using labels is given further below.
+
+With the next field, the timeseries aspect of \nowdb\
+comes in. Indeed, edges have a \term{timestamp}.
+Vertices will have \emph{many} edges -- not a few hundred
+like in most graph databases, but millions or even
+billions. In our retail application,
+edges of type \term{buys}, indicate that a client
+bought a certain product \emph{at a given time}.
+
+The timestamp is always present in all edges and
+its type cannot be changed.
+It always has the type \term{time},
+which (usually) is a positive or negative
+offset from the \acronym{unix} \term{epoch}
+with nanosecond precision.
+
+Finally, edges are weighted. Each edge can be weighted
+in two dimensions (\term{weight} and \term{weight2}).
+The number $2$ is somewhat arbitrary.
+It is in fact a compromise between space and convenience.
+One should not interpret too much into it.
+
+The \term{weight} fields can have any basic type
+(\term{uint}, \term{int}, \term{float}, \term{text},
+\term{time} or \term{bool}).
+
+The fields whose type can be defined by the user,
+can also be renamed. We could say, for instance,
+\tech{weight uint as quantity}.
+The field \term{weight} would then be accessible as
+\term{quantity} in \sql\ statements. 
+\comment{Renaming is not yet possible.}
+
+In the script above we define four of the fields,
+but six will be accessible by the application,
+because \term{edge} and \term{timestamp} are always available.
+But \term{label} will remain invisible as if it did not exist.
+
+In the final section,
+the script loads data from three different \acronym{csv}s
+into the database. \nowdb\ provides loaders
+for different formats. \acronym{csv} is just one example.
+There are many more and the loader even allows 
+users to define
+their own formats using Apache Avro.
+With Avro it is possible to define binary formats, which
+can be much faster than textual formats such as \acronym{csv}.
+Using a serialisation system like Avro also eases
+interoperability of the database with
+external systems and applications and it
+significantly eases version management should data formats
+change over time (what they always do). 
+For more details on data loaders, please refer to chapters
+\ref{chpt_sql} and \ref{chpt_loader}.
+\comment{Avro is not yet available.}
+
+Loaders, in general, are usually much more efficient than
+the \sql\ \term{insert} statement.
 The drawback of \term{insert} is that each statement
 needs the whole cycle of \sql\ parsing and execution,
 while loaders only need one cycle. Since a data source
@@ -421,18 +488,6 @@ As such they need to have a header and we need to instruct
 the loader of how to interpret the data (\tech{use header as client}).
 Since edges always have the same format, they don't need a header
 and we do not give any instructions of how to interpret the data.
-
-\acronym{csv} is only one format supported by the database loader.
-There are many more and the loader even allows users to define
-their own (binary) formats using Apache Avro. Loading binary data 
-can be much faster than loading textual formats such as \acronym{csv}.
-Using a serialisation system like Avro eases
-interoperability of the database with other
-external systems and applications and it
-significantly eases version management should data formats
-change over time (what they always do). 
-For more details on data loaders, please refer to chapters
-\ref{chpt_sql} and \ref{chpt_loader}.
 
 \section{First Queries}
 The alternative to loading data is, of course, the conventional
@@ -476,6 +531,7 @@ insert into sales (edge, origin, destin, timestamp, weight, weight2)
 \end{lstlisting}
 \end{sqlcode}
 
+\begin{minipage}{\textwidth}
 Worth noticing here is the time format,
 which follows \acronym{iso}-8601.
 
@@ -490,22 +546,24 @@ The format is
 \item 2 digits for the second and,
 \item if finer grain is necessary,
 a dot followed by up to 9 digits
-for the nanosecond
+for the nanoseconds.
 \end{itemize}
+\end{minipage}
 
 This format can be used anywhere in \nowdb\ \sql.
 However, it is also possible to define custom
 date and time formats. How to do this is discussed
-in chapter \ref{chpt_sql}.
+in chapter \ref{chpt_sql}. \comment{That's not yet possible.}
 
 Worth noticing is also the first date.
 It was on Jan, 17, 1929 that Popeye had his first
-appearance.
+appearance in a newspaper of the \term{King Features}
+Syndicate.
 
 Now that we have inserted some data
 into our database, we are able to perform $selects$, \eg:
 
-\code{
+\cmdline{
 nowclient -d retail -Q
 "select count(*) from sales $\backslash$ \\
 \hspace*{4.7cm} where edge='buys' $\backslash$ \\
@@ -513,7 +571,7 @@ nowclient -d retail -Q
 }
 
 which would give us 7 and would count Popeye's visits to the supermarket.
-But we could also count how often Spinach was bought:
+We can also count how often Spinach was bought:
 
 \begin{sqlcode}
 \begin{lstlisting}
@@ -523,8 +581,8 @@ select count(*) from sales
 \end{lstlisting}
 \end{sqlcode}
 
-which would give us 6.
-Or we could ask how much Popeye bought and paid per type of product:
+which shows us 6.
+Or we can ask how much Popeye bought and paid per type of product:
 
 \begin{sqlcode}
 \begin{lstlisting}
@@ -536,41 +594,26 @@ select edge, destin, count(*), sum(weight), sum(weight2)
 \end{lstlisting}
 \end{sqlcode}
 
+\begin{minipage}{\textwidth}
 which would give us:
-
 \begin{verbatim}
 buys;100001;6;10;19.9000
 buys;100002;1;1;2.4900
 \end{verbatim}
+\end{minipage}
 
-Two aspects are worth mentioning here:
-First, the statement with the group clause above
-would use the index we defined on sales
-with fields $(edge, destin)$.
-To force the use of an index in a group clause
-there must be an exact match between the fields
-in the group clause and the index; also the order
-of keys in the index and in the clause must be the same.
-For instance, \code{group by destin, edge} would
-not have forced the use of the index.
-Whether using an index or not for grouping
-is an advantage 
-depends on many factors.
-For a detailed discussion of indices and
-optimising queries please refer to chapter \ref{chpt_opt}.
-
-Second, you may have noticed that the output
+Notice that the output
 of the client tool does not resemble the classical
 pretty-printed output produced by most database
-clients today. The advantage of such output is
+client tools today. The advantage of such output is
 that it is easier for humans to read.
 The \acronym{csv}-like output shown above, however,
-is easer to read for machines, especially
-when you want to send the output through pipes
-to other programs, like this:
+is better for interoperability, for instance,
+when we want to combine it through pipes
+with other programs, like this:
 
-\code{
-nowclient -q -d retail -Q "select * from sales" | cut -d";" -f2 | $\dots$
+\cmdline{
+nowclient -d retail -Q "select * from sales" | cut -d";" -f2 | $\dots$
 }
 
 On the other hand, there are tools that
@@ -578,15 +621,17 @@ produce more readable output from \acronym{csv} input,
 such as \tech{csvlook} from the \tech{csvkit} package.\footnote{Have
 a look at
 \url{https://github.com/jeroenjanssens/data-science-at-the-command-line}}
-To obtain a traditional pretty-printed output you could do:
+To obtain a traditional pretty-printed output we could do the following
+(assuming that \tech{query.sql} contains the query we used above):
 
-\code{
+\cmdline{
 cat query.sql | nowclient | csvformat -d";" | $\backslash$ \\
     header -a 'edge,product,count,quantity,price' | csvlook
 }
 
 and would obtain for the grouping query used above:
 
+\begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------+-------+----------+---------|
 |  edge    | product | count | quantity | price   |
@@ -595,6 +640,7 @@ and would obtain for the grouping query used above:
 |  buys    | 100002  | 1     | 1        | 2.4900  |
 |----------+---------+-------+----------+---------|
 \end{verbatim}
+\end{minipage}
 
 Here is a more typical time series query illustrating
 the advantage of the pretty printer:
@@ -609,8 +655,8 @@ select destin, timestamp, weight, weight2
 \end{lstlisting}
 \end{sqlcode}
 
-which, with the same technique used above, shows:
-
+\begin{minipage}{\textwidth}
+which, with the same technique as above, shows:
 \begin{verbatim}
 |----------+---------------------+----------+---------|
 |  product | timestamp           | quantity | price   |
@@ -624,6 +670,7 @@ which, with the same technique used above, shows:
 |  100001  | 1929-01-26T21:19:44 | 2        | 3.9800  |
 |----------+---------------------+----------+---------|
 \end{verbatim}
+\end{minipage}
 
 We can also select from vertices,
 but instead of a table, we use the type:
@@ -635,7 +682,7 @@ select prod_price from product
 \end{lstlisting}
 \end{sqlcode}
 
-would give
+which shows
 \begin{verbatim}
 1.99
 \end{verbatim}
@@ -649,15 +696,15 @@ select client_name from client
 \end{lstlisting}
 \end{sqlcode}
 
-would give
+which gives
 \begin{verbatim}
 Popeye the Sailor
 \end{verbatim}
 
 \comment{
 This is as it should be.
-Unfortunately, there are some inconsistencies stemming 
-from the fact that vertices are column-oriented.
+Unfortunately, there are still heavy inconsistencies
+with vertices.
 The syntax is currently `select field from vertex as type',
 which is ugly and pointless.
 Even worse, grouping, ordering and aggregates
@@ -679,13 +726,13 @@ An instance of the first pattern would be:
 \begin{sqlcode}
 \begin{lstlisting}
 select timestamp, prod_desc, prod_price
-  from sales join product
-    on prod_key = destin
+  from sales join product on destin
  where edge = 'buys'
    and origin = 9000001;
 \end{lstlisting}
 \end{sqlcode}
 
+\begin{minipage}{\textwidth}
 \begin{verbatim}
 |---------------------+----------------------+---------|
 | timestamp           | product              | price   |
@@ -699,6 +746,7 @@ select timestamp, prod_desc, prod_price
 | 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900  |
 |---------------------+----------------------+---------|
 \end{verbatim}
+\end{minipage}
 
 Note the difference in the price column.
 In the previous query we used \term{weight2} of sales,
@@ -714,14 +762,14 @@ We can, of course, combine joins with grouping:
 \begin{sqlcode}
 \begin{lstlisting}
 select edge, destin, count(*), sum(prod_price)
-  from sales join product
-    on prod_key = destin
+  from sales join product on destin
  where edge = 'buys'
    and origin = 9000001
  group by edge, destin;
 \end{lstlisting}
 \end{sqlcode}
 
+\begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------+-------+---------|
 |  edge    | product | count | price   |
@@ -730,23 +778,21 @@ select edge, destin, count(*), sum(prod_price)
 |  buys    | 100002  | 1     | 2.4900  |
 |----------+---------+-------+---------|
 \end{verbatim}
+\end{minipage}
 
 Note again the sum of the price which, here,
 is just the sum of the base price per unit of the product.
 
 The point about the first joining pattern
 is that it joins only one of the two vertices
-with the edge. The second pattern is somewhat more complex:
-it joins both vertices, like:
+with the edge. The second pattern is a bit more complex:
 
 \begin{sqlcode}
 \begin{lstlisting}
-select timestamp, prod_desc, prod_price, client_name
+select timestamp, prod_desc, client_name
   from sales
-  join product
-    on prod_key = destin
-  join client
-    on client_key = origin
+  join product on destin
+  join client on origin
  where edge = 'buys'
    and origin = 9000001;
 \end{lstlisting}
@@ -754,35 +800,37 @@ select timestamp, prod_desc, prod_price, client_name
 
 The result of this query would be:
 
+\begin{minipage}{\textwidth}
 \begin{verbatim}
-|---------------------+----------------------+---------+-------------------|
-| timestamp           | product              | price   | client            |
-|---------------------+----------------------+---------+-------------------|
-| 1929-01-17T09:35:12 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-19T10:15:01 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-20T17:12:55 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-22T08:27:32 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-25T12:09:59 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-26T21:19:44 | Spinach, 450g net    | 1.9900  | Popeye the Sailor |
-| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900  | Popeye the Sailor |
-|---------------------+----------------------+---------+-------------------|
+|---------------------+----------------------+-------------------|
+| timestamp           | product              | client            |
+|---------------------+----------------------+-------------------|
+| 1929-01-17T09:35:12 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-19T10:15:01 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-20T17:12:55 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-22T08:27:32 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-25T12:09:59 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-26T21:19:44 | Spinach, 450g net    | Popeye the Sailor |
+| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | Popeye the Sailor |
+|---------------------+----------------------+-------------------|
 \end{verbatim}
+\end{minipage}
 
 \comment{
 Unfortunately, joins are not yet available :-(
 }
 
-Edges have one more important field that we have not yet discussed,
-namely the \term{label}. The \term{label} is intended to create a connection
+An edge field that we have not yet used is the \term{label}.
+The \term{label} is intended to create a connection
 between edges that are inherently related. In our example, we see
 that at one day Popeye bought two different things:
 spinach and candy cigarettes.
-That was at Jan, 22.
+That was on Jan, 22.
 
+\begin{minipage}{\textwidth}
 These two edges, hence, relate to the same visit at the supermarket.
 We could link these edges using a label. The edge would then be created
 as, for instance:
-
 \begin{sqlcode}
 \begin{lstlisting}
 create edge buys (
@@ -794,10 +842,13 @@ create edge buys (
 );
 \end{lstlisting}
 \end{sqlcode}
+\end{minipage}
 
 The label text would correspond to a token generated by
-the cashpoint when a customer starts the check-out.
-We would then insert edges as follows:
+the cashpoint when a customer starts the check-out
+and all products scanned during the procedure
+would have the same token.
+We could then insert edges using that token as label:
 
 \begin{sqlcode}
 \begin{lstlisting}
@@ -812,7 +863,8 @@ insert into sales (edge, origin, destin, timestamp,
 \end{lstlisting}
 \end{sqlcode}
 
-We could now select edges according to this label:
+\begin{minipage}{\textwidth}
+We now can select edges according to the label:
 
 \begin{sqlcode}
 \begin{lstlisting}
@@ -822,7 +874,9 @@ select destin, timestamp, weight, weight2
  order by timestamp
 \end{lstlisting}
 \end{sqlcode}
+\end{minipage}
 
+\begin{minipage}{\textwidth}
 This query would result in:
 
 \begin{verbatim}
@@ -833,6 +887,7 @@ This query would result in:
 |  100002  | 1929-01-22T08:27:51 | 1        | 2.4900  |
 |----------+---------------------+----------+---------|
 \end{verbatim}
+\end{minipage}
 
 \section{The Python Client}
 Until here we always used the client \emph{tool}
@@ -843,7 +898,7 @@ that needs a client \acronym{api} to connect to the database.
 
 \nowdb\ comes with a native client \acronym{api}
 that is available in different languages, among others
-C, \CC, \csharp, Go, Python and Lua.
+C, \CC, Go, Python and Lua.
 \comment{Only Python is currently available.
 There is a low-level \acronym{api} for C,
 but that is not for developing applications,
@@ -858,7 +913,7 @@ There may be different ideas on how to install python modules.
 The \nowdb\ installation will copy all \nowdb-related modules
 to one specific folder and add this folder to the
 \acronym{pythonpath}. But you also may install
-the \nowdb\ Python \acronym{api} using \term{pip}.
+the \nowdb\ Python \acronym{api} using \tech{pip}.
 Then, everything is handled by the Python environment
 and you don't need to care about these things.
 For more details on installation, please refer
@@ -894,8 +949,8 @@ to indicate the database towards which
 the following statements are directed.
 
 The result of a \term{use} statement is a \term{status}.
-A status is either \acronym{ok} or an error.
-The details of the can be obtained by means of the method
+A status is either \acronym{ok} or an error
+whose details can be obtained by means of the method
 \term{details()}, which returns a string.
 Results also support the method \term{code()},
 which would return a numeric error code.
@@ -903,7 +958,7 @@ It is often useful to know the error code to decide
 what to do programmatically (abandon the program,
 retry, try something else, \etc)
 
-Results are also resource managers. That means
+Results are \term{resource managers}. That means
 that they can be used inside a \term{with} statement.
 \term{with} assures that all resources (in this case
 the result) are freed before the control leaves
@@ -924,6 +979,7 @@ printing for each row the fields 1-3.
 Cursors, indeed, are iterators
 that allow simple iteration using \term{for}.
 
+\begin{minipage}{\textwidth}
 Here is an example of an \term{insert} statement
 (we assume that the connection, `c', was already established):
 
@@ -940,12 +996,11 @@ with c.execute("insert into edge (edge, origin, product, timestamp) \
           print "running time : %d" % rep.runTime()
 \end{lstlisting}
 \end{python}
+\end{minipage}
 
 In the case of data manipulation (\acronym{dml})
 or data loading (\acronym{dll}) statements,
-the result may be a status (as with all statements),
-namely when the statement fails,
-or a report.
+the result (if there was not error) is a report
 A report has the methods \term{affected()},
 which indicates the number of rows affected by this statement,
 \term{runTime()},
@@ -1209,7 +1264,7 @@ which, in its turn, can handle this result.
 When we call the \term{exec} statement
 from \term{nowclient} like this:
 
-\code{
+\cmdline{
 nowclient -d retail -Q "exec revenue(9000001, '1929-01-25')"
 }
 

@@ -49,23 +49,28 @@
 \newcommand{\sql}{\acronym{sql}}
 
 \newcommand{\code}[1]{{\ttfamily #1}}
+\newcommand{\cmdline}[1]{{\ttfamily #1}}
 
 \newenvironment{sqlcode}{
 \small
+\begin{minipage}{\textwidth}
 \lstset{language=sql,
         keepspaces=true,
         showspaces=false,
         showstringspaces=false}
 }{
+\end{minipage}
 }
 
 \newenvironment{python}{
 \small
+\begin{minipage}{\textwidth}
 \lstset{language=python,
         keepspaces=true,
         showspaces=false,
         showstringspaces=false}
 }{
+\end{minipage}
 }
 
 \newcommand{\keyword}[1]{\textbf{#1}}
