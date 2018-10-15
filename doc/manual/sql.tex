@@ -61,8 +61,15 @@ It is not possible to execute an isolated \term{where}
 clause or an isolated \term{from} clause.
 The smallest executable unit is therefore the statement.
 
-Clauses are made of keywords, identifiers, numbers
-and text. Keywords and identifiers are mutually
+Clauses are made of keywords, identifiers, numbers, text,
+symbols (such as ``$, \dot = ( ) * + -$'') and
+whitespace, \ie\ \acronym{ascii}
+10 (line break),
+13 (carriage return),
+9  (horizontal tab)
+and 32 (space).
+
+Keywords and identifiers are mutually
 exclusive, that is, if $k$ is a keyword,
 $k$ cannot be an identifier at the same time.
 \comment{This rule is relaxed in most
@@ -97,6 +104,12 @@ of \acronym{utf}-8 characters.
 Keywords, identifiers and numbers, however,
 must contain only characters
 from the \acronym{ascii} subset.
+Identifiers are further restricted:
+They must start with an \acronym{ascii} 
+Latin alphabetic ($a\dots z$ or $A \dots Z$)
+and must contain only
+alphanumerics or the underscore ($\_$).
+
 Text, by contrast, may contain any
 \acronym{utf}-8 character.
 \comment{It is already possible to store
@@ -540,21 +553,15 @@ The canonical order plays a role for the \term{insert}
 statement.
 
 \comment{
-I am not happy with some of the design decisions
-and the naming to be honest.
-\term{Types} should be called \term{tables} and
-what now is called \term{tables} should be called
-\term{edgestore} or something like that.
-Furthermore, there is this hidden thing \term{vertex}
-that is felt in its impact, but remains (mostly) invisible.
-In the future types (which, then, will be called tables),
-will be stored per attribute (a.k.a. column)
-and edges will be stored in edgestores
-(which are tables with a fixed structure).
-With this
-all the delicateness concerning
-tables versus types and edges versus vertices
-will go away just by itself.
+I am not sure about the choice of the term 
+``table''; I am afraid it can lead to confusion
+with the relational view.
+In fact, types look much more like tables --
+and perhaps they should be called like that.
+The original name for what is now called
+``tables'' was ``context''. For obvious reasons,
+I wanted to get rid of that word.
+However, I am again finding some sympathy for it.
 }
 
 \subsubsection{DROP}
@@ -604,7 +611,7 @@ events together ordered by timestamp to determine
 what the current state is.
 
 Likewise is the type of the timestamp predefined
-and cannot change.
+and cannot be changed.
 
 All other types can be defined.
 The types of \keyword{origin} and \keyword{destin}
@@ -842,6 +849,7 @@ A more concrete example is
 
 For an edge, this would be:
 
+\begin{minipage}{\textwidth}
 \keyword{insert into} \identifier{sales} 
                       (\keyword{edge},
                        \keyword{origin},
@@ -853,6 +861,7 @@ For an edge, this would be:
                        'buys', 9000001, 100001,
                        '1929-01-22T08:53:22',
                        3, 5.97)
+\end{minipage}
 
 When the list of values insert is complete,
 \ie\ covers all fields in the type or table,
@@ -869,6 +878,7 @@ in the edge definition.
 It is also possible \comment{(not yet!)} to insert data from
 a query, \eg:
 
+\begin{minipage}{\textwidth}
 \keyword{insert into} \identifier{sales} ( \\
                       \keyword{edge},
                       \keyword{origin},
@@ -883,6 +893,7 @@ a query, \eg:
                          \keyword{weight2} \\
 \hspace*{0.35cm}\keyword{from} \identifier{another\_table} \\
 \hspace*{0.2cm}\keyword{where} $\dots$)
+\end{minipage}
 
 For details on the \term{where} clause,
 please refer to the \acronym{dql} section.
@@ -938,6 +949,98 @@ so they won't be selected by other statements.
 \comment{delete still has bugs and is therefore not yet available :-(}
 
 \section{Data Loading}
+\subsection{Create}
+The \term{create loader} statement creates a user-defined loader.
+
+\comment{Not yet avalailable}
+
+\subsection{Drop}
+The \term{drop loader} statement removes a user-defined loader
+form the database.
+
+\comment{Not yet avalailable}
+
+\subsection{Load}
+The \term{load} statement loads data from an external
+data source into the database.
+Its general form is
+
+\keyword{load} '/path/to/datafile' \keyword{into} \identifier{mytype\_or\_edge}
+
+\comment{
+For types it's currently ``load '/path/to/datafile' into vertex use header as type''
+(where \term{type} here means the concrete type, \eg\ \term{client}).
+For edges it's ``load '/path/to/datafile' into mytable as edge''
+(where \term{edge} is literal).
+The simpler form above is currently reserved for a raw import scheme,
+which will soon disappear.
+}
+
+The \term{load} statement has optional \term{use} and \term{ignore} clauses
+\comment{we also need a clause options to a user-defined loader}:
+
+\keyword{use loader} \identifier{myformat}
+
+With this clause, a user-defined loader is applied.
+Without this clause the default loader (\acronym{csv})
+is applied. That is equivalent to
+
+\keyword{use loader} \identifier{csv}
+
+In the case of a \acronym{csv} loader,
+the \keyword{header} option can be used:
+
+\keyword{use header}
+
+or:
+
+\keyword{use csv, header}
+
+which means that the data source has a header and that the loader
+will use this header to determine how to load the columns in the data source.
+Note that vertices always require a header, while edges
+must not use a header. If the data file actually has a header
+and edges are to be loaded, the \term{ignore} clause must be used:
+
+\keyword{ignore header}
+
+This will ignore the first line of the \acronym{csv}.
+
+Here is a complete example for the default loader and vertices:
+
+\keyword{load} '/opt/import/client.csv'
+\keyword{into} \identifier{client} \keyword{use header}
+
+\comment{
+\keyword{load} '/opt/import/client.csv'
+\keyword{into} \keyword{vertex} \keyword{use header as} \identifier{client}
+}
+
+and for edges:
+
+\keyword{load} '/opt/import/transactions.csv'
+\keyword{into} \identifier{sales}
+
+\comment{
+\keyword{load} '/opt/import/transactions.csv'
+\keyword{into} \identifier{sales} \keyword{as edge}
+}
+
+The \term{load} statement returns a report on success
+that indicates how many rows have been loaded,
+how many rows have failed and how long it took.
+Notice that \term{load} does not stop on errors.
+Instead, errors are written to standard error
+with the row number where the error occurred.
+This way, the faulty lines can be corrected
+in reimported later. \comment{The process must still be adapted
+to client/server. The server should write the errors
+into a specific file; otherwise, when there is more
+than one session importing data, errors would refer
+to line numbers of different files.}
+
+\subsection{Dump}
+\comment{Not yet available}
 
 \section{Data Querying}
 There is only one type of \acronym{dql} statement.
@@ -980,13 +1083,17 @@ where $p$ is an alias defined in the \term{from} clause.
 This is especially useful with joins.
 
 Projectables are not necessary fields.
-They also may be functions, constants or complex expressions.
+They also may be functions, constants or even complex expressions
+composed of fields, constants, functions and operators.
 The following are, for instance, valid \term{select} clauses:
 
+\begin{minipage}{\textwidth}
 \keyword{select} \identifier{true} \\
 \keyword{select} 'X' \\
 \keyword{select} 3.14159 \\
+\keyword{select} $sum(weight)/42$ \\
 \keyword{select} \keyword{count}(*), \keyword{sum}(\keyword{weight})
+\end{minipage}
 
 The first three clauses may appear pointless.
 Why select constant values from the database?
@@ -1042,18 +1149,13 @@ are more subtle and will be discussed there.
 
 \comment{
 Concerning expressions:
-Those are recursive combinations
-of fields, constants, functions and operators
-that can be nested together.
 Most \sql\ dialect support a wide range of
 arithmetic expressions, \eg\ $+, -, \times, \div, \sqrt{a} $,
 boolean expressions, \keyword{and}, \keyword{or}, \keyword{not}, \etc\
 string operations like concatenation, substring, length and so on.
 Since expressions are recursive, they can be composed, \eg:
-$(a+b)/n, (weight-w)^2$ and so on.
-On the long run, we need to address expressions
-in projection and \term{where} clause, but also in
-updates and inserts.
+$(a+b)/n, (weight-w)^2$ \etc
+On the long run, we need to address expressions.
 The point of the prototype, however, is not
 to prove that \sql\ is possible,
 but that designing special-purpose database technology
@@ -1092,15 +1194,15 @@ Here is a first example of a complete \acronym{dql} statement:
                          \keyword{destin}, 
                          \keyword{timestamp}, 
                          \keyword{weight},
-                         \keyword{weight2} \\
-\hspace*{0.2cm}\keyword{from} \identifier{sales}
+                         \keyword{weight2}
+\keyword{from} \identifier{sales}
 
 It is possible to define an alias for the data source:
 
 \keyword{from} \identifier{sales} \keyword{as} \identifier{s}
 
-The table \identifier{sales} can now be referred to
-in the \term{select} clause as ``s''.
+The table \identifier{sales} can now be referred to as ``s''
+in all other clauses.
 This technique is especially interesting in combination
 with joins.
 
@@ -1116,14 +1218,11 @@ a join has to be used.
 
 \subsection{Join Clause}
 A join combines an edge with a vertex.
-\comment{I am very proud of this wording.
-It describes clearly what a join is
-and it makes the difference
-with relational databases very clear:
-there is not way to combine vertices
-other than by using an edge.
-This said, I am not sure whether other
-kinds of joins will be needed in the future.
+\comment{
+Edges are in fact the way to express
+relations between vertices.
+There is no other way to combine vertices.
+Perhaps, in the future, we need something else.
 Many graph databases offer additional links
 between vertices, which are not edges.
 Usually, these links are used for connections
@@ -1134,32 +1233,30 @@ vertex. One could say that such links express
 }
 The basic form is:
 
-\keyword{join} \identifier{mytype} \keyword{on}
-               (\keyword{edgefield}, \identifier{typefield})
+\keyword{join} \identifier{mytype} \keyword{on} \keyword{edgefield}
 
 To make this more concrete:
 
 \keyword{from} \identifier{sales} 
-\keyword{join} \identifier{client} \keyword{on} 
-               (\keyword{origin}, \identifier{client\_key})
+\keyword{join} \identifier{client} \keyword{on} \keyword{origin}
 
 This would produce an \term{inner join} 
-between \identifier{sales} and \identifier{mytype}.
+between \identifier{sales} and \identifier{client}.
 Joins in \nowdb\ are in fact always inner joins.
 There are no \term{outer joins}. \comment{Do we need them?}
 In consequence, there is not difference between
 \term{left} and \term{right}; one could say,
-joins in \nowdb\ are \term{abelian} and, indeed,
-the order of edge and type is irrelevant.
+joins in \nowdb\ are \term{abelian}.
 
 Since the primary key of a type is known
-and there is always exactly one field,
-which is primary key, it is possible to simplify:
+and there is always exactly one field
+which is primary key, the foreign join key
+(that of \identifier{client}) needs no
+explicit mentioning. It is implicitly clear 
+that \keyword{join} \identifier{client} \keyword{on origin}
+joins on \keyword{origin} $=$ \identifier{client\_key}.
 
-\keyword{from} \identifier{sales}
-\keyword{join} \identifier{client} \keyword{on} \keyword{origin}
-
-Each edge links two vertices.
+Each edge connects two vertices.
 A join, therefore, consists of at most two joins.
 The syntax is straightforward:
 
@@ -1171,8 +1268,9 @@ With this join, all attributes
 from \identifier{sales}, \identifier{client} and \identifier{product}
 are available in the \term{select} clause.
 
-But these entities may have fields with the same name,
-\eg\ we could have named the primary key in both,
+It may happen that the joined entities
+have fields with the same name.
+We could have named the primary key in both,
 \identifier{client} and \identifier{product},
 \identifier{key}, instead of
 \identifier{client\_key} and \identifier{prod\_key}.
@@ -1200,25 +1298,23 @@ with the alias instead of the full entity name, \eg:
 
 \comment{
 Joins are the very heart of any database technology --
-and, as this section show, the design is already quite advanced.
+but it is not easy to get the them right with good performance.
 In a first approach I tried to make joins work
 by always using index range scans.
 Unfortunately, it turned out that index range scans
 are not very efficient in most (or at least many) cases.
-I am therefore now looking for alternatives.
-The most promising appears to be the \term{hash join} technique,
-which is applied in many databases.
-Two avoid wasting weeks of programming
-I prefer to use a higher-level programming language like Python.
-There is a technique (described in \ref{chpt_pythonemb})
-called \term{functional cursors} that I want to use for that purpose.
-To cut a long story short: joins are not yet available.
-There are workarounds, but, indeed, we will need joins \acronym{asap}.
+I am therefore looking for alternatives.
+There are many, sometimes quite sophisticated, techniques.
+Currently, I am experimenting with cache-based subqueries,
+which looks promising. Joins can therefore be available
+within about two weeks. (And this is indeed one of the most
+urgent items on the to-do list.)
 }
 
 \subsection{Correlation} 
-A correlation combines two or more edges.
-\comment{Not yet available}
+Correlation combines two or more edges.
+\comment{I believe that correlation is much better placed
+in support libraries of high-level languages than in \sql.}
 
 \subsection{Where Clause}
 The \term{where} clause adds criteria for the selection
@@ -1315,9 +1411,11 @@ But, indeed, most \sql\ dialects follow this convention.
 
 To force another binding, parentheses can be used:
 
-\keyword{where} \keyword{destin} = 100001
-\keyword{and} (\keyword{timestamp} $<$ '2018-04-01'
+\begin{minipage}{\textwidth}
+\keyword{where} \keyword{destin} = 100001 \\
+\hspace*{0.45cm}\keyword{and} (\keyword{timestamp} $<$ '2018-04-01'
 \keyword{or} \keyword{timestamp} $\ge$ '2018-05-01')
+\end{minipage}
 
 This clause would now select all rows
 that have \keyword{destination} $100001$ and
@@ -1393,10 +1491,49 @@ namely
 \subsubsection{any and all}
 \comment{Not yet available}
 
-\subsection{Group Clause}
+\subsection{While Clause}
+The \term{while} clause implements a common requirement
+in graph databases, namely to follow a link recursively.
+A typical example is social network where we want to
+know if $A$ is connected to $B$ through a path spanning
+more than one edge (of the same kind).
+Here is an illustration:
+
+\begin{minipage}{\textwidth}
+\keyword{select} \keyword{true}
+\keyword{from} \identifier{friend} \\
+\keyword{where} \keyword{edge} $=$ 'isfriend' \\
+\keyword{while} \keyword{destin} $\neq$ 12345 
+\end{minipage}
+
+This statement would follow the ``isfriend'' edges
+until an edge with destination $12345$ is found.
+
+\comment{
+This is not yet available -- and there are some
+aspects to clarify: First, the number of iterations
+must be bounded; otherwise we may follow a
+cycle for eternity. Second, this, obviously, works
+only for edges where origin and destination
+have the same type. Interesting
+would be cases where the types of origin and
+destination alternate, \eg\
+\identifier{client} `buys' \identifier{product} and
+\identifier{product} \keyword{passive}(`buys') \identifier{client}.
+The `operator' \term{passive} here would turn the edge around:
+we first go from \identifier{client} to \identifier{product}
+and then from \identifier{product} to (another) \identifier{client}.
+With this, however, a new difficulty arises:
+how to avoid the combinatorial explosion after some,
+in fact very few, iterations?
+More efficient for such cases is probably just to loop
+through all edges.
+}
+
+\subsection{Group Clause}\label{sec_group}
 Grouping partitions the result set
 according to a set of \term{keys}.
-The result set will then presented
+The result set will then be presented
 according to these partitions.
 The keys used to partition the set
 are defined in the \term{group} clause.
@@ -1407,7 +1544,7 @@ A simple \term{group} clause could be:
 This clause would partition the result
 according to \keyword{ege} and \keyword{destin}.
 
-In the simpleplest from a statement with
+In the simplest from a statement with
 group statement could look like this:
 
 \keyword{select} \keyword{edge},
@@ -1434,7 +1571,8 @@ Let's consider the following set of data
 \end{verbatim}
 \end{minipage}
 
-The group above would produce the following set
+Applied to this set,
+the group above would produce the following output
 
 \begin{minipage}{\textwidth}
 \begin{verbatim}
@@ -1455,12 +1593,12 @@ This, in itself is often a useful feature,
 \viz\ when we want to apply a certain processing
 only once per key. As an aside it may be mentioned
 that this kind of grouping is extremely fast in \nowdb;
-for performance considerations in general, however, please
+for performance considerations in general, please
 refer to chapter \ref{chpt_opt}.
 
-The real power of grouping, however, becomes evident
+The real power of grouping becomes evident
 when we let the database do the processing.
-This is the purpose of aggregate functions.
+This is the purpose of \term{aggregate functions}.
 Aggregates produce a result per group (\ie\ per partition).
 Aggregates are for example
 \term{count}, \term{sum},
@@ -1520,7 +1658,7 @@ The following statements are therefore wrong:
 \keyword{group by} \keyword{edge, destin}
 
 Notice that aggregates without grouping
-are applied on the the whole result set.
+are applied on the whole result set.
 For instance, to count all rows in \identifier{sales},
 one could say:
 
@@ -1539,10 +1677,14 @@ Syntactically, even this is \acronym{ok}:
 
 The values shown for \keyword{edge} and \keyword{destin},
 however, have no relation whatsoever to the \keyword{count}
-result. Those are values correspond
-to a any of the rows in the result set.
-It may be the first or the last or any other.
+result. They correspond
+to a any of the rows in the result set,
+the first, the last or any other.
 That is unspecified.
+
+\comment{
+To be discussed: grouping and having.
+}
 
 \comment{
 Currently, grouping is only possible for combinations of keys
@@ -1562,34 +1704,239 @@ that could motivate alternative grouping techniques.
 }
 
 \subsection{Order Clause}
+The \term{order} clause sorts the result set
+according to a set of sorting criteria (the \term{order keys}).
+Its simplest form is just:
 
-\subsection{Expressions}
-\comment{Not yet available}
+\keyword{order by} \keyword{edge}, \keyword{destin}
 
-\subsection{Operators}
-\subsubsection{Arithmetic}
-\comment{Not yet available}
+which would present the result set (whatever it contains)
+sorted by \keyword{edge} and \keyword{destin}.
 
+\begin{minipage}{\textwidth}
+The statement
+
+\keyword{select} \keyword{edge}, \keyword{destin}
+\keyword{from} \identifier{sales}
+\keyword{order by} \keyword{edge}, \keyword{destin}
+\end{minipage}
+
+applied to the data set already used in section
+\ref{sec_group} would produce the following output:
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+|----------+---------+--------------|
+| edge     | destin  | timestamp    |
+|----------+---------+--------------|
+| 'buys'   | 100001  | '2018-03-15' |
+| 'buys'   | 100001  | '2018-04-15' |
+| 'buys'   | 100001  | '2018-05-15' |
+| 'buys'   | 100001  | '2018-06-15' |
+| 'buys'   | 100002  | '2018-03-15' |
+| 'buys'   | 100002  | '2018-04-15' |
+| 'buys'   | 100002  | '2018-05-15' |
+| 'steals' | 100002  | '2018-06-15' |
+|----------+----------+-------------|
+\end{verbatim}
+\end{minipage}
+
+Performance considerations are important when dealing with sorting.
+It is therefore recommended to study section \ref{chpt_opt} with care.
+
+\comment{
+Similar to grouping, ordering works only with an index
+that has the same keys in the same order.
+Contrary to the grouping case, for ordering this is not acceptable.
+Ordering is needed over and over again and good sorting
+algorithms must be available in the database.
+Well, the algorithms are there (index sorting, in-memory sorting and
+external sorting). The question is: how to apply them in
+the most efficient manner.
+For instance, index sorting is good when we have a range,
+otherwise it's bad.
+In-memory sorting is good when the result set is small,
+otherwise it's bad.
+External sorting is always bad, but the last resort.
+A special case is ordering by timestamp.
+In a timeseries database, that should always be
+available!!!
+The solution I have in mind is to always create
+an index on timestamp with a micro-period (like 1 hour or
+1 minute). The rows within one micro-period would be
+sorted in memory and, since there are few rows in one
+micro-period that is fast and does not impact latency.
+The whole query may be slow, but there are always
+data for the caller to make progress.
+}
+
+\subsection{Operators and Functions}
 \subsubsection{Boolean}
-$=,<,>,\le,\ge,\neq$
+$=,<,>,\le,\ge,\neq$,
+\term{between},
+\term{and}, \term{or}, \term{not},
+\term{in}, \term{any}, \term{all},
+\term{exists}
+
+\subsubsection{Arithmetic}
+$+,-,\times, \div, \%, m^n, \sqrt[m]{n}$,
+$\log, \mod, \dots$
+
+\comment{Not yet available}
 
 \subsubsection{Text}
 \comment{Not yet available}
 
-\subsection{Simple Functions}
-\comment{Not yet available}
-
 \subsection{Aggregates}\label{sec_agg}
 \subsubsection{count}
+The function is applied either to the row (\keyword{count}(*))
+or to a field (\keyword{count}(\identifier{field}).
+Applied to the entire row, it counts the number of elements
+in the result set.
+When applied to a field, it is usually combined with
+\keyword{distinct} (\comment{which is not yet available}),
+otherwise the result would be the same as applying it to the row.
+Common examples are therefore:
+
+\keyword{select} \keyword{count}(*) \keyword{from} \identifier{sales}
+
+and
+
+\keyword{select} \keyword{count}(\keyword{distinct} \keyword{edge})
+\keyword{from} \identifier{sales}
+
+\comment{
+In the following sections, we leave the option to qualify
+a field with \keyword{distinct} out (as well as any other
+qualifiers). It is not yet available anyway.
+}
+
 \subsubsection{sum}
+The function is always a applied to a field.
+and produces the sum of the values in that field over the result set.
+Example:
+
+\keyword{select} \keyword{sum}(\keyword{weight}) \keyword{from} \identifier{sales}
+
 \subsubsection{max and min}
+The functions are always applied to a field.
+Function \term{max} produces the greatest value in the result set
+and function \term{min} produces the smallest value in the result set.
+Example:
+
+\keyword{select} \keyword{max}(\keyword{weight}), \keyword{min}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
 \subsubsection{spread}
+The Function is always applied to a field.
+It produces the difference $max - min$,
+where $max$ is the greatest value in the result set
+and $min$ is the smallest value in the result set.
+Example:
+
+\keyword{select} \keyword{spread}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
 \subsubsection{avg}
+The Function is always applied to a field.
+It produces the arithmetic mean of the values
+of this field in the result set, \ie
+$\left(\sum{x}\right)/n$, where $x$ represents the
+field values in the result set and $n$
+is the number of rows (\ie\ \keyword{count}(*)).
+Example:
+
+\keyword{select} \keyword{avg}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
 \subsubsection{median}
+The function is always applied to a field.
+It finds the central point (or, in case
+the number of rows is even, the average
+of the two central points), when all
+rows are ordered according to the field.
+Example:
+
+\keyword{select} \keyword{median}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+No precaution is currently taken for the case
+that the result set outgrows available memory.
+In that case the query will fail (and probably the queries
+in other sessions too).
+}
+
 \subsubsection{mode}
+The function is always applied to a field.
+It finds the most frequent value in the result set.
+
+\keyword{select} \keyword{mode}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+Not yet available
+}
+
 \subsubsection{stddev}
+The function is always applied to a field.
+It finds the standard deviation according to the formula:
+
+\[
+\sqrt{\frac{\sum_{i=N}^{N}{(x_i - \overline{x})^2}}{N-1}},
+\]
+
+where $N$ is the number of rows in the result set,
+$x_i$ is the $i$th element and $\overline{x}$ is
+the arithmetic mean (\ie\ \keyword{avg}).
+
+\keyword{select} \keyword{stddev}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+Note that there is not much optimisation done in aggregates.
+For instance, \term{median} and \term{stddev} create a
+collection of all values, but each one creates its own collection.
+That is, the values are collected twice.
+}
+
 \subsubsection{integral}
+The function is always applied to a field and
+can only be applied to edges.
+It computes the area under the curve with
+\term{timestamp} on the $x$-axis and the field,
+to which \term{integral} is applied,
+on the $y$-axis. Example:
+
+\keyword{select} \keyword{integral}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+Not yet available
+}
 
 \section{Miscellaneous}
 \subsection{Use}
+The \term{use} statement sets the database for
+the current session. All following statements
+ until the next \term{use} statement
+will be applied to this database.
+Example:
+
+\keyword{use} \identifier{retail}
+
+The statement returns a status result.
+
 \subsection{Exec}
+The \term{exec} statement executes a stored procedure
+whose interface was previously defined.
+The simplest form is
+
+\keyword{exec} \identifier{myprocedure}()
+
+In this case \identifier{myprocedure} has no parameters.
+A concrete example with parameters may be
+
+\keyword{exec} \identifier{revenue}(9000001, '2018-05-01')
+
+The result of the statement depends on the procedure.

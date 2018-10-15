@@ -1,0 +1,90 @@
+\section{Outline}
+The python client consists of a bunch
+of modules all starting with prefix \term{now}.
+The main module which defines
+the \term{Connection} and the \term{Result} class
+is actually called just \tech{now.py}.
+Support functions (which are also available)
+for server-side python are defined in
+\tech{nowutil.py}.
+
+The modules use the package \term{dateutil}
+which must be installed on the system in order
+to use the \term{now} modules.
+(Please refer to chapter
+\ref{chpt_install} for details.)
+
+A client program needs to import at least
+the \term{now} module. The import may have
+any form (\ie\ \term{import now} or
+\term{from now import}).
+
+\section{Connections}
+The \term{Connection} class represents
+a \acronym{tcp/ip} connection to the
+database. It provides the following 
+methods:
+\subsubsection{\_\_init\_\_}
+The constructor takes four arguments,
+which are all strings:
+\begin{itemize}
+\item Address:
+used to determine the address of the server.
+The parameter is passed to the system service
+\tech{getaddrinfo} and allows:
+an \acronym{ip}v4 address,
+an \acronym{ip}v6 address or
+a hostname.
+Examples: ``127.0.0.1'', ``localhost'',
+``myserver.mydomain.org''.
+
+\item Port:
+used to determine the port of the server.
+The parameter is passed to the system service
+\tech{getaddrinfo} and allows:
+a port number or a known service name.
+
+\item User:
+\comment{currently not used}
+\item Password:
+\comment{currently not used}
+\end{itemize}
+
+\subsubsection{execute(statement)}
+The method sends the string \term{statement} to the database
+and waits for the database response.
+The method retuns an instance of the \term{Result} class
+or, on internal errors, raises one of the exceptions
+\term{ClientError} or \term{DBError}.
+
+\subsubsection{close()}
+The method closes the connection and
+releases the C objects allocated by
+the constructor. If the connection
+cannot be closed for any reason,
+the exception \term{ClientError} is raised.
+
+\subsubsection{Resource Manager}
+\term{Connection} is a \term{resource manager}.
+The method \term{close} is therefore
+rarely necessary. Instead, \term{Connection} can
+be used with the \term{with} statement, \ie:
+
+\begin{python}
+\begin{lstlisting}
+with Connection("localhost", "55505", None, None) as conn:
+    # here goes your code
+    # refer to the connect as 'conn'
+\end{lstlisting}
+\end{python}
+
+\section{Results}
+\subsection{Status}
+\subsection{Cursors}
+\subsection{Rows}
+\subsection{Reports}
+\section{Support Functions}
+\section{Exceptions}
+\subsubsection{ClientError}
+\subsubsection{DBError}
+\subsubsection{WrongType}
