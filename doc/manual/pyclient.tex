@@ -4,8 +4,8 @@ of modules all starting with prefix \term{now}.
 The main module which defines
 the \term{Connection} and the \term{Result} class
 is actually called just \tech{now.py}.
-Support functions (which are also available)
-for server-side python are defined in
+Support functions (which are also available
+for server-side python) are defined in
 \tech{nowutil.py}.
 
 The modules use the package \term{dateutil}
@@ -89,10 +89,11 @@ The \term{Result} class has the following methods:
 
 \subsubsection{rType()}
 The method returns the result type,
-either STATUS, REPORT, ROW or CURSOR.
+either \acronym{status}, \acronym{report},
+\acronym{row} or \acronym{cursor}.
 
 \subsubsection{ok()}
-The method return \term{True}
+The method returns \term{True}
 if the instance does not represent
 an error and \term{False} otherwise.
 
@@ -100,7 +101,7 @@ an error and \term{False} otherwise.
 The method releases the C objects
 allocated with the \term{Result} object.
 Since \term{Result} is a resource manager,
-it is rarely necessary to use explicitly.
+it is rarely necessary to use it explicitly.
 
 \subsubsection{Resource Manager}
 Result is a resource manager.
@@ -139,7 +140,7 @@ of client-side error codes.
 \subsubsection{details()}
 The method returns
 detailed information on the error
-(or \term{None} if no error has occurred.
+(or \term{None} if no error has occurred).
 
 \subsection{Cursors}
 If the result is a cursor,
@@ -149,11 +150,11 @@ four more methods are available:
 The method fetches the next bulk
 of rows from the database.
 After successful completion,
-the cursor contains the bulk
-of rows, which can be obtain by means of
+the cursor contains this bulk
+of rows, which can be obtained by means of
 the method \term{row()}.
 Note that the first bulk of rows
-is available immediately with
+is available immediately after
 Cursor creation.
 
 \subsubsection{row()}
@@ -162,13 +163,10 @@ bulk of rows from the cursor.
 It returns a \term{Row} result.
 
 \subsubsection{close()}
-The method closes the cursor.
-Since cursors are server-side
-resource, it needs to be closed
-explicitly; the method, however,
-is usually not called directly,
-but implicitly, when the result
-is created with a \term{with} statement.
+The method closes the cursor;
+the method is usually not called directly,
+but implicitly, when the cursor was
+created by means of a \term{with} statement.
 
 \subsubsection{eof()}
 The method returns \term{True}
@@ -180,7 +178,7 @@ otherwise.
 \term{Cursor} is an iterator.
 Usually, \term{fetch()}, \term{row()}
 and \term{eof()} do not need to be called
-explicitly in the code.
+explicitly.
 Instead a \term{for}-loop  can be used, \eg:
 
 \begin{python}
@@ -210,11 +208,11 @@ Conversion takes place in the obvious way
  float to float, text to string, \etc).
 An exception are \term{time} fields.
 One could expect \term{field} to return
-a \term{datetime}, but that is not a case.
+a \term{datetime}, but that is not the case.
 Time is returned as a (signed) integer
 representing a \acronym{unix} timestamp
 with nanosecond precision.
-It can be converted with \term{now2db}
+It can be converted to \term{datetime} with \term{now2dt}
 (please refer to section \ref{sec_supp}
 for details).
 
@@ -223,7 +221,7 @@ The method advances to the next row.
 If there was one more row, the method
 returns \term{True} and the next call
 to \term{field(n)} will return the
-$n$th field of the next row.
+$n$th field of that row.
 Otherwise, if no more rows are available,
 the method returns \term{False}.
 
@@ -258,9 +256,9 @@ The method returns the number of affected rows.
 
 \subsubsection{errors()}
 The method returns the number of errors.
-Note that \acronym{ddl} statements will
-return a status result if an error occurred.
-In practice, only \acronym{dml} statements provide
+Note that \acronym{dml} statements will
+return a \term{Status} result if an error occurred.
+In practice, only \acronym{dll} statements provide
 this information.
 
 \subsubsection{runTime()}

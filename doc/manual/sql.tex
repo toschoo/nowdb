@@ -18,7 +18,7 @@ distinguished in
 
 \begin{itemize}
 \item \acronym{ddl}:
-Statements that manipulate entities
+Statements that create, drop or alter entities
 in the database that hold or define
 data
 like tables, types, edges, indices,
@@ -78,7 +78,7 @@ because \sql\ has an extraordinary large
 number of keywords which sometimes makes the choice
 of meaningful identifiers a non-trivial task.
 At the time of writing, the \nowdb\ parser
-does not relax this rule, but it will do so
+does not yet relax this rule, but it will do so
 in the future.}
 Keywords are defined by the \sql\ specification,
 identifiers are chosen by the user
@@ -119,7 +119,7 @@ But comparison and sorting are not yet
 urgent to-do.}
 
 Keywords and identifiers are case-insensitive.
-There is no difference in
+There is no difference between
 \term{SELECT}, \term{select} or \term{Select}
 and so on.
 Text, by contrast, is case-sensitive;
@@ -155,14 +155,13 @@ and published.
 
 \section{Types}
 A fundamental part of most languages
-it their type system. \nowdb\ \sql\
+is their type system. \nowdb\ \sql\
 has a very simple type system,
-which is static and save.
+which is static and safe.
 This type system is used to design
 the database and to word
 \sql\ statements.
-This fundamental type system is called
-\sql\ Static Types.
+We usually refer to it as the \sql\ Static Types.
 
 However, since \sql\ is executed
 in a host environment, there is a second
@@ -435,7 +434,7 @@ It is a convenient way to avoid
 that a \sql\ script is abandoned
 in such a situation.
 
-\subsubsection{ALTER}
+% \subsubsection{ALTER}
 
 \subsection{Table}
 \subsubsection{CREATE}
@@ -519,7 +518,7 @@ It has the form:
 
 \keyword{drop table} \identifier{mytable}
 
-\subsubsection{ALTER}
+% \subsubsection{ALTER}
 
 \subsection{Type}
 \term{Types} are user-defined types
@@ -528,11 +527,13 @@ The syntax resembles very much
 the \term{create table} syntax
 in traditional \sql:
 
+\begin{minipage}{\textwidth}
 \keyword{create type} \identifier{product} \{ \\
 \hspace*{1cm}\identifier{prod\_key} \keyword{uint} \keyword{primary key}, \\
 \hspace*{1cm}\identifier{prod\_desc} \keyword{text}, \\
 \hspace*{1cm}\identifier{prod\_price} \keyword{float} \\
 \}
+\end{minipage}
 
 This creates a type called \term{product}
 with three attributes:
@@ -551,18 +552,6 @@ The order in which attributes are declared
 determines the \term{canonical} order for this type.
 The canonical order plays a role for the \term{insert}
 statement.
-
-\comment{
-I am not sure about the choice of the term 
-``table''; I am afraid it can lead to confusion
-with the relational view.
-In fact, types look much more like tables --
-and perhaps they should be called like that.
-The original name for what is now called
-``tables'' was ``context''. For obvious reasons,
-I wanted to get rid of that word.
-However, I am again finding some sympathy for it.
-}
 
 \subsubsection{DROP}
 The \term{drop type} statement removes a type
@@ -615,7 +604,7 @@ and cannot be changed.
 
 All other types can be defined.
 The types of \keyword{origin} and \keyword{destin}
-are usually \keyword{type}s, since they refer
+are usually vertex \keyword{type}s, since they refer
 to vertices which are connected by this specific edge.
 Stored in the database is the value of the primary key
 of the specific type (\ie\ \keyword{uint} for product).
@@ -707,8 +696,8 @@ It rarely makes sense to create
 \keyword{large} or 
 \keyword{huge} indices.
 It actually makes sense,
-when the index from the beginning
-has many keys with many data points.
+when the index
+has many data points per key.
 More details on this can be found in \ref{chpt_sizing}.
 
 \subsubsection{DROP}
@@ -763,18 +752,17 @@ feature in timeseries databases.
 Without this feature, databases would grow
 to an extent that would make efficient queries difficult
 or even impossible. Deleting data by means of the
-\term{delete} statement is not efficient for large
-amounts of data. In the case of \nowdb\
-(but also with other databases), deleting
-the data would not solve the problem,
+\term{delete} statement, however, is not efficient for large
+amounts of data and in \nowdb\
+(but also in other databases), deleting
+the data would not solve the problem at all,
 because \term{delete} does not physically remove
 the data, but just makes them invisible.
 
 Dropping, by contrast, removes all data files 
 that contain only data belonging to that period.
 Removing files, however, is a very efficient
-operation on most platforms, since it only
-declares the disk space free.
+operation on most platforms.
 
 The syntax is:
 
@@ -783,7 +771,7 @@ The syntax is:
 \hspace*{0.45cm}\keyword{and timestamp} $<$  '2018-04-01'
 
 This would drop all data files of table `mytable'
-that contain data between Jan, 1, 2018 (inclusive) and
+that contain only data between Jan, 1, 2018 (inclusive) and
 April, 1, 2018 (exclusive). 
 
 Two remarks are in place. First,
@@ -795,7 +783,7 @@ must be precisely one condition that
 determines an \emph{end date}
 for the period, \ie\ there must be a non-negated expression
 that contains \keyword{timestamp} and a constant date
-and one of the operations $<$ or $\le$.
+and one of the operators $<$ or $\le$.
 
 The rationale for this restrictions is
 to avoid accidentally dropping entire tables
@@ -820,12 +808,12 @@ Second, \term{drop period} does not guarantee
 to drop all data that lie in the period in question --
 in fact, it does not even guarantee to drop any data at all.
 It guarantees, however, to remove all files
-that \emph{only} data that lie that period.
+that contain \emph{only} data that lie within the period.
 In other words, the behaviour is conservative
-and prefers dropping less data than possible over
+and prefers dropping fewer data than possible over
 dropping too many data.
 On the long run, however, with a consistent dropping policy
-old data will by removed consistently and the database
+old data will be removed consistently and the database
 won't grow (except when the periods themselves grow).
 
 \section{Data Manipulation}
@@ -863,10 +851,10 @@ For an edge, this would be:
                        3, 5.97)
 \end{minipage}
 
-When the list of values insert is complete,
+When the list of values is complete,
 \ie\ covers all fields in the type or table,
 and respects the canonical order,
-a shortened form can be used, \eg:
+a shorthand form can be used, \eg:
 
 \keyword{insert into} \identifier{product} 
                       (100001, 'Spinach', 1.99)
@@ -894,9 +882,6 @@ a query, \eg:
 \hspace*{0.35cm}\keyword{from} \identifier{another\_table} \\
 \hspace*{0.2cm}\keyword{where} $\dots$)
 \end{minipage}
-
-For details on the \term{where} clause,
-please refer to the \acronym{dql} section.
 
 \subsection{Update}
 The \term{update} statement changes the values
@@ -977,7 +962,7 @@ which will soon disappear.
 }
 
 The \term{load} statement has optional \term{use} and \term{ignore} clauses
-\comment{we also need a clause options to a user-defined loader}:
+\comment{we also need a clause to add options to a user-defined loader}:
 
 \keyword{use loader} \identifier{myformat}
 
@@ -1032,8 +1017,8 @@ how many rows have failed and how long it took.
 Notice that \term{load} does not stop on errors.
 Instead, errors are written to standard error
 with the row number where the error occurred.
-This way, the faulty lines can be corrected
-in reimported later. \comment{The process must still be adapted
+This way, the faulty lines can be corrected and
+reimported later. \comment{The process must still be adapted
 to client/server. The server should write the errors
 into a specific file; otherwise, when there is more
 than one session importing data, errors would refer
@@ -1048,8 +1033,8 @@ However, this statement is much more complex
 than the statements we have seen so far.
 
 A \acronym{dql} statement consists of at least
-a \term{select} clause (also called \term{projection} clause
-and a \term{from} clause, which in itself my contain
+a \term{select} clause (also called \term{projection} clause)
+and a \term{from} clause, which in itself may contain
 a \term{join} clause.
 It may additionally contain
 a \term{where} clause,
@@ -1099,7 +1084,7 @@ The first three clauses may appear pointless.
 Why select constant values from the database?
 There are, however, very common use cases
 for selecting constant values, in particular
-in combination with the \term{exist} operator,
+in combination with the \keyword{exists} operator,
 but also for \acronym{dql} used within an
 \term{insert} statement. A concrete example
 of the latter already appeared in the section
@@ -1126,7 +1111,7 @@ for instance:
 A special form of functions are \term{aggregates}.
 Aggregates do not operate on one row, but
 on \term{groups} of rows. A group may be defined
-by adding a \term{group} clause. If not \term{group} clause
+by adding a \term{group} clause. If no \term{group} clause
 is present, the group consists of all rows produced
 by the \acronym{dql} statement.
 
@@ -1149,12 +1134,12 @@ are more subtle and will be discussed there.
 
 \comment{
 Concerning expressions:
-Most \sql\ dialect support a wide range of
+Most \sql\ dialects support a wide range of
 arithmetic expressions, \eg\ $+, -, \times, \div, \sqrt{a} $,
 boolean expressions, \keyword{and}, \keyword{or}, \keyword{not}, \etc\
 string operations like concatenation, substring, length and so on.
 Since expressions are recursive, they can be composed, \eg:
-$(a+b)/n, (weight-w)^2$ \etc
+$(a+b)/n, (weight-w)^2$ \etc\
 On the long run, we need to address expressions.
 The point of the prototype, however, is not
 to prove that \sql\ is possible,
@@ -1213,7 +1198,7 @@ data sources at once, \eg:
 \keyword{from} \identifier{product}, \identifier{client}
 
 This form is not supported by \nowdb.
-Whenever, more than one data source is addressed,
+Whenever more than one data source is addressed,
 a join has to be used.
 
 \subsection{Join Clause}
@@ -1244,7 +1229,7 @@ This would produce an \term{inner join}
 between \identifier{sales} and \identifier{client}.
 Joins in \nowdb\ are in fact always inner joins.
 There are no \term{outer joins}. \comment{Do we need them?}
-In consequence, there is not difference between
+In consequence, there is no difference between
 \term{left} and \term{right}; one could say,
 joins in \nowdb\ are \term{abelian}.
 
@@ -1256,7 +1241,7 @@ explicit mentioning. It is implicitly clear
 that \keyword{join} \identifier{client} \keyword{on origin}
 joins on \keyword{origin} $=$ \identifier{client\_key}.
 
-Each edge connects two vertices.
+Every edge connects two vertices.
 A join, therefore, consists of at most two joins.
 The syntax is straightforward:
 
@@ -1266,7 +1251,7 @@ The syntax is straightforward:
 
 With this join, all attributes
 from \identifier{sales}, \identifier{client} and \identifier{product}
-are available in the \term{select} clause.
+are available in all clauses.
 
 It may happen that the joined entities
 have fields with the same name.
@@ -1298,7 +1283,7 @@ with the alias instead of the full entity name, \eg:
 
 \comment{
 Joins are the very heart of any database technology --
-but it is not easy to get the them right with good performance.
+but it is not easy to get them right with good performance.
 In a first approach I tried to make joins work
 by always using index range scans.
 Unfortunately, it turned out that index range scans
@@ -1307,14 +1292,15 @@ I am therefore looking for alternatives.
 There are many, sometimes quite sophisticated, techniques.
 Currently, I am experimenting with cache-based subqueries,
 which looks promising. Joins can therefore be available
-within about two weeks. (And this is indeed one of the most
+within a short time frame. (And this is indeed one of the most
 urgent items on the to-do list.)
 }
 
 \subsection{Correlation} 
 Correlation combines two or more edges.
 \comment{I believe that correlation is much better placed
-in support libraries of high-level languages than in \sql.}
+in support libraries of high-level languages than in \sql.
+Some input from an expert would help ;-)}
 
 \subsection{Where Clause}
 The \term{where} clause adds criteria for the selection
@@ -1345,8 +1331,7 @@ Boolean expressions), while \keyword{not}
 is unary and expects one operand (which again
 is a Boolean expression).
 
-The Boolean operators combine comparisons
-with each other. Comparison operators are
+Operators allowed in comparisons are
 $=, <, >, \le, \ge, \ne$.
 There are two forms to express the $\ne$
 operator, namely ``$<>$'' and ``!=''. 
@@ -1383,7 +1368,7 @@ Here is a tricky \keyword{where} clause:
 \keyword{or} \identifier{timestamp} $\ge$ '2018-05-01'
 
 \keyword{or} has precedence over \keyword{and}.
-Both, \keyword{or} and \keyword{and} bind to the left,
+Both, \keyword{or} and \keyword{and}, bind to the left,
 \ie\ the first operand is the one in front of the operator.
 
 That means, here, that \keyword{or} is at the top-level:
@@ -1494,7 +1479,7 @@ namely
 \subsection{While Clause}
 The \term{while} clause implements a common requirement
 in graph databases, namely to follow a link recursively.
-A typical example is social network where we want to
+A typical example is social networks where we want to
 know if $A$ is connected to $B$ through a path spanning
 more than one edge (of the same kind).
 Here is an illustration:
@@ -1507,7 +1492,7 @@ Here is an illustration:
 \end{minipage}
 
 This statement would follow the ``isfriend'' edges
-until an edge with destination $12345$ is found.
+until an edge with destination $12345$ is reached.
 
 \comment{
 This is not yet available -- and there are some
@@ -1516,7 +1501,7 @@ must be bounded; otherwise we may follow a
 cycle for eternity. Second, this, obviously, works
 only for edges where origin and destination
 have the same type. Interesting
-would be cases where the types of origin and
+may be cases where the types of origin and
 destination alternate, \eg\
 \identifier{client} `buys' \identifier{product} and
 \identifier{product} \keyword{passive}(`buys') \identifier{client}.
@@ -1542,10 +1527,10 @@ A simple \term{group} clause could be:
 \keyword{group by} \keyword{edge, destin}
 
 This clause would partition the result
-according to \keyword{ege} and \keyword{destin}.
+according to \keyword{edge} and \keyword{destin}.
 
-In the simplest from a statement with
-group statement could look like this:
+In the simplest form a statement with
+group clause could look like this:
 
 \keyword{select} \keyword{edge},
                  \keyword{destin}
@@ -1586,8 +1571,8 @@ the group above would produce the following output
 \end{verbatim}
 \end{minipage}
 
-It, hence, produces a distinct set of the key values.
-One could say that grouping abstracts or reduces 
+It, hence, produces a set of distinct key values.
+One could say that grouping \emph{abstracts} or \emph{reduces}
 the data set according to the keys.
 This, in itself is often a useful feature,
 \viz\ when we want to apply a certain processing
@@ -1604,7 +1589,7 @@ Aggregates are for example
 \term{count}, \term{sum},
 \term{max} and \term{min} or \term{avg}.
 A complete list of aggregates supported in \nowdb\
-can be found below in sections \ref{sec_agg}.
+can be found below in section \ref{sec_agg}.
 
 The aggregate function goes to the \term{select} clause
 behind the grouping keys:
@@ -1658,14 +1643,14 @@ The following statements are therefore wrong:
 \keyword{group by} \keyword{edge, destin}
 
 Notice that aggregates without grouping
-are applied on the whole result set.
+are applied to the whole result set.
 For instance, to count all rows in \identifier{sales},
 one could say:
 
 \keyword{select} \keyword{count}(*)
 \keyword{from} \identifier{sales}
 
-The partition on which \keyword{count} is applied here
+The partition to which \keyword{count} is applied here
 is the whole result set.
 
 Syntactically, even this is \acronym{ok}:
@@ -1678,7 +1663,7 @@ Syntactically, even this is \acronym{ok}:
 The values shown for \keyword{edge} and \keyword{destin},
 however, have no relation whatsoever to the \keyword{count}
 result. They correspond
-to a any of the rows in the result set,
+to any of the rows in the result set,
 the first, the last or any other.
 That is unspecified.
 
@@ -1691,7 +1676,7 @@ Currently, grouping is only possible for combinations of keys
 for which an index exists. That is to say:
 the index must be defined over the same set of keys
 and the order of the keys must be the same.
-Otherwise, when there is not matching index,
+Otherwise, when there is no matching index,
 the query fails with error.
 I do not consider this a huge issue.
 Grouping is an expensive operation and if,
@@ -1765,7 +1750,7 @@ The solution I have in mind is to always create
 an index on timestamp with a micro-period (like 1 hour or
 1 minute). The rows within one micro-period would be
 sorted in memory and, since there are few rows in one
-micro-period that is fast and does not impact latency.
+micro-period, that is fast and does not impact latency.
 The whole query may be slow, but there are always
 data for the caller to make progress.
 }
@@ -1805,6 +1790,8 @@ and
 \keyword{select} \keyword{count}(\keyword{distinct} \keyword{edge})
 \keyword{from} \identifier{sales}
 
+The return type is always \keyword{uint}.
+
 \comment{
 In the following sections, we leave the option to qualify
 a field with \keyword{distinct} out (as well as any other
@@ -1812,8 +1799,9 @@ qualifiers). It is not yet available anyway.
 }
 
 \subsubsection{sum}
-The function is always a applied to a field.
+The function is always applied to a field.
 and produces the sum of the values in that field over the result set.
+The return type depends on the type of the input field.
 Example:
 
 \keyword{select} \keyword{sum}(\keyword{weight}) \keyword{from} \identifier{sales}
@@ -1822,6 +1810,7 @@ Example:
 The functions are always applied to a field.
 Function \term{max} produces the greatest value in the result set
 and function \term{min} produces the smallest value in the result set.
+The return type depends on the type of the input field.
 Example:
 
 \keyword{select} \keyword{max}(\keyword{weight}), \keyword{min}(\keyword{weight})
@@ -1832,6 +1821,7 @@ The Function is always applied to a field.
 It produces the difference $max - min$,
 where $max$ is the greatest value in the result set
 and $min$ is the smallest value in the result set.
+The return type depends on the type of the input field.
 Example:
 
 \keyword{select} \keyword{spread}(\keyword{weight})
@@ -1844,6 +1834,7 @@ of this field in the result set, \ie
 $\left(\sum{x}\right)/n$, where $x$ represents the
 field values in the result set and $n$
 is the number of rows (\ie\ \keyword{count}(*)).
+The return type is \keyword{float}.
 Example:
 
 \keyword{select} \keyword{avg}(\keyword{weight})
@@ -1855,6 +1846,7 @@ It finds the central point (or, in case
 the number of rows is even, the average
 of the two central points), when all
 rows are ordered according to the field.
+The return type is \keyword{float}.
 Example:
 
 \keyword{select} \keyword{median}(\keyword{weight})
@@ -1870,6 +1862,7 @@ in other sessions too).
 \subsubsection{mode}
 The function is always applied to a field.
 It finds the most frequent value in the result set.
+The return type depends on the type of the input field.
 
 \keyword{select} \keyword{mode}(\keyword{weight})
 \keyword{from} \identifier{sales}
@@ -1889,6 +1882,8 @@ It finds the standard deviation according to the formula:
 where $N$ is the number of rows in the result set,
 $x_i$ is the $i$th element and $\overline{x}$ is
 the arithmetic mean (\ie\ \keyword{avg}).
+
+The return type is \keyword{float}.
 
 \keyword{select} \keyword{stddev}(\keyword{weight})
 \keyword{from} \identifier{sales}
@@ -1911,6 +1906,8 @@ on the $y$-axis. Example:
 \keyword{select} \keyword{integral}(\keyword{weight})
 \keyword{from} \identifier{sales}
 
+The return type is \keyword{float}.
+
 \comment{
 Not yet available
 }
@@ -1925,7 +1922,7 @@ Example:
 
 \keyword{use} \identifier{retail}
 
-The statement returns a status result.
+The statement returns a \term{Status} result.
 
 \subsection{Exec}
 The \term{exec} statement executes a stored procedure

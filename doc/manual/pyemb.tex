@@ -2,8 +2,8 @@
 The embedded python library consists mainly
 of the \term{nowdb} module, which defines
 the \term{execute} function and the \term{Result} class.
-Support functions (which are also available)
-for client-side python are defined in
+Support functions (which are also available
+for client-side python) are defined in
 \tech{nowutil.py}.
 
 The module uses the package \term{dateutil}
@@ -29,13 +29,13 @@ The embedded \acronym{api} is very similar
 to that provided by the client library,
 but there are also some differences.
 The most obvious difference is that
-there is not \term{Connection} class.
+there is no \term{Connection} class.
 Instead, there is a module-level function
 to execute \sql\ statements.
 
 There are also model-level functions
 to create results. In the client library
-this is not necessary, because client
+this is not necessary, because clients
 do not need to return results.
 Likewise, the \term{Result} class
 has some more methods to deal with
@@ -55,7 +55,7 @@ and those will be discussed here as well.
 The function calls the parser against the statement and, on success,
 executes the parsing result in the database.
 The function returns an instance of the \term{Result} class
-or, on internal errors, raises the exceptions \term{DBError}.
+or, on internal errors, raises the exception \term{DBError}.
 
 \subsubsection{success()}
 The function creates a \term{Status} result
@@ -72,7 +72,7 @@ The row is initially empty.
 
 \subsubsection{convert(typ, value)}
 The function converts \term{value} according
-to the \nowdb\ \sql\ type \term{t}.
+to the \nowdb\ \sql\ type \term{typ}.
 Available types are
 \acronym{text}, \acronym{time},
 \acronym{float}, \acronym{int}, \acronym{uint} and
@@ -84,7 +84,8 @@ The \term{Result} class represents
 the dynamic types described in chapter \ref{chpt_sql}.
 Instances of \term{Result} are
 created and returned by
-the \term{execute()} function.
+the \term{execute()} function
+and by the \term{Result} creators discussed above.
 
 The \term{Result} class has the following methods:
 
@@ -94,7 +95,7 @@ either \acronym{status},
 \acronym{report}, \acronym{row} or \acronym{cursor}.
 
 \subsubsection{ok()}
-The method return \term{True}
+The method returns \term{True}
 if the instance does not represent
 an error and \term{False} otherwise.
 
@@ -103,7 +104,8 @@ The method returns a \term{void} pointer
 to the underlying C structure.
 The database expects such a pointer
 as result from a procedure call and
-wouldn't what to with a Python result instance.
+wouldn't know what to do
+with a Python result instance.
 Any result returned to the database
 must therefore call \term{toDB()} 
 and return the result of that method.
@@ -121,7 +123,7 @@ with execute("select count(*) from sales") as cur:
 The method releases the C objects
 allocated with the \term{Result} object.
 Since \term{Result} is a resource manager,
-it is rarely necessary to use explicitly.
+it is rarely necessary to use it explicitly.
 
 \subsubsection{Resource Manager}
 Result is a resource manager.
@@ -151,8 +153,8 @@ chapter \ref{chpt_errors}.
 
 \subsubsection{details()}
 The method returns
-detailed information on the error
-(or \term{None} if no error has occurred.
+detailed information about the error
+(or \term{None} if no error has occurred).
 
 \subsection{Cursors}
 If the result is a cursor,
@@ -162,11 +164,11 @@ four more methods are available:
 The method fetches the next bulk
 of rows from the database.
 After successful completion,
-the cursor contains the bulk
+the cursor contains this bulk
 of rows, which can be obtained by means of
 the method \term{row()}.
 Note that the first bulk of rows
-is available immediately with
+is available immediately after
 Cursor creation.
 
 \subsubsection{row()}
@@ -180,7 +182,7 @@ Cursors need to be closed
 explicitly; the method, however,
 is usually not called directly,
 but implicitly, when the result
-is created with a \term{with} statement.
+is created by means of a \term{with} statement.
 
 \subsubsection{eof()}
 The method returns \term{True}
@@ -192,7 +194,7 @@ otherwise.
 \term{Cursor} is an iterator.
 Usually, \term{fetch()}, \term{row()}
 and \term{eof()} do not need to be called
-explicitly in the code.
+explicitly.
 Instead a \term{for}-loop  can be used, \eg:
 
 \begin{python}
@@ -222,11 +224,11 @@ Conversion takes place in the obvious way
  float to float, text to string, \etc).
 An exception are \term{time} fields.
 One could expect \term{field} to return
-a \term{datetime}, but that is not a case.
+a \term{datetime}, but that is not the case.
 Time is returned as a (signed) integer
 representing a \acronym{unix} timestamp
 with nanosecond precision.
-It can be converted with \term{now2db}
+It can be converted with \term{now2dt}
 (please refer to chapter \ref{chpt_pythonclient}
 for details).
 
@@ -235,7 +237,7 @@ The method advances to the next row.
 If there was one more row, the method
 returns \term{True} and the next call
 to \term{field(n)} will return the
-$n$th field of the next row.
+$n$th field of that row.
 Otherwise, if no more rows are available,
 the method returns \term{False}.
 
@@ -261,12 +263,12 @@ with execute("exec myproc()") as row:
 \end{lstlisting}
 \end{python}
 
-\subsubsection{add2Row(t, value)}
-The method adds the \term{value}
-as \nowdb\ \sql\ type \term{t} to
+\subsubsection{add2Row(typ, value)}
+The method adds \term{value}
+as \nowdb\ \sql\ type \term{typ} to
 the row. This method is intended
-for rows that are created by the
-procedure. A usage example is:
+for rows that are created in user code.
+A usage example is:
 
 \begin{python}
 \begin{lstlisting}
@@ -300,7 +302,7 @@ from edge and the \term{client\_key} from \term{client}.
 Finally, the row is returned (calling $toDB()$).
 
 \subsubsection{closeRow()}
-The method inserts an \term{end-of-row} marker to the row.
+The method inserts an \term{end-of-row} marker into the row.
 It is intended to be used with bulks of rows created by
 user-defined procedures. Note that it is not necessary
 to close a single row result. The marker separates
@@ -315,9 +317,9 @@ The method returns the number of affected rows.
 
 \subsubsection{errors()}
 The method returns the number of errors.
-Note that \acronym{ddl} statements will
-return a status result if an error occurred.
-In practice, only \acronym{dml} statements provide
+Note that \acronym{dml} statements will
+return a \term{Status} result if an error occurred.
+In practice, only \acronym{dll} statements provide
 this information.
 
 \subsubsection{runTime()}

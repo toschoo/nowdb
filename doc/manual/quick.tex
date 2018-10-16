@@ -20,7 +20,7 @@ docker run --rm -p 55505:55505 $\backslash$\\
 \hspace*{2cm} -d nowdbdocker /bin/bash -c "/nowstart.sh"
 }
 
-This command is creates the docker container and starts it.
+This command creates the docker container and starts it.
 The parameters are
 \begin{itemize}
 \item \tech{--rm}
@@ -77,7 +77,7 @@ and the \tech{-y} switch, which activates
 server-side Python support.
 
 Now the daemon is listening to port 55505
-and ready to respond to database requests.
+and is ready to respond to database requests.
 The daemon starts by printing a welcome banner
 to standard output:
 
@@ -107,6 +107,7 @@ to standard output:
 connections: 128
 port       : 55505
 domain     : any
+base path  : /dbs
 \end{verbatim}
 \end{minipage}
 \endgroup
@@ -128,7 +129,7 @@ only accept connections from the server.
 The host or domain can be given as name (\term{localhost})
 or as \acronym{ip} address (\tech{127.0.0.1});
 
-\item \tech{-p} the port the server to which
+\item \tech{-p} the port to which
 the server will listen; default is 55505,
 but any other (free) port may be used.
  
@@ -137,7 +138,8 @@ If the argument is 0, the connection pool grows
 indefinitely; otherwise, for \tech{-c n},
 $n$ being a positive integer,
 the server will create a connection pool
-up to $n$ sessions and then refuse to accept
+up to $n$ sessions and, all sessions in
+the pool are used, refuse to accept
 more connections. The default pool size is 128;
 \comment{Notice that due to a memory leak
 in the Python interpreter, there is no way
@@ -151,7 +153,7 @@ in the pool.}
 \item \tech{-y} activate server-side Python support;
 \item \tech{-l} activates server-side Lua support;
 \item \tech{-V} prints version information to standard output;
-\item \tech{-?} or \tech{-h} prints a help message to standard output.
+\item \tech{-?} or \tech{-h} prints a help message to standard error.
 \end{itemize}
 \end{minipage}
 
@@ -184,7 +186,7 @@ executing "select count(*) from sales where customer=12345" \\
 
 \begin{minipage}{\textwidth}
 With option \tech{-q} we suppress the processing information.
-We would then only see:
+We would then only see the result:
 
 \cmdline{
 59
@@ -217,7 +219,7 @@ print some (server-side) timing information to standard error;
 quiet mode: don't print processing information to standard error.
 
 \item \tech{-V} prints version information to standard output;
-\item \tech{-?} or \tech{-h} prints a help message to standard output.
+\item \tech{-?} or \tech{-h} prints a help message to standard error.
 \end{itemize}
 \end{minipage}
 
@@ -269,8 +271,8 @@ create edge buys (
         weight uint,
         weight2 float
 );
-load '/opt/data/products.csv' into vertex use header as product;
-load '/opt/data/clients.csv' into vertex use header as client;
+load '/opt/data/products.csv' into product use header;
+load '/opt/data/clients.csv' into client use header;
 load '/opt/data/sales.csv' into sales;
 \end{lstlisting}
 \end{sqlcode}
@@ -359,7 +361,8 @@ The next two blocks of code create the types
 `product' and `client'.
 Types describe vertices.
 Each database has a set
-of vertices that can be connected to form graphs.
+of vertices that can be connected
+by means of edges to form graphs.
 The graphs structure all data
 in our specific application.
 The vertex types thus describe the universe of discourse.
@@ -381,7 +384,7 @@ For more information on \sql\ types,
 please refer to chapter
 \ref{chpt_sql}.
 
-Each type needs a \term{primary key} and
+Every vertex type needs a \term{primary key} and
 that primary key must consist of only one attribute.
 There are no composed keys like in relational
 databases.
@@ -409,7 +412,7 @@ The types of \term{origin} and \term{destin} are defined
 by the user. The types are restricted to vertex types.
 In the script, the types are
 \term{client} and \term{product},
-which we defined above.
+which we defined before.
 
 The next field is \term{label}.
 Labels can be used
@@ -422,9 +425,7 @@ A useful example using labels is given further below.
 
 With the next field, the timeseries aspect of \nowdb\
 comes in. Indeed, edges have a \term{timestamp}.
-Vertices will have \emph{many} edges -- not a few hundred
-like in most graph databases, but millions or even
-billions. In our retail application,
+In our retail application,
 edges of type \term{buys}, indicate that a client
 bought a certain product \emph{at a given time}.
 
@@ -485,7 +486,7 @@ loading is way more efficient than inserting in most cases.
 
 The first two \acronym{csv}s in the script contain vertices.
 As such they need to have a header and we need to instruct
-the loader of how to interpret the data (\tech{use header as client}).
+the loader of how to interpret the data.
 Since edges always have the same format, they don't need a header
 and we do not give any instructions of how to interpret the data.
 
@@ -706,10 +707,8 @@ This is as it should be.
 Unfortunately, there are still heavy inconsistencies
 with vertices.
 The syntax is currently `select field from vertex as type',
-which is ugly and pointless.
-Even worse, grouping, ordering and aggregates
-are not yet implemented for vertices.
-That must be corrected \acronym{asap}.
+which is ugly and pointless
+and will be corrected \acronym{asap}.
 }
 
 Much more typical for \nowdb, however,
