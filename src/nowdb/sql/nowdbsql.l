@@ -89,6 +89,7 @@
 (?i:FALSE)		return NOWDB_SQL_FALSE;
 
 (?i:SELECT)		return NOWDB_SQL_SELECT;
+(?i:INSERT)		return NOWDB_SQL_INSERT;
 (?i:FROM)		return NOWDB_SQL_FROM;
 (?i:WHERE)		return NOWDB_SQL_WHERE;
 (?i:GROUP)		return NOWDB_SQL_GROUP;

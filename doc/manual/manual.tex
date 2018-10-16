@@ -1,0 +1,72 @@
+%% =======================================================
+%% (c) 2018 Tobias Schoofs
+%% =======================================================
+%% NowDB
+%% =======================================================
+
+% Plain Style
+\documentclass{scrreprt}
+
+\include{cmds}
+
+\usepackage{authblk}
+\usepackage[toc,page]{appendix}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{algorithmic}
+\usepackage{nicefrac}
+
+\begin{document}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{8pt}
+
+\title {NoWDB}
+\author {tobias.schoofs@gmx.net}
+\date{\today}
+%\includegraphics[scale=0.75]{sonic.jpg}\\[24pt]\today}
+\maketitle
+\tableofcontents
+
+\chapter{Introduction}\label{chpt_intro} 
+
+\chapter{Quick Start}\label{chpt_quickst}
+\input{quick}
+
+\chapter{SQL}\label{chpt_sql}
+\input{sql}
+
+\chapter{The NoWDB daemon}\label{chpt_nowdbd}
+\chapter{The Client Tool}\label{chpt_clienttool}
+
+\chapter{Higher Level C and C++ Client}\label{chpt_ccpp}
+\CC\
+
+\chapter{Python Client}\label{chpt_pythonclient}
+\input{pyclient}
+
+\chapter{Go Client}\label{chpt_goclient}
+
+\chapter{Lua Client}\label{chpt_luaclient}
+
+\chapter{The Low-Level C Client}\label{chpt_llc}
+
+\chapter{Embedded Python}\label{chpt_pythonemb}
+\input{pyemb}
+
+\chapter{Embedded Lua}\label{chpt_luaemb}
+
+\chapter{Detailed Installation Guide}\label{chpt_install}
+
+\chapter{Defining Data Loaders}\label{chpt_loader}
+
+\chapter{Pub/Sub and Filters}\label{chpt_pubsub}
+
+\chapter{Optimising Queries}\label{chpt_opt}
+\input{qopt}
+
+\chapter{Table and Index Sizing}\label{chpt_sizing}
+
+\chapter{Error Codes}\label{chpt_errors}
+\input{errors}
+
+\end{document}

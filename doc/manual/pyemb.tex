@@ -1,0 +1,355 @@
+\section{Outline}
+The embedded python library consists mainly
+of the \term{nowdb} module, which defines
+the \term{execute} function and the \term{Result} class.
+Support functions (which are also available)
+for client-side python are defined in
+\tech{nowutil.py}.
+
+The module uses the package \term{dateutil}
+which must be installed on the system in order
+to use the \term{nowdb} module.
+(Please refer to chapter
+\ref{chpt_install} for details.)
+
+An embedded Python program needs to import at least
+the \term{nowdb} module. The import must have
+the form \term{import nowdb}, because the database
+interacts with this module through the user-defined
+module.
+
+The user may define a module-level function
+\term{cleanup()} in his or her module.
+This function is called by the database
+before the module is unloaded at the end of
+the session. A meaningful use case for this
+function is provided below in section \ref{sec_func}.
+
+The embedded \acronym{api} is very similar
+to that provided by the client library,
+but there are also some differences.
+The most obvious difference is that
+there is not \term{Connection} class.
+Instead, there is a module-level function
+to execute \sql\ statements.
+
+There are also model-level functions
+to create results. In the client library
+this is not necessary, because client
+do not need to return results.
+Likewise, the \term{Result} class
+has some more methods to deal with
+the specifics of creating results
+and returning them to the database.
+
+\comment{
+Currently, we only discuss procedures --
+in the future, there will also be functions
+(which can be called in \sql\ context)
+and those will be discussed here as well.
+}
+
+\section{Module-level Functions}
+
+\subsubsection{execute(statement)}
+The function calls the parser against the statement and, on success,
+executes the parsing result in the database.
+The function returns an instance of the \term{Result} class
+or, on internal errors, raises the exceptions \term{DBError}.
+
+\subsubsection{success()}
+The function creates a \term{Status} result
+that represents \acronym{ok}.
+
+\subsubsection{makeError(code, msg)}
+The function creates a \term{Status} result
+that represents an error event with error code
+\term{code} and detailed information \term{msg}.
+
+\subsubsection{makeRow()}
+The function creates a \term{Row} result.
+The row is initially empty.
+
+\subsubsection{convert(typ, value)}
+The function converts \term{value} according
+to the \nowdb\ \sql\ type \term{t}.
+Available types are
+\acronym{text}, \acronym{time},
+\acronym{float}, \acronym{int}, \acronym{uint} and
+\acronym{bool},
+which are defined as global constants.
+
+\section{Results}
+The \term{Result} class represents
+the dynamic types described in chapter \ref{chpt_sql}.
+Instances of \term{Result} are
+created and returned by
+the \term{execute()} function.
+
+The \term{Result} class has the following methods:
+
+\subsubsection{rType()}
+The method returns the result type,
+either \acronym{status},
+\acronym{report}, \acronym{row} or \acronym{cursor}.
+
+\subsubsection{ok()}
+The method return \term{True}
+if the instance does not represent
+an error and \term{False} otherwise.
+
+\subsubsection{toDB()}
+The method returns a \term{void} pointer
+to the underlying C structure.
+The database expects such a pointer
+as result from a procedure call and
+wouldn't what to with a Python result instance.
+Any result returned to the database
+must therefore call \term{toDB()} 
+and return the result of that method.
+The following example would return
+the result of a statement as is:
+
+\begin{python}
+\begin{lstlisting}
+with execute("select count(*) from sales") as cur:
+    return cur.toDB()
+\end{lstlisting}
+\end{python}
+
+\subsubsection{release()}
+The method releases the C objects
+allocated with the \term{Result} object.
+Since \term{Result} is a resource manager,
+it is rarely necessary to use explicitly.
+
+\subsubsection{Resource Manager}
+Result is a resource manager.
+\term{Result} can therefore
+be used with the \term{with} statement, \eg:
+
+\begin{python}
+\begin{lstlisting}
+with execute("select count(*) from sales") as cur:
+    # here goes your code
+    # 'cur' is the result and
+    # if no error has occurred, cur is a cursor
+\end{lstlisting}
+\end{python}
+
+\subsection{Status}
+If \term{Result} is a \term{Status},
+two more methods are available:
+
+\subsubsection{code()}
+The method returns the \nowdb\ error code.
+The error code may be 0,
+which means that the call was successful,
+no error has occurred;
+or it may be one of the error codes listed in
+chapter \ref{chpt_errors}.
+
+\subsubsection{details()}
+The method returns
+detailed information on the error
+(or \term{None} if no error has occurred.
+
+\subsection{Cursors}
+If the result is a cursor,
+four more methods are available:
+
+\subsubsection{fetch()}
+The method fetches the next bulk
+of rows from the database.
+After successful completion,
+the cursor contains the bulk
+of rows, which can be obtained by means of
+the method \term{row()}.
+Note that the first bulk of rows
+is available immediately with
+Cursor creation.
+
+\subsubsection{row()}
+The method obtains the current
+bulk of rows from the cursor.
+It returns a \term{Row} result.
+
+\subsubsection{close()}
+The method closes the cursor.
+Cursors need to be closed
+explicitly; the method, however,
+is usually not called directly,
+but implicitly, when the result
+is created with a \term{with} statement.
+
+\subsubsection{eof()}
+The method returns \term{True}
+if the error state of the cursor
+is \term{end-of-file} and \term{False}
+otherwise.
+
+\subsubsection{Iterator}
+\term{Cursor} is an iterator.
+Usually, \term{fetch()}, \term{row()}
+and \term{eof()} do not need to be called
+explicitly in the code.
+Instead a \term{for}-loop  can be used, \eg:
+
+\begin{python}
+\begin{lstlisting}
+with execute("select * from sales") as cur:
+    if not cur.ok():
+        print "ERROR: %s " % cur.details()
+        return
+    for row in cur:
+        # process cursor
+        # row holds a single row
+\end{lstlisting}
+\end{python}
+
+\subsection{Rows}
+If the result is a row,
+four more methods are available:
+
+\subsubsection{field(n)}
+The method returns the value
+of the $n$th field (starting to count
+from 0 for the first field).
+The value is an \sql\ base type
+converted to Python.
+Conversion takes place in the obvious way
+(integer and unsigned integer to int,
+ float to float, text to string, \etc).
+An exception are \term{time} fields.
+One could expect \term{field} to return
+a \term{datetime}, but that is not a case.
+Time is returned as a (signed) integer
+representing a \acronym{unix} timestamp
+with nanosecond precision.
+It can be converted with \term{now2db}
+(please refer to chapter \ref{chpt_pythonclient}
+for details).
+
+\subsubsection{nextRow()}
+The method advances to the next row.
+If there was one more row, the method
+returns \term{True} and the next call
+to \term{field(n)} will return the
+$n$th field of the next row.
+Otherwise, if no more rows are available,
+the method returns \term{False}.
+
+Note that, working with a cursor
+as iterator, it is not necessary
+to use this method. The iterator
+produces single rows.
+The main use case of \term{nextRow()}
+is for user-defined procedures that
+return bulks of rows. An example
+for this usage is:
+
+\begin{python}
+\begin{lstlisting}
+with execute("exec myproc()") as row:
+    if not row.ok():
+        print "ERROR: %s " % row.details()
+        return
+    while True:
+        # use row.field(n) to access fields
+        if not row.nextRow():
+            break
+\end{lstlisting}
+\end{python}
+
+\subsubsection{add2Row(t, value)}
+The method adds the \term{value}
+as \nowdb\ \sql\ type \term{t} to
+the row. This method is intended
+for rows that are created by the
+procedure. A usage example is:
+
+\begin{python}
+\begin{lstlisting}
+with execute("select origin from edge where edge = 'buys'") as cur:
+    our = None
+    for row in cur:
+       if our is None:
+          our = makeRow() # create a row result
+       else:
+          our = closeRow() # terminate row
+
+       with execute("select client_name from client\
+                      where client_key = " +
+                      str(row.field(0))) as cur2:
+            for cow in cur2:
+                our.add2Row(UINT, cur.field(0))
+                our.add2Row(TEXT, cow.field(0))
+
+    return our.toDB() 
+\end{lstlisting}
+\end{python}
+
+This is a na\"ive join implementation:
+For each edge, the function executes a \term{select}
+on the \term{client} with the key found in \term{origin}.
+The function creates a row ``our'' which is initialised
+to \term{None}. Once it was created, it is closed,
+so that each iteration will write to a new row.
+Each of the rows contains two fields: the \term{origin}
+from edge and the \term{client\_key} from \term{client}.
+Finally, the row is returned (calling $toDB()$).
+
+\subsubsection{closeRow()}
+The method inserts an \term{end-of-row} marker to the row.
+It is intended to be used with bulks of rows created by
+user-defined procedures. Note that it is not necessary
+to close a single row result. The marker separates
+rows and is therefore needed only for bulks.
+
+\subsection{Reports}
+If the result is a report,
+three more methods are available:
+
+\subsubsection{affected()}
+The method returns the number of affected rows.
+
+\subsubsection{errors()}
+The method returns the number of errors.
+Note that \acronym{ddl} statements will
+return a status result if an error occurred.
+In practice, only \acronym{dml} statements provide
+this information.
+
+\subsubsection{runTime()}
+The method returns the running time of 
+the \acronym{dml} or \acronym{dll} statement.
+
+A usage example is
+
+\begin{python}
+\begin{lstlisting}
+with execute("load '/opt/import/client.csv into client") as rep:
+    if not rep.ok():
+        print "ERROR: %s " % rep.details()
+        return
+    
+    print "affected: %d, errors: %d, running time: %dus" % 
+             (rep.affected(), rep.errors(), rep.runTime())
+\end{lstlisting}
+\end{python}
+
+\section{Exceptions and Errors}
+\subsubsection{DBError}
+Is raised when an error in the database occurred.
+
+\subsubsection{WrongType}
+Is raised in case of type mismatch, \ie\
+trying to call a method not available for
+this specific return type.
+
+\subsubsection{explain(err)}
+The function \term{explain} returns
+a description of the error code passed in.
+
+\section{Functional Cursor Library}\label{sec_func}
+\comment{tbc}

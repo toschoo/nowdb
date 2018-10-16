@@ -45,6 +45,8 @@ LOG = log
 TOOLS = tools
 RSC = rsc
 OUTLIB = lib
+DOC=doc
+MAN=doc/manual
 LIBPY = python2.7
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
 clibs = -lm -lpthread -ltsalgo
@@ -62,6 +64,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sort/sort.o      \
       $(SRC)/mem/lru.o        \
       $(SRC)/mem/ptlru.o      \
+      $(SRC)/mem/pklru.o      \
       $(SRC)/mem/pplru.o      \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
@@ -72,6 +75,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/scope/procman.o  \
+      $(SRC)/scope/dml.o      \
       $(SRC)/index/index.o    \
       $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
@@ -109,6 +113,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/sort/sort.h      \
       $(SRC)/mem/lru.h        \
       $(SRC)/mem/ptlru.h      \
+      $(SRC)/mem/pklru.h      \
       $(SRC)/mem/pplru.h      \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
@@ -119,6 +124,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/scope/scope.h    \
       $(SRC)/scope/loader.h   \
       $(SRC)/scope/procman.h  \
+      $(SRC)/scope/dml.h      \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
@@ -151,6 +157,12 @@ IFC = include/nowdb/nowdb.h \
 default:	lib 
 
 all:	default tools tests bench server client
+
+install:	lib server client tools
+		cp lib/*.so /usr/local/lib
+		cp bin/nowdbd /usr/local/bin
+		cp bin/nowclient /usr/local/bin
+		cp -r pynow /usr/local/
 
 server:	$(BIN)/nowdbd
 
@@ -622,6 +634,7 @@ clean:
 	rm -f $(SRL)/*.o
 	rm -f $(PYC)/*.pyc
 	rm -f $(TST)/*/*.o
+	rm -f $(TST)/*/*.pyc
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
 	rm -f $(TOOLS)/*.o
@@ -656,6 +669,7 @@ clean:
 	rm -rf $(RSC)/idx??
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
+	rm -rf $(RSC)/db???
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
@@ -705,4 +719,9 @@ clean:
 	rm -f $(BIN)/catalog
 	rm -f $(BIN)/nowdbd
 	rm -f $(BIN)/nowclient
+	rm -f $(MAN)/*.aux
+	rm -f $(MAN)/*.log
+	rm -f $(MAN)/*.out
+	rm -f $(MAN)/*.toc
+	rm -f $(MAN)/*.pdf
 

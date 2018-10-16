@@ -155,6 +155,28 @@ typedef struct {
 	nowdbsql_state_pushAst(nowdbres, d);
 
 /* ------------------------------------------------------------------------
+ * Create An INSERT statement and push it to the stack
+ * Parameters:
+ * - T: ast representing target
+ * - F: ast representing field list
+ * - V: ast representing value list
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_INSERT(T,F,V) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *dml; \
+	nowdb_ast_t *i; \
+	NOWDB_SQL_CREATEAST(&i, NOWDB_AST_INSERT, 0); \
+	NOWDB_SQL_ADDKID(i, T); \
+	NOWDB_SQL_ADDKID(i, V); \
+	if (F != NULL) { \
+		NOWDB_SQL_ADDKID(i, F); \
+	} \
+	NOWDB_SQL_CREATEAST(&dml,NOWDB_AST_DML, 0); \
+	NOWDB_SQL_ADDKID(dml, i); \
+	nowdbsql_state_pushAst(nowdbres, dml);
+
+/* ------------------------------------------------------------------------
  * Create A DQL statement and push it to the stack
  * Parameters:
  * - P: ast representing projection (a.k.a SELECT)

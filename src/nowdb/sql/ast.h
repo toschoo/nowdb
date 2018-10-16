@@ -57,10 +57,12 @@
  * DML is either
  * - insert
  * - update
+ * - delete
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_INSERT 3001
 #define NOWDB_AST_UPDATE 3002
+#define NOWDB_AST_DELETE 3003
 
 /* -----------------------------------------------------------------------
  * DQL is more complex, it consists of the following root nodes
@@ -382,6 +384,12 @@ nowdb_ast_t *nowdb_ast_order(nowdb_ast_t *node);
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get value list from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_value(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get field list from fun

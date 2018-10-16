@@ -1120,29 +1120,33 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 		if (err->errcode == nowdb_err_eof) {
 			nowdb_err_release(err);
 			if (sendEOF(ses) != 0) goto cleanup;
-			return 0; // OK
+			goto cleanup;
 		}
 		// internal error
 		INTERNAL("open cursor");
-		if (sendErr(ses, err, NULL) != 0) {
-			goto cleanup;
-		}
+		sendErr(ses, err, NULL);
 		goto cleanup;
 	}
-	err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (osz == 0) {
-				if (sendEOF(ses) != 0) goto cleanup;
+
+	// the reason for this loop is a bug in row.project
+	// for vertices. we should fix that instead of leaving
+	// the otherwise meaningless loop here!
+	do { 
+		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				if (osz == 0) {
+					if (sendEOF(ses) != 0) goto cleanup;
+				}
+			} else {
+				// internal error
+				INTERNAL("fetching first row");
+				sendErr(ses, err, NULL);
+				goto cleanup;
 			}
-		} else {
-			// internal error
-			INTERNAL("fetching first row");
-			sendErr(ses, err, NULL);
-			goto cleanup;
 		}
-	}
+	} while(osz==0);
 
 	// insert cursor into tree
 	ses->curid++;
@@ -1195,17 +1199,23 @@ static int fetch(nowdb_session_t    *ses,
 	if (nowdb_cursor_eof(scur->cur)) return sendEOF(ses);
 
 	// fetch
-	err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
-	if (err != NOWDB_OK) {
-		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (osz == 0) return sendEOF(ses);
-		} else {
-			INTERNAL("fetching cursor");
-			sendErr(ses, err, NULL);
-			return -1;
+	// the reason for this loop is a bug in row.project
+	// for vertices. we should fix that instead of leaving
+	// the otherwise meaningless loop here!
+	do { 
+		err = nowdb_cursor_fetch(scur->cur, buf, sz, &osz, &cnt);
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err);
+				if (osz == 0) return sendEOF(ses);
+			} else {
+				INTERNAL("fetching cursor");
+				sendErr(ses, err, NULL);
+				return -1;
+			}
 		}
-	}
+	} while(osz==0);
+
 	scur->count += cnt;
 
 	// debugging...
@@ -1289,7 +1299,8 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 
 	case NOWDB_QRY_RESULT_SCOPE:
 		ses->scope = res.result;
-		nowdb_proc_setScope(ses->proc, ses->scope);
+		err = nowdb_proc_setScope(ses->proc, ses->scope);
+		if (err != NOWDB_OK) return sendErr(ses, err, ast);
 		return sendOK(ses);
 
 	case NOWDB_QRY_RESULT_ROW:

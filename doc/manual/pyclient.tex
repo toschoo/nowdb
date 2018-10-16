@@ -1,0 +1,331 @@
+\section{Outline}
+The python client consists of a bunch
+of modules all starting with prefix \term{now}.
+The main module which defines
+the \term{Connection} and the \term{Result} class
+is actually called just \tech{now.py}.
+Support functions (which are also available)
+for server-side python are defined in
+\tech{nowutil.py}.
+
+The modules use the package \term{dateutil}
+which must be installed on the system in order
+to use the \term{now} modules.
+(Please refer to chapter
+\ref{chpt_install} for details.)
+
+A client program needs to import at least
+the \term{now} module. The import may have
+any form (\ie\ \term{import now} or
+\term{from now import}).
+
+\section{Connections}
+The \term{Connection} class represents
+a \acronym{tcp/ip} connection to the
+database. It provides the following 
+methods:
+\subsubsection{\_\_init\_\_}
+The constructor takes four arguments,
+which are all strings:
+\begin{itemize}
+\item Address:
+used to determine the address of the server.
+The parameter is passed to the system service
+\tech{getaddrinfo} and allows:
+an \acronym{ip}v4 address,
+an \acronym{ip}v6 address or
+a hostname.
+Examples: ``127.0.0.1'', ``localhost'',
+``myserver.mydomain.org''.
+
+\item Port:
+used to determine the port of the server.
+The parameter is passed to the system service
+\tech{getaddrinfo} and allows:
+a port number or a known service name.
+
+\item User:
+\comment{currently not used}
+\item Password:
+\comment{currently not used}
+\end{itemize}
+
+\subsubsection{execute(statement)}
+The method sends the string \term{statement} to the database
+and waits for the database response.
+The method returns an instance of the \term{Result} class
+or, on internal errors, raises one of the exceptions
+\term{ClientError} or \term{DBError}.
+
+\subsubsection{close()}
+The method closes the connection and
+releases the C objects allocated by
+the constructor. If the connection
+cannot be closed for any reason,
+the exception \term{ClientError} is raised.
+
+\subsubsection{Resource Manager}
+\term{Connection} is a \term{resource manager}.
+The method \term{close} is therefore
+rarely necessary. Instead, \term{Connection} can
+be used with the \term{with} statement, \ie:
+
+\begin{python}
+\begin{lstlisting}
+with Connection("localhost", "55505", None, None) as conn:
+    # here goes your code
+    # refer to the connect as 'conn'
+\end{lstlisting}
+\end{python}
+
+\section{Results}
+The \term{Result} class represents
+the dynamic types described in chapter \ref{chpt_sql}.
+Instances of \term{Result} are
+created and returned by
+the \term{Connection.execute()} method.
+
+The \term{Result} class has the following methods:
+
+\subsubsection{rType()}
+The method returns the result type,
+either STATUS, REPORT, ROW or CURSOR.
+
+\subsubsection{ok()}
+The method return \term{True}
+if the instance does not represent
+an error and \term{False} otherwise.
+
+\subsubsection{release()}
+The method releases the C objects
+allocated with the \term{Result} object.
+Since \term{Result} is a resource manager,
+it is rarely necessary to use explicitly.
+
+\subsubsection{Resource Manager}
+Result is a resource manager.
+\term{Result} can therefore
+be used with the \term{with} statement, \eg:
+
+\begin{python}
+\begin{lstlisting}
+with conn.execute("select count(*) from sales") as cur:
+    # here goes your code
+    # 'conn' is a previously created connection
+    # 'cur' is the result and
+    # if no error has occurred, cur is a cursor
+\end{lstlisting}
+\end{python}
+
+\subsection{Status}
+If \term{Result} is a \term{Status},
+two more methods are available:
+
+\subsubsection{code()}
+The method returns the \nowdb\ error code.
+The error code may be
+\begin{itemize}
+\item 0: Success, no error has occurred;
+\item positive:
+An error in the database occurred;
+chapter \ref{chpt_errors} provides a list
+of server-side error codes.
+\item negative:
+An error in the client library occurred;
+chapter \ref{chpt_llc} provides a list
+of client-side error codes.
+\end{itemize}
+
+\subsubsection{details()}
+The method returns
+detailed information on the error
+(or \term{None} if no error has occurred.
+
+\subsection{Cursors}
+If the result is a cursor,
+four more methods are available:
+
+\subsubsection{fetch()}
+The method fetches the next bulk
+of rows from the database.
+After successful completion,
+the cursor contains the bulk
+of rows, which can be obtain by means of
+the method \term{row()}.
+Note that the first bulk of rows
+is available immediately with
+Cursor creation.
+
+\subsubsection{row()}
+The method obtains the current
+bulk of rows from the cursor.
+It returns a \term{Row} result.
+
+\subsubsection{close()}
+The method closes the cursor.
+Since cursors are server-side
+resource, it needs to be closed
+explicitly; the method, however,
+is usually not called directly,
+but implicitly, when the result
+is created with a \term{with} statement.
+
+\subsubsection{eof()}
+The method returns \term{True}
+if the error state of the cursor
+is \term{end-of-file} and \term{False}
+otherwise.
+
+\subsubsection{Iterator}
+\term{Cursor} is an iterator.
+Usually, \term{fetch()}, \term{row()}
+and \term{eof()} do not need to be called
+explicitly in the code.
+Instead a \term{for}-loop  can be used, \eg:
+
+\begin{python}
+\begin{lstlisting}
+with conn.execute("select * from sales") as cur:
+    if not cur.ok():
+        print "ERROR: %s " % cur.details()
+        return
+    for row in cur:
+        # process cursor
+        # row holds a single row
+\end{lstlisting}
+\end{python}
+
+\subsection{Rows}
+If the result is a row,
+two more methods are available:
+
+\subsubsection{field(n)}
+The method returns the value
+of the $n$th field (starting to count
+from 0 for the first field).
+The value is an \sql\ base type
+converted to Python.
+Conversion takes place in the obvious way
+(integer and unsigned integer to int,
+ float to float, text to string, \etc).
+An exception are \term{time} fields.
+One could expect \term{field} to return
+a \term{datetime}, but that is not a case.
+Time is returned as a (signed) integer
+representing a \acronym{unix} timestamp
+with nanosecond precision.
+It can be converted with \term{now2db}
+(please refer to section \ref{sec_supp}
+for details).
+
+\subsubsection{nextRow()}
+The method advances to the next row.
+If there was one more row, the method
+returns \term{True} and the next call
+to \term{field(n)} will return the
+$n$th field of the next row.
+Otherwise, if no more rows are available,
+the method returns \term{False}.
+
+Note that, working with a cursor
+as iterator, it is not necessary
+to use this method. The iterator
+produces single rows.
+The main use case of \term{nextRow()}
+is for user-defined procedures that
+return bulks of rows. An example
+for this usage is:
+
+\begin{python}
+\begin{lstlisting}
+with conn.execute("exec myproc()") as row:
+    if not row.ok():
+        print "ERROR: %s " % row.details()
+        return
+    while True:
+        # use row.field(n) to access fields
+        if not row.nextRow():
+            break
+\end{lstlisting}
+\end{python}
+
+\subsection{Reports}
+If the result is a report,
+three more methods are available:
+
+\subsubsection{affected()}
+The method returns the number of affected rows.
+
+\subsubsection{errors()}
+The method returns the number of errors.
+Note that \acronym{ddl} statements will
+return a status result if an error occurred.
+In practice, only \acronym{dml} statements provide
+this information.
+
+\subsubsection{runTime()}
+The method returns the running time of 
+the \acronym{dml} or \acronym{dll} statement.
+
+A usage example is
+
+\begin{python}
+\begin{lstlisting}
+with conn.execute("load '/opt/import/client.csv into client") as rep:
+    if not rep.ok():
+        print "ERROR: %s " % rep.details()
+        return
+    print "affected: %d, errors: %d, running time: %dus" % 
+             (rep.affected(), rep.errors(), rep.runTime())
+\end{lstlisting}
+\end{python}
+
+\section{Exceptions and Errors}
+\subsubsection{ClientError}
+Is raised when an error in the client library occurred
+(\eg\ a socket error).
+
+\subsubsection{DBError}
+Is raised when an error in the database occurred.
+
+\subsubsection{WrongType}
+Is raised in case of type mismatch, \ie\
+trying to call a method not available for
+this specific return type.
+
+\subsubsection{explain(err)}
+The function \term{explain} returns
+a description of the error code passed in.
+
+\section{Support Functions}\label{sec_supp}
+Support functions are provided by module
+\term{nowutil}. Currently the following
+support functions are available:
+
+\subsubsection{dt2now(dt)}
+The function expects a \term{datetime}
+object and converts it to a \nowdb\ timestamp.
+
+\subsubsection{now2dt(tp)}
+The function expects a \nowdb\ timestamp
+and converts it to a \term{datetime} object.
+
+\subsubsection{utc}
+This is a global variable defined in \term{nowutil}.
+It is the \acronym{utc} timezone object needed
+for many datetime constructors and conversion functions.
+It is provided for convenience.
+
+\subsubsection{TIMEFORMAT and DATEFORMAT}
+These are global constants providing the
+standard \nowdb\ time and date format
+strings that can be used, for instance,
+in the \term{datetime}
+\term{strftime} and \term{strptime} methods, \eg:
+
+\begin{python}
+\begin{lstlisting}
+    stmt = "select count(*) from sales\
+             where timestamp = '" + tp.strftime(TIMEFORMAT) + "'"
+\end{lstlisting}
+\end{python}

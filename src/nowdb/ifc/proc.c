@@ -384,15 +384,30 @@ nowdb_err_t nowdb_proc_create(nowdb_proc_t **proc,
 	(*proc)->lib = lib;
 	(*proc)->scope = scope;
 
+	(*proc)->dml = calloc(1, sizeof(nowdb_dml_t));
+	if ((*proc)->dml == NULL) {
+		NOMEM("allocating parser");
+		free(*proc); *proc = NULL;
+	}
+
+	err = nowdb_dml_init((*proc)->dml, (*proc)->scope, 1);
+	if (err != NOWDB_OK) {
+		free((*proc)->dml); (*proc)->dml = NULL;
+		free(*proc); *proc = NULL;
+		return err;
+	}
+
 	(*proc)->parser = calloc(1,sizeof(nowdbsql_parser_t));
 	if ((*proc)->parser == NULL) {
 		NOMEM("allocating parser");
+		free((*proc)->dml); (*proc)->dml = NULL;
 		free(*proc); *proc = NULL;
 		return err;
 	}
 	if (nowdbsql_parser_init((*proc)->parser, stdin) != 0) {
 		err = nowdb_err_get(nowdb_err_parser, FALSE, OBJECT,
 		                              "cannot init parser");
+		free((*proc)->dml); (*proc)->dml = NULL;
 		free((*proc)->parser); (*proc)->parser = NULL;
 		free(*proc); *proc = NULL;
 		return err;
@@ -445,6 +460,10 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
 	if (proc->scope != NULL) {
 		proc->scope = NULL;
 	}
+	if (proc->dml != NULL) {
+		nowdb_dml_destroy(proc->dml);
+		free(proc->dml); proc->dml = NULL;
+	}
 #ifdef _NOWDB_WITH_PYTHON
 	if (proc->pyIntp != NULL) {
 		PyEval_RestoreThread(proc->pyIntp);
@@ -473,9 +492,11 @@ nowdb_err_t nowdb_proc_reinit(nowdb_proc_t *proc) {
  * Set current scope
  * ------------------------------------------------------------------------
  */
-void nowdb_proc_setScope(nowdb_proc_t  *proc, 
-                         nowdb_scope_t *scope) {
+nowdb_err_t nowdb_proc_setScope(nowdb_proc_t  *proc, 
+                                nowdb_scope_t *scope) {
 	proc->scope = scope;
+	nowdb_dml_destroy(proc->dml);
+	return nowdb_dml_init(proc->dml, proc->scope, 1);
 }
 
 /* ------------------------------------------------------------------------
@@ -484,6 +505,14 @@ void nowdb_proc_setScope(nowdb_proc_t  *proc,
  */
 nowdb_scope_t *nowdb_proc_getScope(nowdb_proc_t *proc) {
 	return proc->scope;
+}
+
+/* ------------------------------------------------------------------------
+ * Get DML helper from proc interface
+ * ------------------------------------------------------------------------
+ */
+nowdb_dml_t *nowdb_proc_getDML(nowdb_proc_t *proc) {
+	return proc->dml;
 }
 
 /* ------------------------------------------------------------------------
