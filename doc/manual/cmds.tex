@@ -11,7 +11,8 @@
 \usepackage{ucs}
 \usepackage[utf8x]{inputenc} 
 \usepackage{tabto}
-\usepackage[portuguese,german,english]{babel}
+\usepackage[russian,portuguese,german,english]{babel}
+\usepackage{CJK}
 \usepackage{amsfonts}
 \usepackage{amsfonts}
 
@@ -20,9 +21,10 @@
 \usepackage{amsthm}
 \usepackage{amscd}
 
-\usepackage{listings}
-
 \usepackage{siunitx}
+
+\usepackage{listings}
+\usepackage{longtable}
 
 \usepackage{tikz}
 \usepackage{pgfplots}
@@ -48,24 +50,43 @@
 \newcommand{\sql}{\acronym{sql}}
 
 \newcommand{\code}[1]{{\ttfamily #1}}
+\newcommand{\cmdline}[1]{{\ttfamily #1}}
 
 \newenvironment{sqlcode}{
 \small
+\begin{minipage}{\textwidth}
 \lstset{language=sql,
         keepspaces=true,
         showspaces=false,
         showstringspaces=false}
 }{
+\end{minipage}
 }
 
 \newenvironment{python}{
 \small
+\begin{minipage}{\textwidth}
 \lstset{language=python,
         keepspaces=true,
         showspaces=false,
         showstringspaces=false}
 }{
+\end{minipage}
 }
+
+\newenvironment{ccode}{
+\small
+\begin{minipage}{\textwidth}
+\lstset{language=C,
+        keepspaces=true,
+        showspaces=false,
+        showstringspaces=false}
+}{
+\end{minipage}
+}
+
+\newcommand{\keyword}[1]{\textbf{#1}}
+\newcommand{\identifier}[1]{\textit{#1}}
 
 \newcommand{\Rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
 
