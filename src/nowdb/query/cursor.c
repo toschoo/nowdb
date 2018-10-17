@@ -557,6 +557,12 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 
 	*x = 1;
 
+	/*
+	fprintf(stderr, "groupswitch on %p+%u %u bytes to %p\n",
+	                 src, cur->off, cur->recsize, cur->tmp);
+	*/
+
+	/* group not yet initialised */
 	if (memcmp(cur->tmp, nowdb_nullrec, cur->recsize) == 0) {
 		memcpy(cur->tmp, src+cur->off, cur->recsize);
 		if (cur->group != NULL) {
@@ -573,6 +579,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 	      nowdb_sort_vertex_keys_compare(cur->tmp,
 		                         src+cur->off,
 		                      cur->rdr->ikeys);
+	/* no group switch, just map */
 	if (cmp == NOWDB_SORT_EQUAL) {
 		if (cur->group != NULL) {
 			err = nowdb_group_map(cur->group, ctype,
@@ -582,16 +589,18 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		cur->off += recsz; *x=0;
 		return NOWDB_OK;
 	}
+	/* we actually switch the group */
 	if (cur->group != NULL) {
 		err = nowdb_group_map(cur->group, ctype,
 			                      cur->tmp2);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 		if (err != NOWDB_OK) return err;
-
-		memcpy(cur->tmp2, cur->tmp, cur->recsize);
 	}
 	memcpy(cur->tmp, src+cur->off, cur->recsize);
+	if (cur->tmp2 != NULL && src != cur->tmp2) {
+		memcpy(cur->tmp2, cur->tmp, cur->recsize);
+	}
 	return NOWDB_OK;
 }
 
@@ -622,6 +631,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 		err = nowdb_group_reduce(cur->nogrp, ctype);
 	} else {
 		g = cur->group;
+		cur->off = 0;
 		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
 	}
 	if (err != NOWDB_OK) return err;
@@ -673,7 +683,10 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	while(*osz < sz) {
 		/* we have reached the end of the current page */
 		if (cur->off >= mx) {
-			// fprintf(stderr, "move %u %u\n", cur->off, *osz);
+			/*
+			fprintf(stderr, "move %u %u (%u)\n",
+			                 cur->off, *osz, mx);
+			*/
 			err = nowdb_reader_move(cur->rdr);
 			if (err != NOWDB_OK) {
 				return handleEOF(cur, err,
