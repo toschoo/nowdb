@@ -74,6 +74,17 @@
 \end{minipage}
 }
 
+\newenvironment{ccode}{
+\small
+\begin{minipage}{\textwidth}
+\lstset{language=C,
+        keepspaces=true,
+        showspaces=false,
+        showstringspaces=false}
+}{
+\end{minipage}
+}
+
 \newcommand{\keyword}[1]{\textbf{#1}}
 \newcommand{\identifier}[1]{\textit{#1}}
 
