@@ -1118,7 +1118,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
-			fprintf(stderr, "FUN: %s\n", (char*)field->value);
+			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 			flags = NOWDB_FIELD_AGG;
 

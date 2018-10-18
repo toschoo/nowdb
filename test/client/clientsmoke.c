@@ -272,12 +272,13 @@ int writeVrtx(char *path, int type, int halves) {
 #define EXECCUR(sql) \
 	fprintf(stderr, "executing %s\n", sql); \
 	err = nowdb_exec_statement(con, sql, &res); \
-	if (err != 0) { \
+	if (err != 0 && err != nowdb_err_eof) { \
 		fprintf(stderr, "cannot execute statement: %d\n", err); \
 		rc = EXIT_FAILURE; goto cleanup; \
 	} \
-	if (nowdb_result_status(res) != 0) { \
-		fprintf(stderr, "ERROR %hd: %s\n", \
+	if (nowdb_result_status(res) != 0 && \
+            nowdb_result_errcode(res) != nowdb_err_eof) { \
+		fprintf(stderr, "ERROR %hd in execcur: %s\n", \
 		        nowdb_result_errcode(res), \
 		       nowdb_result_details(res)); \
 		nowdb_result_destroy(res); \
@@ -452,16 +453,21 @@ int main() {
 
 	timestamp(&t1);
 
+	int havedata = 1;
 	sprintf(q, "select edge, destin, timestamp, weight from sales\
 	             where edge = 'buys' and origin=%lu", wanted);
 	EXECCUR(q);
 
 	err = nowdb_cursor_open(res, &cur);
 	if (err != NOWDB_OK) {
-		fprintf(stderr, "NOT A CURSOR\n");
-		rc = EXIT_FAILURE; goto cleanup;
+		if (nowdb_cursor_errcode(cur) == nowdb_err_eof) {
+			havedata = 0;
+		} else {
+			fprintf(stderr, "NOT A CURSOR\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 	}
-	while (nowdb_cursor_ok(cur)) {
+	while (havedata && nowdb_cursor_ok(cur)) {
 		// count rows
 		row = nowdb_cursor_row(cur);
 		if (row == NULL) {
@@ -510,15 +516,17 @@ int main() {
 	}
 	if (!nowdb_cursor_eof(cur)) {
 		fprintf(stderr, "this is not EOF!\n");
-		fprintf(stderr, "ERROR %d: %s\n",
+		fprintf(stderr, "ERROR %d in cursor: %s\n",
 		        nowdb_cursor_errcode(cur),
 		        nowdb_cursor_details(cur));
 		rc = EXIT_FAILURE;
 	}
-	err = nowdb_cursor_close(cur);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot close cursor: %d\n", err);
-		rc = EXIT_FAILURE; goto cleanup;
+	if (havedata) {
+		err = nowdb_cursor_close(cur);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "cannot close cursor: %d\n", err);
+			rc = EXIT_FAILURE; goto cleanup;
+		}
 	}
 	timestamp(&t2);
 	fprintf(stderr, "time: %ldus\n", minus(&t2, &t1)/1000);
