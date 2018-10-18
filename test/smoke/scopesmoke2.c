@@ -477,6 +477,8 @@ int main() {
 	char *sql=NULL;
 	char exists = 0;
 
+	int ITER = 10;
+
 	srand(time(NULL) ^ (uint64_t)&printf);
 
 	if (!nowdb_init()) {
@@ -561,7 +563,7 @@ int main() {
 
 	// test fullscan
 	fprintf(stderr, "FULLSCAN\n");
-	for(int i=0; i<10; i++) {
+	for(int i=0; i<ITER; i++) {
 		GETRANDOM(5, &o, &d, &tp, SQLFULL, &sql);
 		COUNTRESULT(sql);
 		CHECKRESULT(5, o, d, tp);
@@ -576,7 +578,7 @@ int main() {
 
 	// test index
 	fprintf(stderr, "INDEX SEARCH\n");
-	for(int i=0; i<10; i++) {
+	for(int i=0; i<ITER; i++) {
 		GETRANDOM(5, &o, &d, &tp, SQLIDX, &sql);
 		COUNTRESULT(sql);
 		CHECKRESULT(5, o, d, tp);
@@ -584,7 +586,7 @@ int main() {
 
 	// test order
 	fprintf(stderr, "ORDER\n");
-	for(int i=0; i<10; i++) {    // RANGE SCAN
+	for(int i=0; i<ITER; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
@@ -598,7 +600,7 @@ int main() {
 
 	// test count without group
 	fprintf(stderr, "COUNT W/O GROUP\n");
-	for(int i=0; i<10; i++) {
+	for(int i=0; i<ITER; i++) {
 		GETRANDOM(5, &o, &d, &tp, SQLCIDX, &sql);
 		READRESULT(sql, 0);
 		CHECKRESULT(5, o, d, tp);

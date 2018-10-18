@@ -492,7 +492,9 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 		return NOWDB_OK;
 
 	} else if (k == fun->fsize) {
-		now2float(&fun->r1, BLOCK(runner->cont)->block, fun->dtype);
+		now2float(&fun->r1, BLOCK(
+                           fun->many.head->cont)->block,
+		           fun->dtype);
 		return NOWDB_OK;
 	}
 
@@ -501,6 +503,8 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 
 	// even or odd?
 	two = (k/fun->fsize)%2==0;
+
+	if (two) c-=fun->fsize;
 
 	// go to centre
 	for(runner=fun->many.head; runner!=NULL; runner=runner->nxt) {
@@ -574,7 +578,7 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 		return NOWDB_OK;
 
 	case NOWDB_FUN_MEDIAN:
-		fprintf(stderr, "computing median\n");
+		// fprintf(stderr, "computing median\n");
 
 		err = nowdb_block_sort(&fun->many,
 		                        fun->flist,
@@ -585,7 +589,7 @@ static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 		return median(fun);
 
 	case NOWDB_FUN_STDDEV:
-		fprintf(stderr, "computing stddev\n");
+		// fprintf(stderr, "computing stddev\n");
 
 		/* compute average */
 		err = map2(fun, NOWDB_FUN_AVG);

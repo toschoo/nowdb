@@ -1,0 +1,473 @@
+\section{Outline}
+The low-level C \acronym{api} is not intended
+for application development. For this purpose
+high-level C and a \CC\ \acronym{api}s exist
+(please refer to chapter \ref{chpt_ccpp}).
+This \acronym{api} aims instead to ease
+the development of client language bindings.
+The Python, Lua and Go client \acronym{api}s
+are built on it.
+
+The \acronym{api} consists of the \tech{libnowdbclient}
+library, which is installed in a canonical library directory
+such as \tech{/usr/local/lib},
+and the \tech{nowclient.h} interface,
+which is intalled in a canonical header directory
+such as \tech{/usr/local/include}.
+
+The \acronym{api} provides services for
+time conversion, connection management,
+result handling and error handling.
+
+\section{Time}
+The \acronym{api} defines the \nowdb\ time type,
+\tech{nowdb\_time\_t} as \tech{uint64\_t}.
+Values of this type represent a \acronym{unix}
+timestamp with nanosecond precision.
+The smallest and greatest possible values
+are defined as 
+\begin{itemize}
+\item \acronym{nowdb\_time\_dawn}
+(`1677-09-21T00:12:44')
+and
+\item \acronym{nowdb\_time\_dusk}
+(`2262-04-11T23:47:16')
+respectively.
+\end{itemize}
+
+The standard formats are defined as
+\begin{itemize}
+\item \acronym{nowdb\_time\_format}
+\tech{"\%Y-\%m-\%dT\%H:\%M:\%S"} and
+\item \acronym{nowdb\_date\_format}
+\tech{"\%Y-\%m-\%d"}. 
+\end{itemize}
+
+The following time conversion functions are available:
+
+\subsubsection{nowdb\_time\_fromUnix}
+The function receives a \acronym{posix} \tech{struct timespec}
+and returns a \tech{nowdb\_time\_t}. The conversion never fails.
+
+\subsubsection{nowdb\_time\_toUnix}
+The function receives a \tech{nowdb\_time\_t} 
+and a pointer to a \acronym{posix} \tech{struct timespec},
+which must not be \acronym{null}.
+The function returns an \tech{int} representing
+an error code (see chapter \ref{chpt_errors}).
+The conversion fails if the pointer to the \term{timespec}
+structure is \acronym{null} or when the
+\tech{nowdb\_time\_t} value is out of range
+(which can happen only with custom time configurations).
+
+\subsubsection{nowdb\_time\_parse}
+The function receives
+\begin{itemize}
+\item a time string (which must not be \acronym{null}),
+\item a format string (which must not be \acronym{null}) and
+\item a pointer to a \tech{nowdb\_time\_t}
+(which must not be \acronym{null}).
+\end{itemize}
+
+The function returns an \tech{int} representing
+an error code (see chapter \ref{chpt_errors}).
+
+The function attempts to parse the time string
+according to the format string and, if successful,
+stores the result under the address passed in as third parameter.
+
+\subsubsection{nowdb\_time\_show}
+The function receives
+\begin{itemize}
+\item a \tech{nowdb\_time\_t}
+\item a format string (which must not be \acronym{null}),
+\item a \tech{char} buffer (which must not be \acronym{null}) and
+\item a \tech{size\_t} indicating the size of the buffer.
+(which must not be \acronym{null}).
+\end{itemize}
+
+The function returns an \tech{int} representing
+an error code (see chapter \ref{chpt_errors}).
+
+The function writes a string representation
+of the \tech{nowdb\_time\_t} value
+according to the format string
+into the \tech{char} buffer.
+The function fails (among other reasons),
+if the buffer is not big enough to hold the result.
+
+\subsubsection{nowdb\_time\_get}
+The function expects no argument and returns a \tech{nowdb\_time\_t}
+representing the current time. On failure,
+the function returns \acronym{nowdb\_time\_dawn}
+(which is certainly not \emph{now}).
+
+\section{Connection}
+The type \tech{nowdb\_con\_t} represents a
+\acronym{tcp/ip} connection to the database.
+The type is defined as pointer to an
+\term{anonymous struct} and cannot be
+allocated by the user.
+
+Note that connections are not \term{threadsafe}.
+Threads must not access connection objects
+concurrently.
+
+For connection management the following services
+are available:
+
+\subsubsection{nowdb\_connect}
+The function receives six arguments:
+\begin{itemize}
+\item a pointer to a \tech{nowdb\_con\_t}
+(which must not be \acronym{null}),
+\item a string
+(which must not be \acronym{null})
+defining the \term{node}
+on which the database is running and which
+may be an \acronym{ip} \tech{v4} or \tech{v6} address or
+a hostname.
+\item a string
+(which must not be \acronym{null})
+defining the service which
+is usually the port to which the database is listening,
+\item a string
+(which may be \acronym{null})
+defining the user (\comment{currently not used}),
+\item a string
+(which may be \acronym{null})
+defining the password of that user (\comment{currently not used}) and
+\item an \tech{int} representing connection flags.
+\end{itemize}
+
+The function returns an \tech{int} representing
+a client error code (see section \ref{sec_clnterrors}).
+
+The function attempts to connect to the database server.
+On success (when the return value is \acronym{ok}),
+the \tech{nowdb\_con\_t} pointer is guaranteed
+to point to a valid connection object.
+Otherwise, no memory is allocated.
+
+The flags represent connection options.
+Currently, the following options are available:
+\begin{itemize}
+\item \acronym{nowdb\_flags\_text}:
+results for this session will be sent
+in a textual (\acronym{csv}) format.
+\comment{Not available}
+
+\item \acronym{nowdb\_flags\_le}:
+results for this session will be sent
+in binary \term{little endian} format.
+
+\item \acronym{nowdb\_flags\_be}:
+results for this session will be sent
+in binary \term{big endian} format.
+\comment{Not available}
+\end{itemize}
+
+\subsubsection{nowdb\_connection\_close}
+The function receives a \tech{nowdb\_con\_t}
+and returns an \tech{int} representing
+a client error code (see section \ref{sec_clnterrors}).
+
+The function terminates the connection.
+On success, it is guaranteed that all
+resources have been freed.
+Otherwise, when an error code is returned,
+resources are still allocated and must be
+freed using \tech{nowdb\_connection\_destroy}.
+
+\subsubsection{nowdb\_connection\_destroy}
+The function receives a \tech{nowdb\_con\_t}.
+The function frees all resources allocated to this connection.
+The function never fails and
+is declared as \tech{void}.
+
+\section{Result}
+The \acronym{api} implements the four
+\nowdb\ dynamic types:
+
+\begin{itemize}
+\item \acronym{nowdb\_result\_status}
+\item \acronym{nowdb\_result\_report}
+\item \acronym{nowdb\_result\_cursor}
+\item \acronym{nowdb\_result\_row}
+\end{itemize}
+
+Three anonymous structs are defined to
+represent these types:
+\begin{itemize}
+\item \tech{nowdb\_result\_status} represents
+\begin{itemize}
+\item\acronym{nowdb\_result\_status} and
+\item\acronym{nowdb\_result\_report},
+\end{itemize}
+\ie\ the services defined for \term{status}
+also accept an object of type \term{report}
+and \textit{vice versa};
+\item \tech{nowdb\_result\_cursor} 
+represents \acronym{nowdb\_result\_cursor};
+\item \tech{nowdb\_result\_row} 
+represents \acronym{nowdb\_result\_row}
+\end{itemize}
+
+\subsection{Execution}
+\subsubsection{nowdb\_exec\_statement}
+The function receives
+\begin{itemize}
+\item a connection
+\item a string representing an \sql\ statement
+\item a pointer to a result object
+\end{itemize}
+
+None of those must be \acronym{null}.
+
+The function returns an \tech{int} representing
+a client error code.
+
+The function sends the \sql\ statement
+to the database and waits for the result.
+On success,
+the \tech{nowdb\_result\_t} pointer is guaranteed
+to point to a valid result object.
+Otherwise, no additional memory is allocated.
+
+\subsubsection{nowdb\_exec\_statementZC}
+This function is a \term{zerocopy} variant
+of \tech{nowdb\_exec\_statement}.
+\tech{nowdb\-\_\-exec\-\_\-statement} copies all
+data received from the database to a private
+buffer that belongs to the result object.
+This allows user programs to process
+interleaving queries, \ie\
+statements can be executed,
+while others still have pending results.
+
+In some cases, this is not necessary,
+in particular when the result is just
+a status that is checked once immediately
+after \tech{exec} has returned.
+In such cases
+\tech{nowdb\-\_exec\-\_statementZC}
+might be more efficient, because
+it does not copy the result data into a private buffer,
+but leaves them in the connection object.
+The next query, hence, will overwrite
+those data.
+
+Note that \tech{nowdb\_exec\_statementZC}
+is not allowed when the result
+may be a cursor.
+
+\subsection{Status and Report}
+\subsubsection{nowdb\_result\_errcode}
+The function receives a \tech{nowdb\_result\_t}
+and returns its error code which is a server-side
+error code (or 0 for success).
+
+\subsubsection{nowdb\_result\_eof}
+The function receives a \tech{nowdb\_result\_t}
+and returns an \tech{int} which is $\neq 0$
+if the error code is \term{end-of-file}
+and 0 otherwise.
+
+\subsubsection{nowdb\_result\_details}
+The function receives a \tech{nowdb\_result\_t}
+and returns a constant string providing details
+on the error represented by the status.
+If no error has occurred, the result string
+is \tech{"OK"}.
+
+\subsubsection{nowdb\_result\_report}
+The function is declared as \tech{void}.
+The function receives a \tech{nowdb\_result\_t}
+and three more parameters:
+\begin{itemize}
+\item a pointer to a \tech{uint64\_t}
+which must not be \acronym{null}
+and to which the number of affected rows
+is written; 
+\item a pointer to a \tech{uint64\_t}
+which must not be \acronym{null}
+and to which the number of errors
+is written; 
+\item a pointer to a \tech{uint64\_t}
+which must not be \acronym{null}
+and to which the running time in microseconds
+is written.
+\end{itemize}
+
+\subsubsection{nowdb\_result\_destroy}
+The function is declared as \tech{void}.
+The function receives a \tech{nowdb\_result\_t}
+and frees all resources assigned to it.
+
+\subsection{Cursor}
+\subsubsection{nowdb\_cursor\_open}
+The function receives a \tech{nowdb\_result\_t}
+and a pointer to a \tech{nowdb\_cursor\_t}
+(which must not be \acronym{null}).
+It returns an \tech{int} representing
+a client error code.
+The function \emph{casts} the result
+passed in to the pointer address.
+The function fails if the result
+does not not represent a valid result
+or if that result was created
+with \term{zerocopy} option.
+Note that \tech{nowdb\_exec\_statementZC}
+is not allowed when the result
+may be a cursor.
+
+\subsubsection{nowdb\_cursor\_errcode}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns its error code.
+
+\subsubsection{nowdb\_cursor\_details}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns a constant string providing error details.
+If no error has occurred, the result string
+is \tech{"OK"}.
+
+\subsubsection{nowdb\_cursor\_eof}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns an \tech{int} which is $\neq 0$
+if the error code is \term{end-of-file}
+and 0 otherwise.
+
+\subsubsection{nowdb\_cursor\_ok}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns an \tech{int} which is $\neq 0$
+if the error code is \acronym{ok}
+and 0 otherwise.
+
+\subsubsection{nowdb\_cursor\_id}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns a \tech{uint64\_t} which
+represents the identifier under which this
+cursor is known in the server.
+
+\subsubsection{nowdb\_cursor\_fetch}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns an \tech{int} which
+represents a client error code.
+On success, the cursor fetches the next
+bulk of rows from the server.
+If there are no more rows in the server,
+the error code of the cursor passes to \term{end-of-file}.
+
+\subsubsection{nowdb\_cursor\_row}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns \tech{nowdb\_row\_t}.
+Note that the result is not a copy
+of the rows in the cursor, but a reference
+to those.
+It is therefore not necessary to destroy
+the returned rows.
+On the other hand, the rows are lost
+when either \tech{fetch} or \tech{close}
+is called on the cursor. 
+
+\subsubsection{nowdb\_cursor\_close}
+The function receives a \tech{nowdb\_cursor\_t}
+and returns an \tech{int} which represents an
+error code.
+It sends a close request for this cursor
+to the database and, on success,
+frees all resources assigned to this cursor.
+Otherwise, if the close request fails,
+the cursor must be destroyed using 
+\tech{nowdb\_result\_destroy} and
+casting the cursor to a \tech{nowdb\_result\_t}
+
+\subsection{Row}
+\subsubsection{nowdb\_row\_next}
+The function receives a \tech{nowdb\_row\_t}
+and returns an \tech{int} that represents
+a client error code.
+It advances to the next row.
+If the current row was already the last one,
+\term{end-of-file} is returned.
+
+\subsubsection{nowdb\_row\_rewind}
+The function is declared as \tech{void}.
+The function receives a \tech{nowdb\_row\_t}.
+It resets the row struct to the first row.
+
+\subsubsection{nowdb\_row\_field}
+The function receives a \tech{nowdb\_row\_t}
+and two more parameters, namely
+\begin{itemize}
+\item an \tech{int}, $n$, indicating
+that we want to obtain the $n$th field
+starting to count from 0
+for the first field in the row;
+\item a pointer to an \tech{int}
+which must not be \acronym{null}
+and is set to the type of the field.
+\end{itemize}
+The function returns the address
+of the first byte of the $n$th field
+or \acronym{null} on error.
+
+Valid types are
+\begin{itemize}
+\item \acronym{nowdb\_typ\_uint}
+\item \acronym{nowdb\_typ\_int}
+\item \acronym{nowdb\_typ\_float}
+\item \acronym{nowdb\_typ\_time}
+\item \acronym{nowdb\_typ\_text}
+\item \acronym{nowdb\_typ\_bool}
+\end{itemize}
+
+\subsubsection{nowdb\_row\_copy}
+The function receives and returns
+a \tech{nowdb\_row\_t} and
+copies the row passed in allocating
+new memory. Rows created with copy
+must be destroyed using \tech{nowdb\_result\_destroy}
+casting the row to the generic result type.
+
+\subsubsection{nowdb\_row\_write}
+The function receives a \acronym{file} pointer and
+a \tech{nowdb\_row\_t}.
+It returns an \tech{int} representing
+a client error code.
+The function writes a textual representation
+of the row(s) passed in to the file.
+
+\section{Error Handling}
+\subsubsection{nowdb\_err\_explain}
+The function receives a (client or server) error code
+and returns a constant string explaining the error.
+
+\begin{minipage}{\textwidth}
+\section{Error Codes}\label{sec_clnterrors}
+\bgroup
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\begin{longtable}{||l||c||l||}\hline
+\textbf{Error Name} & \textbf{Numerical Code} & \textbf{Meaning} \\\hline\endhead\hline
+out of memory                             &     -1 & \\\hline\hline
+no connection                             &     -2 & \\\hline\hline
+socket error                              &     -3 & \\\hline\hline
+error on address                          &     -4 & \\\hline\hline
+cannot create result                      &     -5 & \\\hline\hline
+invalid parameter                         &     -6 & \\\hline\hline
+error on read operation                   &   -101 & \\\hline\hline
+error on write operation                  &   -102 & \\\hline\hline
+error on open  operation                  &   -103 & \\\hline\hline
+error on close operation                  &   -104 & \\\hline\hline
+use statement failed                      &   -105 & \\\hline\hline
+protocol error                            &   -106 & \\\hline\hline
+statement or requested resource too big   &   -107 & \\\hline\hline
+operating system error (check errno)      &   -108 & \\\hline\hline
+time or date format error                 &   -109 & \\\hline\hline
+cursor with zerocopy requested            &   -110 & \\\hline\hline
+cannot close cursor                       &   -111 & \\\hline
+\end{longtable}
+\end{center}
+\egroup
+\end{minipage}
