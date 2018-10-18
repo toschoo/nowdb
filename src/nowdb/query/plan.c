@@ -244,8 +244,13 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	case NOWDB_TYP_TEXT:
 		if (off == NOWDB_OFF_TMSTMP) {
 			*typ = NOWDB_TYP_TIME;
-			rc = nowdb_time_fromString(str,
-			      NOWDB_TIME_FORMAT, *value);
+			if (strnlen(str, 4096) == 10) {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_DATE_FORMAT, *value);
+			} else {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_TIME_FORMAT, *value);
+			}
 			if (rc != 0) err = nowdb_err_get(rc, FALSE,
 		                   OBJECT, "timestamp from string");
 		} else {

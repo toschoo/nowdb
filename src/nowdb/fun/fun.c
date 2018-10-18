@@ -216,6 +216,12 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 	ts_algo_list_init(&fun->many);
 
 	fun->ftype = getFType(type);
+
+	// we need a valid field if ftype is not ZERO
+	if ((short)field  == -1 && fun->ftype != NOWDB_FUN_ZERO) {
+		INVALID("no field for function that needs a field");
+	}
+
 	fun->fun   = type;
 	fun->ctype = ctype;
 	fun->field = field;

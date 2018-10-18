@@ -30,6 +30,7 @@
 typedef struct {
 	nowdb_rwlock_t  lock;       /* model is threadsafe   */
 	char           *path;       /* path to model on disk */
+                                    /* lookup what it is     */
 	ts_algo_tree_t *vrtxById;   /* lookup vertex by id   */
 	ts_algo_tree_t *vrtxByName; /* lookup vertex by name */
 	ts_algo_tree_t *propById;   /* lookup prop.  by id   */
