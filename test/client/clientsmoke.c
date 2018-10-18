@@ -412,7 +412,7 @@ int main() {
 	EXECDLL("load 'rsc/edge100.csv' into sales as edge");
 
 	fprintf(stderr, "wait a second!\n");
-	sleep(5);
+	// sleep(5);
 
 	sprintf(q, "select count(*), sum(weight) from sales\
 	             where edge = 'buys' and origin=%lu", wanted);

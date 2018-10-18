@@ -401,8 +401,14 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
  * String to time
  * ------------------------------------------------------------------------
  */
-#define STRTOTIME(frm) \
-	rc = nowdb_time_fromString(val->value,frm,target); \
+#define STRTOTIME() \
+	if (strnlen(val->value, 4096) == 10) { \
+		rc = nowdb_time_fromString(val->value, \
+		             NOWDB_DATE_FORMAT,target);\
+	} else { \
+		rc = nowdb_time_fromString(val->value,\
+		            NOWDB_TIME_FORMAT,target);\
+	} \
 	if (rc != 0) { \
 		err = nowdb_err_get(rc, FALSE, OBJECT, "string to time"); \
 	}
@@ -427,12 +433,9 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		return getKey(dml, val->value, target);
 
 	case NOWDB_TYP_DATE:
-		STRTOTIME(NOWDB_DATE_FORMAT);
-		break;
-
 	case NOWDB_TYP_TIME:
 		fprintf(stderr, "TIME: %s\n", (char*)val->value);
-		STRTOTIME(NOWDB_TIME_FORMAT);
+		STRTOTIME();
 		break;
 
 	case NOWDB_TYP_FLOAT:

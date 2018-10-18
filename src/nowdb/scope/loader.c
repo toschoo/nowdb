@@ -860,13 +860,19 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
  * String to time
  * ------------------------------------------------------------------------
  */
-#define STRTOTIME(frm) \
+#define STRTOTIME() \
 	if (len > 255) { \
 		return -1; \
 	} \
 	memcpy(ldr->csv->txt, data, len); \
 	ldr->csv->txt[len] = 0; \
-	rc = nowdb_time_fromString(ldr->csv->txt,frm,target); \
+	if (len == 10) { \
+		rc = nowdb_time_fromString(ldr->csv->txt, \
+		                    ldr->datefrm,target); \
+	} else { \
+		rc = nowdb_time_fromString(ldr->csv->txt, \
+		                    ldr->timefrm,target); \
+	} \
 	if (rc != 0) { \
 		err = nowdb_err_get(rc, FALSE, OBJECT, "time to string"); \
 		HANDLEERR(ldr, err); \
@@ -893,11 +899,8 @@ static inline char getValueAsType(nowdb_loader_t *ldr,
 		return getKeyFromText(ldr, data, len, target);
 
 	case NOWDB_TYP_DATE:
-		STRTOTIME(ldr->datefrm);
-		break;
-
 	case NOWDB_TYP_TIME:
-		STRTOTIME(ldr->timefrm);
+		STRTOTIME();
 		break;
 
 	case NOWDB_TYP_FLOAT:
