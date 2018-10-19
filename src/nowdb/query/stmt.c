@@ -116,7 +116,10 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 		if (err != NOWDB_OK) return err;
 
 		err = nowdb_scope_drop(scope);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			nowdb_scope_destroy(scope); free(scope);
+			return err;
+		}
 
 		nowdb_scope_destroy(scope); free(scope);
 

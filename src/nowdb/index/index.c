@@ -39,6 +39,13 @@ static char *OBJECT = "idx";
 	                            FALSE, OBJECT, "index NULL");
 
 /* -----------------------------------------------------------------------
+ * Macro: out of memory
+ * -----------------------------------------------------------------------
+ */
+#define NOMEM(s) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
+
+/* -----------------------------------------------------------------------
  * Helper: make beet errors
  * -----------------------------------------------------------------------
  */
@@ -397,13 +404,17 @@ static void computeHostSize(nowdb_index_desc_t *desc,
  * but they are not covered here!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_create(char *path, uint16_t size,
+nowdb_err_t nowdb_index_create(char *base,
+                               char *path,
+                               uint16_t size,
                                nowdb_index_desc_t  *desc) {
 	nowdb_err_t   err;
 	beet_err_t    ber;
 	beet_config_t cfg;
-	char *ep, *hp, *ip;
+	char *ep, *hp, *ip, *fp;
 
+	if (base == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                     FALSE, OBJECT, "base path is NULL");
 	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "path is NULL");
 	if (desc == NULL) return nowdb_err_get(nowdb_err_invalid,
@@ -418,7 +429,14 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 	if (ip == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "allocating index path");
 
-	err = mkIdxDir(ip);
+	fp = nowdb_path_append(base, ip);
+	if (fp == NULL) {
+		free(ip);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+	                                     "allocating index path");
+	}
+
+	err = mkIdxDir(fp); free(fp);
 	if (err != NOWDB_OK) {
 		free(ip); return err;
 	}
@@ -443,7 +461,7 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 	setHostCompare(desc, &cfg);
 	cfg.subPath = ep;
 
-	ber = beet_index_create(hp, 1, &cfg);
+	ber = beet_index_create(base, hp, 1, &cfg);
 	if (ber != BEET_OK) {
 		free(ep); free(hp);
 		return makeBeetError(ber);
@@ -455,7 +473,7 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
 	setEmbCompare(&cfg);
 	cfg.subPath = NULL;
 
-	ber = beet_index_create(ep, 0, &cfg);
+	ber = beet_index_create(base, ep, 0, &cfg);
 	if (ber != BEET_OK) {
 		free(ep); free(hp);
 		return makeBeetError(ber);
@@ -468,11 +486,13 @@ nowdb_err_t nowdb_index_create(char *path, uint16_t size,
  * Drop index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_drop(char *path) {
+nowdb_err_t nowdb_index_drop(char *base, char *path) {
 	nowdb_err_t err;
 	beet_err_t  ber;
-	char *ep, *hp;
+	char *ep, *hp, *tmp;
 
+	if (base == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                     FALSE, OBJECT, "base path is NULL");
 	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "path is NULL");
 
@@ -486,32 +506,45 @@ nowdb_err_t nowdb_index_drop(char *path) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 	                                     "allocating emb. path");
 	}
-	ber = beet_index_drop(ep);
+	ber = beet_index_drop(base,ep);
 	if (ber != BEET_OK) {
 		free(ep); free(hp);
 		return makeBeetError(ber);
 	}
-	ber = beet_index_drop(hp);
+	ber = beet_index_drop(base,hp);
 	if (ber != BEET_OK) {
 		free(ep); free(hp);
 		return makeBeetError(ber);
 	}
-	err = removePath(ep);
+	tmp = nowdb_path_append(base, ep);
+	if (tmp == NULL) {
+		free(ep); free(hp);
+		NOMEM("allocating index path");
+		return err;
+	}
+	err = removePath(tmp);
+	free(tmp); free(ep);
 	if (err != NOWDB_OK) {
 		free(ep); free(hp);
 		return err;
 	}
-	err = removePath(hp);
-	if (err != NOWDB_OK) {
-		free(ep); free(hp);
+	tmp = nowdb_path_append(base, hp);
+	if (tmp == NULL) {
+		free(hp);
+		NOMEM("allocating index path");
 		return err;
 	}
-	err = removePath(path);
-	if (err != NOWDB_OK) {
-		free(ep); free(hp);
+	err = removePath(tmp);
+	free(tmp); free(hp);
+	if (err != NOWDB_OK) return err;
+
+	tmp = nowdb_path_append(base, path);
+	if (tmp == NULL) {
+		NOMEM("allocating index path");
 		return err;
 	}
-	free(ep); free(hp);
+	err = removePath(tmp); free(tmp);
+	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
 
@@ -519,13 +552,17 @@ nowdb_err_t nowdb_index_drop(char *path) {
  * Open index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_open(char *path, void *handle,
+nowdb_err_t nowdb_index_open(char *base,
+                             char *path,
+                             void *handle,
                              nowdb_index_desc_t *desc) {
 	nowdb_err_t        err;
 	beet_open_config_t cfg;
 	beet_err_t         ber;
 	char *hp, *ip;
 
+	if (base == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                     FALSE, OBJECT, "base path is NULL");
 	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "path is NULL");
 	if (handle == NULL) return nowdb_err_get(nowdb_err_invalid,
@@ -561,7 +598,7 @@ nowdb_err_t nowdb_index_open(char *path, void *handle,
 		return err;
 	}
 
-	ber = beet_index_open(hp, handle, &cfg, &desc->idx->idx);
+	ber = beet_index_open(base, hp, handle, &cfg, &desc->idx->idx);
 	if (ber != BEET_OK) {
 		free(desc->idx); desc->idx = NULL; free(hp);
 		return makeBeetError(ber);

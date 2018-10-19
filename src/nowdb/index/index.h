@@ -133,20 +133,23 @@ void nowdb_index_desc_destroy(nowdb_index_desc_t *desc);
  * Create index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_create(char *path, uint16_t size,
+nowdb_err_t nowdb_index_create(char *base,   char *path,
+                               uint16_t            size,
                                nowdb_index_desc_t *desc);
 
 /* ------------------------------------------------------------------------
  * Drop index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_drop(char *path);
+nowdb_err_t nowdb_index_drop(char *base, char *path);
 
 /* ------------------------------------------------------------------------
  * Open index
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_open(char *path, void *handle,
+nowdb_err_t nowdb_index_open(char *base,
+                             char *path,
+                             void *handle,
                              nowdb_index_desc_t *desc);
 
 /* ------------------------------------------------------------------------

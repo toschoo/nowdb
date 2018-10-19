@@ -15,9 +15,10 @@
 #include <limits.h>
 #include <sys/stat.h>
 
-#define IMNPATH "rsc/iman10"
-#define CTXPATH "rsc/ctx10"
-#define VXPATH "rsc/vertex10"
+#define BASE "rsc/idxdb10"
+#define IMNPATH "rsc/idxdb10/iman10"
+#define CTXPATH "context"
+#define VXPATH "vertex"
 
 /* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare name
@@ -64,15 +65,20 @@ void removeICat(char *path) {
  */
 int makectxdir(char *ctxname) {
 	struct stat st;
-	char *p, *i;
+	char *f, *p, *i;
 
-	if (stat(CTXPATH, &st) != 0) {
-		if (mkdir(CTXPATH, S_IRWXU) != 0) {
+	f = nowdb_path_append(BASE, CTXPATH);
+	if (f == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	if (stat(f, &st) != 0) {
+		if (mkdir(f, S_IRWXU) != 0) {
 			fprintf(stderr, "cannot create %s\n", CTXPATH);
-			return -1;
+			free(f); return -1;
 		}
 	}
-	p = nowdb_path_append(CTXPATH, ctxname);
+	p = nowdb_path_append(f, ctxname); free(f);
 	if (p == NULL) {
 		fprintf(stderr, "out-of-mem\n");
 		return -1;
@@ -105,14 +111,21 @@ int makectxdir(char *ctxname) {
 int makevxdir() {
 	struct stat st;
 	char *i;
+	char *p;
 
-	if (stat(VXPATH, &st) != 0) {
-		if (mkdir(VXPATH, S_IRWXU) != 0) {
+	p = nowdb_path_append(BASE, VXPATH);
+	if (p == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+
+	if (stat(p, &st) != 0) {
+		if (mkdir(p, S_IRWXU) != 0) {
 			fprintf(stderr, "cannot create %s\n", VXPATH);
-			return -1;
+			free(p); return -1;
 		}
 	}
-	i = nowdb_path_append(VXPATH, "index");
+	i = nowdb_path_append(p, "index"); free(p);
 	if (i == NULL) {
 		fprintf(stderr, "out-of-mem\n");
 		return -1;
@@ -151,7 +164,7 @@ nowdb_index_desc_t *createIndexDesc(char                *name,
  * Create an index (it must exist to be able to open the iman)
  * ------------------------------------------------------------------------
  */
-int createIndex(char *path, uint16_t size,
+int createIndex(char *base, char *path, uint16_t size,
                 nowdb_index_desc_t  *desc) {
 	nowdb_err_t    err;
 	char *p;
@@ -161,7 +174,7 @@ int createIndex(char *path, uint16_t size,
 		fprintf(stderr, "out-of-mem\n");
 		return -1;
 	}
-	err = nowdb_index_create(p, size, desc); free(p);
+	err = nowdb_index_create(base, p, size, desc); free(p);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -229,6 +242,22 @@ ts_algo_tree_t *fakeCtx() {
 }
 
 /* ------------------------------------------------------------------------
+ * Fake database
+ * ------------------------------------------------------------------------
+ */
+int fakeDB() {
+	struct stat st;
+	
+	if (stat(BASE, &st) != 0) {
+		if (mkdir(BASE, S_IRWXU) != 0) {
+			fprintf(stderr, "cannot create %s\n", BASE);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
  * init iman
  * ------------------------------------------------------------------------
  */
@@ -236,13 +265,26 @@ int initMan(nowdb_index_man_t *iman,
             void            *handle,
             ts_algo_tree_t     *ctx) {
 	nowdb_err_t err;
+	char *cp, *vp;
+
+	cp = nowdb_path_append(BASE, CTXPATH);
+	if (cp == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	vp = nowdb_path_append(BASE, VXPATH);
+	if (vp == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		free(cp); return -1;
+	}
 
 	err = nowdb_index_man_init(iman,
 	                           ctx,
 	                           handle,
+	                           BASE,
 	                           IMNPATH,
-	                           CTXPATH,
-	                           VXPATH);
+	                           cp, vp);
+	free(vp); free(cp);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init iman\n");
 		nowdb_err_print(err);
@@ -430,6 +472,11 @@ int main() {
 
 	removeICat(IMNPATH);
 
+	if (fakeDB() != 0) {
+		fprintf(stderr, "cannot fake database\n");
+		return EXIT_FAILURE;
+	}
+
 	ctx = fakeCtx();
 	if (ctx == NULL) {
 		fprintf(stderr, "cannot fake context\n");
@@ -474,7 +521,7 @@ int main() {
 		fprintf(stderr, "cannot create desc for idx0\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for idx0\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
@@ -509,7 +556,7 @@ int main() {
 		fprintf(stderr, "cannot create desc for idx1\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for idx1\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
@@ -596,7 +643,7 @@ int main() {
 		goto cleanup;
 	}
 
-	if (createIndex(ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for ctx1\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
@@ -631,7 +678,7 @@ int main() {
 		destroyKeys(&k4);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for cdx2\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;

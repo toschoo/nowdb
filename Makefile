@@ -670,6 +670,8 @@ clean:
 	rm -rf $(RSC)/ctx??
 	rm -rf $(RSC)/db??
 	rm -rf $(RSC)/db???
+	rm -rf $(RSC)/idxdb??
+	rm -rf $(RSC)/idxdb???
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
