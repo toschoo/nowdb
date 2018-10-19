@@ -48,6 +48,9 @@ static char *OBJECT = "TEXT";
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
 
+#define INVALID(x) \
+	err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, x);
+
 typedef struct {
 	nowdb_key_t key;
 	char       *str;
@@ -400,7 +403,7 @@ void nowdb_text_destroy(nowdb_text_t *txt) {
  * Helper: get path for index
  * ------------------------------------------------------------------------
  */
-static nowdb_path_t getpath(int which, nowdb_path_t base) {
+static nowdb_path_t getpath(int which) {
 	nowdb_path_t p;
 
 	switch(which) {
@@ -415,7 +418,7 @@ static nowdb_path_t getpath(int which, nowdb_path_t base) {
 	case BIGNUM: p="bigkey"; break;
 	default: return NULL;
 	}
-	return nowdb_path_append(base, p);
+	return p;
 }
 
 /* ------------------------------------------------------------------------
@@ -434,12 +437,12 @@ nowdb_err_t nowdb_text_create(nowdb_text_t *txt) {
 	beet_config_init(&cfg);
 	for(int i=0;i<9; i++) {
 		configure(i, &cfg);
-		p = getpath(i, txt->path);
+		p = getpath(i);
 		if (p == NULL) {
-			NOMEM("allocating path");
+			INVALID("no path for text index");
 			return err;
 		}
-		ber = beet_index_create(p, 1, &cfg); free(p);
+		ber = beet_index_create(txt->path, p, 1, &cfg);
 		if (ber != BEET_OK) return makeBeetError(ber);
 	}
 	return NOWDB_OK;
@@ -452,22 +455,27 @@ nowdb_err_t nowdb_text_create(nowdb_text_t *txt) {
 nowdb_err_t nowdb_text_drop(nowdb_text_t *txt) {
 	beet_err_t ber;
 	nowdb_err_t err;
-	nowdb_path_t p;
+	nowdb_path_t p,q;
 
 	TEXTNULL();
 	if (txt->path == NULL) return nowdb_err_get(nowdb_err_invalid,
 		                  FALSE, OBJECT, "text path is NULL");
 	for(int i=0; i<9; i++) {
-		p = getpath(i, txt->path);
+		p = getpath(i);
 		if (p == NULL) {
-			NOMEM("allocating path");
+			INVALID("no path for text index");
 			return err;
 		}
-		ber = beet_index_drop(p);
+		ber = beet_index_drop(txt->path, p);
 		if (ber != BEET_OK) {
-			free(p); return makeBeetError(ber);
+			return makeBeetError(ber);
 		}
-		err = nowdb_path_remove(p); free(p);
+		q = nowdb_path_append(txt->path, p);
+		if (q == NULL) {
+			NOMEM("appending path");
+			return err;
+		}
+		err = nowdb_path_remove(q); free(q);
 		if (err != NOWDB_OK) return err;
 	}
 	return nowdb_path_remove(txt->path);
@@ -515,12 +523,12 @@ nowdb_err_t nowdb_text_open(nowdb_text_t *txt) {
 
 	beet_open_config_ignore(&cfg);
 	for(int i=0; i<9; i++) {
-		p = getpath(i, txt->path);
+		p = getpath(i);
 		if (p == NULL) {
-			NOMEM("allocating path");
+			INVALID("no path for text index");
 			return err;
 		}
-		ber = beet_index_open(p, nowdb_lib(), &cfg, &idx); free(p);
+		ber = beet_index_open(txt->path, p, nowdb_lib(), &cfg, &idx);
 		if (ber != BEET_OK) {
 			return makeBeetError(ber);
 		}

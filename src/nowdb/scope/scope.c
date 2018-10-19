@@ -85,7 +85,11 @@ static nowdb_err_t mkthisctxpath(nowdb_scope_t *scope,
                                           char **path) {
 	char *tmp;
 
-	tmp = nowdb_path_append(scope->path, "context");
+	if (scope != NULL) {
+		tmp = nowdb_path_append(scope->path, "context");
+	} else {
+		tmp = strdup("context");
+	}
 	if (tmp == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating context path");
@@ -104,7 +108,11 @@ static nowdb_err_t mkthisctxpath(nowdb_scope_t *scope,
  */
 static nowdb_err_t mkvtxpath(nowdb_scope_t *scope, char **path) {
 
-	*path = nowdb_path_append(scope->path, "vertex");
+	if (scope != NULL) {
+		*path = nowdb_path_append(scope->path, "vertex");
+	} else {
+		*path = strdup("vertex");
+	}
 	if (*path == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                           "allocating vertex path");
@@ -175,6 +183,7 @@ static nowdb_err_t initIndexMan(nowdb_scope_t *scope) {
 	err = nowdb_index_man_init(scope->iman,
 	                          &scope->contexts,
 	                           nowdb_lib(),
+	                           scope->path,
 	                           imanpath,
 	                           ctxpath,
 	                           vtxpath);
@@ -741,9 +750,9 @@ static nowdb_err_t dropIndex(nowdb_scope_t     *scope,
 	char *tmp, *path;
 	
 	if (desc->ctx != NULL) {
-		err = mkthisctxpath(scope, desc->ctx->name, &path);
+		err = mkthisctxpath(NULL, desc->ctx->name, &path);
 	} else {
-		err = mkvtxpath(scope, &path);
+		err = mkvtxpath(NULL, &path);
 	}
 	if (err != NOWDB_OK) return err;
 
@@ -757,7 +766,7 @@ static nowdb_err_t dropIndex(nowdb_scope_t     *scope,
 	if (err != NOWDB_OK) {
 		free(path); return err;
 	}
-	err = nowdb_index_drop(path); free(path);
+	err = nowdb_index_drop(scope->path, path); free(path);
 	return err;
 }
 
@@ -1030,6 +1039,10 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 
 	/* remove icat */
 	err = removeFile(scope, "icat");
+	if (err != NOWDB_OK) goto unlock;
+
+	/* remove pcat */
+	err = removeFile(scope, "pcat");
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove catalog */
@@ -1345,11 +1358,11 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 		err = findContext(scope, context, &ctx);
 		if (err != NOWDB_OK) goto unlock;
 
-		err = mkthisctxpath(scope, ctx->name, &tmp);
+		err = mkthisctxpath(NULL, ctx->name, &tmp);
 		if (err != NOWDB_OK) goto unlock;
 		
 	} else {
-		err = mkvtxpath(scope, &tmp);
+		err = mkvtxpath(NULL, &tmp);
 		if (err != NOWDB_OK) goto unlock;
 	}
 
@@ -1373,14 +1386,15 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 		free(path); goto unlock;
 	}
 
-	err = nowdb_index_create(path, sz, desc); 
+	err = nowdb_index_create(scope->path, path, sz, desc); 
 	if (err != NOWDB_OK) {
 		free(path);
 		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
 		goto unlock;
 	}
 
-	err = nowdb_index_open(path, nowdb_lib(), desc); free(path);
+	err = nowdb_index_open(scope->path, path, nowdb_lib(), desc);
+	free(path);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
 		goto unlock;

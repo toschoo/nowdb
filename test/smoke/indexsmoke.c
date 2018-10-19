@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 
 #define BASEPATH "rsc"
-#define IDXPATH "rsc/idx10"
+#define IDXPATH "idxdb20"
 #define IDXNAME "idx10"
 #define CTXNAME "CTX_TEST"
 
@@ -54,12 +54,27 @@ int mkpath(char *path) {
 	return 0;
 }
 
+int mkidxpath() {
+	char *p;
+	int rc;
+
+	p = nowdb_path_append(BASEPATH, IDXPATH);
+	if (p == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	rc = mkpath(p); free(p);
+	return rc;
+}
+
 int createIndex(char *path, uint16_t size,
                 nowdb_index_desc_t  *desc) {
 	nowdb_err_t    err;
 
+	fprintf(stderr, "creating %s/%s/%s\n", path, IDXPATH, desc->name);
+
 	// if (mkpath(path) != 0) return -1;
-	err = nowdb_index_create(path, size, desc);
+	err = nowdb_index_create(path, IDXPATH, size, desc);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -68,10 +83,18 @@ int createIndex(char *path, uint16_t size,
 	return 0;
 }
 
-int dropIndex(char *path) {
+int dropIndex(char *name) {
 	nowdb_err_t    err;
+	char *p;
 
-	err = nowdb_index_drop(path);
+	fprintf(stderr, "dropping %s/%s/%s\n", BASEPATH, IDXPATH, name);
+
+	p = nowdb_path_append(IDXPATH, name);
+	if (p == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	err = nowdb_index_drop(BASEPATH, p); free(p);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -87,8 +110,6 @@ int getConfig(char *path, beet_config_t *cfg) {
 	p = nowdb_path_append(path, "host");
 	if (p == NULL) return -1;
 
-	sprintf(p, "%s/host", path);
-
 	ber = beet_config_get(p, cfg);
 	if (ber != BEET_OK) {
 		fprintf(stderr, "beet error: %s (%d)\n",
@@ -103,12 +124,22 @@ int testCreateSizes(char *path) {
 	nowdb_index_desc_t desc;
 	nowdb_context_t     ctx;
 	beet_config_t       cfg;
+	char *p;
 	int x;
 	uint32_t sz;
 
 	ctx.name = CTXNAME;
 	desc.name = IDXNAME;
 	desc.ctx  = &ctx;
+
+	p = malloc(strlen(path)    +
+                   strlen(IDXPATH) +
+	           strlen(IDXNAME) + 3);
+	if (p == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
+	sprintf(p, "%s/%s/%s", path, IDXPATH, IDXNAME);
 
 	for(int i=0; i<10; i++) {
 
@@ -122,12 +153,16 @@ int testCreateSizes(char *path) {
 		sz = 1; sz <<= x;
 
 		if (createIndex(path, sz, &desc) != 0) {
-			free(desc.keys->off); free(desc.keys);
+			free(desc.keys->off); free(desc.keys); free(p);
+			fprintf(stderr, "cannot create index\n");
 			return -1;
 		}
 		free(desc.keys->off); free(desc.keys);
 
-		if (getConfig(IDXPATH, &cfg) != 0) return -1;
+		if (getConfig(p, &cfg) != 0) {
+			fprintf(stderr, "CANNOT GET CONFIG\n"); free(p);
+			return -1;
+		}
 
 		if (cfg.leafPageSize != (cfg.keySize + cfg.dataSize) * 
 		                         cfg.leafNodeSize + 12) {
@@ -135,7 +170,7 @@ int testCreateSizes(char *path) {
 			"config not correct: (%u + %u) * %u + 12 != %u\n",
 			cfg.keySize, cfg.dataSize,
 			cfg.leafNodeSize, cfg.leafPageSize);
-			beet_config_destroy(&cfg);
+			beet_config_destroy(&cfg); free(p);
 			return -1;
 		}
 		if (cfg.intPageSize != (cfg.keySize + 4) * 
@@ -144,12 +179,16 @@ int testCreateSizes(char *path) {
 			"config not correct: (%u + 4) * %u + 12 != %u\n",
 			cfg.keySize,
 			cfg.intNodeSize, cfg.intPageSize);
-			beet_config_destroy(&cfg);
+			beet_config_destroy(&cfg); free(p);
 			return -1;
 		}
 		beet_config_destroy(&cfg);
-		if (dropIndex(IDXPATH) != 0) return -1;
+		if (dropIndex(IDXNAME) != 0) {
+			fprintf(stderr, "CANNOT DROP\n"); free(p);
+			return -1;
+		}
 	}
+	free(p);
 	return 0;
 }
 
@@ -157,7 +196,7 @@ int openIndex(char *path, void *handle,
               nowdb_index_desc_t *desc) {
 	nowdb_err_t    err;
 
-	err = nowdb_index_open(path, handle, desc);
+	err = nowdb_index_open(path, IDXPATH, handle, desc);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -204,11 +243,16 @@ int main() {
 	desc.keys = makekeys(1);
 	desc.idx  = NULL;
 
+	if (mkidxpath() != 0) {
+		fprintf(stderr, "cannot create idx path\n");
+		return EXIT_FAILURE;
+	}
+
 	if (createIndex(BASEPATH, NOWDB_CONFIG_SIZE_SMALL, &desc) != 0) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (dropIndex(IDXPATH) != 0) {
+	if (dropIndex(IDXNAME) != 0) {
 		fprintf(stderr, "dropIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

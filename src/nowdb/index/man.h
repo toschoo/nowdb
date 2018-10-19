@@ -26,7 +26,8 @@
 typedef struct {
 	nowdb_rwlock_t     lock; /* protect index manager       */
 	FILE              *file; /* where we store metadata     */
-	char              *path; /* path to that file           */
+	char              *base; /* base path                   */
+	char              *path; /* path to metadata file       */
 	char           *ctxpath; /* path to the contexts        */
 	char            *vxpath; /* path to vertex              */
 	void            *handle; /* handle to compare lib       */
@@ -42,6 +43,7 @@ typedef struct {
 nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
                                  ts_algo_tree_t *context,
                                             void *handle, 
+                                              char *base,
                                               char *path,
                                            char *ctxpath,
                                             char *vxpath);
