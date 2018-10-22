@@ -185,7 +185,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
-	fprintf(stderr, "SETTING TARGET %s\n", trgname);
+	// fprintf(stderr, "SETTING TARGET %s\n", trgname);
 
 	// check fields == values
 	if (fields != NULL && values != NULL) {
@@ -429,17 +429,17 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		memset(target, 0, sizeof(nowdb_key_t)); break;
 
 	case NOWDB_TYP_TEXT:
-		fprintf(stderr, "TEXT: %s\n", (char*)val->value);
+		// fprintf(stderr, "TEXT: %s\n", (char*)val->value);
 		return getKey(dml, val->value, target);
 
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
-		fprintf(stderr, "TIME: %s\n", (char*)val->value);
+		// fprintf(stderr, "TIME: %s\n", (char*)val->value);
 		STRTOTIME();
 		break;
 
 	case NOWDB_TYP_FLOAT:
-		fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
+		// fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
 		STROD();
 		break;
 
@@ -448,7 +448,7 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		break;
 
 	case NOWDB_TYP_UINT:
-		fprintf(stderr, "UINT: %s\n", (char*)val->value);
+		// fprintf(stderr, "UINT: %s\n", (char*)val->value);
 		STROX(uint64_t, strtoul);
 		break;
 
@@ -556,6 +556,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	nowdb_simple_value_t *val;
 	nowdb_vertex_t vrtx;
 	int i=0;
+	int pkfound=0;
 
 	memset(&vrtx, 0, sizeof(nowdb_vertex_t));
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
@@ -567,10 +568,11 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		if (dml->p[i]->pk) {
 			err = getValueAsType(dml, val, &vrtx.vertex);
 			if (err != NOWDB_OK) return err;
+			pkfound = 1;
 		}
 		i++;
 	}
-	if (vrtx.vertex == 0) {
+	if (!pkfound) {
 		INVALIDVAL("no pk in vertex");
 		return err;
 	}
@@ -583,9 +585,11 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		err = getValueAsType(dml, val, &vrtx.value);
 		if (err != NOWDB_OK) break;
 
+		/*
 		fprintf(stderr, "inserting vertex %u / %lu / %lu / %u\n",
 		                 vrtx.role, vrtx.vertex,
 		                 vrtx.property, vrtx.vtype);
+		*/
 
 		err = nowdb_store_insert(dml->store, &vrtx);
 		if (err != NOWDB_OK) break;

@@ -888,24 +888,25 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 		err = getType(scope, trg, &t, &v);
 		if (err != NOWDB_OK) return err;
 	}
-	if (ast == NULL) return NOWDB_OK;
 
-	cond = nowdb_ast_operand(ast,1);
-	if (cond == NULL) INVALIDAST("no first operand in where");
+	if (ast != NULL) {
+		cond = nowdb_ast_operand(ast,1);
+		if (cond == NULL) INVALIDAST("no first operand in where");
 
-	/*
-	fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
-	*/
+		/*
+		fprintf(stderr, "where: %d->%d\n", ast->ntype, cond->ntype);
+		*/
 
-	/* get condition creates a filter */
-	err = getCondition(scope, trg, e, v, &w, cond);
-	if (err != NOWDB_OK) {
-		if (*filter != NULL) {
-			nowdb_filter_destroy(*filter); 
-			free(*filter); *filter = NULL;
+		/* get condition creates a filter */
+		err = getCondition(scope, trg, e, v, &w, cond);
+		if (err != NOWDB_OK) {
+			if (*filter != NULL) {
+				nowdb_filter_destroy(*filter); 
+				free(*filter); *filter = NULL;
+				return err;
+			}
 			return err;
 		}
-		return err;
 	}
 	if (t != NULL && w != NULL) {
 		err = nowdb_filter_newBool(&and, NOWDB_FILTER_AND);
@@ -921,6 +922,8 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 		*filter = and;
 
 	} else if (t != NULL) *filter = t; else *filter = w;
+
+	// nowdb_filter_show(*filter, stderr);
 
 	return NOWDB_OK;
 }

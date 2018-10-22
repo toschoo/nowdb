@@ -9,6 +9,20 @@ class FailedCreation(Exception):
     def __str__(self):
         return self.msg
 
+class FailedLoading(Exception):
+    def __init__(self, m):
+         self.msg = m
+
+    def __str__(self):
+        return self.msg
+
+class TestFailed(Exception):
+    def __init__(self, m):
+         self.msg = m
+
+    def __str__(self):
+        return self.msg
+
 def createDB(c, db):
     stmt = "drop schema %s if exists" % db
     with c.execute(stmt) as r:
@@ -82,7 +96,11 @@ def db2csv(p,c,e):
     clients2csv("rsc/clients.csv", c)
     edges2csv("rsc/edges.csv", e)
 
-def loadDB(c):
+def loadDB(c, db):
+    stmt = "use %s" % db
+    with c.execute(stmt) as r:
+        if not r.ok():
+            raise FailedLoading("cannot use %s" % db)
     return (loadProducts(c), loadClients(c), loadEdges(c))
 
 def loadProducts(c):

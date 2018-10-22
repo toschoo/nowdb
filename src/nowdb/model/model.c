@@ -64,7 +64,7 @@ static ts_algo_cmp_t propidcompare(void *ignore, void *one, void *two) {
 static ts_algo_cmp_t propnamecompare(void *ignore, void *one, void *two) {
 	if (PROP(one)->roleid < PROP(two)->roleid) return ts_algo_cmp_less;
 	if (PROP(one)->roleid > PROP(two)->roleid) return ts_algo_cmp_greater;
-	int x = strcmp(PROP(one)->name, PROP(two)->name);
+	int x = strcasecmp(PROP(one)->name, PROP(two)->name);
 	if (x < 0) return ts_algo_cmp_less;
 	if (x > 0) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
@@ -95,7 +95,7 @@ static ts_algo_cmp_t vrtxidcompare(void *ignore, void *one, void *two) {
  * ------------------------------------------------------------------------
  */
 static ts_algo_cmp_t vrtxnamecompare(void *ignore, void *one, void *two) {
-	int x = strcmp(VRTX(one)->name, VRTX(two)->name);
+	int x = strcasecmp(VRTX(one)->name, VRTX(two)->name);
 	if (x < 0) return ts_algo_cmp_less;
 	if (x > 0) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
@@ -116,7 +116,7 @@ static ts_algo_cmp_t edgeidcompare(void *ignore, void *one, void *two) {
  * ------------------------------------------------------------------------
  */
 static ts_algo_cmp_t edgenamecompare(void *ignore, void *one, void *two) {
-	int x = strcmp(EDGE(one)->name, EDGE(two)->name);
+	int x = strcasecmp(EDGE(one)->name, EDGE(two)->name);
 	if (x < 0) return ts_algo_cmp_less;
 	if (x > 0) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
