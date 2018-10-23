@@ -72,7 +72,7 @@ if __name__ == '__main__':
                  print "we need to have %d" % nume
                  exit(1)
 	
-        with c.execute("select prod_key from vertex as product") as cur:
+        with c.execute("select prod_key, prod_desc from vertex as product") as cur:
            if not cur.ok():
               print "ERROR: %s" % cur.details()
               exit(1)
@@ -85,7 +85,7 @@ if __name__ == '__main__':
               print "we need to have %d" % nump
               exit(1)
 
-        with c.execute("select client_key from vertex as client") as cur:
+        with c.execute("select client_key, client_name from vertex as client") as cur:
            if not cur.ok():
               print "ERROR: %s" % cur.details()
               exit(1)
@@ -98,7 +98,7 @@ if __name__ == '__main__':
               print "we need to have %d" % numc
               exit(1)
 
-        (p2,c2,e2) = db.loadDB(c)
+        (p2,c2,e2) = db.loadDB(c,"db100")
         if len(p2) != len(products):
             print "loaded products differ from original: %d != %d" % (len(p2), len(products))
         if len(c2) != len(clients):

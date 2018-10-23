@@ -353,20 +353,12 @@ static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: vertex projection
+ * Helper: get vertex model
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t projectVertex(nowdb_row_t *row,
-                                        char *buf,
-                                        uint32_t sz,
-                                        uint32_t *osz,
-                                        char *nsp) {
+static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
 	nowdb_err_t err;
-	size_t s;
-	char   t;
-	char *str;
 
-	*nsp = 0;
 	if (row->v == NULL) {
 		err = nowdb_model_getVertexById(row->model,
 		                row->vrtx[0].role, &row->v);
@@ -386,6 +378,28 @@ static inline nowdb_err_t projectVertex(nowdb_row_t *row,
 			if (err != NOWDB_OK) return err;
 		}
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: vertex projection
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t projectVertex(nowdb_row_t *row,
+                                        char *buf,
+                                        uint32_t sz,
+                                        uint32_t *osz,
+                                        char *nsp) {
+	nowdb_err_t err;
+	size_t s;
+	char   t;
+	char *str;
+
+	*nsp = 0;
+
+	err = getVertexModel(row);
+	if (err != NOWDB_OK) return err;
+
 	for(int i=row->vcur; i<row->sz; i++) {
 		switch(row->p[i]->value) {
 		case NOWDB_TYP_TEXT:
@@ -410,17 +424,26 @@ static inline nowdb_err_t projectVertex(nowdb_row_t *row,
 }
 
 static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
+	int k=-1;
 	for(int i=0; i<row->sz; i++) {
+
 		/*
-		fprintf(stderr, "%s: %lu == %lu\n",
+		fprintf(stderr, "%s: %lu (%d) == %lu\n",
 			row->fields[i].name,
 			row->fields[i].propid,
+		        row->p[i]->pk,
 			v->property);
 		*/
+
 		if (row->fields[i].target != NOWDB_TARGET_VERTEX) continue;
 		if (row->fields[i].propid == v->property) return i;
+
+		/* this is stupid */
+		if (row->sz == 1   &&
+                    row->p != NULL && row->p[i]->pk &&
+		    row->p[i]->roleid == v->role) k=i;
 	}
-	return -1;
+	return k;
 }
 
 /* ------------------------------------------------------------------------
@@ -478,11 +501,30 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			}
 
 		} else {
+			/* this is all quite disgusting.
+			 * we urgently need a clean solution
+			 * vor vertices! */
 			*ok = 1;
+
+			/* we need the vertex model to decide
+			 * what is primary key */
+			if (row->v == NULL) {
+				memcpy(row->vrtx, src,
+				  sizeof(nowdb_vertex_t));
+				err = getVertexModel(row);
+				if (err != NOWDB_OK) return err;
+			}
 			int k = findProp(row, (nowdb_vertex_t*)src);
 			if (k < 0) return NOWDB_OK;
 			if (!row->dirty) row->dirty = 1;
 			memcpy(row->vrtx+k, src, sizeof(nowdb_vertex_t));
+
+			/* if we have the primary key, force
+			 * the primary key vertex into value */
+			if (row->p != NULL && row->p[k]->pk) {
+				memcpy(&row->vrtx[k].value,
+				       &row->vrtx[k].vertex,8);
+			}
 			row->cur++;
 			if (row->cur == row->sz) break;
 			return NOWDB_OK;
