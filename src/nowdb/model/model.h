@@ -180,4 +180,12 @@ nowdb_err_t nowdb_model_getEdgeByName(nowdb_model_t      *model,
 nowdb_err_t nowdb_model_getEdgeById(nowdb_model_t      *model,
                                     nowdb_key_t        edgeid,
                                     nowdb_model_edge_t **edge);
+
+/* ------------------------------------------------------------------------
+ * What is by name
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
+                               char           *name,
+                               nowdb_target_t *trg);
 #endif

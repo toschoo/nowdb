@@ -13,7 +13,7 @@ def vertexSelectNoPK(c):
 
     print "RUNNING TEST 'vertexSelectNoPK'"
 
-    stmt = "select prod_desc, prod_price from vertex as product \
+    stmt = "select prod_desc, prod_price from product \
              where prod_key = %s" % str(ps[0].key)
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -22,7 +22,7 @@ def vertexSelectNoPK(c):
         for row in cur:
             print "%s: %.2f" % (row.field(0), row.field(1))
 
-    stmt = "select prod_key from vertex as product \
+    stmt = "select prod_key from product \
              where prod_desc = '%s'" % ps[0].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -31,10 +31,10 @@ def vertexSelectNoPK(c):
         for row in cur:
             print "%d" % row.field(0)
             if row.field(0) != ps[0].key:
-                raise db.TestFailed("wroing key selected for product: %d != %d" %
+                raise db.TestFailed("wrong key selected for product: %d != %d" %
                                    (row.field(), ps[0].key))
 
-    stmt = "select client_key from vertex as client \
+    stmt = "select client_key from client \
              where client_name = '%s'" % cs[0].name
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -43,10 +43,10 @@ def vertexSelectNoPK(c):
         for row in cur:
             print "%d" % row.field(0)
             if row.field(0) != cs[0].key:
-                raise db.TestFailed("wroing key selected for client: %d != %d" %
+                raise db.TestFailed("wrong key selected for client: %d != %d" %
                                    (row.field(), cs[0].key))
 
-    stmt = "select prod_desc from vertex as product"
+    stmt = "select prod_desc from product"
     with c.execute(stmt) as cur:
         n=0
         if not cur.ok():
@@ -58,7 +58,7 @@ def vertexSelectNoPK(c):
         if n != len(ps):
            raise db.TestFailed("expecting %d products, but have %d" % (len(ps), n))
 
-    stmt = "select client_name from vertex as client"
+    stmt = "select client_name from client"
     with c.execute(stmt) as cur:
         n=0
         if not cur.ok():
@@ -91,7 +91,7 @@ def keyzero(c):
             raise db.TestFailed("cannot insert zero")
 
     stmt = "select test_key, test_desc \
-              from vertex as testzero \
+              from testzero \
              where test_key = 0"
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -158,6 +158,8 @@ def invalidEdgeInserts(c):
             print "%d: %s" % (r.code(), r.details())
 
 # it shall not be possible to create an edge and a type of the same name
+# TODO:
+# it shall not be possible to create a context and a type of the same name
 def doublenaming(c):
 
     print "RUNNING TEST 'doublenaming'"

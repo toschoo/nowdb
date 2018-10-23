@@ -1545,3 +1545,41 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
 	}
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * What is by name
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
+                               char          *name,
+                               nowdb_target_t *trg) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	thing_t pattern, *thing;
+
+	MODELNULL();
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_read(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(model->thingByName, &pattern);
+
+	if (thing == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found,
+	                               FALSE, OBJECT, name);
+	} else {
+		*trg = thing->t==E?NOWDB_TARGET_EDGE:
+		                   NOWDB_TARGET_VERTEX;
+	}
+
+	err2 = nowdb_unlock_read(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
