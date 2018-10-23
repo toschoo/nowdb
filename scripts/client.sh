@@ -64,5 +64,6 @@ then
 fi
 
 kill -2 $p
+sleep 1
 
 echo "PASSED"

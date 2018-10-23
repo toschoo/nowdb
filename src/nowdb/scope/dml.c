@@ -284,23 +284,32 @@ static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
 static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
                                  ts_algo_list_t *fields,
                                  ts_algo_list_t *values) {
-	nowdb_err_t err;
-	ts_algo_list_node_t *frun, *vrun;
+	ts_algo_list_node_t *frun, *vrun, *edge=NULL;
 	nowdb_simple_value_t *val;
+	char tp=0;
+	int off=-1;
 
 	vrun = values->head;
 	if (fields != NULL) {
 		for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
-			if (strcasecmp(frun->cont, "edge") == 0) break;
+			off = nowdb_edge_offByName(frun->cont);
+			if (off == NOWDB_OFF_EDGE) {
+				edge=vrun; if (tp) break;
+			} else if (off == NOWDB_OFF_TMSTMP) {
+				tp=1; if (edge != NULL) break;
+			}
 			vrun = vrun->nxt;
 		}
 	}
-	if (vrun != NULL) {
-		val = vrun->cont;
-		err = setEdgeModel(dml, val->value);
-		if (err != NOWDB_OK) return err;
+	if (edge == NULL) {
+		INVALID("edge field missing in insert");
 	}
-	return NOWDB_OK;
+	if (!tp) {
+		INVALID("timestamp missing in insert");
+	}
+	val = edge->cont;
+	fprintf(stderr, "%s\n", (char*)val->value);
+	return setEdgeModel(dml, val->value);
 }
 
 static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
