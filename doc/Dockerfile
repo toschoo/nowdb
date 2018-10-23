@@ -37,7 +37,14 @@ RUN cd build && cd nowdb && \
   env LD_LIBRARY_PATH="./lib:/usr/lib:/usr/local/lib" \
   make all && make install && cd .. 
 
-RUN mkdir log
+# shall be nowdb
+RUN groupadd -g 1000 nowdb
+RUN useradd -u 1000 -g 1000 nowdb
 
 COPY nowstart.sh .
-RUN chmod u+x nowstart.sh
+COPY nowstop.sh .
+
+RUN chown nowdb.nowdb nowstart.sh && chmod u+x nowstart.sh
+RUN chown nowdb.nowdb nowstop.sh && chmod u+x nowstop.sh
+
+USER nowdb

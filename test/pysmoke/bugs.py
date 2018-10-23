@@ -108,6 +108,56 @@ def keyzero(c):
            print "%d: %s" % (r.code(), r.details())
            raise db.TestFailed("cannot drop zero")
 
+# create edge must contain origin and destin
+# origin and edgin must be vertex types
+def createInvalidEdge(c):
+
+    print "RUNNING TEST 'createInvalidEdge'"
+
+    with c.execute("create edge testedge (origin client, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge without destin :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("create edge testedge (destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge without origin :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("create edge testedge (origin uint, destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge with origin that is not a vertex :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("create edge testedge (origin client, destin uint, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge with destin that is not a vertex :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+# insert into edge must contain edge and timestamp
+def invalidEdgeInserts(c):
+
+    print "RUNNING TEST 'invalidEdgeInserts'"
+
+    with c.execute("insert into sales (origin, destin, timestamp, weight) \
+                                      (9999999, 9999, '2019-01-01', 0.99)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an edge without edge :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into sales (edge, origin, destin, weight) \
+                                      ('buys', 9999999, 9999, 0.99)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an edge without timestamp :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+#### MAIN ####################################################################
 if __name__ == '__main__':
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
@@ -116,4 +166,5 @@ if __name__ == '__main__':
 
         vertexSelectNoPK(c)
         keyzero(c)
-
+        createInvalidEdge(c)
+        invalidEdgeInserts(c)

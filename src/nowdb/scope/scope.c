@@ -1732,6 +1732,10 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 
 	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "name is NULL");
+	if (origin == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                      FALSE, OBJECT, "edge without origin");
+	if (destin == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                      FALSE, OBJECT, "edge without destin");
 
 	err = nowdb_lock_read(&scope->lock);
 	if (err != NOWDB_OK) return err;

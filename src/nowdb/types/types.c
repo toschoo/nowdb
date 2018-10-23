@@ -340,6 +340,7 @@ int nowdb_edge_offByName(char *fld) {
 	if (strcasecmp(fld, "label") == 0) return NOWDB_OFF_LABEL;
 	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_TMSTMP;
 	if (strcasecmp(fld, "tmstmp") == 0) return NOWDB_OFF_TMSTMP;
+	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_TMSTMP;
 	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_TMSTMP;
 	if (strcasecmp(fld, "datetime") == 0) return NOWDB_OFF_TMSTMP;
 	if (strcasecmp(fld, "date") == 0) return NOWDB_OFF_TMSTMP;
@@ -371,4 +372,19 @@ int nowdb_sizeByOff(uint32_t recsize, uint16_t off) {
 		default: return 8;
 		}
 	}
+}
+
+int nowdb_strtotype(char *str) {
+	if (str == NULL) return -1;
+	if (strnlen(str, 32) > 32) return -1;
+	if (strcasecmp(str, "uint")     == 0 ||
+	    strcasecmp(str, "uinteger") == 0) return NOWDB_TYP_UINT;
+	if (strcasecmp(str, "int")     == 0 ||
+	    strcasecmp(str, "integer") == 0) return NOWDB_TYP_INT;
+	if (strcasecmp(str, "date") == 0 ||
+	    strcasecmp(str, "time") == 0) return NOWDB_TYP_TIME;
+	if (strcasecmp(str, "float")   == 0) return NOWDB_TYP_FLOAT;
+	if (strcasecmp(str, "text")    == 0) return NOWDB_TYP_TEXT;
+	if (strcasecmp(str, "bool")    == 0) return NOWDB_TYP_BOOL;
+	return -1;
 }
