@@ -46,6 +46,45 @@ static char *OBJECT = "model";
 	(*(nowdb_roleid_t*)x)
 
 /* ------------------------------------------------------------------------
+ * type or edge descriptor
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	char *name; /* name of the thing    */
+	void *ptr;  /* pointer to the thing */
+	char  t;    /* type of the thing    */
+} thing_t;
+
+#define THING(x) \
+	((thing_t*)x)
+
+/* ------------------------------------------------------------------------
+ * thing by name
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t thingnamecompare(void *ignore, void *one, void *two) {
+	int x = strcasecmp(THING(one)->name, THING(two)->name);
+	if (x < 0) return ts_algo_cmp_less;
+	if (x > 0) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
+ * destroy thing
+ * ------------------------------------------------------------------------
+ */
+static void thingdestroy(void *ignore, void **n) {
+	if (n == NULL) return;
+	if (*n == NULL) return;
+	if (THING(*n)->name != NULL) {
+		// fprintf(stderr, "destroying %s\n", THING(*n)->name);
+		free(THING(*n)->name);
+		THING(*n)->name = NULL;
+	}
+	free(*n); *n = NULL;
+}
+
+/* ------------------------------------------------------------------------
  * compare properties by id (roleid, propid)
  * ------------------------------------------------------------------------
  */
@@ -228,6 +267,7 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	MODELNULL();
 
 	model->path = NULL;
+	model->thingByName = NULL;
 	model->vrtxById = NULL;
 	model->vrtxByName = NULL;
 	model->edgeByName = NULL;
@@ -242,6 +282,16 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	model->path = strdup(path);
 	if (model->path == NULL) {
 		NOMEM("allocating path");
+		return err;
+	}
+
+	model->thingByName= ts_algo_tree_new(&thingnamecompare, NULL,
+	                                     &noupdate,
+	                                     &thingdestroy,
+	                                     &thingdestroy);
+	if (model->thingByName == NULL) {
+		nowdb_model_destroy(model);
+		NOMEM("tree.new");
 		return err;
 	}
 
@@ -323,6 +373,10 @@ void nowdb_model_destroy(nowdb_model_t *model) {
 	nowdb_rwlock_destroy(&model->lock);
 	if (model->path != NULL) {
 		free(model->path); model->path = NULL;
+	}
+	if (model->thingByName != NULL) {
+		ts_algo_tree_destroy(model->thingByName);
+		free(model->thingByName); model->thingByName = NULL;
 	}
 	if (model->vrtxByName != NULL) { /* destroy first the secondary! */
 		ts_algo_tree_destroy(model->vrtxByName);
@@ -501,7 +555,6 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 		return err;
 	}
 
-	vertex2buf(buf, sz, list);
 	switch(what) {
 	case V: vertex2buf(buf,sz,list); break;
 	case P: prop2buf(buf,sz,list); break;
@@ -684,6 +737,7 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	char *buf;
 	uint32_t sz=0;
 	ts_algo_tree_t *byId, *byName;
+	thing_t *thing;
 
 	switch(what) {
 	case V: byId = model->vrtxById; f=VMODEL;
@@ -733,6 +787,10 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 
 	free(buf);
 
+	/* NOTE: on error, it is not sufficient to
+	 *       destroy the list; we also need to
+	 *       destroy the content that was not
+	 *       yet inserted into a tree */
 	if (err != NOWDB_OK) {
 		ts_algo_list_destroy(&list); return err;
 	}
@@ -746,6 +804,32 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byName.insert");
 			return err;
+		}
+		if (what == V || what == E) {
+			thing = calloc(1,sizeof(thing_t));
+			if (thing == NULL) {
+				ts_algo_list_destroy(&list);
+				NOMEM("allocating thing descriptor");
+				return err;
+			}
+			thing->name = strdup(what==V?
+			    EDGE(runner->cont)->name:
+			    VRTX(runner->cont)->name);
+			if (thing->name == NULL) {
+				free(thing);
+				ts_algo_list_destroy(&list);
+				NOMEM("allocating thing's name");
+				return err;
+			}
+			thing->ptr = runner->cont;
+			thing->t = what;
+			if (ts_algo_tree_insert(model->thingByName,
+			                      thing) != TS_ALGO_OK) {
+				free(thing);
+				ts_algo_list_destroy(&list);
+				NOMEM("thing.insert");
+				return err;
+			}
 		}
 	}
 	ts_algo_list_destroy(&list);
@@ -789,27 +873,64 @@ unlock:
  */
 static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
                                 ts_algo_tree_t *byName,
-                                void           *thing) {
+                                ts_algo_tree_t *three,
+                                void           *entity,
+                                char            what) {
+	nowdb_err_t err;
 	void *tmp;
+	thing_t pattern, *thing=NULL;
 
-	tmp = ts_algo_tree_find(byId, thing);
+	tmp = ts_algo_tree_find(byId, entity);
 	if (tmp != NULL) {
-		fprintf(stderr, "found: %lu (%s)\n", PROP(tmp)->propid, PROP(tmp)->name);
-		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
-		                                                "id");
+		return nowdb_err_get(nowdb_err_dup_key,
+		                   FALSE, OBJECT, "id");
 	}
-	tmp = ts_algo_tree_find(byName, thing);
-	if (tmp != NULL) {
-		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT,
-		                                              "name");
+	if (what == E || what == V) {
+		pattern.name = what==E?EDGE(entity)->name:
+		                       VRTX(entity)->name;
+		fprintf(stderr, "searching for %s in things\n", pattern.name);
+		thing = ts_algo_tree_find(three, &pattern);
+		if (thing != NULL) {
+			return nowdb_err_get(nowdb_err_dup_key,
+			          FALSE, OBJECT, pattern.name);
+		}
+	} else {
+		tmp = ts_algo_tree_find(byName, entity);
+		if (tmp != NULL) {
+			return nowdb_err_get(nowdb_err_dup_key,
+			                 FALSE, OBJECT, "name");
+		}
 	}
-	if (ts_algo_tree_insert(byId, thing) != TS_ALGO_OK) {
+	if (ts_algo_tree_insert(byId, entity) != TS_ALGO_OK) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                      "tree.insert");
 	}
-	if (ts_algo_tree_insert(byName, thing) != TS_ALGO_OK) {
+	if (ts_algo_tree_insert(byName, entity) != TS_ALGO_OK) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                      "tree.insert");
+	}
+
+	// what is it?
+	if (what == E || what == V) {
+		thing = calloc(1,sizeof(thing_t));
+		if (thing == NULL) {
+			NOMEM("allocating thing");
+			return err;
+		}
+		thing->name = strdup(what==E?EDGE(entity)->name:
+		                             VRTX(entity)->name);
+		if (thing->name == NULL) {
+			free(thing);
+			NOMEM("allocating thing's name");
+			return err;
+		}
+		thing->ptr = entity;
+		thing->t = what;
+
+		if (ts_algo_tree_insert(three, thing) != TS_ALGO_OK) {
+			return nowdb_err_get(nowdb_err_no_mem,
+			         FALSE, OBJECT, "tree.insert");
+		}
 	}
 	return NOWDB_OK;
 }
@@ -843,7 +964,7 @@ static inline nowdb_err_t add(nowdb_model_t  *model,
 	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
 
-	err = addNL(byId, byName, thing);
+	err = addNL(byId, byName, model->thingByName, thing, what);
 	if (err != NOWDB_OK) goto unlock;
 
 	err = storeModel(model, what);
@@ -978,13 +1099,22 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	nowdb_model_prop_t *prop=NULL;
-	nowdb_model_vertex_t *vrtx, *tmp;
+	nowdb_model_vertex_t *vrtx;
 	ts_algo_list_node_t *runner;
+	thing_t pattern, *thing;
 
 	MODELNULL();
 
 	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(model->thingByName, &pattern);
+	if (thing != NULL) {
+		err = nowdb_err_get(nowdb_err_dup_key,
+		                  FALSE, OBJECT, name);
+		goto unlock;
+	}
 
 	if (props != NULL) {
 		findPK(props, &prop);
@@ -1006,14 +1136,6 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		free(vrtx); goto unlock;
 	}
 
-	tmp = ts_algo_tree_find(model->vrtxByName, vrtx);
-	if (tmp != NULL) {
-		err = nowdb_err_get(nowdb_err_dup_key,
-		                  FALSE, OBJECT, name);
-		free(vrtx->name); free(vrtx);
-		goto unlock;
-	}
-
 	vrtx->roleid = getNextRoleid(model);
 
 	if (prop != NULL) {
@@ -1032,7 +1154,9 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		}
 	}
 
-	err = addNL(model->vrtxById, model->vrtxByName, vrtx);
+	err = addNL(model->vrtxById,
+	            model->vrtxByName,
+	            model->thingByName, vrtx, V);
 	if (err != NOWDB_OK) {
 		free(vrtx->name); free(vrtx);
 		goto unlock;
@@ -1040,8 +1164,8 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	if (props != NULL) {
 		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 			err = addNL(model->propById,
-			            model->propByName,
-			            runner->cont);
+			            model->propByName, NULL,
+			            runner->cont, P);
 			if (err != NOWDB_OK) break;
 		}
 		if (err != NOWDB_OK) goto unlock;
@@ -1072,6 +1196,7 @@ nowdb_err_t nowdb_model_removeVertex(nowdb_model_t *model,
 	nowdb_err_t err2 = NOWDB_OK;
 	nowdb_model_vertex_t *vrtx;
 	nowdb_model_vertex_t  tmp;
+	thing_t pattern;
 
 	MODELNULL();
 
@@ -1086,6 +1211,8 @@ nowdb_err_t nowdb_model_removeVertex(nowdb_model_t *model,
 		goto unlock;
 	}
 
+	pattern.name = vrtx->name;
+	ts_algo_tree_delete(model->thingByName, &pattern);
 	ts_algo_tree_delete(model->vrtxByName, vrtx);
 	ts_algo_tree_delete(model->vrtxById, vrtx);
 
@@ -1150,6 +1277,7 @@ nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
 	nowdb_err_t err2 = NOWDB_OK;
 	nowdb_model_edge_t *e;
 	nowdb_model_edge_t  tmp;
+	thing_t pattern;
 
 	MODELNULL();
 
@@ -1164,6 +1292,8 @@ nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
 		goto unlock;
 	}
 
+	pattern.name = e->name;
+	ts_algo_tree_delete(model->thingByName, &pattern);
 	ts_algo_tree_delete(model->edgeByName, e);
 	ts_algo_tree_delete(model->edgeById, e);
 
@@ -1189,6 +1319,7 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 	nowdb_model_vertex_t *vrtx, vtmp;
 	ts_algo_list_t props;
 	ts_algo_list_node_t *runner;
+	thing_t pattern;
 
 	MODELNULL();
 
@@ -1224,8 +1355,11 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 
 	ts_algo_list_destroy(&props);
 
+	pattern.name = vrtx->name;
+	ts_algo_tree_delete(model->thingByName, &pattern);
 	ts_algo_tree_delete(model->vrtxByName, vrtx);
 	ts_algo_tree_delete(model->vrtxById, vrtx);
+
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
 	if (err2 != NOWDB_OK) {

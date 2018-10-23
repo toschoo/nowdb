@@ -157,6 +157,27 @@ def invalidEdgeInserts(c):
          else:
             print "%d: %s" % (r.code(), r.details())
 
+# it shall not be possible to create an edge and a type of the same name
+def doublenaming(c):
+
+    print "RUNNING TEST 'doublenaming'"
+
+    with c.execute("create edge foo (origin client, destin product, weight float)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create an edge named 'foo': %s" % r.details())
+
+    with c.execute("create type foo (foo_key uint primary key, foo_name text)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create type 'foo' (which is an edge) :-(")
+
+    with c.execute("create type bar (bar_key uint primary key, bar_name text)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a type named 'bar': %s" % r.details())
+
+    with c.execute("create edge bar (origin client, destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge named 'bar' which is a type :-(")
+
 #### MAIN ####################################################################
 if __name__ == '__main__':
     with now.Connection("localhost", "55505", None, None) as c:
@@ -168,3 +189,4 @@ if __name__ == '__main__':
         keyzero(c)
         createInvalidEdge(c)
         invalidEdgeInserts(c)
+        doublenaming(c)

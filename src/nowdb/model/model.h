@@ -28,15 +28,15 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t  lock;       /* model is threadsafe   */
-	char           *path;       /* path to model on disk */
-                                    /* lookup what it is     */
-	ts_algo_tree_t *vrtxById;   /* lookup vertex by id   */
-	ts_algo_tree_t *vrtxByName; /* lookup vertex by name */
-	ts_algo_tree_t *propById;   /* lookup prop.  by id   */
-	ts_algo_tree_t *propByName; /* lookup prop.  by name */
-	ts_algo_tree_t *edgeById;   /* lookup edge   by id   */
-	ts_algo_tree_t *edgeByName; /* lookup edge   by name */
+	nowdb_rwlock_t  lock;        /* model is threadsafe   */
+	char           *path;        /* path to model on disk */
+	ts_algo_tree_t *thingByName; /* lookup what it is     */
+	ts_algo_tree_t *vrtxById;    /* lookup vertex by id   */
+	ts_algo_tree_t *vrtxByName;  /* lookup vertex by name */
+	ts_algo_tree_t *propById;    /* lookup prop.  by id   */
+	ts_algo_tree_t *propByName;  /* lookup prop.  by name */
+	ts_algo_tree_t *edgeById;    /* lookup edge   by id   */
+	ts_algo_tree_t *edgeByName;  /* lookup edge   by name */
 } nowdb_model_t;
 
 /* ------------------------------------------------------------------------
