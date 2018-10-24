@@ -1234,6 +1234,30 @@ static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
 }
 
 /* -----------------------------------------------------------------------
+ * Adjust target to what it s according to model
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
+                                       nowdb_ast_t   *trg) {
+	nowdb_err_t  err;
+	nowdb_target_t t;
+
+	err = nowdb_model_whatIs(scope->model, trg->value, &t);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_key_not_found) {
+			nowdb_err_release(err);
+			trg->stype = NOWDB_AST_CONTEXT;
+			return NOWDB_OK;
+		}
+		return err;
+	}
+
+	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
+	                                 NOWDB_AST_CONTEXT;
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
@@ -1258,6 +1282,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
+
+	err = adjustTarget(scope, trg);
+	if (err != NOWDB_OK) return err;
 
 	/* create summary node */
 	stp = malloc(sizeof(nowdb_plan_t));

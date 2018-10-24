@@ -954,15 +954,6 @@ Its general form is
 
 \keyword{load} '/path/to/datafile' \keyword{into} \identifier{mytype\_or\_edge}
 
-\comment{
-For types it's currently ``load '/path/to/datafile' into vertex use header as type''
-(where \term{type} here means the concrete type, \eg\ \term{client}).
-For edges it's ``load '/path/to/datafile' into mytable as edge''
-(where \term{edge} is literal).
-The simpler form above is currently reserved for a raw import scheme,
-which will soon disappear.
-}
-
 The \term{load} statement has optional \term{use} and \term{ignore} clauses
 \comment{we also need a clause to add options to a user-defined loader}:
 
@@ -998,20 +989,10 @@ Here is a complete example for the default loader and vertices:
 \keyword{load} '/opt/import/client.csv'
 \keyword{into} \identifier{client} \keyword{use header}
 
-\comment{
-\keyword{load} '/opt/import/client.csv'
-\keyword{into} \keyword{vertex} \keyword{use header as} \identifier{client}
-}
-
 and for edges:
 
 \keyword{load} '/opt/import/transactions.csv'
 \keyword{into} \identifier{sales}
-
-\comment{
-\keyword{load} '/opt/import/transactions.csv'
-\keyword{into} \identifier{sales} \keyword{as edge}
-}
 
 The \term{load} statement returns a report on success
 that indicates how many rows have been loaded,
@@ -1165,15 +1146,6 @@ Valid \term{from} clauses are for instance:
 \keyword{from} \identifier{sales} \\
 \keyword{from} \identifier{product} \\
 \keyword{from} \identifier{client}
-
-\comment{
-The latter two, unfortunately, do not work right now.
-The current syntax is quite esoteric (and will go
-away very soon). Since \term{product} and \term{client}
-are vertex types, the current form is
-\keyword{from vertex as} \identifier{product}.
-That is quite ugly and, indeed, pointless.
-}
 
 Here is a first example of a complete \acronym{dql} statement:
 

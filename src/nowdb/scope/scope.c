@@ -1200,6 +1200,7 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	nowdb_context_t *ctx;
+	char t;
 
 	SCOPENULL();
 
@@ -1217,6 +1218,7 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 		goto unlock;
 	}
 
+	// context does not yet exist
 	err = findContext(scope, name, &ctx);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_key_not_found) {
@@ -1228,6 +1230,15 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
 		goto unlock;
 	}
+
+	// there is no edge nor type with that name
+	err = nowdb_model_whatIs(scope->model, name, &t);
+	if (err == NOWDB_OK) {
+		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+		goto unlock;
+	}
+	if (err->errcode != nowdb_err_key_not_found) goto unlock;
+	nowdb_err_release(err);
 
 	err = initContext(scope, name, cfg, scope->ver, &ctx);
 	if (err != NOWDB_OK) goto unlock;
@@ -1657,6 +1668,7 @@ nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
                                    char               *name,
                                    ts_algo_list_t    *props) {
 	nowdb_err_t err2,err=NOWDB_OK;
+	nowdb_context_t *ctx;
 
 	SCOPENULL();
 
@@ -1666,10 +1678,19 @@ nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
 	/* currently, we lock the scope
 	 * for reading, so it cannot be 
 	 * closed while we are working */
-	err = nowdb_lock_read(&scope->lock);
+	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
 
 	SCOPENOTOPEN();
+
+	// not context with that name exists
+	err = findContext(scope, name, &ctx);
+	if (err == NOWDB_OK) {
+		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+		goto unlock;
+	}
+	if (err->errcode != nowdb_err_key_not_found) goto unlock;
+	nowdb_err_release(err);
 
 	if (props != NULL) {
 		err = addPropids(scope, props);
@@ -1679,7 +1700,7 @@ nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
 	if (err != NOWDB_OK) goto unlock;
 
 unlock:
-	err2 = nowdb_unlock_read(&scope->lock);
+	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
@@ -1727,6 +1748,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	nowdb_err_t err2,err=NOWDB_OK;
 	nowdb_model_edge_t   *e=NULL;
 	nowdb_model_vertex_t *v=NULL;
+	nowdb_context_t *ctx;
 
 	SCOPENULL();
 
@@ -1737,10 +1759,19 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	if (destin == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                      FALSE, OBJECT, "edge without destin");
 
-	err = nowdb_lock_read(&scope->lock);
+	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
 
 	SCOPENOTOPEN();
+
+	// not context with that name exists
+	err = findContext(scope, name, &ctx);
+	if (err == NOWDB_OK) {
+		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+		goto unlock;
+	}
+	if (err->errcode != nowdb_err_key_not_found) goto unlock;
+	nowdb_err_release(err);
 
 	e = calloc(1,sizeof(nowdb_model_edge_t));
 	if (e == NULL) {
@@ -1789,7 +1820,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	}
 
 unlock:
-	err2 = nowdb_unlock_read(&scope->lock);
+	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}
