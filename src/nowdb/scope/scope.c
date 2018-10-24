@@ -1186,7 +1186,7 @@ static inline nowdb_err_t createVIndex(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) return err;
 
 	err = createIndex(scope, VINDEX, NULL, keys,
-	                    NOWDB_CONFIG_SIZE_SMALL);
+	                    NOWDB_CONFIG_SIZE_TINY);
 	nowdb_index_keys_destroy(keys);
 	if (err != NOWDB_OK) return err;
 
