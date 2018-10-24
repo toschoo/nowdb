@@ -158,27 +158,86 @@ def invalidEdgeInserts(c):
             print "%d: %s" % (r.code(), r.details())
 
 # it shall not be possible to create an edge and a type of the same name
-# TODO:
 # it shall not be possible to create a context and a type of the same name
+# it shall not be possible to create a context and an edge of the same name
 def doublenaming(c):
 
     print "RUNNING TEST 'doublenaming'"
 
-    with c.execute("create edge foo (origin client, destin product, weight float)") as r:
+    # type and edge
+    with c.execute("create edge fooedge (origin client, destin product, weight float)") as r:
          if not r.ok():
-            raise db.TestFailed("I cannot create an edge named 'foo': %s" % r.details())
+            raise db.TestFailed("I cannot create an edge named 'fooedge': %s" % r.details())
 
-    with c.execute("create type foo (foo_key uint primary key, foo_name text)") as r:
+    with c.execute("create type fooedge (foo_key uint primary key, foo_name text)") as r:
          if r.ok():
-            raise db.TestFailed("I can create type 'foo' (which is an edge) :-(")
+            raise db.TestFailed("I can create type 'fooedge' (which is an edge) :-(")
 
-    with c.execute("create type bar (bar_key uint primary key, bar_name text)") as r:
+    with c.execute("create type bartype (bar_key uint primary key, bar_name text)") as r:
          if not r.ok():
-            raise db.TestFailed("I cannot create a type named 'bar': %s" % r.details())
+            raise db.TestFailed("I cannot create a type named 'bartype': %s" % r.details())
 
-    with c.execute("create edge bar (origin client, destin product, weight float)") as r:
+    with c.execute("create edge bartype (origin client, destin product, weight float)") as r:
          if r.ok():
-            raise db.TestFailed("I can create an edge named 'bar' which is a type :-(")
+            raise db.TestFailed("I can create an edge named 'bartype' which is a type :-(")
+
+    with c.execute("drop edge fooedge") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop edge fooedge: %s" % r.details())
+
+    with c.execute("drop type bartype") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop type bartype: %s" % r.details())
+
+    # type and context
+    with c.execute("create table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a table named 'fooctx': %s" % r.details())
+
+    with c.execute("create type fooctx (foo_key uint primary key, foo_name text)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create type 'fooctx' (which is a table) :-(")
+
+    with c.execute("create type bartype (bar_key uint primary key, bar_name text)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a type named 'bartype': %s" % r.details())
+
+    with c.execute("create table bartype") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge named 'bartype' which is a type :-(")
+
+    with c.execute("drop table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop table fooctx: %s" % r.details())
+
+    with c.execute("drop type bartype") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop type bartype: %s" % r.details())
+
+    # edge and context
+    with c.execute("create table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a table named 'fooctx': %s" % r.details())
+
+    with c.execute("create edge fooctx (origin client, destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create edge 'fooctx' (which is a table) :-(")
+
+    with c.execute("create edge baredge (origin client, destin product, weight float)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create an edge named 'baredge': %s" % r.details())
+
+    with c.execute("create table baredge") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an table named 'baredge' which is an edge :-(")
+
+    with c.execute("drop table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop table fooctx: %s" % r.details())
+
+    with c.execute("drop edge baredge") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop edge baredge: %s" % r.details())
 
 #### MAIN ####################################################################
 if __name__ == '__main__':
