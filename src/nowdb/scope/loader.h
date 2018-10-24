@@ -89,7 +89,6 @@ typedef struct nowdb_csv_st nowdb_csv_t;
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	/* model */
 	FILE            *stream; /* the input stream  */
 	FILE           *ostream; /* the output stream */
 	nowdb_store_t    *store; /* the output store  */

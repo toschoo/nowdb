@@ -587,6 +587,12 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	}
 	i=0;
 	vrtx.role = dml->v->roleid;
+
+	/*
+	 * now register the vertex
+	 * we should also consider to lock
+	 * the scope for the whole insert
+	 */
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		vrtx.property = dml->p[i]->propid;
@@ -604,6 +610,14 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		if (err != NOWDB_OK) break;
 		i++;
 	}
+	/*
+	 * if things fail here,
+	 * we have already registered the vertex
+	 * and we have inserted parts of it.
+	 * we need to:
+	 * - delete everything we inserted
+	 * - unregister
+	 */
 	return err;
 }
 

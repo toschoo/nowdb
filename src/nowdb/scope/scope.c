@@ -7,6 +7,9 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/io/dir.h>
 
+#include <beet/types.h>
+#include <beet/index.h>
+
 static char *OBJECT = "scope";
 
 #define VINDEX "_vindex"
@@ -63,6 +66,24 @@ static void ctxdestroy(void *ignore, void **n) {
 		nowdb_context_destroy((nowdb_context_t*)(*n));
 		free(*n); *n = NULL;
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: make beet error
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t makeBeetError(beet_err_t ber) {
+	nowdb_err_t err, err2=NOWDB_OK;
+
+	if (ber == BEET_OK) return NOWDB_OK;
+	if (ber < BEET_OSERR_ERRNO) {
+		err2 = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
+		                          (char*)beet_oserrdesc());
+	}
+	err = nowdb_err_get(nowdb_err_beet, FALSE, OBJECT,
+	                         (char*)beet_errdesc(ber));
+	if (err == NOWDB_OK) return err2; else err->cause = err2;
+	return err;
 }
 
 /* -----------------------------------------------------------------------
@@ -1972,10 +1993,53 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Register vertex
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
+                                       nowdb_roleid_t  role,
+                                       nowdb_key_t      vid) {
+	beet_err_t ber;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	char key[12];
+	char found=0;
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_plru12_get(scope->vache, role, vid, &found);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (found) {
+		err = nowdb_err_get(nowdb_err_dup_key,
+		              FALSE, OBJECT, "vertex");
+		goto unlock;
+	}
+
+	memcpy(key, &role, 4); memcpy(key+4, &vid, 8);
+	ber = beet_index_doesExist(scope->vindex->idx, key);
+	if (ber == BEET_ERR_KEYNOF) {
+		err = nowdb_plru12_add(scope->vache, role, vid);
+		goto unlock;
+	}
+	if (ber != BEET_OK) {
+		err = makeBeetError(ber); goto unlock;
+	}
+	err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, "vertex");
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Insert one record
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
-                               char        *context,
+                               nowdb_store_t *store,
                                void          *data);
-

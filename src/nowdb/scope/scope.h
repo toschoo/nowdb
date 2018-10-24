@@ -215,8 +215,16 @@ nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
-                               char        *context,
+                               nowdb_store_t *store,
                                void          *data);
+
+/* ------------------------------------------------------------------------
+ * Register vertex
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
+                                       nowdb_roleid_t  role,
+                                       nowdb_key_t      vid);
 
 /* ------------------------------------------------------------------------
  * Load csv
