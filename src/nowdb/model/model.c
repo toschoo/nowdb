@@ -77,7 +77,6 @@ static void thingdestroy(void *ignore, void **n) {
 	if (n == NULL) return;
 	if (*n == NULL) return;
 	if (THING(*n)->name != NULL) {
-		// fprintf(stderr, "destroying %s\n", THING(*n)->name);
 		free(THING(*n)->name);
 		THING(*n)->name = NULL;
 	}
@@ -243,7 +242,6 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 		}
 
 		if (stat(p, &st) != 0) {
-			// fprintf(stderr, "creating %s\n", p);
 			tmp = fopen(p, "wb");
 			if (tmp == NULL) {
 				err = nowdb_err_get(nowdb_err_open,
@@ -531,7 +529,6 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	}
 
 	if (tree->count == 0) {
-		fprintf(stderr, "write zero and ready\n");
 		return NOWDB_OK;
 	}
 	list = ts_algo_tree_toList(tree);
@@ -888,7 +885,6 @@ static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
 	if (what == E || what == V) {
 		pattern.name = what==E?EDGE(entity)->name:
 		                       VRTX(entity)->name;
-		fprintf(stderr, "searching for %s in things\n", pattern.name);
 		thing = ts_algo_tree_find(three, &pattern);
 		if (thing != NULL) {
 			return nowdb_err_get(nowdb_err_dup_key,

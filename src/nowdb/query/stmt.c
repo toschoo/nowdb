@@ -721,6 +721,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 
 	/* create vertex loader */
 	case NOWDB_AST_VERTEX:
+	case NOWDB_AST_TYPE:
 		fprintf(stderr, "loading '%s' into vertex as type '%s'\n",
 		                path, type);
 
@@ -763,6 +764,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	
 	default:
 		fclose(stream); 
+		fprintf(stderr, "target: %d\n", trg->stype);
 		INVALIDAST("invalid target for load");
 	}
 
@@ -1404,15 +1406,46 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 	}
 
 	/* get model type if any */
-	m = nowdb_ast_option(op, NOWDB_AST_TYPE);
-	if (m != NULL) {
-		type = m->value;
+	if (trg->value == NULL) {
+		m = nowdb_ast_option(op, NOWDB_AST_TYPE);
+		if (m != NULL) {
+			type = m->value;
+			flgs |= NOWDB_CSV_MODEL;
+		}
+	} else {
+		type = trg->value;
 		flgs |= NOWDB_CSV_MODEL;
 	}
 
 	/* load and cleanup */
 	err = load(scope, p, trg, type, flgs, res); free(p);
 	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Adjust target to what it is according to model
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
+                                       nowdb_ast_t   *trg) {
+	nowdb_err_t  err;
+	nowdb_target_t t;
+
+	if (trg->value == NULL) return NOWDB_OK;
+
+	err = nowdb_model_whatIs(scope->model, trg->value, &t);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_key_not_found) {
+			nowdb_err_release(err);
+			trg->stype = NOWDB_AST_CONTEXT;
+			return NOWDB_OK;
+		}
+		return err;
+	}
+
+	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
+	                                 NOWDB_AST_CONTEXT;
+	return NOWDB_OK;
 }
 
 /* -------------------------------------------------------------------------
@@ -1422,6 +1455,7 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 static nowdb_err_t handleDLL(nowdb_ast_t *ast,
                          nowdb_scope_t *scope,
                       nowdb_qry_result_t *res) {
+	nowdb_err_t err;
 	nowdb_ast_t *op;
 	nowdb_ast_t *trg;
 
@@ -1435,6 +1469,9 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
 	
 	trg = nowdb_ast_target(ast);
 	if (trg == NULL) INVALIDAST("no target in AST");
+
+	err = adjustTarget(scope, trg);
+	if (err != NOWDB_OK) return err;
 
 	if (op->ntype != NOWDB_AST_LOAD) INVALIDAST("invalid operation");
 	
