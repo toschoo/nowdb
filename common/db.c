@@ -239,7 +239,7 @@ int createDB(int hedges, int hprods, int hclients) {
 		return -1;
 	}
 
-	EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
+	// EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
 	EXECSTMT("create index vidx_ropo on vertex (role, property)");
 
 	EXECSTMT("create tiny table sales set stress=constant");

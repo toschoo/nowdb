@@ -66,6 +66,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/ptlru.o      \
       $(SRC)/mem/pklru.o      \
       $(SRC)/mem/pplru.o      \
+      $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
@@ -115,6 +116,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/mem/ptlru.h      \
       $(SRC)/mem/pklru.h      \
       $(SRC)/mem/pplru.h      \
+      $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \

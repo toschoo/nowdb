@@ -9,6 +9,8 @@
 
 static char *OBJECT = "scope";
 
+#define VINDEX "_vindex"
+
 /* ------------------------------------------------------------------------
  * Macro: scope NULL
  * ------------------------------------------------------------------------
@@ -320,6 +322,8 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->path = NULL;
 	scope->iman = NULL;
 	scope->model = NULL;
+	scope->vindex = NULL;
+	scope->vache = NULL;
 	scope->text = NULL;
 	scope->pman = NULL;
 	scope->ver  = ver;
@@ -374,7 +378,21 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		ts_algo_tree_destroy(&scope->contexts);
 		return err;
 	}
+
+	/* vertex cache */
+	scope->vache = calloc(1,sizeof(nowdb_plru12_t));
+	if (scope->vache == NULL) {
+		nowdb_scope_destroy(scope);
+		NOMEM("vertex cache");
+		return err;
+	}
+	err = nowdb_plru12_init(scope->vache, 10000000);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope);
+		return err;
+	}
 	
+	/* text */
 	p = nowdb_path_append(path, "text");
 	if (p == NULL) {
 		nowdb_scope_destroy(scope);
@@ -393,6 +411,8 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		nowdb_scope_destroy(scope);
 		return err;
 	}
+
+	/* stored procedures */
 	err = nowdb_procman_new(&scope->pman, path);
 	if (err != NOWDB_OK) {
 		nowdb_scope_destroy(scope);
@@ -407,6 +427,10 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
  */
 void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope == NULL) return;
+	if (scope->vache != NULL) {
+		nowdb_plru12_destroy(scope->vache);
+		free(scope->vache); scope->vache = NULL;
+	}
 	if (scope->iman != NULL) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
@@ -1062,12 +1086,128 @@ unlock:
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: create index internally
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t createIndex(nowdb_scope_t     *scope,
+                                      char               *name,
+                                      char            *context,
+                                      nowdb_index_keys_t *keys,
+                                      uint16_t          sizing) {
+	nowdb_err_t err;
+	nowdb_context_t *ctx=NULL;
+	nowdb_index_desc_t *desc=NULL;
+	nowdb_index_keys_t *k;
+	char *path = NULL;
+	char *tmp;
+
+	if (context != NULL) {
+		err = findContext(scope, context, &ctx);
+		if (err != NOWDB_OK) return err;
+
+		err = mkthisctxpath(NULL, ctx->name, &tmp);
+		if (err != NOWDB_OK) return err;
+		
+	} else {
+		err = mkvtxpath(NULL, &tmp);
+		if (err != NOWDB_OK) return err;
+	}
+
+	err = mkidxpath(tmp, &path); free(tmp);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_index_keys_copy(keys, &k);
+	if (err != NOWDB_OK) {
+		free(path); return err;
+	}
+
+	err = nowdb_index_desc_create(name, ctx, k, NULL, &desc);
+	if (err != NOWDB_OK) {
+		nowdb_index_keys_destroy(k);
+		free(path); return err;
+	}
+
+	err = nowdb_index_man_register(scope->iman, desc);
+	if (err != NOWDB_OK) {
+		nowdb_index_desc_destroy(desc); free(desc);
+		free(path); return err;
+	}
+
+	err = nowdb_index_create(scope->path, path, sizing, desc); 
+	if (err != NOWDB_OK) {
+		free(path);
+		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
+		return err;
+	}
+
+	err = nowdb_index_open(scope->path, path, nowdb_lib(), desc);
+	free(path);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
+		return err;
+	}
+
+	/* TODO: write missing data */
+	
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: check whether vertex index was already created
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getVIndex(nowdb_scope_t *scope, char *x) {
+	nowdb_index_desc_t *desc;
+	nowdb_err_t err;
+
+	err = nowdb_index_man_getByName(scope->iman, VINDEX, &desc);
+	if (err == NOWDB_OK) {
+		scope->vindex = desc->idx;
+		*x = 1; return NOWDB_OK;
+	}
+	if (err->errcode == nowdb_err_key_not_found) {
+		nowdb_err_release(err);
+		*x = 0; return NOWDB_OK;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: create vertex index
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t createVIndex(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_index_keys_t *keys;
+	char x=0;
+
+	err = nowdb_index_keys_create(&keys, 2, NOWDB_OFF_ROLE,
+	                                      NOWDB_OFF_VERTEX);
+	if (err != NOWDB_OK) return err;
+
+	err = createIndex(scope, VINDEX, NULL, keys,
+	                    NOWDB_CONFIG_SIZE_SMALL);
+	nowdb_index_keys_destroy(keys);
+	if (err != NOWDB_OK) return err;
+
+	err = getVIndex(scope, &x);
+	if (err != NOWDB_OK) return err;
+
+	if (!x) return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	                         "cannot create index on vertices");
+
+	return NOWDB_OK;
+	
+}
+
+/* -----------------------------------------------------------------------
  * Open a scope
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
+	char x = 0;
 
 	if (scope == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                   FALSE, OBJECT, "scope object is NULL");
@@ -1134,7 +1274,30 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
+	err = getVIndex(scope, &x);
+	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
+
+	if (!x) err = createVIndex(scope);
+	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
+		NOWDB_IGNORE(closeAllContexts(scope));
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
+
 	scope->state = NOWDB_SCOPE_OPEN;
+
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
@@ -1340,12 +1503,7 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
                                     nowdb_index_keys_t *keys,
                                     uint16_t          sizing) {
 	nowdb_err_t err2,err=NOWDB_OK;
-	nowdb_context_t *ctx=NULL;
-	nowdb_index_desc_t *desc=NULL;
-	nowdb_index_keys_t *k;
 	uint16_t sz;
-	char *path = NULL;
-	char *tmp;
 
 	SCOPENULL();
 
@@ -1365,53 +1523,7 @@ nowdb_err_t nowdb_scope_createIndex(nowdb_scope_t     *scope,
 
 	SCOPENOTOPEN();
 
-	if (context != NULL) {
-		err = findContext(scope, context, &ctx);
-		if (err != NOWDB_OK) goto unlock;
-
-		err = mkthisctxpath(NULL, ctx->name, &tmp);
-		if (err != NOWDB_OK) goto unlock;
-		
-	} else {
-		err = mkvtxpath(NULL, &tmp);
-		if (err != NOWDB_OK) goto unlock;
-	}
-
-	err = mkidxpath(tmp, &path); free(tmp);
-	if (err != NOWDB_OK) goto unlock;
-
-	err = nowdb_index_keys_copy(keys, &k);
-	if (err != NOWDB_OK) {
-		free(path); goto unlock;
-	}
-
-	err = nowdb_index_desc_create(name, ctx, k, NULL, &desc);
-	if (err != NOWDB_OK) {
-		nowdb_index_keys_destroy(k);
-		free(path); goto unlock;
-	}
-
-	err = nowdb_index_man_register(scope->iman, desc);
-	if (err != NOWDB_OK) {
-		nowdb_index_desc_destroy(desc); free(desc);
-		free(path); goto unlock;
-	}
-
-	err = nowdb_index_create(scope->path, path, sz, desc); 
-	if (err != NOWDB_OK) {
-		free(path);
-		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
-		goto unlock;
-	}
-
-	err = nowdb_index_open(scope->path, path, nowdb_lib(), desc);
-	free(path);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_index_man_unregister(scope->iman, name));
-		goto unlock;
-	}
-
-	/* TODO: write missing data */
+	err = createIndex(scope, name, context, keys, sz);
 
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);
