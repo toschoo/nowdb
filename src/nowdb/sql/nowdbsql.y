@@ -67,6 +67,12 @@
 %type context_options {nowdb_ast_t*}
 %destructor context_options {nowdb_ast_destroyAndFree($$);}
 
+%type load_options {nowdb_ast_t*}
+%destructor load_options {nowdb_ast_destroyAndFree($$);}
+
+%type load_option {nowdb_ast_t*}
+%destructor load_option {nowdb_ast_destroyAndFree($$);}
+
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
 
@@ -212,10 +218,16 @@ ddl ::= drop_clause(C) IF EXISTS. {
 dll ::= LOAD STRING(S) INTO dml_target(T). {
 	NOWDB_SQL_MAKE_LOAD(S,T,NULL,NULL)
 }
+dll ::= LOAD STRING(S) INTO dml_target(T) SET load_options(O). {
+	NOWDB_SQL_MAKE_LOAD(S,T,O,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
 }
-
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) SET load_options(O). {
+	NOWDB_SQL_ADDKID(H,O)
+	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
 }
@@ -616,6 +628,24 @@ header_clause(O) ::= IGNORE HEADER. {
 }
 header_clause(O) ::= USE HEADER. {
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_USE);
+}
+
+/* ------------------------------------------------------------------------
+ * Error Clause
+ * ------------------------------------------------------------------------
+ */
+load_options(L) ::= load_option(O). {
+	L=O;
+}
+load_options(L) ::= load_option(O) COMMA load_options(L2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,L2);
+	L=O;
+}
+load_option(O) ::= ERRORS EQ STRING(S). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ERRORS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, S);
 }
 
 /* ------------------------------------------------------------------------

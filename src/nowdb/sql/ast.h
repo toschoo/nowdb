@@ -170,6 +170,7 @@
 #define NOWDB_AST_IGNORE   10210
 #define NOWDB_AST_PK       10211
 #define NOWDB_AST_LANG     10212
+#define NOWDB_AST_ERRORS   10213
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:

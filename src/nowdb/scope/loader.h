@@ -91,6 +91,7 @@ typedef struct nowdb_csv_st nowdb_csv_t;
 typedef struct {
 	FILE            *stream; /* the input stream  */
 	FILE           *ostream; /* the output stream */
+	void             *scope; /* the scope         */
 	nowdb_store_t    *store; /* the output store  */
 	nowdb_model_t    *model; /* the db's model    */
 	nowdb_text_t      *text; /* the db's text     */
@@ -115,6 +116,7 @@ typedef struct {
 nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
+                              void            *scope,
                               nowdb_store_t   *store,
                               nowdb_model_t   *model,
                               nowdb_text_t     *text,

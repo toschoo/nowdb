@@ -236,6 +236,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_PK: return "primary key";
 		case NOWDB_AST_TYPE: return "as type";
 		case NOWDB_AST_LANG: return "language";
+		case NOWDB_AST_ERRORS: return "error file";
 		default: return "unknown option";
 		}
 
