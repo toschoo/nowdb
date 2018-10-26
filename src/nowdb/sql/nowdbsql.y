@@ -664,7 +664,7 @@ dml_target(T) ::= VERTEX. {
  * ------------------------------------------------------------------------
  */
 projection_clause(P) ::= SELECT STAR. {
-	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_STAR);
 }
 
 projection_clause(P) ::= SELECT pj_list(F). {
@@ -837,6 +837,19 @@ condition(C) ::= operand(O1) comparison(O) operand(O2) . {
 	NOWDB_SQL_ADDKID(O,O1);
 	NOWDB_SQL_ADDKID(O,O2);
 	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+condition(C) ::= field(N) IN LPAR val_list(V) RPAR. {
+	NOWDB_SQL_CHECKSTATE()
+	nowdb_ast_t *F;
+	nowdb_ast_t *O;
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_COMPARE, NOWDB_AST_IN);
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, N);
+	NOWDB_SQL_ADDKID(O,F);
+	NOWDB_SQL_ADDKID(O,V);
 	NOWDB_SQL_ADDKID(C,O);
 }
 
