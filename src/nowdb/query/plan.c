@@ -1223,8 +1223,16 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	nowdb_bitmap8_t flags;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_ast_t *field;
+	nowdb_model_vertex_t *v=NULL;
 	nowdb_field_t *f;
 	int off=-1;
+
+	// get vertex type
+	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
+		err = nowdb_model_getVertexByName(scope->model,
+		                               trg->value, &v);
+		if (err != NOWDB_OK) return err;
+	}
 
 	*fields = calloc(1, sizeof(ts_algo_list_t));
 	if (*fields == NULL) {
@@ -1293,6 +1301,8 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 					NOMEM("allocating field name");
 					free(f); break;
 				}
+				if (v != NULL) f->roleid = v->roleid;
+				f->pk = 0;
 			} else {
 				f->off = (uint32_t)off;
 				f->name = NULL;

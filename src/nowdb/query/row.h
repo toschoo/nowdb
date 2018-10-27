@@ -31,6 +31,8 @@ typedef struct {
 	uint32_t          off; /* identifies the field for edges         */
 	char            *name; /* name of a property                     */
 	nowdb_key_t    propid; /* propid for this property               */
+	nowdb_roleid_t roleid; /* to which type it belongs               */
+	char               pk; /* is primary key                         */
 	void           *value; /* constant value                         */
 	uint16_t          typ; /* type of constant value                 */
 	nowdb_bitmap8_t flags; /* what to do with the field              */
