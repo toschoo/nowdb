@@ -506,7 +506,6 @@ int main() {
 	}
 
 	if (!exists) {
-		EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
 		EXECSTMT("create index vidx_ropo on vertex (role, property)");
 
 		EXECSTMT("create tiny table sales set stress=constant");

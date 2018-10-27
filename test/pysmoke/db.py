@@ -51,10 +51,6 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create index idx_sales_eo")
 
-    with c.execute("create index vidx_rovi on vertex (role, vid)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index vidx_rovi")
-
     with c.execute("create index vidx_ropo on vertex (role, property)") as r:
         if not r.ok():
             raise FailedCreation("cannot create index vidx_ropo")

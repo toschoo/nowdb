@@ -11,6 +11,9 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 
+#include <tsalgo/list.h>
+#include <tsalgo/tree.h>
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -31,6 +34,7 @@
 #define NOWDB_FILTER_LT 4
 #define NOWDB_FILTER_GT 5
 #define NOWDB_FILTER_NE 6
+#define NOWDB_FILTER_IN 7
 
 /* ------------------------------------------------------------------------
  * Boolean Operations
@@ -48,15 +52,16 @@
  * ------------------------------------------------------------------------
  */
 typedef struct nowdb_filter_st {
-	int        ntype; /* node type                              */
-	int           op; /* operation (compare or boolean)         */
-	uint32_t     off; /* offset of the field into the structure */
-	uint32_t    size; /* size of the field                      */
-	nowdb_type_t typ; /* type of the field                      */
-	void        *val; /* value to compare with                  */
-	char         own; /* value is to be destroyed               */
-	struct nowdb_filter_st *left;  /* left kid                  */
-	struct nowdb_filter_st *right; /* right kid                 */
+	int          ntype; /* node type                              */
+	int             op; /* operation (compare or boolean)         */
+	uint32_t       off; /* offset of the field into the structure */
+	uint32_t      size; /* size of the field                      */
+	nowdb_type_t   typ; /* type of the field                      */
+	void          *val; /* value to compare with                  */
+	ts_algo_tree_t *in; /* values to compare with                 */
+	char           own; /* value is to be destroyed               */
+	struct nowdb_filter_st *left;  /* left kid                    */
+	struct nowdb_filter_st *right; /* right kid                   */
 } nowdb_filter_t;
 
 /* ------------------------------------------------------------------------
@@ -65,7 +70,8 @@ typedef struct nowdb_filter_st {
  */
 nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
                                         uint32_t off, uint32_t size,
-                                        nowdb_type_t typ, void *val);
+                                        nowdb_type_t typ, void *val,
+                                                ts_algo_list_t *in);
 
 /* ------------------------------------------------------------------------
  * Filter owns the value

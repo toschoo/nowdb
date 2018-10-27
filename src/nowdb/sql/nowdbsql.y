@@ -67,6 +67,12 @@
 %type context_options {nowdb_ast_t*}
 %destructor context_options {nowdb_ast_destroyAndFree($$);}
 
+%type load_options {nowdb_ast_t*}
+%destructor load_options {nowdb_ast_destroyAndFree($$);}
+
+%type load_option {nowdb_ast_t*}
+%destructor load_option {nowdb_ast_destroyAndFree($$);}
+
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
 
@@ -212,10 +218,16 @@ ddl ::= drop_clause(C) IF EXISTS. {
 dll ::= LOAD STRING(S) INTO dml_target(T). {
 	NOWDB_SQL_MAKE_LOAD(S,T,NULL,NULL)
 }
+dll ::= LOAD STRING(S) INTO dml_target(T) SET load_options(O). {
+	NOWDB_SQL_MAKE_LOAD(S,T,O,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
 }
-
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) SET load_options(O). {
+	NOWDB_SQL_ADDKID(H,O)
+	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
 }
@@ -619,6 +631,24 @@ header_clause(O) ::= USE HEADER. {
 }
 
 /* ------------------------------------------------------------------------
+ * Error Clause
+ * ------------------------------------------------------------------------
+ */
+load_options(L) ::= load_option(O). {
+	L=O;
+}
+load_options(L) ::= load_option(O) COMMA load_options(L2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,L2);
+	L=O;
+}
+load_option(O) ::= ERRORS EQ STRING(S). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ERRORS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, S);
+}
+
+/* ------------------------------------------------------------------------
  * DML target
  * ------------------------------------------------------------------------
  */
@@ -634,7 +664,7 @@ dml_target(T) ::= VERTEX. {
  * ------------------------------------------------------------------------
  */
 projection_clause(P) ::= SELECT STAR. {
-	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_STAR);
 }
 
 projection_clause(P) ::= SELECT pj_list(F). {
@@ -807,6 +837,19 @@ condition(C) ::= operand(O1) comparison(O) operand(O2) . {
 	NOWDB_SQL_ADDKID(O,O1);
 	NOWDB_SQL_ADDKID(O,O2);
 	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+condition(C) ::= field(N) IN LPAR val_list(V) RPAR. {
+	NOWDB_SQL_CHECKSTATE()
+	nowdb_ast_t *F;
+	nowdb_ast_t *O;
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_COMPARE, NOWDB_AST_IN);
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, N);
+	NOWDB_SQL_ADDKID(O,F);
+	NOWDB_SQL_ADDKID(O,V);
 	NOWDB_SQL_ADDKID(C,O);
 }
 

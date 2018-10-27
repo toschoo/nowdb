@@ -112,11 +112,11 @@
 /* -----------------------------------------------------------------------
  * DQL From and Select:
  * - join
- * - all (select *)
+ * - star (select *)
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_JOIN   4010
-#define NOWDB_AST_ALL    4011
+#define NOWDB_AST_STAR   4011
 
 /* -----------------------------------------------------------------------
  * Micellaneous
@@ -170,6 +170,7 @@
 #define NOWDB_AST_IGNORE   10210
 #define NOWDB_AST_PK       10211
 #define NOWDB_AST_LANG     10212
+#define NOWDB_AST_ERRORS   10213
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:
@@ -229,6 +230,7 @@
 #define NOWDB_AST_LT NOWDB_FILTER_LT
 #define NOWDB_AST_GT NOWDB_FILTER_GT
 #define NOWDB_AST_NE NOWDB_FILTER_NE
+#define NOWDB_AST_IN NOWDB_FILTER_IN
 
 /* -----------------------------------------------------------------------
  * what the ast value represents:

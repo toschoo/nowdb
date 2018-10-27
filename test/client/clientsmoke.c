@@ -371,7 +371,6 @@ int main() {
 	// yet another error
 	EXECFAULTY("select edge from nosuchcontext");
 
-	EXEC("create tiny index vidx_rovi on vertex (role, vid)");
 	EXEC("create index vidx_ropo on vertex (role, property)");
 
 	EXEC("create tiny table sales set stress=constant");

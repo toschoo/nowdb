@@ -18,6 +18,7 @@
 #include <nowdb/scope/loader.h>
 #include <nowdb/index/man.h>
 #include <nowdb/model/model.h>
+#include <nowdb/mem/plru12.h>
 #include <nowdb/text/text.h>
 #include <nowdb/scope/procman.h>
 
@@ -34,6 +35,8 @@ typedef struct {
 	nowdb_path_t    catalog; /* catalog path      */
 	nowdb_version_t     ver; /* db version        */
 	nowdb_store_t  vertices; /* vertices          */
+	nowdb_index_t   *vindex; /* index on vertices */
+	nowdb_plru12_t   *vache; /* vertex cache      */
 	ts_algo_tree_t contexts; /* contexts          */
 	nowdb_index_man_t *iman; /* index manager     */
 	nowdb_model_t    *model; /* model             */
@@ -212,8 +215,16 @@ nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
-                               char        *context,
+                               nowdb_store_t *store,
                                void          *data);
+
+/* ------------------------------------------------------------------------
+ * Register vertex
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
+                                       nowdb_roleid_t  role,
+                                       nowdb_key_t      vid);
 
 /* ------------------------------------------------------------------------
  * Load csv

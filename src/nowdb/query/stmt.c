@@ -24,7 +24,7 @@
  * -------------------------------------------------------------------------
  */
 #define NOMEM(s) \
-	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
 
 /* -------------------------------------------------------------------------
  * Macro for the very common error "invalid argument"
@@ -402,12 +402,14 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		if (p == NULL) {
 			destroyProps(&props);
 			NOMEM("allocating property");
+			return err;
 		}
 
 		p->name  = strdup(d->value);
 		if (p->name == NULL) {
 			destroyProps(&props);
 			NOMEM("allocating property name");
+			return err;
 		}
 
 		p->value = nowdb_ast_type(d->stype);
@@ -421,6 +423,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
 			destroyProps(&props);
 			NOMEM("list.addpend");
+			return err;
 		}
 
 		d = nowdb_ast_declare(d);
@@ -602,18 +605,23 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 
 	// make proc descriptor
 	pd = calloc(1, sizeof(nowdb_proc_desc_t));
-	if (pd == NULL) NOMEM("allocating proc descriptor");
+	if (pd == NULL) {
+		NOMEM("allocating proc descriptor");
+		return err;
+	}
 
 	pd->name = strdup(name);
 	if (pd->name == NULL) {
 		free(pd);
 		NOMEM("allocating procedure name");
+		return err;
 	}
 
 	pd->module = strdup(module);
 	if (pd->module == NULL) {
 		free(pd->name); free(pd);
 		NOMEM("allocating module name");
+		return err;
 	}
 
 	pd->lang = lx;
@@ -635,6 +643,7 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 	if (pd->args == NULL) {
 		nowdb_proc_desc_destroy(pd); free(pd);
 		NOMEM("allocating procedure parameters");
+		return err;
 	}
 
 	p = nowdb_ast_declare(op); i=0;
@@ -646,6 +655,7 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 		if (pd->args[i].name == NULL) {
 			nowdb_proc_desc_destroy(pd); free(pd);
 			NOMEM("allocating parameter name");
+			return err;
 		}
 		pd->args[i].typ = nowdb_ast_type(p->stype);
 		pd->args[i].pos = i; // caution!
@@ -702,11 +712,12 @@ static nowdb_err_t dropProc(nowdb_ast_t  *op,
  */
 static nowdb_err_t load(nowdb_scope_t    *scope,
                         nowdb_path_t       path,
+                        nowdb_path_t      epath,
                         nowdb_ast_t        *trg,
                         char              *type,
                         nowdb_bitmap32_t    flg,
                         nowdb_qry_result_t *res) {
-	FILE *stream;
+	FILE *stream, *estream=stderr;
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_context_t *ctx;
 	nowdb_loader_t   ldr;
@@ -717,6 +728,13 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	if (stream == NULL) return nowdb_err_get(nowdb_err_open,
 		                            TRUE, OBJECT, path);
 
+	/* open error stream from epath */
+	if (epath != NULL) {
+		estream = fopen(epath, "wb");
+		if (estream == NULL) return nowdb_err_get(nowdb_err_open,
+			                            TRUE, OBJECT, epath);
+	}
+
 	switch(trg->stype) {
 
 	/* create vertex loader */
@@ -726,12 +744,14 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		                path, type);
 
 		flg |= NOWDB_CSV_VERTEX;
-		err = nowdb_loader_init(&ldr, stream, stderr,
+		err = nowdb_loader_init(&ldr, stream, estream,
+		                        scope,
 		                        &scope->vertices,
 		                        scope->model,
 		                        scope->text,
 		                        type,  flg);
 		if (err != NOWDB_OK) {
+			if (epath != NULL) fclose(estream);
 			fclose(stream); return err;
 		}
 		break;
@@ -741,7 +761,8 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		if (trg->value == NULL) INVALIDAST("no target name in AST");
 		err = nowdb_scope_getContext(scope, trg->value, &ctx);
 		if (err != NOWDB_OK) {
-			fclose(stream); return err;
+			if (epath != NULL) fclose(estream);
+			fclose(stream);return err;
 		}
 
 		if (type != NULL) {
@@ -752,17 +773,20 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 			                           path, ctx->name);
 		}
 
-		err = nowdb_loader_init(&ldr, stream, stderr,
+		err = nowdb_loader_init(&ldr, stream, estream,
+		                        scope,
 		                        &ctx->store,
 		                        scope->model,
 		                        scope->text,
 		                        type,  flg);
 		if (err != NOWDB_OK) {
+			if (epath != NULL) fclose(estream);
 			fclose(stream); return err;
 		}
 		break;
 	
 	default:
+		if (epath != NULL) fclose(estream);
 		fclose(stream); 
 		fprintf(stderr, "target: %d\n", trg->stype);
 		INVALIDAST("invalid target for load");
@@ -771,6 +795,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	/* run the loader */
 	err = nowdb_loader_run(&ldr);
 	fclose(stream); 
+	if (epath != NULL) fclose(estream);
 
 	/* create a report */
 	rep = calloc(1, sizeof(nowdb_qry_report_t));
@@ -1071,7 +1096,10 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 	}
 
 	*args = PyTuple_New((Py_ssize_t)pd->argn);
-	if (*args == NULL) NOMEM("allocating Python tuple");
+	if (*args == NULL) {
+		NOMEM("allocating Python tuple");
+		return err;
+	}
 
 	p = params;
 	for(uint16_t i=0; i<pd->argn; i++) {
@@ -1363,6 +1391,35 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: get string from ast string value
+ * TODO: this should be done in the parser!
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t getString(nowdb_ast_t *ast, char **str) {
+	nowdb_err_t err;
+	char *tmp;
+	size_t  s;
+
+	if (ast == NULL) INVALIDAST("option is NULL");
+	if (ast->value == NULL) INVALIDAST("value is NULL");
+
+	tmp = ast->value; s = strlen(tmp);
+	if (s < 1) INVALIDAST("incomplete string value");
+
+	*str = malloc(s+1);
+	if (*str == NULL) {
+		NOMEM("allocating path");
+		return err;
+	}
+	if (tmp[0] == '\'') {
+		strcpy(*str, tmp+1); (*str)[s-2] = 0;
+	} else {
+		strcpy(*str, tmp);
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
  * Handle load statement
  * -------------------------------------------------------------------------
  */
@@ -1370,9 +1427,8 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
                               nowdb_ast_t *trg,
                               nowdb_scope_t *scope,
                               nowdb_qry_result_t *res) {
-	size_t s;
 	nowdb_err_t  err;
-	nowdb_path_t p, tmp;
+	nowdb_path_t path, epath=NULL;
 	nowdb_ast_t *opts, *o;
 	nowdb_ast_t *m;
 	nowdb_bitmap32_t flgs = 0;
@@ -1388,21 +1444,19 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 		o = nowdb_ast_option(opts, NOWDB_AST_USE);
 		if (o != NULL) flgs = NOWDB_CSV_HAS_HEADER |
 		                      NOWDB_CSV_USE_HEADER;
+
+		o = nowdb_ast_option(opts, NOWDB_AST_ERRORS);
+		if (o != NULL) {
+			err = getString(o, &epath);
+			if (err != NOWDB_OK) return err;
+		}
 	}
 	if (op->value == NULL) INVALIDAST("no path in load operation");
 
-	tmp = op->value; s = strlen(tmp);
-	if (s < 1) INVALIDAST("incomplete path value");
-
-	/* remove quotes from value:
-	   TODO: this should be done in the sql parser */
-	p = malloc(s+1);
-	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-	                                                 "allocating path");
-	if (tmp[0] == '\'') {
-		strcpy(p, tmp+1); p[s-2] = 0;
-	} else {
-		strcpy(p, tmp);
+	err = getString(op, &path);
+	if (err != NOWDB_OK) {
+		if (epath != NULL) free(epath);
+		return err;
 	}
 
 	/* get model type if any */
@@ -1418,7 +1472,8 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 	}
 
 	/* load and cleanup */
-	err = load(scope, p, trg, type, flgs, res); free(p);
+	err = load(scope, path, epath, trg, type, flgs, res);
+	free(path); if (epath != NULL) free(epath);
 	return err;
 }
 

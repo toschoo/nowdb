@@ -32,7 +32,7 @@ def vertexSelectNoPK(c):
             print "%d" % row.field(0)
             if row.field(0) != ps[0].key:
                 raise db.TestFailed("wrong key selected for product: %d != %d" %
-                                   (row.field(), ps[0].key))
+                                   (row.field(0), ps[0].key))
 
     stmt = "select client_key from client \
              where client_name = '%s'" % cs[0].name
@@ -44,7 +44,7 @@ def vertexSelectNoPK(c):
             print "%d" % row.field(0)
             if row.field(0) != cs[0].key:
                 raise db.TestFailed("wrong key selected for client: %d != %d" %
-                                   (row.field(), cs[0].key))
+                                   (row.field(0), cs[0].key))
 
     stmt = "select prod_desc from product"
     with c.execute(stmt) as cur:

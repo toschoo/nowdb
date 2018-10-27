@@ -656,20 +656,6 @@ It has the form:
 \keyword{create index} \identifier{myidx} \keyword{on} \identifier{mytable}
 (\identifier{field1}, \identifier{field2})
 
-\comment{
-It is possible to create indices on vertex.
-But that is a mess and is not documented here.
-In fact, currently, indices on vertex are
-not on the user-defined attributes, but on
-internal attributes
-(like \term{roleid}, \term{property}, \etc).
-That, obviously, does not make any sense.
-Instead there will be internal indices
-that are created, when the database is created,
-and user-defined indices, which will then be
-defined on the type attributes.
-}
-
 The fields (``field1'', ``field2'', \etc)
 are edge fields. Any combination of fields
 can be used in index definitions.
@@ -699,6 +685,13 @@ It actually makes sense,
 when the index
 has many data points per key.
 More details on this can be found in \ref{chpt_sizing}.
+
+\comment {
+Vertices have one internal index which is created
+when the database is created.
+It will be possible in the future to define
+indices on vertex attributes.
+}
 
 \subsubsection{DROP}
 The \term{drop index} statement removes an index physically from disk.
@@ -883,6 +876,40 @@ a query, \eg:
 \hspace*{0.2cm}\keyword{where} $\dots$)
 \end{minipage}
 
+Insert (just as data loading) respects data integrity
+on vertices. That is, the primary key of the vertex
+must be unique for that type. Otherwise, \term{insert}
+fails with the error \term{duplicate key}.
+
+Edges, on the other hand, have no primary key.
+Several edges that all look the same can be inserted
+without limits. For people coming from the relational
+world, this may sound strange. However, edges are
+timeseries data and in the timeseries world
+it is completely acceptable and
+even common to insert the same event for the same
+point in time. It is not so clear 
+what ``same time'' shall mean in the first place.
+Typically a point in time in a timeseries application
+is not an exact spot (\eg\ that millisecond or that
+minute). More often than not events happen in
+time frames; how to identify and correlate single events
+is not so much database methodology, but data science.
+
+\nowdb\ does also not enforce the relation between
+vertex type and edge. That is, one can insert edges
+to which no corresponding vertex exist.
+The reason is that the life cycles of timeseries data
+and master data are often not in sync.
+For one, timeseries data may arrive, before the
+respective vertices have been inserted into the database
+and, even more typical, timeseries data might
+outlive their vertices in the database.
+A client, for instance, who does not renew his or her
+customer card, may be removed from the database;
+the timeseries data in the database, however,
+are still there.
+
 \subsection{Update}
 The \term{update} statement changes the values
 of fields in rows in tables or types.
@@ -998,14 +1025,23 @@ The \term{load} statement returns a report on success
 that indicates how many rows have been loaded,
 how many rows have failed and how long it took.
 Notice that \term{load} does not stop on errors.
-Instead, errors are written to standard error
+Instead, errors are written to a file
 with the row number where the error occurred.
 This way, the faulty lines can be corrected and
-reimported later. \comment{The process must still be adapted
-to client/server. The server should write the errors
-into a specific file; otherwise, when there is more
-than one session importing data, errors would refer
-to line numbers of different files.}
+reimported later.
+
+Here is how to indicate an error file:
+
+\keyword{load} '/opt/import/transactions.csv'
+\keyword{into} \identifier{sales} \\
+\hspace*{0.3cm}\keyword{set errors} $=$ '/opt/import/transactions.err'
+
+If no error file is indicated,
+the errors are written to standard error.
+This rarely makes sense,
+since different sessions can load data concurrently.
+Standard error would then contain a mix
+of errors of all sessions that tried to load data.
 
 \subsection{Dump}
 \comment{Not yet available}

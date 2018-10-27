@@ -574,10 +574,16 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 			INVALIDVAL("types differ");
 			return err;
 		}
+		// store primary key in vertex
 		if (dml->p[i]->pk) {
 			err = getValueAsType(dml, val, &vrtx.vertex);
 			if (err != NOWDB_OK) return err;
 			pkfound = 1;
+
+		// check all other values
+		} else {
+			err = getValueAsType(dml, val, &vrtx.value);
+			if (err != NOWDB_OK) break;
 		}
 		i++;
 	}
@@ -585,12 +591,24 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		INVALIDVAL("no pk in vertex");
 		return err;
 	}
+
+	// now we have role and vertex
 	i=0;
 	vrtx.role = dml->v->roleid;
+
+	// now register the vertex...
+	err = nowdb_scope_registerVertex(dml->scope,
+	                                 vrtx.role,
+	                                 vrtx.vertex);
+	if (err != NOWDB_OK) return err;
+
+	// ... and store all attributes
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		vrtx.property = dml->p[i]->propid;
 		vrtx.vtype = dml->p[i]->value;
+
+		// this shall not happen, we already checked it
 		err = getValueAsType(dml, val, &vrtx.value);
 		if (err != NOWDB_OK) break;
 
@@ -604,6 +622,14 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		if (err != NOWDB_OK) break;
 		i++;
 	}
+	/*
+	 * if things fail here,
+	 * we have already registered the vertex
+	 * and we have inserted parts of it.
+	 * we need to:
+	 * - delete everything we inserted
+	 * - and unregister
+	 */
 	return err;
 }
 

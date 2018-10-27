@@ -190,10 +190,6 @@ static inline nowdb_err_t getEdgeField(char              *name,
  * The type of the value is inferred either from
  * - the type of the field (then *typ is set) or
  * - from the explicit type coming from the ast
- * TODO:
- * - check types
- * - use the model to determine types
- * - handle strings!!!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getValue(nowdb_scope_t *scope,
@@ -255,6 +251,12 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		                   OBJECT, "timestamp from string");
 		} else {
 			err = nowdb_text_getKey(scope->text, str, *value);
+			if (err != NOWDB_OK && err->errcode ==
+			            nowdb_err_key_not_found) 
+			{
+				**(uint64_t**)value = NOWDB_TEXT_UNKNOWN;
+				nowdb_err_release(err); err = NOWDB_OK;
+			}
 		}
 		if (err != NOWDB_OK) {
 			free(*value); *value = NULL;
@@ -267,6 +269,43 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	if (*tmp != 0) return nowdb_err_get(nowdb_err_invalid,
 	                  FALSE, OBJECT, "conversion failed");
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get Values:
+ * -----------
+ * get all values in list of options
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getValues(nowdb_scope_t *scope,
+                                    nowdb_ast_t     *ast,
+				    uint32_t         off,
+                                    uint32_t          sz,
+                                    nowdb_type_t    *typ,
+                                    int            stype,
+                                    ts_algo_list_t *vals) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_ast_t  *v;
+	void     *value;
+
+	v = ast;
+	while (v!=NULL) {
+		// fprintf(stderr, "value: %s\n", (char*)v->value);
+		err = getValue(scope, v->value, off, sz, typ, stype, &value);
+		if (err != NOWDB_OK) break;
+		if (ts_algo_list_append(vals, value) != TS_ALGO_OK) {
+			NOMEM("list.append"); break;
+		}
+		v = nowdb_ast_value(v);
+	}
+	if (err != NOWDB_OK) {
+		ts_algo_list_node_t *run;
+		for(run=vals->head; run!=NULL; run=run->nxt) {
+			free(run->cont);
+		}
+		ts_algo_list_destroy(vals);
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -347,14 +386,36 @@ static inline nowdb_err_t getEdgeCompare(nowdb_scope_t   *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, off, sz, &typ, 0, &value);
-	if (err != NOWDB_OK) return err;
+	if (operator == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
+		ts_algo_list_init(&vals);
 
-	err = nowdb_filter_newCompare(comp, operator, off, sz, typ, value);
-	if (err != NOWDB_OK) {
-		free(value); return err;
+		err = getValues(scope, op, off, sizeof(nowdb_key_t),
+	                                            &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, operator,
+		                                off, sz, typ,
+			                         NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+	} else {
+		err = getValue(scope, op->value, off, sz, &typ, 0, &value);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, operator,
+		                   off, sz, typ, value, NULL);
+		if (err != NOWDB_OK) {
+			free(value); return err;
+		}
+		nowdb_filter_own(*comp);
 	}
-	nowdb_filter_own(*comp);
 	return NOWDB_OK;
 }
 
@@ -375,7 +436,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 	nowdb_filter_t *and;
 	nowdb_model_prop_t *p;
 	nowdb_ast_t *op;
-	void *value;
+	void *value=NULL;
 	uint32_t off=0;
 
 	op = op1->ntype == NOWDB_AST_FIELD?op1:op2;
@@ -391,7 +452,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 		                                     NOWDB_OFF_PROP,
 		                                sizeof(nowdb_key_t),
 		                                     NOWDB_TYP_UINT,
-	                                     	        &p->propid);
+	                                     	  &p->propid, NULL);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -400,20 +461,48 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
-	                                    &p->value, 0, &value);
-	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(pid);
-		free(pid); return err;
-	}
+	// we have 'in' instead of a single value
+	if (operator == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
 
-	err = nowdb_filter_newCompare(&val, operator, off,
-		                      sizeof(nowdb_key_t),
-		                                 p->value,
-		                                    value);
-	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(pid); free(pid); 
-		free(value); return err;
+		ts_algo_list_init(&vals);
+		err = getValues(scope, op, off, sizeof(nowdb_key_t),
+	                                       &p->value, 0, &vals);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid);
+			free(pid); return err;
+		}
+		err = nowdb_filter_newCompare(&val, operator, off,
+			                      sizeof(nowdb_key_t),
+			                                 p->value,
+			                             NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			nowdb_filter_destroy(pid); free(pid); 
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+		ts_algo_list_destroy(&vals);
+
+	} else {
+		err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
+	                                            &p->value, 0, &value);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid);
+			free(pid); return err;
+		}
+		err = nowdb_filter_newCompare(&val, operator, off,
+			                      sizeof(nowdb_key_t),
+			                                 p->value,
+			                               value,NULL);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid); free(pid); 
+			if (value != NULL) free(value);
+			return err;
+		}
 	}
 	nowdb_filter_own(val);
 
@@ -467,27 +556,57 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 		         ast->stype, op1, op2, comp);
 	}
 
-	/* check whether op1 is field or value */
-	if (op1->ntype == NOWDB_AST_FIELD) {
-		err = getField(op1->value, trg, &off,
-		               &sz, op2->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op2->value, off, sz,
-		                 &typ, op2->stype, &conv);
-	} else {
-		err = getField(op2->value, trg, &off,
-		               &sz, op1->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op1->value, off, sz,
-		                 &typ, op1->stype, &conv);
-	}
-	if (err != NOWDB_OK) return err;
+	// fprintf(stderr, "beyond type and edge\n");
 
-	err = nowdb_filter_newCompare(comp, ast->stype,
-	                           off, sz, typ, conv);
-	if (err != NOWDB_OK) return err;
-	nowdb_filter_own(*comp);
-	
+	// we have 'in' instead of a single value
+	if (ast->stype == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
+
+		ts_algo_list_init(&vals);
+
+		err = getField(op1->value, trg, &off,
+			       &sz, op2->isstr, &typ);
+		if (err != NOWDB_OK) return err;
+
+		err = getValues(scope, op2, off, sizeof(nowdb_key_t),
+	                                             &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                                  off, sz, typ,
+			                           NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+		ts_algo_list_destroy(&vals);
+
+	/* check whether op1 is field or value */
+	} else {
+		if (op1->ntype == NOWDB_AST_FIELD) {
+			err = getField(op1->value, trg, &off,
+			               &sz, op2->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op2->value, off, sz,
+			                 &typ, op2->stype, &conv);
+		} else {
+			err = getField(op2->value, trg, &off,
+			               &sz, op1->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op1->value, off, sz,
+			                 &typ, op1->stype, &conv);
+		}
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                      off, sz, typ, conv, NULL);
+		if (err != NOWDB_OK) return err;
+		nowdb_filter_own(*comp);
+	}
 	return NOWDB_OK;
 }
 
@@ -551,7 +670,7 @@ static nowdb_err_t idxFromFilter(nowdb_filter_t *filter,
 	if (filter == NULL) return NOWDB_OK;
 
 	if (filter->ntype == NOWDB_FILTER_COMPARE) {
-		if (filter->op == NOWDB_FILTER_EQ) {
+		if (filter->op == NOWDB_FILTER_EQ) { // IN as well
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
 				return nowdb_err_get(nowdb_err_no_mem,
@@ -850,7 +969,7 @@ static inline nowdb_err_t getType(nowdb_scope_t    *scope,
 
 	err = nowdb_filter_newCompare(filter, NOWDB_FILTER_EQ,
 	               NOWDB_OFF_ROLE, sizeof(nowdb_roleid_t),
-	                       NOWDB_TYP_UINT, &(*v)->roleid);
+	                 NOWDB_TYP_UINT, &(*v)->roleid, NULL);
 	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
@@ -900,6 +1019,9 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 		/* get condition creates a filter */
 		err = getCondition(scope, trg, e, v, &w, cond);
 		if (err != NOWDB_OK) {
+			if (t!=NULL) {
+				nowdb_filter_destroy(t);free(t);
+			}
 			if (*filter != NULL) {
 				nowdb_filter_destroy(*filter); 
 				free(*filter); *filter = NULL;
@@ -1582,7 +1704,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	/* add projection */
 	if (sel == NULL) return NOWDB_OK;
-	if (sel->stype == NOWDB_AST_ALL) return NOWDB_OK;
+	if (sel->stype == NOWDB_AST_STAR) return NOWDB_OK;
 
 	err = getFields(scope, trg, sel, &pj, &agg);
 	if (err != NOWDB_OK) {
