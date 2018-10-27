@@ -290,7 +290,7 @@ static inline nowdb_err_t getValues(nowdb_scope_t *scope,
 
 	v = ast;
 	while (v!=NULL) {
-		fprintf(stderr, "value: %s\n", (char*)v->value);
+		// fprintf(stderr, "value: %s\n", (char*)v->value);
 		err = getValue(scope, v->value, off, sz, typ, stype, &value);
 		if (err != NOWDB_OK) break;
 		if (ts_algo_list_append(vals, value) != TS_ALGO_OK) {
@@ -556,7 +556,7 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 		         ast->stype, op1, op2, comp);
 	}
 
-	fprintf(stderr, "beyond type and edge\n");
+	// fprintf(stderr, "beyond type and edge\n");
 
 	// we have 'in' instead of a single value
 	if (ast->stype == NOWDB_FILTER_IN) {
