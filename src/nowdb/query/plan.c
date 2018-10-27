@@ -386,15 +386,36 @@ static inline nowdb_err_t getEdgeCompare(nowdb_scope_t   *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, off, sz, &typ, 0, &value);
-	if (err != NOWDB_OK) return err;
+	if (operator == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
+		ts_algo_list_init(&vals);
 
-	err = nowdb_filter_newCompare(comp, operator,
-	                   off, sz, typ, value, NULL);
-	if (err != NOWDB_OK) {
-		free(value); return err;
+		err = getValues(scope, op, off, sizeof(nowdb_key_t),
+	                                            &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, operator,
+		                                off, sz, typ,
+			                         NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+	} else {
+		err = getValue(scope, op->value, off, sz, &typ, 0, &value);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, operator,
+		                   off, sz, typ, value, NULL);
+		if (err != NOWDB_OK) {
+			free(value); return err;
+		}
+		nowdb_filter_own(*comp);
 	}
-	nowdb_filter_own(*comp);
 	return NOWDB_OK;
 }
 
@@ -537,27 +558,55 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 
 	fprintf(stderr, "beyond type and edge\n");
 
-	/* check whether op1 is field or value */
-	if (op1->ntype == NOWDB_AST_FIELD) {
-		err = getField(op1->value, trg, &off,
-		               &sz, op2->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op2->value, off, sz,
-		                 &typ, op2->stype, &conv);
-	} else {
-		err = getField(op2->value, trg, &off,
-		               &sz, op1->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op1->value, off, sz,
-		                 &typ, op1->stype, &conv);
-	}
-	if (err != NOWDB_OK) return err;
+	// we have 'in' instead of a single value
+	if (ast->stype == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
 
-	err = nowdb_filter_newCompare(comp, ast->stype,
-	                      off, sz, typ, conv, NULL);
-	if (err != NOWDB_OK) return err;
-	nowdb_filter_own(*comp);
-	
+		ts_algo_list_init(&vals);
+
+		err = getField(op1->value, trg, &off,
+			       &sz, op2->isstr, &typ);
+		if (err != NOWDB_OK) return err;
+
+		err = getValues(scope, op2, off, sizeof(nowdb_key_t),
+	                                             &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                                  off, sz, typ,
+			                           NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+		ts_algo_list_destroy(&vals);
+
+	/* check whether op1 is field or value */
+	} else {
+		if (op1->ntype == NOWDB_AST_FIELD) {
+			err = getField(op1->value, trg, &off,
+			               &sz, op2->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op2->value, off, sz,
+			                 &typ, op2->stype, &conv);
+		} else {
+			err = getField(op2->value, trg, &off,
+			               &sz, op1->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op1->value, off, sz,
+			                 &typ, op1->stype, &conv);
+		}
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                      off, sz, typ, conv, NULL);
+		if (err != NOWDB_OK) return err;
+		nowdb_filter_own(*comp);
+	}
 	return NOWDB_OK;
 }
 
@@ -621,7 +670,7 @@ static nowdb_err_t idxFromFilter(nowdb_filter_t *filter,
 	if (filter == NULL) return NOWDB_OK;
 
 	if (filter->ntype == NOWDB_FILTER_COMPARE) {
-		if (filter->op == NOWDB_FILTER_EQ) {
+		if (filter->op == NOWDB_FILTER_EQ) { // IN as well
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
 				return nowdb_err_get(nowdb_err_no_mem,
