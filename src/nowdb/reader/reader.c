@@ -1435,7 +1435,7 @@ nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
  */
 static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
                                   int type, uint32_t nr,
-                                  va_list args) {
+                                  nowdb_reader_t **sub) {
 
 	nowdb_err_t err;
 
@@ -1446,21 +1446,26 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 	if (err != NOWDB_OK) return err;
 
 	(*reader)->type = type;
+	(*reader)->sub = sub;
 	(*reader)->nr = nr;
 	(*reader)->cur = 0;
 	(*reader)->key = NULL;
 	(*reader)->eof = 0;
 
+	/*
 	(*reader)->sub = calloc(nr, sizeof(nowdb_reader_t*));
 	if ((*reader)->sub == NULL) {
 		NOMEM("allocating subreaders");
 		nowdb_reader_destroy(*reader); free(*reader);
 		return err;
 	}
+	*/
 	
 	for(int i=0; i<nr; i++) {
+		/*
 		(*reader)->sub[i] = (nowdb_reader_t*)va_arg(args,
 		                                 nowdb_reader_t*);
+		*/
 		if ((*reader)->sub[i] == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                 OBJECT, "subreader is NULL");
@@ -1478,18 +1483,41 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 
 	return nowdb_reader_rewind(*reader);
 }
-                   
+
 /* ------------------------------------------------------------------------
  * Sequence Reader
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...) {
 	va_list args;
+	nowdb_reader_t **sub;
 	nowdb_err_t err;
+	int i=0;
+
+	sub = calloc(nr, sizeof(nowdb_reader_t*));
+	if (sub == NULL) {
+		NOMEM("allocating readers");
+		return err;
+	}
+	
 	va_start(args,nr);
-	err = mkMulti(reader, NOWDB_READER_SEQ, nr, args);
+	for(i=0;i<nr;i++) {
+		sub[i] = va_arg(args, nowdb_reader_t*);
+	}
 	va_end(args);
+	err = mkMulti(reader, NOWDB_READER_SEQ, nr, sub);
+	if (err != NOWDB_OK) free(sub);
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Sequence Reader
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_seqArray(nowdb_reader_t **reader,
+                                  uint32_t             nr,
+                                  nowdb_reader_t    **sub) {
+	return mkMulti(reader, NOWDB_READER_SEQ, nr, sub);
 }
 
 /* ------------------------------------------------------------------------
@@ -1498,9 +1526,22 @@ nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...) {
  */
 nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
 	va_list args;
+	nowdb_reader_t **sub;
 	nowdb_err_t err;
+	int i=0;
+
+	sub = calloc(nr, sizeof(nowdb_reader_t*));
+	if (sub == NULL) {
+		NOMEM("allocating readers");
+		return err;
+	}
+	
 	va_start(args,nr);
-	err = mkMulti(reader, NOWDB_READER_MERGE, nr, args);
+	for(i=0;i<nr;i++) {
+		sub[i] = va_arg(args, nowdb_reader_t*);
+	}
 	va_end(args);
+	err = mkMulti(reader, NOWDB_READER_MERGE, nr, sub);
+	if (err != NOWDB_OK) free(sub);
 	return err;
 }

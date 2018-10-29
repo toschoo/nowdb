@@ -309,12 +309,23 @@ nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
 /* ------------------------------------------------------------------------
  * Sequence reader
  * ---------------
- * reader: the merge reader
+ * reader: the sequence reader
  * nr    : number of subreaders
  * ...   : the readers
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...); 
+
+/* ------------------------------------------------------------------------
+ * Sequence reader
+ * ---------------
+ * reader: the sequence reader
+ * nr    : number of subreaders
+ * sub   : array of readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_seqArray(nowdb_reader_t **reader, uint32_t nr,
+                                  nowdb_reader_t **sub);
 
 /* ------------------------------------------------------------------------
  * Merge reader
@@ -325,6 +336,17 @@ nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
+
+/* ------------------------------------------------------------------------
+ * Merge reader
+ * ------------
+ * reader: the merge reader
+ * nr    : number of subreaders
+ * sub   : array of readers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_mergeArray(nowdb_reader_t **reader, uint32_t nr,
+                                    nowdb_reader_t **sub);
 
 nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
                              nowdb_reader_t *sub);

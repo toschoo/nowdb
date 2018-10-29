@@ -19,6 +19,8 @@
 
 static char *OBJECT = "cursor";
 
+#define VINDEX "_vindex"
+
 /* ------------------------------------------------------------------------
  * Helper: Index contains model identifier
  * ------------------------------------------------------------------------
@@ -96,19 +98,26 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
  */
 static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
                                     int               type,
-                                    nowdb_plan_idx_t *pidx) {
+                                    nowdb_plan_idx_t *pidx,
+                                    int              count) {
 	nowdb_err_t err;
-	nowdb_reader_t *full;
-	nowdb_reader_t *search;
+	nowdb_reader_t **rds;
+
+	rds = calloc(count+1, sizeof(nowdb_reader_t*));
+	if (rds == NULL) {
+		NOMEM("allocating readers");
+		return err;
+	}
 
 	err = getPending(&cur->stf.files, &cur->stf.pending);
 	if (err != NOWDB_OK) {
+		free(rds);
 		return err;
 	}
 	
 	switch(type) {
 	case NOWDB_PLAN_SEARCH_:
-		err = nowdb_reader_fullscan(&full, &cur->stf.pending, NULL);
+		err = nowdb_reader_fullscan(&rds[0], &cur->stf.pending, NULL);
 		break;
 	default:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -116,24 +125,28 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 	}
 	if (err != NOWDB_OK) return err;
 
-	switch(type) {
-	case NOWDB_PLAN_SEARCH_:
-		err = nowdb_reader_search(&search, &cur->stf.files,
-		                       pidx->idx, pidx->keys, NULL);
-		break;
-	default:
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
-		                                    "unknown seq type");
+	for(int i=0; i<count; i++) {
+		switch(type) {
+		case NOWDB_PLAN_SEARCH_:
+			err = nowdb_reader_search(&rds[i+1], &cur->stf.files,
+			                     pidx[i].idx, pidx[i].keys, NULL);
+			break;
+		default:
+			return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
+			                                    "unknown seq type");
+		}
+		if (err != NOWDB_OK) {
+			// nowdb_reader_destroy(full);
+			// destroy all readers
+			return err;
+		}
 	}
+	
+	err = nowdb_reader_seqArray(&cur->rdr, count+1, rds);
 	if (err != NOWDB_OK) {
-		nowdb_reader_destroy(full);
-		return err;
-	}
-
-	err = nowdb_reader_seq(&cur->rdr, 2, search, full);
-	if (err != NOWDB_OK) {
-		nowdb_reader_destroy(full);
-		nowdb_reader_destroy(search);
+		// destroy all readers
+		// nowdb_reader_destroy(full);
+		// nowdb_reader_destroy(search);
 		return err;
 	}
 	return NOWDB_OK;
@@ -275,7 +288,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	/* create an index search reader */
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		// fprintf(stderr, "SEARCH\n");
-		err = createSeq(cur, rplan->stype, pidx);
+		err = createSeq(cur, rplan->stype, pidx, 1);
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_ ||
 	          (rplan->stype == NOWDB_PLAN_KRANGE_ && !hasId(pidx))) {
@@ -321,8 +334,8 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
                               nowdb_filter_t *filter,
                               char              *yes)
 {
-	nowdb_err_t err;
-	nowdb_model_prop_t *p;
+	// nowdb_err_t err;
+	// nowdb_model_prop_t *p;
 
 	*yes = 1;
 
@@ -454,6 +467,82 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	return NOWDB_OK;
 }
 
+static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
+                                        nowdb_cursor_t *cur,
+                                        ts_algo_list_t *vlst) {
+	nowdb_err_t err;
+	nowdb_plan_idx_t *pidx;
+	nowdb_index_desc_t *desc;
+	ts_algo_list_node_t *run;
+
+	fprintf(stderr, "SEARCH\n");
+
+	err = nowdb_index_man_getByName(scope->iman,
+	                              VINDEX, &desc);
+	if (err != NOWDB_OK) return err;
+	
+	pidx = calloc(vlst->len, sizeof(nowdb_plan_idx_t));
+	if (pidx == NULL) {
+		NOMEM("allocating plan index");
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		return err;
+		
+	}
+	int i=0;
+	for(run=vlst->head;run!=NULL;run=run->nxt) {
+		pidx[i].idx = desc->idx;
+		pidx[i].keys = malloc(12);
+		if (pidx[i].keys == NULL) {
+			NOMEM("allocating keys");
+			NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+			free(pidx); // destroy keys!
+			return err;
+		}
+		memcpy(pidx[i].keys, &cur->v->roleid, 4);
+		memcpy(pidx[i].keys+4, run->cont, 8); i++;
+	}
+	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, vlst->len);
+	free(pidx); // destroy keys
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
+                                 nowdb_cursor_t *cur,
+                                 ts_algo_list_t *vlst) {
+	nowdb_err_t err;
+
+	if (cur->rdr != NULL) {
+		nowdb_reader_destroy(cur->rdr);
+		free(cur->rdr); cur->rdr = NULL;
+	}
+	if (cur->stf.store != NULL) {
+		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
+		ts_algo_list_destroy(&cur->stf.pending);
+		cur->stf.store = NULL;
+	}
+	
+	err = nowdb_store_getFiles(&scope->vertices, &cur->stf.files,
+	                            NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
+	if (err != NOWDB_OK) return err;
+
+	if (vlst->len > 30) err = nowdb_reader_fullscan(&cur->rdr,
+		                          &cur->stf.files, NULL);
+	else err = makeVidSearch(scope, cur, vlst);
+
+	if (err != NOWDB_OK) {
+		// destroy files
+		return err;
+	}
+	if (cur->filter != NULL) {
+		cur->rdr->filter = cur->filter;
+	}
+	return NOWDB_OK;
+}
+
 #define VID(x) \
 	(*(uint64_t*)x)
 
@@ -475,7 +564,8 @@ static void videstroy(void *ignore, void **n) {
 }
 
 #define BUFSIZE 8192
-static nowdb_err_t getVids(nowdb_cursor_t *mom) {
+static nowdb_err_t getVids(nowdb_scope_t *scope,
+                           nowdb_cursor_t  *mom) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_cursor_t *cur;
 	char *buf=NULL;
@@ -557,7 +647,10 @@ static nowdb_err_t getVids(nowdb_cursor_t *mom) {
 		goto cleanup;
 	}
 	// create filter with in compare
-	err = makeVidCompare(mom, vlst); // I need the roleid
+	err = makeVidCompare(mom, vlst);
+	if (err != NOWDB_OK) goto cleanup;
+
+	err = makeVidReader(scope, mom, vlst);
 	if (err != NOWDB_OK) goto cleanup;
 
 cleanup:
@@ -739,7 +832,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 		if (ok) return NOWDB_OK;
 
-		err = getVids(*cur);
+		err = getVids(scope, *cur);
 		if (err != NOWDB_OK) {
 			nowdb_cursor_destroy(*cur);
 			free(*cur); return err;
