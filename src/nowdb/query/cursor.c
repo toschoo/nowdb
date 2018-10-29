@@ -330,6 +330,10 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 
 	nowdb_filter_show(filter, stderr); fprintf(stderr, "\n");
 
+	if (filter->ntype == NOWDB_FILTER_COMPARE &&
+	    filter->op == NOWDB_FILTER_EQ         &&
+	    filter->off == NOWDB_OFF_ROLE) return NOWDB_OK;
+
 	if (!(filter->ntype == NOWDB_FILTER_BOOL &&
 	      filter->op    == NOWDB_FILTER_AND)) {
 		fprintf(stderr, "filter not &\n");
@@ -353,6 +357,7 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 
 	if (*yes == 1) return NOWDB_OK;	
 
+	/*
 	*yes = 1;
 
 	for(int i=0; i<row->sz; i++) {
@@ -372,6 +377,7 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 			*yes=0;
 		} 
 	}
+	*/
 	return NOWDB_OK;
 }
 
@@ -393,7 +399,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	ts_algo_list_init(&vids);
 
 	for(run=vlst->head;run!=NULL;run=run->nxt) {
-		void *vid = malloc(8);
+		uint64_t *vid = malloc(8);
 		if (vid == NULL) {
 			NOMEM("allocating vid");
 			// destroy list content!
@@ -444,7 +450,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	ts_algo_list_destroy(&vids);
 	cur->filter = f;
 	cur->rdr->filter = f; /* we should use a fresh reader */
-	nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
+	nowdb_filter_show(f,stderr);fprintf(stderr, "\n");
 	return NOWDB_OK;
 }
 
@@ -525,7 +531,7 @@ static nowdb_err_t getVids(nowdb_cursor_t *mom) {
 			} else break;
 		}
 		for(int i=0; i<osz; i+=cur->recsize) {
-			void *vid;
+			uint64_t *vid;
 			vid = malloc(8);
 			if (vid == NULL) {
 				NOMEM("allocating vid");

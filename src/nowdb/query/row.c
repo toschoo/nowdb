@@ -371,6 +371,7 @@ static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
 			return err;
 		}
 		for(int i=0;i<row->sz;i++) {
+			if (row->fields[i].name == NULL) continue;
 			err = nowdb_model_getPropByName(row->model,
 			                            row->v->roleid,
 			                       row->fields[i].name,
@@ -439,9 +440,11 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 		if (row->fields[i].propid == v->property) return i;
 
 		/* this is stupid */
+		/*
 		if (row->sz == 1   &&
                     row->p != NULL && row->p[i]->pk &&
 		    row->p[i]->roleid == v->role) k=i;
+		*/
 	}
 	return k;
 }
@@ -477,6 +480,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	}
 	for(int i=row->cur; i<row->sz; i++) {
 		if (row->fields[i].target == NOWDB_TARGET_NULL) {
+			fprintf(stderr, "projecting constant\n");
 			if (row->fields[i].value == NULL) continue;
 			err = projectConst(row->fields+i, buf, sz, osz, &nsp);
 			if (err != NOWDB_OK) return err;

@@ -32,6 +32,9 @@ static char *OBJECT = "reader";
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
 
+#define ENDOF(x) \
+	err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, x);
+
 /* ------------------------------------------------------------------------
  * Helper: initialise an already allocated reader
  * ------------------------------------------------------------------------
@@ -111,7 +114,7 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 
 	reader->current = reader->files->head;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
-	                                           FALSE, OBJECT, NULL);
+	                                     FALSE, OBJECT, "no files");
 	reader->closeit = FALSE;
 	reader->page = NULL; 
 	reader->cont = NULL; 
@@ -123,6 +126,9 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 		err = nowdb_file_open(reader->current->cont);
 		if (err != NOWDB_OK) return err;
 		reader->closeit = TRUE;
+	} else {
+		err = nowdb_file_rewind(reader->current->cont);
+		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
 }
@@ -186,6 +192,7 @@ static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
  */
 static inline nowdb_err_t rewindSeq(nowdb_reader_t *reader) {
 	nowdb_err_t    err;
+	char one = 0;
 
 	reader->cur = 0;
 	reader->cont = NULL;
@@ -194,7 +201,17 @@ static inline nowdb_err_t rewindSeq(nowdb_reader_t *reader) {
 
 	for(int i=0; i<reader->nr; i++) {
 		err = nowdb_reader_rewind(reader->sub[i]);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err); continue;
+			}
+			return err;
+		}
+		if (!one) one=1;
+	}
+	if (!one) {
+		ENDOF("all readers EOF");
+		return err;
 	}
 	return NOWDB_OK;
 }

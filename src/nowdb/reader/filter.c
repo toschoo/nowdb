@@ -503,7 +503,7 @@ void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 				 *(int64_t*)filter->val);
 			}
 		} else {
-			fprintf(stream, "(...)");
+			fprintf(stream, "(...)[%d]", filter->in->count);
 		}
 	}
 }
