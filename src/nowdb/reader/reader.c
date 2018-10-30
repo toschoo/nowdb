@@ -46,6 +46,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->nodata = 0;
 	reader->eof = 0;
 	reader->ko  = 0;
+	reader->ownfiles = 0;
+	reader->files = NULL;
 	reader->buf = NULL;
 	reader->tmp = NULL;
 	reader->tmp2 = NULL;
@@ -254,6 +256,21 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		free(reader->bplru);
 		reader->bplru = NULL;
 	}
+	if (reader->file != NULL) {
+		NOWDB_IGNORE(nowdb_file_close(reader->file));
+		reader->file = NULL;
+	}
+	if (reader->files != NULL && reader->ownfiles) {
+		for(ts_algo_list_node_t *run=
+		          reader->files->head;
+		      run!=NULL; run=run->nxt)
+		{
+			nowdb_file_destroy(run->cont);
+			free(run->cont);
+		}
+		ts_algo_list_destroy(reader->files);
+		free(reader->files);
+	}
 
 	switch(reader->type) {
 
@@ -272,10 +289,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			beet_state_destroy(reader->state);
 			reader->state = NULL;
 		}
-		if (reader->file != NULL) {
-			NOWDB_IGNORE(nowdb_file_close(reader->file));
-			reader->file = NULL;
-		}
 		return;
 
 	case NOWDB_READER_FRANGE:
@@ -285,10 +298,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		if (reader->iter != NULL) {
 			beet_iter_destroy(reader->iter);
 			reader->iter = NULL;
-		}
-		if (reader->file != NULL) {
-			NOWDB_IGNORE(nowdb_file_close(reader->file));
-			reader->file = NULL;
 		}
 		if (reader->plru != NULL) {
 			nowdb_pplru_destroy(reader->plru);
@@ -789,6 +798,7 @@ static inline nowdb_err_t moveSeq(nowdb_reader_t *reader) {
 			reader->cur++;
 			continue;
 		}
+		fprintf(stderr, "ERR %u:", reader->cur); nowdb_err_print(err);
 		return err;
 	}
 	reader->cont = reader->sub[reader->cur]->cont;
@@ -1451,20 +1461,7 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 	(*reader)->key = NULL;
 	(*reader)->eof = 0;
 
-	/*
-	(*reader)->sub = calloc(nr, sizeof(nowdb_reader_t*));
-	if ((*reader)->sub == NULL) {
-		NOMEM("allocating subreaders");
-		nowdb_reader_destroy(*reader); free(*reader);
-		return err;
-	}
-	*/
-	
 	for(int i=0; i<nr; i++) {
-		/*
-		(*reader)->sub[i] = (nowdb_reader_t*)va_arg(args,
-		                                 nowdb_reader_t*);
-		*/
 		if ((*reader)->sub[i] == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                 OBJECT, "subreader is NULL");
