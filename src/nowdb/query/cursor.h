@@ -11,7 +11,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/reader/reader.h>
-#include <nowdb/query/plan.h>
+#include <nowdb/qplan/plan.h>
 #include <nowdb/query/row.h>
 #include <nowdb/fun/group.h>
 

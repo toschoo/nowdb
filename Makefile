@@ -91,10 +91,10 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
       $(SRC)/sql/parser.o     \
+      $(SRC)/qplan/plan.o     \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
       $(SRC)/query/rowutl.o   \
-      $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
       $(SRC)/ifc/proc.o       \
       $(SRC)/ifc/nowproc.o    \
@@ -137,10 +137,10 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/fun/expr.h       \
       $(SRC)/fun/fun.h        \
       $(SRC)/fun/group.h      \
+      $(SRC)/qplan/plan.h     \
       $(SRC)/query/rowutl.h   \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
-      $(SRC)/query/plan.h     \
       $(SRC)/query/cursor.h   \
       $(SRC)/sql/ast.h        \
       $(SRC)/sql/lex.h        \

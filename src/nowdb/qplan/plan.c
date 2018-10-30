@@ -4,7 +4,7 @@
  * Execution Plan
  * ========================================================================
  */
-#include <nowdb/query/plan.h>
+#include <nowdb/qplan/plan.h>
 #include <nowdb/reader/filter.h>
 #include <nowdb/query/row.h>
 #include <nowdb/fun/fun.h>
