@@ -29,13 +29,21 @@
 #define NOWDB_READER_FRANGE   100
 #define NOWDB_READER_KRANGE   101
 #define NOWDB_READER_CRANGE   102
+#define NOWDB_READER_MRANGE   103
 #define NOWDB_READER_BUF      1000
 #define NOWDB_READER_BUFIDX   1001
 #define NOWDB_READER_BKRANGE  1002
 #define NOWDB_READER_BCRANGE  1003
+#define NOWDB_READER_BMRANGE  1004
 #define NOWDB_READER_SEQ      10001
 #define NOWDB_READER_MERGE    10002
 #define NOWDB_READER_JOIN     10003
+
+/* ------------------------------------------------------------------------
+ * Max sub readers
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_READER_MAXSUB 64
 
 /* ------------------------------------------------------------------------
  * Reader   
@@ -87,7 +95,7 @@ typedef struct nowdb_reader_t {
 	char                     eof; /* reached eof                   */
 	char                  nodata; /* reader has not data           */
 	char                      ko; /* key-only reader               */
-	nowdb_bitmap32_t       moved; /* sub has been moved            */
+	nowdb_bitmap64_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
 
 /* ------------------------------------------------------------------------
@@ -307,7 +315,7 @@ nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
                                  void *start,void  *end);
 
 /* ------------------------------------------------------------------------
- * Sequence reader
+ * Sequence reader ('va_list' convention)
  * ---------------
  * reader: the sequence reader
  * nr    : number of subreaders
@@ -317,18 +325,18 @@ nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
 nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...); 
 
 /* ------------------------------------------------------------------------
- * Sequence reader
+ * Sequence reader ('argv' convention)
  * ---------------
  * reader: the sequence reader
  * nr    : number of subreaders
  * sub   : array of readers
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_seqArray(nowdb_reader_t **reader, uint32_t nr,
-                                  nowdb_reader_t **sub);
+nowdb_err_t nowdb_reader_vseq(nowdb_reader_t **reader, uint32_t nr,
+                              nowdb_reader_t **sub);
 
 /* ------------------------------------------------------------------------
- * Merge reader
+ * Merge reader ('va_list' convention)
  * ------------
  * reader: the merge reader
  * nr    : number of subreaders
@@ -338,15 +346,15 @@ nowdb_err_t nowdb_reader_seqArray(nowdb_reader_t **reader, uint32_t nr,
 nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
 
 /* ------------------------------------------------------------------------
- * Merge reader
+ * Merge reader ('argv' convention)
  * ------------
  * reader: the merge reader
  * nr    : number of subreaders
  * sub   : array of readers
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_mergeArray(nowdb_reader_t **reader, uint32_t nr,
-                                    nowdb_reader_t **sub);
+nowdb_err_t nowdb_reader_vmerge(nowdb_reader_t **reader, uint32_t nr,
+                                nowdb_reader_t **sub);
 
 nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
                              nowdb_reader_t *sub);

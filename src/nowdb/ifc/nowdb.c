@@ -1129,7 +1129,8 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	}
 
 	// the reason for this loop is a bug in row.project
-	// for vertices. we should fix that instead of leaving
+	// for vertices. (The bug should be solved!!!!)
+	// we should fix that instead of leaving
 	// the otherwise meaningless loop here!
 	do { 
 		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
@@ -1200,6 +1201,7 @@ static int fetch(nowdb_session_t    *ses,
 
 	// fetch
 	// the reason for this loop is a bug in row.project
+	// (it should be solved, though!!!)
 	// for vertices. we should fix that instead of leaving
 	// the otherwise meaningless loop here!
 	do { 

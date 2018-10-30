@@ -86,6 +86,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
                               uint32_t *osz,
+                              char *full,
                               char *count,
                               char *complete);
 

@@ -154,7 +154,7 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 		}
 	}
 	
-	err = nowdb_reader_seqArray(&cur->rdr, count+1, rds);
+	err = nowdb_reader_vseq(&cur->rdr, count+1, rds);
 	if (err != NOWDB_OK) {
 		DESTROYREADERS(count+1,rds);
 		return err;
@@ -595,15 +595,17 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 	                          NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 	if (err != NOWDB_OK) return err;
 
-	// this magical number reflects an internal
-	// of reader (which, currently, can have only
-	// 32 subreaders). We should increase that value
-	// to at least 64 (using a 64 bitmap in reader)
-	// and, on the long run, we should improve readers
+	// this magical number reflects an internal of reader
+        // (which, currently, can have only 64 subreaders). 
+	// On the long run, we should improve readers
 	// so that we can have a meaningful limit or
 	// threshold, preferrably a ratio with the number
 	// of keys in the type.
-	if (vlst->len > 30) {
+	// Furthermore, instead of performing a fullscan
+	// we should use a MRANGE merge reader, i.e.
+	// a reader that presents only relevant keys (vid),
+	// i.e. keys that correspond to the 'in' list.
+	if (vlst->len > 61) {
 		err = nowdb_reader_fullscan(&cur->rdr,
 		                &cur->stf.files, NULL);
 	} else {
@@ -1117,7 +1119,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
                                         uint32_t *count) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_group_t *g;
-	char complete=0, cc=0;
+	char complete=0, cc=0, full=0;
 	char x;
 	
 	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
@@ -1139,8 +1141,8 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	err = nowdb_row_project(cur->row, g,
 	                          cur->tmp2,
 	                  cur->rdr->recsize,
-		          buf, sz, osz, &cc,
-			          &complete);
+		        buf, sz, osz, &full,
+                            &cc, &complete);
 	if (err != NOWDB_OK) {
 		nowdb_err_release(old);
 		return err;
@@ -1167,7 +1169,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 	uint32_t recsz = cur->rdr->recsize;
 	nowdb_filter_t *filter = cur->rdr->filter;
 	char *src = nowdb_reader_page(cur->rdr);
-	char complete=0, cc=0, x=1;
+	char complete=0, cc=0, x=1, full=0;
 	uint32_t mx;
 
 	/* the reader should store the content type */
@@ -1244,14 +1246,14 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			if (cur->group == NULL) {
 				err = nowdb_row_project(cur->row, NULL,
 				                   src+cur->off, recsz,
-				                     buf, sz, osz, &cc,
-				                            &complete);
+				                   buf, sz, osz, &full,
+ 				                       &cc, &complete);
 			} else {
 				err = nowdb_row_project(cur->row,
 				                      cur->group,
 				                cur->tmp2, recsz,
-				               buf, sz, osz, &cc,
-				                      &complete);
+				             buf, sz, osz, &full,
+				                 &cc, &complete);
 			}
 			if (err != NOWDB_OK) return err;
 			if (complete) {
@@ -1264,7 +1266,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			} else if (cur->tmp != 0) {
 				memcpy(cur->tmp, nowdb_nullrec, cur->recsize);
 			}
-			if (cc == 0) break;
+			if (full) break;
 		}
 	}
 	return NOWDB_OK;
@@ -1279,9 +1281,7 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                                        uint32_t *osz,
                                        uint32_t *cnt)
 {
-	*osz = 0;
-	*cnt = 0;
-
+	*osz = 0; *cnt = 0;
 	return simplefetch(cur, buf, sz, osz, cnt);
 }
 

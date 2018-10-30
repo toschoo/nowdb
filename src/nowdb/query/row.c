@@ -459,13 +459,14 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               nowdb_group_t *group,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
-                              uint32_t *osz,
+                              uint32_t *osz, char *full,
                               char *cnt, char *ok) {
 	nowdb_err_t err;
 	char nsp = 0;
 
 	ROWNULL();
 
+	*full=0;
 	*ok = 0;
 	*cnt = 0;
 	if (row->cur == 0 && row->dirty) {
@@ -485,7 +486,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			err = projectConst(row->fields+i, buf, sz, osz, &nsp);
 			if (err != NOWDB_OK) return err;
 			if (nsp) {
-				row->cur = i;
+				row->cur = i; *full=1;
 				return NOWDB_OK;
 			}
 
@@ -500,7 +501,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			}
 			if (err != NOWDB_OK) return err;
 			if (nsp) {
-				row->cur = i;
+				row->cur = i; *full=1;
 				return NOWDB_OK;
 			}
 
@@ -538,7 +539,10 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	if (*ok && recsz == sizeof(nowdb_vertex_t)) {
 		err = projectVertex(row, buf, sz, osz, &nsp);
 		if (err != NOWDB_OK) return err;
-		if (nsp) return NOWDB_OK;
+		if (nsp) {
+			*full=1;
+			return NOWDB_OK;
+		}
 	}
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';

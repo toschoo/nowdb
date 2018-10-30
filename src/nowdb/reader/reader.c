@@ -11,16 +11,9 @@
 static char *OBJECT = "reader";
 
 /* ------------------------------------------------------------------------
- * Reader Types
+ * Some helpers
  * ------------------------------------------------------------------------
  */
-#define NOWDB_READER_FULLSCAN 1
-#define NOWDB_READER_SEARCH   10
-#define NOWDB_READER_FRANGE   100
-#define NOWDB_READER_KRANGE   101
-#define NOWDB_READER_CRANGE   102
-#define NOWDB_READER_BUF      1000
-
 #define BEETERR(x,f) \
 	if (x == BEET_ERR_EOF) { \
 		if (f) reader->eof = 1; \
@@ -34,6 +27,12 @@ static char *OBJECT = "reader";
 
 #define ENDOF(x) \
 	err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, x);
+
+/* ------------------------------------------------------------------------
+ * ALL MOVED
+ * ------------------------------------------------------------------------
+ */
+#define ALLMOVED 0xffffffffffffffff
 
 /* ------------------------------------------------------------------------
  * Helper: initialise an already allocated reader
@@ -226,7 +225,7 @@ static inline nowdb_err_t rewindMerge(nowdb_reader_t *reader) {
 	reader->key = NULL;
 	reader->cont = NULL;
 	reader->eof = 0; 
-	reader->moved = 0xffffffff;
+	reader->moved = ALLMOVED;
 
 	for(int i=0; i<reader->nr; i++) {
 		err = nowdb_reader_rewind(reader->sub[i]);
@@ -1511,12 +1510,12 @@ nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...) {
 }
 
 /* ------------------------------------------------------------------------
- * Sequence Reader
+ * Sequence Reader (sub readers in array of pointers)
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_reader_seqArray(nowdb_reader_t **reader,
-                                  uint32_t             nr,
-                                  nowdb_reader_t    **sub) {
+nowdb_err_t nowdb_reader_vseq(nowdb_reader_t **reader,
+                              uint32_t             nr,
+                              nowdb_reader_t    **sub) {
 	return mkMulti(reader, NOWDB_READER_SEQ, nr, sub);
 }
 
@@ -1544,4 +1543,14 @@ nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
 	err = mkMulti(reader, NOWDB_READER_MERGE, nr, sub);
 	if (err != NOWDB_OK) free(sub);
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Merge Reader (sub readers in array of pointers)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_vmerge(nowdb_reader_t **reader,
+                                uint32_t             nr,
+                                nowdb_reader_t    **sub) {
+	return mkMulti(reader, NOWDB_READER_MERGE, nr, sub);
 }

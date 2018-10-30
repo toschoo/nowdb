@@ -151,7 +151,7 @@ static inline int prepareProducts(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do p = rand()%(2*x); while(p==0);
+		do p = rand()%(10000000); while(p==0);
 		products[i].id = p;
 		randomString(products[i].str, 60);
 	}
@@ -168,7 +168,7 @@ static inline int prepareClients(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do c = rand()%(2*x); while(c==0);
+		do c = rand()%(10000000); while(c==0);
 		c += 9000000;
 		clients[i].id = c;
 		randomString(clients[i].str, 60);

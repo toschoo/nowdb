@@ -263,6 +263,7 @@ int processCursor(nowdb_cursor_t *cur) {
 
 	for(;;) {
 		nowdb_timestamp(&t1);
+		osz=0; cnt=0;
 		err = nowdb_cursor_fetch(cur, buf, BUFSIZE, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
