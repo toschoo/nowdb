@@ -104,6 +104,35 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
 	} \
 	free(rs);
 
+#define DESTROYFILES(f) \
+	for(ts_algo_list_node_t *rr=f->head; \
+	               rr!=NULL; rr=rr->nxt){\
+		nowdb_file_destroy(rr->cont); \
+		free(rr->cont);  \
+	} \
+	ts_algo_list_destroy(f); free(f);
+
+#define COPYFILES(src,trg) \
+	nowdb_file_t *file; \
+	files = calloc(1, sizeof(ts_algo_list_t)); \
+	if (files == NULL) { \
+		NOMEM("allocating new file list"); \
+		break; \
+	} \
+	ts_algo_list_init(files); \
+	for(ts_algo_list_node_t *run= cur->stf.files.head; \
+	    run!=NULL; run=run->nxt) { \
+		file = malloc(sizeof(nowdb_file_t)); \
+		if (file == NULL) { \
+			NOMEM("allocating file"); \
+			DESTROYFILES(files); \
+			break; \
+		} \
+		nowdb_file_copy(run->cont, file); \
+		ts_algo_list_append(files, file); \
+	} \
+	if (err != NOWDB_OK) break;
+
 /* ------------------------------------------------------------------------
  * Create sequence reader
  * ------------------------------------------------------------------------
@@ -139,10 +168,19 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 		free(rds); return err;
 	}
 	for(int i=0; i<count; i++) {
+		ts_algo_list_t *files;
+
 		switch(type) {
 		case NOWDB_PLAN_SEARCH_:
-			err = nowdb_reader_search(&rds[i+1], &cur->stf.files,
-			                     pidx[i].idx, pidx[i].keys, NULL);
+			if (i>0) {
+				// each reader needs its
+				// own file descriptor
+				COPYFILES(&cur->stf.files, files);
+			} else {
+				files = &cur->stf.files;
+			}
+			err = nowdb_reader_search(&rds[i+1], files,
+			           pidx[i].idx, pidx[i].keys, NULL);
 			break;
 		default:
 			return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -152,6 +190,8 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 			DESTROYREADERS(i,rds);
 			return err;
 		}
+		// destroy your own private file descriptor
+		if (i > 0) rds[i+1]->ownfiles = 1;
 	}
 	
 	err = nowdb_reader_vseq(&cur->rdr, count+1, rds);
@@ -557,7 +597,6 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
 	// create index keys
 	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, vlst->len);
 	DESTROYPIDX(vlst->len,pidx);
-	// free(pidx);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
 		return err;
@@ -784,6 +823,14 @@ cleanup:
 }
 
 /* ------------------------------------------------------------------------
+ * init vertex props
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t initProps(nowdb_cursor_t *cur) {
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Create new cursor
  * ------------------------------------------------------------------------
  */
@@ -851,6 +898,15 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	}
 	if ((*cur)->filter != NULL) {
 		(*cur)->rdr->filter = (*cur)->filter;
+
+		if ((*cur)->target == NOWDB_TARGET_VERTEX) {
+			fprintf(stderr, "CURSOR IS VERTEX\n");
+			err = initProps(*cur);
+			if (err != NOWDB_OK) {
+				nowdb_cursor_destroy(*cur); free(*cur);
+				return err;
+			}
+		}
 	}
 
 	/* pass on to projection or order by or group by */
@@ -961,6 +1017,11 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_reader_destroy(cur->rdr);
 		free(cur->rdr); cur->rdr = NULL;
 	}
+	/*
+	if (cur->props != NULL) {
+		cur->props = NULL;
+	}
+	*/
 	if (cur->filter != NULL) {
 		nowdb_filter_destroy(cur->filter);
 		free(cur->filter);
