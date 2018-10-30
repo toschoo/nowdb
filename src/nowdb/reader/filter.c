@@ -22,6 +22,10 @@ static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
 	case NOWDB_TYP_TEXT:
 	case NOWDB_TYP_LONGTEXT:
 	case NOWDB_TYP_UINT:
+		/*
+		fprintf(stderr, "comparing %lu and %lu\n", *(uint64_t*)one,
+		                                           *(uint64_t*)two);
+		*/
 		if (*(uint64_t*)one <
 		    *(uint64_t*)two) return ts_algo_cmp_less;
 		if (*(uint64_t*)one >
@@ -32,8 +36,8 @@ static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_INT:
 		/*
-		fprintf(stderr, "comparing %d and %d\n", *(int*)one,
-		                                         *(int*)two);
+		fprintf(stderr, "comparing %ld and %ld\n", *(int64_t*)one,
+		                                           *(int64_t*)two);
 		*/
 		if (*(int64_t*)one <
 		    *(int64_t*)two) return ts_algo_cmp_less;
@@ -499,7 +503,7 @@ void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 				 *(int64_t*)filter->val);
 			}
 		} else {
-			fprintf(stream, "(...)");
+			fprintf(stream, "(...)[%d]", filter->in->count);
 		}
 	}
 }

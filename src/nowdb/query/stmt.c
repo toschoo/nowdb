@@ -5,7 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/query/stmt.h>
-#include <nowdb/query/plan.h>
+#include <nowdb/qplan/plan.h>
 #include <nowdb/query/cursor.h>
 #include <nowdb/index/index.h>
 #include <nowdb/ifc/nowdb.h>

@@ -2,6 +2,9 @@ import now
 import random
 import datetime
 
+PRODUCTRANGE = 1000
+CLIENTRANGE = 9000000
+
 class FailedCreation(Exception):
     def __init__(self, m):
          self.msg = m

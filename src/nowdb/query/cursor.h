@@ -11,7 +11,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/reader/reader.h>
-#include <nowdb/query/plan.h>
+#include <nowdb/qplan/plan.h>
 #include <nowdb/query/row.h>
 #include <nowdb/fun/group.h>
 
@@ -30,21 +30,23 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_reader_t    *rdr; /* the reader                    */
-	nowdb_storefile_t  stf; /* should be a list of stf!      */
-	nowdb_model_t   *model; /* model                         */
-	nowdb_filter_t *filter; /* main filter                   */
-	nowdb_row_t       *row; /* projection                    */
-	nowdb_group_t   *group; /* grouping                      */
-	nowdb_group_t   *nogrp; /* appy aggs without grouping    */
-	uint32_t           off; /* offset in the current reader  */
-	uint32_t       recsize; /* record size                   */
-	char              *tmp; /* temporary buffer              */
-	char             *tmp2; /* temporary buffer              */
-	char          *fromkey; /* range: fromkey                */
-	char            *tokey; /* range:   tokey                */
-	char             hasid; /* has id to identify model      */
-	char               eof; /* end of file was reached       */
+	nowdb_target_t    target; /* main target                   */
+	nowdb_reader_t      *rdr; /* the reader                    */
+	nowdb_storefile_t    stf; /* should be a list of stf!      */
+	nowdb_model_t     *model; /* model                         */
+	nowdb_filter_t   *filter; /* main filter                   */
+	nowdb_row_t         *row; /* projection                    */
+	nowdb_group_t     *group; /* grouping                      */
+	nowdb_group_t     *nogrp; /* apply aggs without grouping   */
+	nowdb_model_vertex_t  *v; /* type if this is not a join!   */
+	uint32_t             off; /* offset in the current reader  */
+	uint32_t         recsize; /* record size                   */
+	char                *tmp; /* temporary buffer              */
+	char               *tmp2; /* temporary buffer              */
+	char            *fromkey; /* range: fromkey                */
+	char              *tokey; /* range:   tokey                */
+	char               hasid; /* has id to identify model      */
+	char                 eof; /* end of file was reached       */
 } nowdb_cursor_t;
 
 /* ------------------------------------------------------------------------
