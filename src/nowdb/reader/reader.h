@@ -95,6 +95,7 @@ typedef struct nowdb_reader_t {
 	char                     eof; /* reached eof                   */
 	char                  nodata; /* reader has not data           */
 	char                      ko; /* key-only reader               */
+	char                ownfiles; /* destroy files                 */
 	nowdb_bitmap64_t       moved; /* sub has been moved            */
 } nowdb_reader_t;
 
@@ -355,7 +356,4 @@ nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...);
  */
 nowdb_err_t nowdb_reader_vmerge(nowdb_reader_t **reader, uint32_t nr,
                                 nowdb_reader_t **sub);
-
-nowdb_err_t nowdb_reader_add(nowdb_reader_t *reader,
-                             nowdb_reader_t *sub);
 #endif
