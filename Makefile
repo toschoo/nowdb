@@ -82,6 +82,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
+      $(SRC)/reader/vrow.o    \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
@@ -131,6 +132,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
+      $(SRC)/reader/vrow.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \

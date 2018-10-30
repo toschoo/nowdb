@@ -129,7 +129,11 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
 			break; \
 		} \
 		nowdb_file_copy(run->cont, file); \
-		ts_algo_list_append(files, file); \
+		if (ts_algo_list_append(files, file) != TS_ALGO_OK) { \
+			NOMEM("list.append"); \
+			DESTROYFILES(files);  \
+			break; \
+		} \
 	} \
 	if (err != NOWDB_OK) break;
 

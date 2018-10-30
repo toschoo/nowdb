@@ -14,6 +14,10 @@ static char *OBJECT="filter";
 #define NOMEM(m) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, m);
 
+/* ------------------------------------------------------------------------
+ * Callbacks for 'IN' tree
+ * ------------------------------------------------------------------------
+ */
 #define TREETYPE(t) \
 	(nowdb_type_t)(uint64_t)(((ts_algo_tree_t*)t)->rsc)
 
@@ -72,6 +76,10 @@ static void valdestroy(void *ignore, void **n) {
 	free(*n); *n=NULL;
 }
 
+/* ------------------------------------------------------------------------
+ * Create the 'IN' tree
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t createInTree(nowdb_filter_t *filter,
                                 ts_algo_list_t *in) {
 	nowdb_err_t          err;
@@ -421,6 +429,13 @@ char nowdb_filter_range(nowdb_filter_t *filter,
 	findRange(filter, sz, off, rstart, rend, &map);
 	return (popcount32(map) == 2*sz);
 }
+
+/* ------------------------------------------------------------------------
+ * Copy filter
+ * TODO
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_filter_copy(nowdb_filter_t *src, nowdb_filter_t *trg);
 
 /* ------------------------------------------------------------------------
  * Print filter to 'stream'
