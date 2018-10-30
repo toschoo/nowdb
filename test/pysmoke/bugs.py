@@ -14,7 +14,7 @@ def vertexSelectNoPK(c):
     print "RUNNING TEST 'vertexSelectNoPK'"
 
     stmt = "select prod_desc, prod_price from product \
-             where prod_key = %s" % str(ps[0].key)
+             where prod_key = %d" % ps[0].key
     with c.execute(stmt) as cur:
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
@@ -32,7 +32,7 @@ def vertexSelectNoPK(c):
             print "%d" % row.field(0)
             if row.field(0) != ps[0].key:
                 raise db.TestFailed("wrong key selected for product: %d != %d" %
-                                   (row.field(), ps[0].key))
+                                   (row.field(0), ps[0].key))
 
     stmt = "select client_key from client \
              where client_name = '%s'" % cs[0].name
@@ -44,7 +44,7 @@ def vertexSelectNoPK(c):
             print "%d" % row.field(0)
             if row.field(0) != cs[0].key:
                 raise db.TestFailed("wrong key selected for client: %d != %d" %
-                                   (row.field(), cs[0].key))
+                                   (row.field(0), cs[0].key))
 
     stmt = "select prod_desc from product"
     with c.execute(stmt) as cur:
@@ -101,6 +101,8 @@ def keyzero(c):
            print "%d: %s" % (row.field(0), row.field(1))
            if row.field(0) != 0 or row.field(1) != "zero":
               raise db.TestFailed("zero values differ!")
+
+    ### DELETE ZERO!
 
     stmt = "drop type testzero"
     with c.execute(stmt) as r:
@@ -251,3 +253,5 @@ if __name__ == '__main__':
         createInvalidEdge(c)
         invalidEdgeInserts(c)
         doublenaming(c)
+
+        print "PASSED"

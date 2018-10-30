@@ -19,6 +19,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define NOWDB_TEXT_NULL    0
+#define NOWDB_TEXT_UNKNOWN 1
+
 /* ------------------------------------------------------------------------
  * text manager
  * ------------------------------------------------------------------------

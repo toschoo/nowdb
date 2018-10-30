@@ -2,6 +2,9 @@ import now
 import random
 import datetime
 
+PRODUCTRANGE = 1000
+CLIENTRANGE = 9000000
+
 class FailedCreation(Exception):
     def __init__(self, m):
          self.msg = m
@@ -50,10 +53,6 @@ def createDB(c, db):
     with c.execute("create index idx_sales_eo on sales (edge,origin)") as r:
         if not r.ok():
             raise FailedCreation("cannot create index idx_sales_eo")
-
-    with c.execute("create index vidx_rovi on vertex (role, vid)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index vidx_rovi")
 
     with c.execute("create index vidx_ropo on vertex (role, property)") as r:
         if not r.ok():

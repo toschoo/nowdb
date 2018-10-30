@@ -145,7 +145,7 @@ static inline char *tellType(int ntype, int stype) {
 
 	case NOWDB_AST_FROM: return "from";
 	case NOWDB_AST_SELECT: 
-		if (stype == NOWDB_AST_ALL) return "select *";
+		if (stype == NOWDB_AST_STAR) return "select *";
 		else return "select";
 
 	case NOWDB_AST_WHERE: return "where";
@@ -236,6 +236,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_PK: return "primary key";
 		case NOWDB_AST_TYPE: return "as type";
 		case NOWDB_AST_LANG: return "language";
+		case NOWDB_AST_ERRORS: return "error file";
 		default: return "unknown option";
 		}
 
@@ -247,6 +248,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_LT: return "<";
 		case NOWDB_AST_GT: return ">";
 		case NOWDB_AST_NE: return "!=";
+		case NOWDB_AST_IN: return "in";
 		default: return "unknown compare";
 		}
 

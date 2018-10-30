@@ -371,6 +371,7 @@ static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
 			return err;
 		}
 		for(int i=0;i<row->sz;i++) {
+			if (row->fields[i].name == NULL) continue;
 			err = nowdb_model_getPropByName(row->model,
 			                            row->v->roleid,
 			                       row->fields[i].name,
@@ -439,9 +440,11 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 		if (row->fields[i].propid == v->property) return i;
 
 		/* this is stupid */
+		/*
 		if (row->sz == 1   &&
                     row->p != NULL && row->p[i]->pk &&
 		    row->p[i]->roleid == v->role) k=i;
+		*/
 	}
 	return k;
 }
@@ -456,13 +459,14 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               nowdb_group_t *group,
                               char *src, uint32_t recsz,
                               char *buf, uint32_t sz,
-                              uint32_t *osz,
+                              uint32_t *osz, char *full,
                               char *cnt, char *ok) {
 	nowdb_err_t err;
 	char nsp = 0;
 
 	ROWNULL();
 
+	*full=0;
 	*ok = 0;
 	*cnt = 0;
 	if (row->cur == 0 && row->dirty) {
@@ -477,11 +481,12 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	}
 	for(int i=row->cur; i<row->sz; i++) {
 		if (row->fields[i].target == NOWDB_TARGET_NULL) {
+			fprintf(stderr, "projecting constant\n");
 			if (row->fields[i].value == NULL) continue;
 			err = projectConst(row->fields+i, buf, sz, osz, &nsp);
 			if (err != NOWDB_OK) return err;
 			if (nsp) {
-				row->cur = i;
+				row->cur = i; *full=1;
 				return NOWDB_OK;
 			}
 
@@ -496,7 +501,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			}
 			if (err != NOWDB_OK) return err;
 			if (nsp) {
-				row->cur = i;
+				row->cur = i; *full=1;
 				return NOWDB_OK;
 			}
 
@@ -534,7 +539,10 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	if (*ok && recsz == sizeof(nowdb_vertex_t)) {
 		err = projectVertex(row, buf, sz, osz, &nsp);
 		if (err != NOWDB_OK) return err;
-		if (nsp) return NOWDB_OK;
+		if (nsp) {
+			*full=1;
+			return NOWDB_OK;
+		}
 	}
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';

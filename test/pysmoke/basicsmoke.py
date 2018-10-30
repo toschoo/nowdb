@@ -26,7 +26,7 @@ if __name__ == '__main__':
         with c.execute("select count(*), sum(weight), avg(weight) \
                           from sales") as cur:
             if not cur.ok():
-              print "ERROR: %s" % cur.details()
+              print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
             for r in cur:
                cnt2 = r.field(0)
@@ -72,9 +72,9 @@ if __name__ == '__main__':
                  print "we need to have %d" % nume
                  exit(1)
 	
-        with c.execute("select prod_key, prod_desc from vertex as product") as cur:
+        with c.execute("select prod_key, prod_desc from product") as cur:
            if not cur.ok():
-              print "ERROR: %s" % cur.details()
+              print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
            cnt = 0
            for row in cur:
@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
         with c.execute("select client_key, client_name from vertex as client") as cur:
            if not cur.ok():
-              print "ERROR: %s" % cur.details()
+              print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
            cnt = 0
            for row in cur:
