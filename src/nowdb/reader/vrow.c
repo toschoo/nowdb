@@ -216,10 +216,6 @@ static inline nowdb_err_t getProperty(nowdb_vrow_t  *vrow,
                                       propmap_t       **p) {
 	// find offset
 	*p = ts_algo_tree_find(vrow->pspec, pattern);
-	if (*p == NULL) {
-		fprintf(stderr, "unknown propid: %lu\n", pattern->propid);
-		INVALID("unknown propid");
-	}
 	return NOWDB_OK;
 }
 
