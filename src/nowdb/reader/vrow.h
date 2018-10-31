@@ -24,6 +24,8 @@
  */
 typedef struct {
 	nowdb_roleid_t  role;   /* this is the type we are handling   */
+	uint32_t        size;   /* size of one vrow                   */
+	uint32_t          np;   /* number of props                    */
 	nowdb_filter_t *filter; /* the relevant filter                */
 	ts_algo_tree_t *pspec;  /* all properties for the vertex type */
 	ts_algo_tree_t *vrtx;   /* map of current vertices            */
@@ -62,13 +64,13 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
  * vertices that are complete
  * (i.e. all relevant properties have been added)
  * are evaluated. If the evaluation fails for a given vertex,
- * it is removed from the vrow and *vertex is NULL;
- * if the evaluation succeeds, the *vertex is removed
- * and passed back in *vertex.
+ * it is removed from the vrow and false is returned;
+ * if the evaluation succeeds, the *vertex is removed,
+ * its vid is passed back through *vid and true is returned.
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t    *vrow,
-                            nowdb_vertex_t **vertex);
+nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t  *vrow,
+                             nowdb_key_t    *vid);
 
 /* ------------------------------------------------------------------------
  * Show current vrows and their state (debugging)
