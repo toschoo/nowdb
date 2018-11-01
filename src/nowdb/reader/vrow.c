@@ -319,7 +319,7 @@ static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
 				return err;
 			}
 			err = copyList(in, src->size, &in2);
-			ts_algo_list_destroy(in);
+			ts_algo_list_destroy(in); free(in);
 			if (err != NOWDB_OK) return err;
 		}
 		err = nowdb_filter_newCompare(trg, src->op, *off,
