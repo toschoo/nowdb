@@ -465,7 +465,7 @@ void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 			fprintf(stream, ")");
 			break;
 
-		case NOWDB_FILTER_OR: fprintf(stream, "|");
+		case NOWDB_FILTER_OR: // fprintf(stream, "|");
 			fprintf(stream, "(");
 			nowdb_filter_show(filter->left, stream);
 			fprintf(stream, " v ");

@@ -26,6 +26,7 @@ typedef struct {
 	nowdb_roleid_t  role;   /* this is the type we are handling   */
 	uint32_t        size;   /* size of one vrow                   */
 	uint32_t          np;   /* number of props                    */
+	char        wantvrtx;   /* want vertex                        */
 	nowdb_filter_t *filter; /* the relevant filter                */
 	ts_algo_tree_t *pspec;  /* all properties for the vertex type */
 	ts_algo_tree_t *vrtx;   /* map of current vertices            */

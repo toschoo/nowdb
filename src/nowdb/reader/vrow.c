@@ -26,6 +26,7 @@ typedef struct {
 	nowdb_key_t vertex; /* the vertex              */
 	char          *row; /* the row                 */
 	int             np; /* current number of props */
+	char       hasvrtx; /* needs and has pk        */
 } vrow_t;
 
 /* ------------------------------------------------------------------------
@@ -126,6 +127,7 @@ static inline nowdb_err_t copyList(ts_algo_list_t  *l1,
 			free(*l2); *l2 = NULL;
 			return err;
 		}
+		memcpy(val, run->cont, sz);
 		if (ts_algo_list_append(*l2, val) != TS_ALGO_OK) {
 			NOMEM("list.append");
 			DESTROYIN((*l2));
@@ -157,6 +159,7 @@ static inline nowdb_err_t getVRow(nowdb_vrow_t   *vrow,
 
 		(*v)->vertex = vrtx->vertex;
 		(*v)->np = 0;
+		(*v)->hasvrtx = 0;
 
 		(*v)->row = calloc(1,vrow->size);
 		if ((*v)->row == NULL) {
@@ -187,7 +190,7 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t  *vrow,
 	propmap_t pattern, *res;
 
 	// find offset
-	fprintf(stderr, "inserting property %lu\n", *(uint64_t*)src->val);
+	// fprintf(stderr, "inserting property %lu\n", *(uint64_t*)src->val);
 	memcpy(&pattern.propid, src->val, KEYSZ);
 	res = ts_algo_tree_find(vrow->pspec, &pattern);
 	if (res == NULL) {
@@ -197,6 +200,36 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t  *vrow,
 			return err;
 		}
 		memcpy(&res->propid, src->val, KEYSZ);
+ 		res->off = ROLESZ+KEYSZ*(*cnt);(*cnt)++;
+
+		if (ts_algo_tree_insert(vrow->pspec, res) != TS_ALGO_OK) {
+			NOMEM("allocating propmap");
+			return err;
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Insert vertex into propmap
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
+                                       int            *cnt) {
+	nowdb_err_t err;
+	propmap_t pattern, *res;
+
+	// find offset
+	// fprintf(stderr, "inserting vertex\n");
+	pattern.propid=NOWDB_OFF_VERTEX;
+	res = ts_algo_tree_find(vrow->pspec, &pattern);
+	if (res == NULL) {
+		res = calloc(1, sizeof(propmap_t));
+		if (res == NULL) {
+			NOMEM("allocating propmap");
+			return err;
+		}
+		res->propid=NOWDB_OFF_VERTEX;
  		res->off = ROLESZ+KEYSZ*(*cnt);(*cnt)++;
 
 		if (ts_algo_tree_insert(vrow->pspec, res) != TS_ALGO_OK) {
@@ -253,14 +286,25 @@ static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
 		if (src->off == NOWDB_OFF_ROLE) {
 			*off = 0;
 
-		// get the prop offset from the propmap
+		// use the prop offset from the propmap (for property)
 		} else if (src->off == NOWDB_OFF_VALUE) {
+			// fprintf(stderr, "VALUE\n");
 			if (*off < 0) {
 				INVALID("no valid offset");
 			}
+
+		// use the prop offset from the propmap (for vertex)
+		} else if (src->off == NOWDB_OFF_VERTEX) {
+			// fprintf(stderr, "VERTEX\n");
+			err = insertVertex(vrow, cnt);
+			if (err != NOWDB_OK) return err;
+			vrow->wantvrtx = 1;
+			
+			*off=ROLESZ+KEYSZ*(*cnt-1);
 	
 		// ignore anything else	
 		} else {
+			// fprintf(stderr, "IGNORE %u\n", src->off);
 			err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
 			if (err != NOWDB_OK) return err;
 			return NOWDB_OK;
@@ -322,6 +366,11 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
 	nowdb_err_t err;
 	int off=-1;
 	int cnt=0;
+
+	/*
+	fprintf(stderr, "FILTER BEFORE:\n");
+	nowdb_filter_show(fil, stderr); fprintf(stderr, "\n");
+	*/
 
 	err = copyNode(vrow, &cnt, &off, fil, &vrow->filter);
 	if (err != NOWDB_OK) return err;
@@ -449,6 +498,16 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	*/
 	memcpy(v->row+pm->off, &vertex->value, KEYSZ);
 	v->np++;
+
+	// filter requests vid
+	if (vrow->wantvrtx && !v->hasvrtx) {
+		pattern.propid = NOWDB_OFF_VERTEX;
+		err = getProperty(vrow, &pattern, &pm);
+		if (err != NOWDB_OK) return err;
+		if (pm == NULL) return NOWDB_OK; // error
+		memcpy(v->row+pm->off, &vertex->vertex, KEYSZ);
+		v->np++; v->hasvrtx = 1;
+	}
 
 	// if complete, delete and add to ready
 	if (v->np == vrow->np) {

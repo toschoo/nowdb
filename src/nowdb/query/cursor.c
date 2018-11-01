@@ -411,7 +411,6 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 	// (role = mytype) and (vid = myvid)
 	if (!(filter->ntype == NOWDB_FILTER_BOOL &&
 	      filter->op    == NOWDB_FILTER_AND)) {
-		fprintf(stderr, "filter not &\n");
 		*yes = 0;
 	} else {
 		if (filter->left == NULL) {
@@ -420,12 +419,12 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 		if (filter->right == NULL) {
 			INVALIDPLAN("incomplete filter");
 		}
-
-		// missing: in (vid, vid, vid, ...)
 		if (!(filter->left->ntype == NOWDB_FILTER_COMPARE &&
-		      filter->left->op == NOWDB_FILTER_EQ)) *yes = 0;
+		      (filter->left->op == NOWDB_FILTER_EQ ||
+		       filter->left->op == NOWDB_FILTER_IN))) *yes = 0;
 		if (!(filter->right->ntype == NOWDB_FILTER_COMPARE &&
-		      filter->right->op == NOWDB_FILTER_EQ)) *yes = 0;
+		      (filter->right->op == NOWDB_FILTER_EQ ||
+		       filter->right->op == NOWDB_FILTER_IN))) *yes = 0;
 		if (filter->left->off != NOWDB_OFF_ROLE &&
 		    filter->right->off != NOWDB_OFF_ROLE) *yes = 0;
 		if (filter->left->off != NOWDB_OFF_VERTEX &&
