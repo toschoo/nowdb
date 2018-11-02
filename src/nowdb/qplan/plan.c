@@ -214,8 +214,6 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	nowdb_err_t err=NOWDB_OK;
 	int rc;
 
-	fprintf(stderr, "TYPE: %d/%d/%u\n", *typ, stype, sz);
-	
 	if (*typ == 0) {
 		switch(stype) {
 		case NOWDB_AST_FLOAT: *typ = NOWDB_TYP_FLOAT; break;
