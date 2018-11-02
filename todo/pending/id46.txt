@@ -1,0 +1,3 @@
+change roleid to typeid
+
+change the awful name 'role' and 'roleid' to typeid

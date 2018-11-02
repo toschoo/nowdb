@@ -653,6 +653,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.h
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
+	rm -f todo/bin/*.pyc
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
