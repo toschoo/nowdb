@@ -33,6 +33,8 @@ static char *OBJECT = "plan";
  * - sets the offset into the structure
  * - the size of the field
  * - the type of the field (if known!)
+ * TODO:
+ * => use offByName instead!!!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getField(char            *name,
@@ -76,7 +78,10 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") == 0) {
+	if (strcasecmp(name, "DESTIN") ||
+	    strcasecmp(name, "DEST")   ||
+	    strcasecmp(name, "DST")    ||
+	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
@@ -86,7 +91,8 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "TIMESTAMP") == 0) {
+	if (strcasecmp(name, "STAMP") ||
+	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_TIME;
 		return NOWDB_OK;
@@ -146,7 +152,10 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") == 0) {
+	if (strcasecmp(name, "DESTIN") ||
+	    strcasecmp(name, "DEST")   ||
+	    strcasecmp(name, "DST")    ||
+	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		if (d != NULL && d->vid == NOWDB_MODEL_TEXT) {
 			*type = NOWDB_TYP_TEXT;
@@ -164,7 +173,8 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "TIMESTAMP") == 0) {
+	if (strcasecmp(name, "STAMP") == 0 ||
+	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = NOWDB_TYP_TIME;
 		return NOWDB_OK;
