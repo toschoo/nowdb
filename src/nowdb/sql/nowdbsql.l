@@ -64,6 +64,7 @@
 (?i:TEXT)		return NOWDB_SQL_TEXT;
 (?i:DATE)		return NOWDB_SQL_DATE;
 (?i:DATETIME)		return NOWDB_SQL_TIME;
+(?i:TIME)		return NOWDB_SQL_TIME;
 (?i:FLOAT)		return NOWDB_SQL_FLOAT;
 (?i:INT)		return NOWDB_SQL_INT;
 (?i:INTEGER)		return NOWDB_SQL_INT;

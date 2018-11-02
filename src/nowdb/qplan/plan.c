@@ -34,7 +34,7 @@ static char *OBJECT = "plan";
  * - the size of the field
  * - the type of the field (if known!)
  * TODO:
- * => use offByName instead!!!
+ * => use offByName instead and unify!!!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getField(char            *name,
@@ -78,9 +78,9 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") ||
-	    strcasecmp(name, "DEST")   ||
-	    strcasecmp(name, "DST")    ||
+	if (strcasecmp(name, "DESTIN")      == 0 ||
+	    strcasecmp(name, "DEST")        == 0 ||
+	    strcasecmp(name, "DST")         == 0 ||
 	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
@@ -91,7 +91,7 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "STAMP") ||
+	if (strcasecmp(name, "STAMP")     == 0 ||
 	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_TIME;
@@ -138,6 +138,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
                                        uint32_t           *off,
                                        uint32_t            *sz,
                                        nowdb_type_t      *type) {
+
 	if (strcasecmp(name, "EDGE") == 0) {
 		*off = NOWDB_OFF_EDGE; *sz = 8;
 		*type = NOWDB_TYP_TEXT;
@@ -152,9 +153,9 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") ||
-	    strcasecmp(name, "DEST")   ||
-	    strcasecmp(name, "DST")    ||
+	if (strcasecmp(name, "DESTIN")      == 0 ||
+	    strcasecmp(name, "DEST")        == 0 ||
+	    strcasecmp(name, "DST")         == 0 ||
 	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		if (d != NULL && d->vid == NOWDB_MODEL_TEXT) {
@@ -173,7 +174,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "STAMP") == 0 ||
+	if (strcasecmp(name, "STAMP")     == 0 ||
 	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = NOWDB_TYP_TIME;
@@ -209,13 +210,11 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
                                    nowdb_type_t    *typ,
                                    int            stype,
                                    void         **value) {
-	char *tmp;
+	char *tmp=NULL;
 	nowdb_err_t err=NOWDB_OK;
 	int rc;
 
-	*value = malloc(sz);
-	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
-		             FALSE, OBJECT, "allocating buffer");
+	fprintf(stderr, "TYPE: %d/%d/%u\n", *typ, stype, sz);
 	
 	if (*typ == 0) {
 		switch(stype) {
@@ -226,6 +225,10 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		default: *value = NULL; return NOWDB_OK;
 		}
 	}
+
+	*value = malloc(sz);
+	if (*value == NULL) return nowdb_err_get(nowdb_err_no_mem,
+		              FALSE, OBJECT, "allocating buffer");
 
 	switch(*typ) {
 	case NOWDB_TYP_FLOAT:
@@ -239,7 +242,21 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 			**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
 		break;
 
+	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
+		if (stype == NOWDB_AST_TEXT) {
+			if (strnlen(str, 4096) == 10) {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_DATE_FORMAT, *value);
+			} else {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_TIME_FORMAT, *value);
+			}
+			if (rc != 0) err = nowdb_err_get(rc, FALSE,
+		                   OBJECT, "timestamp from string");
+			break;
+		}
+		
 	case NOWDB_TYP_INT:
 		if (sz == 4) 
 			**(int32_t**)value = (int32_t)strtol(str, &tmp, 10);
@@ -276,8 +293,11 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
-	if (*tmp != 0) return nowdb_err_get(nowdb_err_invalid,
-	                  FALSE, OBJECT, "conversion failed");
+	if (err != NOWDB_OK) {
+		if (*value != NULL) free(*value);
+		return nowdb_err_get(nowdb_err_invalid,FALSE, OBJECT,
+		                          "value conversion failed");
+	}
 	return NOWDB_OK;
 }
 
@@ -329,6 +349,8 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 	nowdb_err_t err;
 	char *tmp;
 
+	fprintf(stderr, "VALUE %s: %u\n", prop->name, prop->value);
+
 	*value = malloc(sizeof(nowdb_key_t));
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		             FALSE, OBJECT, "allocating buffer");
@@ -341,6 +363,7 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 		**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
 		break;
 
+	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_INT:
 		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
@@ -358,8 +381,8 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 	}
 	if (*tmp != 0) {
 		free(*value); *value = NULL;
-		return nowdb_err_get(nowdb_err_invalid,
-	           FALSE, OBJECT, "conversion failed");
+		return nowdb_err_get(nowdb_err_invalid,FALSE,OBJECT,
+	                                 "typed conversion failed");
 	}
 	return NOWDB_OK;
 }
@@ -499,7 +522,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 
 	} else {
 		err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
-	                                            &p->value, 0, &value);
+	                                    &p->value, op->stype, &value);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(pid);
 			free(pid); return err;
@@ -1215,8 +1238,8 @@ static inline nowdb_err_t getConstValue(uint16_t typ,
 	}
 	if (*tmp != 0) {
 		free(*value); *value = NULL;
-		return nowdb_err_get(nowdb_err_invalid,
-	           FALSE, OBJECT, "conversion failed");
+		return nowdb_err_get(nowdb_err_invalid,FALSE,OBJECT,
+	                            "conversion of constant failed");
 	}
 	return NOWDB_OK;
 }

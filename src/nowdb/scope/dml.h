@@ -17,6 +17,10 @@
 
 #include <tsalgo/list.h>
 
+/* ------------------------------------------------------------------------
+ * DML helper
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	char           *trgname; /* name of least recently used target */
         nowdb_scope_t    *scope; /* current scope                      */
@@ -31,26 +35,50 @@ typedef struct {
 	int                 num; /* number of properties               */
 } nowdb_dml_t;
 
+/* ------------------------------------------------------------------------
+ * Simplified value structure
+ * ------------------------------------------------------------------------
+ */
 typedef struct {
 	void       *value;
 	nowdb_type_t type;
 } nowdb_simple_value_t;
 
+/* ------------------------------------------------------------------------
+ * Initialise an already allocated dml helper
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml, 
                            nowdb_scope_t *scope,
                            char       withCache);
 
+/* ------------------------------------------------------------------------
+ * Destroy a dml helper
+ * ------------------------------------------------------------------------
+ */
 void nowdb_dml_destroy(nowdb_dml_t *dml);
 
+/* ------------------------------------------------------------------------
+ * Set target according to target name
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
                                 char    *trgname,
                           ts_algo_list_t *fields,
                           ts_algo_list_t *values);
 
+/* ------------------------------------------------------------------------
+ * Insert one row (in row format)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_insertRow(nowdb_dml_t *dml,
                                 char        *row,
                                 uint32_t     sz);
 
+/* ------------------------------------------------------------------------
+ * Insert one row (in fields/value format)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_insertFields(nowdb_dml_t *dml,
                              ts_algo_list_t *fields,
                              ts_algo_list_t *values);

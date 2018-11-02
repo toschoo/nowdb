@@ -909,6 +909,10 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	}
 	if ((*cur)->filter != NULL) {
+		/*
+		nowdb_filter_show((*cur)->filter, stderr);
+		fprintf(stderr, "\n");
+		*/
 		(*cur)->rdr->filter = (*cur)->filter;
 	}
 
