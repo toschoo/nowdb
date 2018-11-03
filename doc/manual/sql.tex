@@ -839,7 +839,7 @@ For an edge, this would be:
                        \keyword{weight},
                        \keyword{weight2})
                       (\\
-                       'buys', 9000001, 100001,
+\hspace*{2.99cm}       'buys', 9000001, 100001,
                        '1929-01-22T08:53:22',
                        3, 5.97)
 \end{minipage}
@@ -852,9 +852,19 @@ a shorthand form can be used, \eg:
 \keyword{insert into} \identifier{product} 
                       (100001, 'Spinach', 1.99)
 
-Note that for the shorthand form on edges,
-all typeable edge fields must be declared
-in the edge definition. 
+Note that, for the shorthand form on edges,
+typeable edge fields which were not declared
+in the edge definition, must be inserted with zero, \eg:
+
+\begin{minipage}{\textwidth}
+\keyword{insert into} \identifier{sales} 
+                      ('buys', 9000001, 100001, 0,
+                       '1929-01-22T08:53:22',
+                       3, 5.97)
+\end{minipage}
+
+where the fourth position is 0 and represents
+the label that was not defined.
 
 It is also possible \comment{(not yet!)} to insert data from
 a query, \eg:
