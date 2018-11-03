@@ -1,0 +1,6 @@
+bug: missing attribute
+----------------------
+an attribute that was not explicitly inserted,
+cannot be found.
+Solution: if row is incomplete, but has vid,
+          return NULL for missing fields
