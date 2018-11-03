@@ -38,6 +38,7 @@ then
 	exit 1
 fi
 
+efile=rsc/kilo.csv
 file=rsc/loc.csv
 csv=$file
 base=rsc
@@ -100,6 +101,7 @@ function mkwhere() {
 
 # create the data
 bin/writecsv -vertex 1 > $file
+bin/writecsv > $efile
 
 # load them into database
 cat $loader | bin/scopetool $base

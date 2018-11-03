@@ -40,6 +40,7 @@ then
 fi
 
 file=rsc/kilo.csv
+vfile=rsc/loc.csv
 csv=rsc/ctx_measure.csv
 base=rsc
 loader=test/sql/load2.sql
@@ -102,6 +103,7 @@ function mkwhere() {
 
 # create the data
 bin/writecsv > $file
+bin/writecsv -vertex 1 > $vfile
 
 # make them csvsql-readable
 echo "edge;origin;destin;label;timestamp;weight;weight2" > $csv

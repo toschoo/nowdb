@@ -95,7 +95,7 @@ def vidwhere1att(c):
     k = ps[idx].key
 
     # prod_key where 1 condition
-    stmt = "select prod_key from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_key from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -187,7 +187,7 @@ def vidwhereatts(c):
     k = ps[idx].key
 
     # prod_key where key and non-key
-    stmt = "select prod_key from product where prod_desc = %s and prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    stmt = "select prod_key from product where prod_desc = '%s' and prod_key=%d" % (ps[idx].desc, ps[idx].key)
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -199,7 +199,7 @@ def vidwhereatts(c):
 
     # non-key and non-key
     stmt = "select prod_key from product \
-             where prod_desc = %s \
+             where prod_desc = '%s' \
                and prod_price < 100.0" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -392,7 +392,7 @@ def attswhereatts(c):
 
     # prod_key where key and non-key
     stmt = "select prod_desc, prod_cat from product \
-             where prod_desc = %s \
+             where prod_desc = '%s' \
                and prod_key=%d" % (ps[idx].desc, ps[idx].key)
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -469,7 +469,7 @@ def attswhere1att(c):
     k = ps[idx].key
 
     # 1 att where 1 condition
-    stmt = "select prod_price from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_price from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -481,7 +481,7 @@ def attswhere1att(c):
            raise db.TestFailed("cannot find product %d: %s" % (k, ps[idx].desc))
 
     # 2 atts where 1 condition
-    stmt = "select prod_desc, prod_price from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_desc, prod_price from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
