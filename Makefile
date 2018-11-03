@@ -82,6 +82,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
+      $(SRC)/reader/vrow.o    \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
@@ -131,6 +132,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
+      $(SRC)/reader/vrow.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
@@ -200,6 +202,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/filtersmoke             \
 	$(SMK)/funsmoke                \
 	$(SMK)/rowsmoke                \
+	$(SMK)/vrowsmoke               \
 	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
 	$(SMK)/scopesmoke2             \
@@ -386,6 +389,11 @@ $(SMK)/funsmoke:	$(LIB) $(DEP) $(SMK)/funsmoke.o
 			                 $(libs) -lnowdb
 
 $(SMK)/rowsmoke:	$(LIB) $(DEP) $(SMK)/rowsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/vrowsmoke:	$(LIB) $(DEP) $(SMK)/vrowsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -645,6 +653,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.h
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
+	rm -f todo/bin/*.pyc
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
@@ -690,6 +699,7 @@ clean:
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/funsmoke
 	rm -f $(SMK)/rowsmoke
+	rm -f $(SMK)/vrowsmoke
 	rm -f $(SMK)/pmansmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke

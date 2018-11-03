@@ -5,6 +5,7 @@
 import now
 import db
 import datetime
+import time
 import random
 
 MYRANGE = (6000000, 6999999)
@@ -90,11 +91,11 @@ def vidwhere1att(c):
     print "RUNNING TEST 'vidwhere1att'"
 
     idx = random.randint(1,len(ps)-1)
-    print "LENGTH: %d, idx: %d" % (len(ps), idx)
+    # print "LENGTH: %d, idx: %d" % (len(ps), idx)
     k = ps[idx].key
 
     # prod_key where 1 condition
-    stmt = "select prod_key from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_key from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -176,17 +177,299 @@ def vidwhere1att(c):
         if n != 1:
            raise db.TestFailed("found product %d more than once: %d" % (k, n))
 
+# select primary key where several atts
+def vidwhereatts(c):
+
+    print "RUNNING TEST 'vidwhereatts'"
+
+    idx = random.randint(1,len(ps)-1)
+    # print "LENGTH: %d, idx: %d" % (len(ps), idx)
+    k = ps[idx].key
+
+    # prod_key where key and non-key
+    stmt = "select prod_key from product where prod_desc = '%s' and prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key and non-key
+    stmt = "select prod_key from product \
+             where prod_desc = '%s' \
+               and prod_price < 100.0" % ps[idx].desc
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key and non-key
+    stmt = "select prod_key from product \
+             where prod_cat  < 5\
+               and prod_price < 100.0"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("nothing found")
+
+    # non-key and non-key and non-key
+    stmt = "select prod_key from product \
+             where prod_cat  < 5\
+               and prod_packing < 3 \
+               and prod_price < 100.0"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("nothing found")
+
+    # non-key and non-key and non-key (variant)
+    stmt = "select prod_key from product \
+             where prod_cat  = %d\
+               and prod_packing = %d \
+               and prod_price < 100.0" % (ps[idx].cat, ps[idx].packing)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key and non-key or non-key
+    stmt = "select prod_key from product \
+             where prod_cat  = %d\
+               and prod_packing = %d \
+                or prod_price < 100.0" % (ps[idx].cat, ps[idx].packing)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key or non-key and non-key (variant)
+    stmt = "select prod_key from product \
+             where prod_cat  = %d\
+                or prod_packing = %d \
+               and prod_price < 100.0" % (ps[idx].cat, ps[idx].packing)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key or non-key or non-key
+    stmt = "select prod_key from product \
+             where prod_cat  = %d\
+                or prod_packing = %d \
+                or prod_price < 100.0" % (ps[idx].cat, ps[idx].packing)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key or non-key or non-key (variant)
+    stmt = "select prod_key from product \
+             where prod_cat  = 10 \
+                or prod_packing = 100 \
+                or prod_price < 100.0" 
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key and non-key or non-key (wrong condition fails)
+    stmt = "select prod_key from product \
+             where prod_cat  = 10 \
+               and prod_packing = 100 \
+                or prod_price < 100.0" 
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # non-key and (non-key or non-key) (fails)
+    stmt = "select prod_key from product \
+             where prod_cat  = 10 \
+               and (prod_packing < 5 \
+                or  prod_price < 100.0)" 
+    with c.execute(stmt) as cur:
+        if cur.ok():
+           raise db.TestFailed("found data for an impposible query")
+        if cur.code() != now.EOF:
+           raise db.TestFailed("unexpected error: %d: %s" % (cur.code(), cur.details()))
+
+    # non-key or (non-key and non-key)
+    stmt = "select prod_key from product \
+             where prod_cat  = 10 \
+                or (prod_packing < 100 \
+                and prod_price < 100.0)" 
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+	found=False
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+        if n<1:
+          raise db.TestFailed("nothing found")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+# select atts where several atts
+def attswhereatts(c):
+
+    print "RUNNING TEST 'attswhereatts'"
+
+    idx = random.randint(1,len(ps)-1)
+    # print "LENGTH: %d, idx: %d" % (len(ps), idx)
+    k = ps[idx].key
+
+    # prod_key where key and non-key
+    stmt = "select prod_desc, prod_cat from product \
+             where prod_desc = '%s' \
+               and prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("found nothing")
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("found nothing")
+
+    # prod_desc, prod_key where key and non-key
+    stmt = "select prod_desc, prod_key from product \
+             where prod_cat = %d \
+               and prod_packing = %d" % (ps[idx].cat, ps[idx].packing)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        found=0
+        for row in cur:
+            n+=1
+            if row.field(1) == k:
+               found=1
+        if n<1:
+          raise db.TestFailed("found nothing")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # where non-key and (non-key and non-key)
+    stmt = "select prod_desc, prod_price from product \
+             where prod_cat = %d \
+               and (prod_price >= %f \
+               and  prod_price <= %f)" % (ps[idx].cat, ps[idx].price-0.001, ps[idx].price+0.001)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        found=0
+        for row in cur:
+            n+=1
+            if row.field(0) == ps[idx].desc:
+               found=1
+        if n<1:
+          raise db.TestFailed("found nothing")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # where non-key or (non-key and non-key)
+    stmt = "select prod_desc, prod_price from product \
+             where prod_cat = 100 \
+                or (prod_price <= %f \
+               and  prod_price >= %f)" % (ps[idx].price+0.001, ps[idx].price-0.001)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        found=0
+        for row in cur:
+            n+=1
+            if row.field(0) == ps[idx].desc:
+               found=1
+        if n<1:
+          raise db.TestFailed("found nothing")
+        if not found:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+        
 # select atts where one att
 def attswhere1att(c):
 
     print "RUNNING TEST 'attswhere1att'"
 
     idx = random.randint(1,len(ps)-1)
-    print "LENGTH: %d, idx: %d" % (len(ps), idx)
+    # print "LENGTH: %d, idx: %d" % (len(ps), idx)
     k = ps[idx].key
 
     # 1 att where 1 condition
-    stmt = "select prod_price from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_price from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -198,7 +481,7 @@ def attswhere1att(c):
            raise db.TestFailed("cannot find product %d: %s" % (k, ps[idx].desc))
 
     # 2 atts where 1 condition
-    stmt = "select prod_desc, prod_price from product where prod_desc = %s" % ps[idx].desc
+    stmt = "select prod_desc, prod_price from product where prod_desc = '%s'" % ps[idx].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -366,7 +649,6 @@ def constwherevid(c):
                raise db.TestFailed("True not True %d: %s" % (k, row.field(0)))
 
 # select primary key where primary key IN
-# does not yet work!!!
 def whereinvid(c):
 
     print "RUNNING TEST 'whereinvid'"
@@ -417,18 +699,76 @@ def whereinvid(c):
         if n != mx:
             raise db.TestFailed("wrong key: %d,%d,%d != %d" % (k,l,m,row.field(0)))
 
+# select primary key where att IN
+def wherein1att(c):
+
+    print "RUNNING TEST 'wherein1att'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+    d1 = ps[idx].desc
+
+    l = ps[idx-1].key
+    d2 = ps[idx-1].desc
+
+    if idx < len(ps)-1:
+       m = ps[idx+1].key
+       d3 = ps[idx+1].desc
+    else:
+       m = ps[idx-2].key
+       d3 = ps[idx-2].desc
+
+    # select key where att in (...)
+    stmt = "select prod_key from product where prod_desc in ('%s', '%s', '%s')" % (d1,d2,d3)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n < 1:
+            raise db.TestFailed("nothing found")
+
+    # select att where att in (...)
+    stmt = "select prod_desc from product where prod_desc in ('%s', '%s', '%s')" % (d1,d2,d3)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        for row in cur:
+            if row.field(0) != d1 and row.field(0) != d2 and row.field(0) != d3:
+                raise db.TestFailed("wrong product: %d,%d,%d != %d" % (k,l,m,row.field(0)))
+        if n < 1:
+            raise db.TestFailed("nothing found")
+
+    # select atts where att in (...)
+    stmt = "select prod_desc, prod_cat from product \
+             where prod_desc in ('%s', '%s', '%s')" % (d1,d2,d3)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != d1 and row.field(0) != d2 and row.field(0) != d3:
+                raise db.TestFailed("wrong product: %d,%d,%d != %d" % (k,l,m,row.field(0)))
+        if n < 1:
+            raise db.TestFailed("nothing found")
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
 
         vidwherevid(c)
         attswherevid(c)
-        # constwherevid(c)
         vidwhere1att(c)
         attswhere1att(c)
-        # vidwhereatts(c)
-        # constwhereatts(c)
+        vidwhereatts(c)
+        attswhereatts(c)
         whereinvid(c)
+        wherein1att(c)
+        # whereinatts(c)
+        # constwhereatts(c)
+        # constwherevid(c)
 
         print "PASSED"
 

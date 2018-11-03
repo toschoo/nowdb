@@ -6,6 +6,7 @@
  */
 #include <nowdb/types/types.h>
 #include <nowdb/types/errman.h>
+#include <nowdb/types/time.h>
 
 #include <beet/config.h>
 
@@ -229,6 +230,47 @@ static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
 		if (what == 0) e->weight = 0;  else e->weight2 = 0;
 	}
 	return 0;
+}
+
+int nowdb_correctType(nowdb_type_t good,
+                      nowdb_type_t *bad,
+                      void       *value) {
+	if (good == NOWDB_TYP_TIME ||
+            good == NOWDB_TYP_DATE) {
+		if (*bad == NOWDB_TYP_INT) {
+			*bad = good;
+			return 0;
+		}
+		if (*bad == NOWDB_TYP_UINT) {
+			int64_t tmp;
+			tmp = *(int64_t*)value;
+			*bad = good; memcpy(value, &tmp, 8);
+			return 0;
+		}
+		if (*bad == NOWDB_TYP_TEXT) {
+			int rc;
+			char *str = value;
+			int64_t tmp;
+			size_t s;
+
+			s = strnlen(str, 4096);
+
+			if (s < 10) {
+				return -1;
+
+			} else if (s == 10) {
+				rc = nowdb_time_fromString(str,
+				      NOWDB_DATE_FORMAT, &tmp);
+			} else {
+				rc = nowdb_time_fromString(str,
+				      NOWDB_TIME_FORMAT, &tmp);
+			}
+			if (rc != 0) return -1;
+			*bad = good; memcpy(value, &tmp, 8);
+			return 0;
+		}
+	}
+	return -1;
 }
 
 static inline int strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value)

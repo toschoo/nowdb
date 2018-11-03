@@ -319,6 +319,11 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 
 	err = nowdb_stmt_handle(ast, global_scope, NULL, path, &res);
 	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			fprintf(stderr, "Read: 0\n");
+			return 0;
+		}
 		fprintf(stderr, "cannot handle ast: \n");
 		nowdb_ast_show(ast);
 		nowdb_err_print(err);

@@ -1,12 +1,14 @@
 # ========================================================================
-# Test script for sql (scopetool)
-# -------------------
+# Test script for where on edge
+# -----------------------------
 # Prerequisits:
 # - csvkit should be installed
 #
 # The script
+# - creates the database rsc/db500
+# - creates an edge and a context
 # - creates rsc/kilo.csv with 1000 edges using writecsv
-# - copies this file to rsc/context.csv and adds a header to it
+# - copies this file to rsc/ctx_measure.csv and adds a header to it
 # - it then generates random wheres containing
 #   edge, origin, destin and timestamp
 #   - with and & ors (randomly)
@@ -24,8 +26,8 @@ else
 fi
 
 # sqlprefix
-csvsqlprfx="select count(*) from context "
-nowsqlprfx="use test;select *  from ctx_tiny "
+csvsqlprfx="select count(*) from ctx_measure "
+nowsqlprfx="use db500;select count(*) from ctx_measure "
 csvsqlsufx=""
 nowsqlsufx=";"
 
@@ -38,8 +40,9 @@ then
 fi
 
 file=rsc/kilo.csv
-csv=rsc/context.csv
-base=/opt/dbs
+vfile=rsc/loc.csv
+csv=rsc/ctx_measure.csv
+base=rsc
 loader=test/sql/load2.sql
 
 # how we build our where clause
@@ -51,7 +54,7 @@ function mkwhere() {
 	edge=$(echo $vars | cut -d";" -f1)
 	origin=$(echo $vars | cut -d";" -f2)
 	destin=$(echo $vars | cut -d";" -f3)
-	tmstmp=$(echo $vars | cut -d";" -f5)
+	label=$(echo $vars | cut -d";" -f4)
 
 	for i in {0..3}
 	do
@@ -76,33 +79,34 @@ function mkwhere() {
 	x=$(($RANDOM%4))
 	case $x in
 		0) 
-			e="edge=$edge"; o="origin=$origin";
-			d="destin=$destin"; t="timestamp=$tmstmp"
+			e="edge='$edge'"; o="origin=$origin";
+			d="destin=$destin"; l="label=$label"
 			;;
 		1) 
-			e="(edge=$edge"; o="origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp" 
+			e="(edge='$edge'"; o="origin=$origin"; 
+			d="destin=$destin)"; l="label=$label" 
 			;;
 		2) 
-			e="edge=$edge";o="(origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp"
+			e="edge='$edge'";o="(origin=$origin"; 
+			d="destin=$destin)"; l="label=$label"
 			;;
 		3) 
-			e="edge=$edge";o="(origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp"
+			e="edge='$edge'";o="(origin=$origin"; 
+			d="destin=$destin)"; l="label=$label"
 			;;
 	esac
 
-	w="where $e $c1 $o $c2 $d $c3 $t"
+	w="where $e $c1 $o $c2 $d $c3 $l"
 
 	printf "%s\n" "$w"
 }
 
 # create the data
 bin/writecsv > $file
+bin/writecsv -vertex 1 > $vfile
 
 # make them csvsql-readable
-echo "edge;origin;destin;label;timestamp;weight;weight2;wtype;wtype2" > $csv
+echo "edge;origin;destin;label;timestamp;weight;weight2" > $csv
 cat $file >> $csv
 
 # load them into database
@@ -140,15 +144,14 @@ do
 		exit 1
 	fi
 	csvres=$(echo $csvout | awk -F" " '{print $2}')
-	nowout=$(echo $nowdbsql | bin/scopetool $base 2>&1 >/dev/null |\
-		grep Read)
+	nowres=$(echo $nowdbsql | bin/scopetool $base 2>/dev/null)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in scopetool '%s':\n" "$nowdbsql"
 		echo "$nowout"
 		exit 1
 	fi
-	nowres=$(echo $nowout | cut -d" " -f2)
+	# nowres=$(echo $nowout | cut -d" " -f2)
 	if [ $csvres -ne $nowres ]
 	then
 		printf "FAILED in '%s': %d != %d\n" $csvsql $csvres $nowres

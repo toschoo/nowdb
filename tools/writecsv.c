@@ -30,32 +30,54 @@ void helptxt(char *progname) {
  * -----------------------------------------------------------------------
  */
 void edges(FILE *csv, nowdb_edge_t *buf, uint32_t size) {
+	char stamp[32];
 	for(uint32_t i = 0; i<size; i++) {
-		fprintf(csv, "%lu;%lu;%lu;%lu;%ld;%lu;%lu;%u;%u\n",
-		             buf[i].edge,
+		if (nowdb_time_toString(buf[i].timestamp,
+		                        NOWDB_TIME_FORMAT,
+		                        stamp, 32) != 0) {
+			fprintf(stderr, "cannot convert timestamp\n");
+			break;
+		}
+		fprintf(csv, "measure;%lu;%lu;%lu;%s;%lu;%lu\n",
 		             buf[i].origin,
 		             buf[i].destin,
 		             buf[i].label,
-		             buf[i].timestamp,
+		                    stamp,
 		             buf[i].weight,
-		             buf[i].weight2,
-		             buf[i].wtype[0],
-		             buf[i].wtype[1]);
+		             buf[i].weight2);
 	}
 }
+
+/* -----------------------------------------------------------------------
+ * Location vertex
+ * ---------------
+ * create type loc (
+ *    id uint primary key,
+ *    name text,
+ *    lon  float,
+ *    lat  float
+ * )
+ * -----------------------------------------------------------------------
+ */
+typedef struct {
+	uint32_t   id;
+	char name[32];
+	char  lon[16];
+	char  lat[16];
+} loc_t;
 
 /* -----------------------------------------------------------------------
  * write buffer of vertices to file
  * -----------------------------------------------------------------------
  */
-void vertices(FILE *csv, nowdb_vertex_t *buf, uint32_t size) {
+void vertices(FILE *csv, loc_t *buf, uint32_t size) {
+	fprintf(csv, "id;name;lon;lat\n");
 	for(int32_t i=0; i<size; i++) {
-		fprintf(csv, "%lu;%lu;%lu;%u;%u\n",
-		             buf[i].vertex,
-		             buf[i].property,
-		             buf[i].value,
-		             buf[i].vtype,
-		             buf[i].role);
+		fprintf(csv, "%u;%s;%s;%s\n",
+		             buf[i].id,
+		             buf[i].name,
+		             buf[i].lon,
+		             buf[i].lat);
 	}
 }
 
@@ -76,7 +98,7 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 
 		do buf[j].origin = rand()%100; while(buf[j].origin == 0);
 		do buf[j].destin = rand()%100; while(buf[j].destin == 0);
-		do buf[j].edge   = rand()%10; while(buf[j].edge == 0);
+		buf[j].label  = rand()%100;
 		buf[j].weight = (uint64_t)i;
 		buf[j].wtype[0] = NOWDB_TYP_UINT;
 		if (i%10 == 0) {
@@ -97,25 +119,46 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 }
 
 /* -----------------------------------------------------------------------
- * For large values of 'count', this will insert around 100K 'keys'
- * where key means, distinct values for vertex, property, role  
+ * Write a random string into str
+ * -----------------------------------------------------------------------
+ */
+void randomString(char *str, uint32_t mx) {
+	uint32_t sz;
+
+	do {sz = rand()%mx;} while(sz == 0);
+	str[sz] = 0;
+	for(int i=0; i<sz; i++) {
+		str[i] = rand()%26;
+		str[i] += 64;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Creates vertices of type 'location'
  * -----------------------------------------------------------------------
  */
 nowdb_bool_t writeVertices(FILE *csv, uint64_t count) {
-	nowdb_vertex_t buf[1024];
+	loc_t buf[1024];
 	int j = 0;
+	int n, r;
 
 	memset(&buf,0,32*1024);
 
 	for(uint32_t i=0; i<count; i++) {
 
-		do buf[j].vertex   = rand()%100; while(buf[j].vertex == 0);
-		do buf[j].property = rand()%100; while(buf[j].property == 0);
-		do buf[j].role     = rand()%10; while(buf[j].role == 0);
+		buf[j].id = i;
 
-		buf[j].value = (uint64_t)i;
-		buf[j].vtype = NOWDB_TYP_UINT;
+		randomString(buf[j].name, 4);
 
+ 		n = rand()%181;
+		if (rand()%2 == 0) n*=-1;
+		r = rand()%10;
+		sprintf(buf[j].lon, "%d.%d", n, r);
+
+		n = rand()%91; if (rand()%2 == 0) n*=-1;
+		r = rand()%10;
+		sprintf(buf[j].lat, "%d.%d", n, r);
+	
 		j++;
 		if (j == 1024) {
 			vertices(csv, buf, j); j=0;
