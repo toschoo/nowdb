@@ -50,6 +50,15 @@ def updid(base):
        f.write(str(i)+"\n")
     return i
 
+def prompath(path):
+    if path == "idea":
+       return "pending"
+    if path == "pending":
+       return "progress"
+    if path == "progress":
+       return "done"
+    return None
+
 def show(base, what="pending"):
     print "show"
     p = getDir(base, what)
@@ -78,6 +87,15 @@ def create(base, topic):
 def edit(base, what, itm):
     p = path(path(base, what), delabel(itm))
     cmd = "vim %s" % p
+    os.system(cmd)
+
+def prom(base, what, itm):
+    src = path(path(base, what), delabel(itm))
+    trg = path(base,prompath(what))
+    if trg is None:
+       print "cannot promote that item"
+       return
+    cmd = "mv %s %s" % (src, trg)
     os.system(cmd)
 
 if __name__ == "__main__":
@@ -115,5 +133,10 @@ if __name__ == "__main__":
        itm = sys.argv[3]
        edit(BASE, what, itm)
 
-       
-   
+    if sys.argv[1] == "promote":
+       if len(sys.argv) < 4:
+          print "Tell me where the item is and which item you want to promote"
+          exit(1)
+       what = sys.argv[2]
+       itm = sys.argv[3]
+       prom(BASE, what, itm)
