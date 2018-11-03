@@ -1,0 +1,3 @@
+range index
+
+indices over timestamp and floats

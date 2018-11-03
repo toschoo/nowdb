@@ -129,7 +129,11 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
 			break; \
 		} \
 		nowdb_file_copy(run->cont, file); \
-		ts_algo_list_append(files, file); \
+		if (ts_algo_list_append(files, file) != TS_ALGO_OK) { \
+			NOMEM("list.append"); \
+			DESTROYFILES(files);  \
+			break; \
+		} \
 	} \
 	if (err != NOWDB_OK) break;
 
@@ -376,6 +380,15 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * init vertex props
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t initVrow(nowdb_cursor_t *cur) {
+	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
+	return nowdb_vrow_create(cur->v->roleid, &cur->vrow, cur->filter);
+}
+
+/* ------------------------------------------------------------------------
  * Helper: check whether filter contains nothing but vid
  * ------------------------------------------------------------------------
  */
@@ -398,7 +411,6 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 	// (role = mytype) and (vid = myvid)
 	if (!(filter->ntype == NOWDB_FILTER_BOOL &&
 	      filter->op    == NOWDB_FILTER_AND)) {
-		fprintf(stderr, "filter not &\n");
 		*yes = 0;
 	} else {
 		if (filter->left == NULL) {
@@ -407,12 +419,12 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 		if (filter->right == NULL) {
 			INVALIDPLAN("incomplete filter");
 		}
-
-		// missing: in (vid, vid, vid, ...)
 		if (!(filter->left->ntype == NOWDB_FILTER_COMPARE &&
-		      filter->left->op == NOWDB_FILTER_EQ)) *yes = 0;
+		      (filter->left->op == NOWDB_FILTER_EQ ||
+		       filter->left->op == NOWDB_FILTER_IN))) *yes = 0;
 		if (!(filter->right->ntype == NOWDB_FILTER_COMPARE &&
-		      filter->right->op == NOWDB_FILTER_EQ)) *yes = 0;
+		      (filter->right->op == NOWDB_FILTER_EQ ||
+		       filter->right->op == NOWDB_FILTER_IN))) *yes = 0;
 		if (filter->left->off != NOWDB_OFF_ROLE &&
 		    filter->right->off != NOWDB_OFF_ROLE) *yes = 0;
 		if (filter->left->off != NOWDB_OFF_VERTEX &&
@@ -725,17 +737,21 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	cur->recsize = mom->recsize;
 	cur->filter = mom->filter;
 	cur->v = mom->v;
+	cur->fromkey = mom->fromkey;
+	cur->tokey = mom->tokey;
 
 	cur->row = NULL;
 	cur->group = NULL;
 	cur->nogrp = NULL;
 	cur->tmp = NULL;
 	cur->tmp2 = NULL;
-	cur->fromkey = NULL;
-	cur->tokey = NULL;
 
 	cur->hasid = 1;
 	cur->eof = 0;
+
+	// initialise the vertex row handler
+	err = initVrow(cur);
+	if (err != NOWDB_OK) goto cleanup;
 
 	// open it
 	err = nowdb_cursor_open(cur);
@@ -815,19 +831,15 @@ cleanup:
 	if (buf != NULL) free(buf);
 
 	// destroy the cursor
+	if (cur->vrow != NULL) {
+		nowdb_vrow_destroy(cur->vrow);
+		free(cur->vrow); cur->vrow = NULL;
+	}
 	free(cur);
 
 	mom->eof = 0;
 
 	return err;
-}
-
-/* ------------------------------------------------------------------------
- * init vertex props
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t initProps(nowdb_cursor_t *cur) {
-	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -897,16 +909,11 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	}
 	if ((*cur)->filter != NULL) {
+		/*
+		nowdb_filter_show((*cur)->filter, stderr);
+		fprintf(stderr, "\n");
+		*/
 		(*cur)->rdr->filter = (*cur)->filter;
-
-		if ((*cur)->target == NOWDB_TARGET_VERTEX) {
-			fprintf(stderr, "CURSOR IS VERTEX\n");
-			err = initProps(*cur);
-			if (err != NOWDB_OK) {
-				nowdb_cursor_destroy(*cur); free(*cur);
-				return err;
-			}
-		}
 	}
 
 	/* pass on to projection or order by or group by */
@@ -998,6 +1005,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		}
 		if (ok) return NOWDB_OK;
 
+		// get vids
 		err = getVids(scope, *cur);
 		if (err != NOWDB_OK) {
 			nowdb_cursor_destroy(*cur);
@@ -1017,11 +1025,6 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_reader_destroy(cur->rdr);
 		free(cur->rdr); cur->rdr = NULL;
 	}
-	/*
-	if (cur->props != NULL) {
-		cur->props = NULL;
-	}
-	*/
 	if (cur->filter != NULL) {
 		nowdb_filter_destroy(cur->filter);
 		free(cur->filter);
@@ -1043,6 +1046,10 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	if (cur->row != NULL) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
+	}
+	if (cur->vrow != NULL) {
+		nowdb_vrow_destroy(cur->vrow);
+		free(cur->vrow); cur->vrow = NULL;
 	}
 	if (cur->tmp != NULL) {
 		free(cur->tmp); cur->tmp = NULL;
@@ -1275,8 +1282,26 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* apply filter */
-		if (filter != NULL &&
+		/* apply filter to vertex row */
+		if (cur->vrow != NULL) {
+			nowdb_key_t vid;
+			char x=0;
+
+			// we add one more property
+			err = nowdb_vrow_add(cur->vrow,
+			    (nowdb_vertex_t*)(src+cur->off), &x);
+			if (err != NOWDB_OK) return err;
+			if (!x) {
+				cur->off += recsz; continue;
+			}
+			// the only record that could have been completed
+			// by that is the one to which the current belongs
+			if (!nowdb_vrow_eval(cur->vrow, &vid)) {
+				cur->off += recsz; continue;
+			}
+
+		/* apply filter directly */
+		} else if (filter != NULL &&
 		    !nowdb_filter_eval(filter, src+cur->off)) {
 			cur->off += recsz; continue;
 		}

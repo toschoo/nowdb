@@ -105,6 +105,9 @@ typedef uint32_t nowdb_type_t;
 
 int nowdb_strtoval(char *str, nowdb_type_t typ, void *value);
 int nowdb_strtotype(char *str);
+int nowdb_correctType(nowdb_type_t good,
+                      nowdb_type_t *bad,
+                      void      *value);
 
 #define NOWDB_EOR       0xa
 
