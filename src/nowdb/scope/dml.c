@@ -636,6 +636,13 @@ static inline nowdb_err_t correctType(uint32_t typ,
 			val->type = typ;
 			return NOWDB_OK;
 		}
+		if (val->type == NOWDB_TYP_UINT) {
+			val->type = NOWDB_TYP_INT;
+			return NOWDB_OK;
+		}
+		if (val->type == NOWDB_TYP_INT) {
+			return NOWDB_OK;
+		}
 	}
 	/* this is as it should be!!!
 	if (nowdb_correctType(typ, &val->type, val->value) != 0) {
