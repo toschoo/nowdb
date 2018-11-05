@@ -28,11 +28,14 @@ def vertexSelectNoPK(c):
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
             raise db.TestFailed("cannot execute select on product without pk")
+        found = False
         for row in cur:
             print "%d" % row.field(0)
-            if row.field(0) != ps[0].key:
-                raise db.TestFailed("wrong key selected for product: %d != %d" %
-                                   (row.field(0), ps[0].key))
+            if row.field(0) == ps[0].key:
+                found=True
+        if not found:
+            raise db.TestFailed("product not found: %d, %s" %
+                                   (ps[0].key,ps[0].desc))
 
     stmt = "select client_key from client \
              where client_name = '%s'" % cs[0].name
@@ -40,11 +43,14 @@ def vertexSelectNoPK(c):
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
             raise db.TestFailed("cannot execute select on client without pk")
+        found=False
         for row in cur:
             print "%d" % row.field(0)
-            if row.field(0) != cs[0].key:
-                raise db.TestFailed("wrong key selected for client: %d != %d" %
-                                   (row.field(0), cs[0].key))
+            if row.field(0) == cs[0].key:
+                found=True
+        if not found:      
+           raise db.TestFailed("product not found. %d, %s" %
+                                   (cs[0].key, cs[0].name))
 
     stmt = "select prod_desc from product"
     with c.execute(stmt) as cur:

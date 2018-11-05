@@ -170,6 +170,17 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
 }
 
 /* ------------------------------------------------------------------------
+ * Is our vertex representation in canonical order?
+ * ------------------------------------------------------------------------
+ */
+static char propsSorted(nowdb_dml_t *dml) {
+	for(int i=0; i<dml->num; i++) {
+		if (dml->p[i]->pos != i) return 0;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
  * Do we insert the complete vertex?
  * ------------------------------------------------------------------------
  */
@@ -182,7 +193,8 @@ static char vertexComplete(nowdb_dml_t *dml,
 
 	if (dml->p == NULL) return 0;
 	if (fields == NULL) {
-		return (values->len == dml->num);
+		if (values->len != dml->num) return 0;
+		return propsSorted(dml);
 	}
 	if (dml->num != fields->len) return 0;
 	for(run=fields->head; run!=NULL; run=run->nxt) {
@@ -335,14 +347,19 @@ static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
 			}
 			vrun = vrun->nxt;
 		}
+		if (edge == NULL) {
+			INVALID("edge field missing in insert");
+		}
+		if (!tp) {
+			INVALID("timestamp missing in insert");
+		}
+		val = edge->cont;
+	} else {
+		if (values == NULL) INVALID("no values");
+		if (values->len < 7) INVALID("incomplete value list");
+		if (values->len > 7) INVALID("too many values");
+		val = values->head->cont;
 	}
-	if (edge == NULL) {
-		INVALID("edge field missing in insert");
-	}
-	if (!tp) {
-		INVALID("timestamp missing in insert");
-	}
-	val = edge->cont;
 	// fprintf(stderr, "%s\n", (char*)val->value);
 	return setEdgeModel(dml, val->value);
 }
@@ -619,6 +636,13 @@ static inline nowdb_err_t correctType(uint32_t typ,
 			val->type = typ;
 			return NOWDB_OK;
 		}
+		if (val->type == NOWDB_TYP_UINT) {
+			val->type = NOWDB_TYP_INT;
+			return NOWDB_OK;
+		}
+		if (val->type == NOWDB_TYP_INT) {
+			return NOWDB_OK;
+		}
 	}
 	/* this is as it should be!!!
 	if (nowdb_correctType(typ, &val->type, val->value) != 0) {
@@ -632,6 +656,7 @@ static inline nowdb_err_t correctType(uint32_t typ,
 
 /* ------------------------------------------------------------------------
  * Insert vertex in fields/value format
+ * NOTE: this relies on setTarget
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,

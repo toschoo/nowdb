@@ -103,7 +103,7 @@ static inline nowdb_err_t getField(char            *name,
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "WEIGHT2") == 0) {
-		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*off = NOWDB_OFF_WEIGHT2; *sz = 8; 
 		*type = isstr?NOWDB_TYP_TEXT:0;
 		return NOWDB_OK;
 	}
@@ -186,7 +186,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "WEIGHT2") == 0) {
-		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*off = NOWDB_OFF_WEIGHT2; *sz = 8; 
 		*type = e!=NULL?e->weight2:0;
 		return NOWDB_OK;
 	}

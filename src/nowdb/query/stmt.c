@@ -388,6 +388,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 	ts_algo_list_t props;
 	nowdb_model_prop_t *p;
 	char x=0; /* do we have props ? */
+	uint32_t i=0;
 
 	d = nowdb_ast_declare(op);
 	ts_algo_list_init(&props);
@@ -415,6 +416,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		p->value = nowdb_ast_type(d->stype);
 		p->propid = 0;
 		p->roleid = 0;
+		p->pos    = i; i++;
 		p->pk = FALSE;
 
 		o = nowdb_ast_option(d, NOWDB_AST_PK);
