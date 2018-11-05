@@ -759,9 +759,11 @@ operation on most platforms.
 
 The syntax is:
 
+\begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
 \keyword{where timestamp} $\ge$ '2018-01-01' \\
 \hspace*{0.45cm}\keyword{and timestamp} $<$  '2018-04-01'
+\end{minipage}
 
 This would drop all data files of table `mytable'
 that contain only data between Jan, 1, 2018 (inclusive) and
@@ -794,8 +796,10 @@ before a given date (which is very common
 for timeseries databases, that often represent gliding
 time windows):
 
+\begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
 \keyword{where timestamp} $<$ '2018-04-01'
+\end{minipage}
 
 Second, \term{drop period} does not guarantee
 to drop all data that lie in the period in question --
@@ -811,7 +815,7 @@ won't grow (except when the periods themselves grow).
 
 \section{Data Manipulation}
 \subsection{Insert}
-The \term{insert} statements inserts one or more rows
+The \term{insert} statement inserts one or more rows
 to a given table or type.
 The basic form is
 
@@ -854,17 +858,19 @@ a shorthand form can be used, \eg:
 
 Note that, for the shorthand form on edges,
 typeable edge fields which were not declared
-in the edge definition, must be inserted with zero, \eg:
+in the edge definition, must be inserted with
+\acronym{null}, \eg:
 
 \begin{minipage}{\textwidth}
 \keyword{insert into} \identifier{sales} 
-                      ('buys', 9000001, 100001, 0,
+                      ('buys', 9000001, 100001,
+                       \acronym{null},
                        '1929-01-22T08:53:22',
                        3, 5.97)
 \end{minipage}
 
-where the fourth position is 0 and represents
-the label that was not defined.
+where the fourth position is \acronym{null} and represents
+the label which was not defined.
 
 It is also possible \comment{(not yet!)} to insert data from
 a query, \eg:
