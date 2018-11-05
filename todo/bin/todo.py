@@ -60,7 +60,7 @@ def prompath(path):
     return None
 
 def show(base, what="pending"):
-    print "show"
+    print what
     p = getDir(base, what)
     d = sorted(os.listdir(p),key=isorter)
     for i in d:
@@ -104,11 +104,20 @@ if __name__ == "__main__":
        helptxt(sys.argv[0])
        exit(1)
 
-    if sys.argv[1] == "show":
-       what = "pending"
-       if len(sys.argv) > 2:
-          what = sys.argv[2]
-       show(BASE,what)
+    if sys.argv[1] == "show"     or \
+       sys.argv[1] == "idea"     or \
+       sys.argv[1] == "pending"  or \
+       sys.argv[1] == "progress" or \
+       sys.argv[1] == "done"     or \
+       sys.argv[1] == "parked":
+         if sys.argv[1] == "show":
+            what = "pending"
+            if len(sys.argv) > 2:
+               what = sys.argv[2]
+         else:
+            what = sys.argv[1]
+
+         show(BASE,what)
 
     if sys.argv[1] == "item":
        if len(sys.argv) < 4:

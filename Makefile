@@ -199,6 +199,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertstoresmoke        \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
+	$(SMK)/exprsmoke               \
 	$(SMK)/filtersmoke             \
 	$(SMK)/funsmoke                \
 	$(SMK)/rowsmoke                \
@@ -379,6 +380,11 @@ $(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
 				         $(libs) -lnowdb
 
 $(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/exprsmoke:	$(LIB) $(DEP) $(SMK)/exprsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -696,6 +702,7 @@ clean:
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/readersmoke
+	rm -f $(SMK)/exprsmoke
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/funsmoke
 	rm -f $(SMK)/rowsmoke

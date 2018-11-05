@@ -13,7 +13,7 @@
 #include <nowdb/text/text.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/mem/ptlru.h>
-#include <nowdb/fun/expr.h>
+// #include <nowdb/fun/expr.h>
 #include <nowdb/fun/group.h>
 #include <nowdb/query/rowutl.h>
 

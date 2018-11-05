@@ -66,6 +66,10 @@ int nowdb_row_print(char *buf, uint32_t sz, FILE *stream) {
 			}
 			i++; break;
 
+		case NOWDB_TYP_NOTHING: 
+			fprintf(stream, "NULL");
+			i++; break;
+
 		default:
 			fprintf(stderr, "unknown type (%d): %d\n", i, (int)t);
 			return nowdb_err_invalid;
