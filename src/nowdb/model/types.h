@@ -35,7 +35,7 @@ typedef struct {
 	char              *name; /* property name                  */
 	nowdb_key_t      propid; /* property id (stored in vertex) */
 	nowdb_roleid_t   roleid; /* the type to which it belongs   */
-	                         /* keep properties ordered        */
+	uint32_t            pos; /* keep properties ordered        */
 	nowdb_type_t      value; /* type of the property value     */
 	nowdb_bool_t         pk; /* this one is PK                 */
 } nowdb_model_prop_t;
