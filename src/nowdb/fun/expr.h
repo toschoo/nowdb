@@ -11,6 +11,8 @@
 #include <nowdb/types/error.h>
 #include <nowdb/types/time.h>
 
+#include <tsalgo/list.h>
+
 /* -----------------------------------------------------------------------
  * Expression types:
  * -----------------
@@ -27,19 +29,22 @@
 #define NOWDB_EXPR_FUN   4
 #define NOWDB_EXPR_AGG   5
 
-struct nowdb_expr_t;
+typedef struct nowdb_expr_t* nowdb_expr_t;
 
 /* ------------------------------------------------------------------------
  * Field Expression
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t        off; /* offset into data source */
-	char          *text; /* string if off is text   */
-	char          *name; /* property name if vertex */
-	nowdb_key_t  propid; /* propid if vertex        */
-	nowdb_roleid_t role; /* vertex type if vertex   */
-	char             pk; /* primary key if vertex   */
+	uint32_t        etype; /* expression type         */
+	nowdb_target_t target; /* vertex or edge?         */
+	int               off; /* offset into data source */
+	nowdb_type_t     type; /* Type of field           */
+	char            *text; /* string if off is text   */
+	char            *name; /* property name if vertex */
+	nowdb_roleid_t   role; /* vertex type if vertex   */
+	nowdb_key_t    propid; /* propid if vertex        */
+	char               pk; /* primary key if vertex   */
 } nowdb_field_t;
 
 /* ------------------------------------------------------------------------
@@ -47,6 +52,7 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
+	uint32_t    etype; /* expression type         */
 	void       *value; /* the value    */
 	nowdb_type_t type; /* and its type */
 } nowdb_const_t;
@@ -56,24 +62,19 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t            ftype; /* Operator type (+,-,*,/,...) */
-	uint32_t             args; /* Number of operands          */
-	struct nowdb_expr_t *argv; /* Operands                    */
+	uint32_t      etype;  /* expression type             */
+	uint32_t        fun;  /* Operator type (+,-,*,/,...) */
+	uint32_t       args;  /* Number of operands          */
+	nowdb_expr_t  *argv;  /* Operands                    */
+	nowdb_type_t  *types; /* types of the arg results    */
+	void      **results;  /* arg results                 */
+	void           *res;  /* result                      */
 } nowdb_op_t;
 
 /* ------------------------------------------------------------------------
  * Aggregate Expression
  * ------------------------------------------------------------------------
  */
-
-/* ------------------------------------------------------------------------
- * Expression
- * ------------------------------------------------------------------------
- */
-typedef struct nowdb_expr_t {
-	uint32_t etype; /* const, field, operator, ufun or agg */
-	void       *ex; /* the expression content              */
-} nowdb_expr_t;
 
 /* -----------------------------------------------------------------------
  * Conversions
@@ -97,9 +98,9 @@ typedef struct nowdb_expr_t {
 #define NOWDB_EXPR_OP_POW   15
 #define NOWDB_EXPR_OP_ROOT  16
 #define NOWDB_EXPR_OP_LOG   17
-#define NOWDB_EXPR_OP_CEIL  17
-#define NOWDB_EXPR_OP_FLOOR 18
-#define NOWDB_EXPR_OP_ROUND 19
+#define NOWDB_EXPR_OP_CEIL  18
+#define NOWDB_EXPR_OP_FLOOR 19
+#define NOWDB_EXPR_OP_ROUND 20
 
 /* -----------------------------------------------------------------------
  * Logic
@@ -153,32 +154,44 @@ typedef struct nowdb_expr_t {
  * Create expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_newField(nowdb_expr_t **expr, uint32_t off);
+nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
 
-nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t **expr,
+nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
+                                      char      *propname,
+                                      nowdb_roleid_t role,
+                                      nowdb_key_t propid);
+
+nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
                                    void         *value,
                                    nowdb_type_t  type);
-nowdb_err_t nowdb_expr_newOp(nowdb_expr_t **expr,
-                             uint32_t      ftype,
-                             uint32_t       args,
-                             nowdb_expr_t *argv);
+
+nowdb_err_t nowdb_expr_newOp(nowdb_expr_t   *expr,
+                             uint32_t         fun,
+                             ts_algo_list_t  *ops);
+
+
+// newAgg
 
 /* -----------------------------------------------------------------------
  * Destroy expression
  * -----------------------------------------------------------------------
  */
-void nowdb_expr_destroy(nowdb_expr_t *expr);
+void nowdb_expr_destroy(nowdb_expr_t expr);
 
 /* -----------------------------------------------------------------------
  * Copy expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_copy(nowdb_expr_t  *src,
-                            nowdb_expr_t **trg);
+nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
+                            nowdb_expr_t *trg);
 
 /* -----------------------------------------------------------------------
  * Evaluate expression
  * -----------------------------------------------------------------------
  */
+nowdb_err_t nowdb_expr_eval(nowdb_expr_t  expr,
+                            char         *row,
+                            nowdb_type_t *typ,
+                            void        **res);
 
 #endif

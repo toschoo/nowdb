@@ -74,6 +74,19 @@ nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t  *vrow,
                              nowdb_key_t    *vid);
 
 /* ------------------------------------------------------------------------
+ * Check for complete vertex
+ * -------------------------
+ * Checks whether there is a complete vertex (without evaluation).
+ * If there is, its row is copied into row and
+ * its size is pass to 'size'.
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
+                                 uint32_t     *size,
+                                 char        **row);
+
+
+/* ------------------------------------------------------------------------
  * Show current vrows and their state (debugging)
  * ------------------------------------------------------------------------
  */

@@ -87,6 +87,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
       $(SRC)/fun/group.o      \
+      $(SRC)/fun/expr.o       \
       $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \

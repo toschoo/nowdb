@@ -821,6 +821,8 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	err = makeVidReader(scope, mom, vlst);
 	if (err != NOWDB_OK) goto cleanup;
 
+	// make mom->vrow from field list
+
 cleanup:
 	if (vids != NULL) {
 		ts_algo_tree_destroy(vids); free(vids);
