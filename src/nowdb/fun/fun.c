@@ -47,11 +47,11 @@ static char *OBJECT  = "fun";
 
 #define PERFM(o) \
 	switch(t) { \
-	case NOWDB_TYP_DATE: \
-	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_UINT: \
 		o(*(uint64_t*)v1, *(uint64_t*)v2); \
 		return NOWDB_OK; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_INT: \
 		o(*(int64_t*)v1, *(int64_t*)v2); \
 		return NOWDB_OK; \
@@ -63,11 +63,11 @@ static char *OBJECT  = "fun";
 
 #define TOFLOAT() \
 	switch(t) { \
-	case NOWDB_TYP_DATE: \
-	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_UINT: \
 		x = (double)(*(uint64_t*)v2); \
 		MOV(v1, &x); break; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_INT: \
 		x = (double)(*(int64_t*)v2); \
 		MOV(v1, &x); break; \

@@ -6,13 +6,20 @@
  */
 #include <nowdb/fun/expr.h>
 
+#include <stdarg.h>
+#include <stdio.h>
+#include <math.h>
+
 static char *OBJECT = "EXPR";
 
 #define NOMEM(s) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
 
 #define INVALID(s) \
-	return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
+	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
+
+#define INVALIDTYPE(s) \
+	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
 
 #define FIELD(x) \
 	((nowdb_field_t*)x)
@@ -102,14 +109,14 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 	return NOWDB_OK;
 }
 
-nowdb_err_t nowdb_expr_newOp(nowdb_expr_t  *expr,
-                             uint32_t        fun,
-                             ts_algo_list_t *ops) {
-	nowdb_err_t err;
-	ts_algo_list_node_t *run;
-	int i=0;
+static inline int getArgs(int o);
 
-	*expr = calloc(1,sizeof(nowdb_const_t));
+static inline nowdb_err_t initOp(nowdb_expr_t *expr,
+                                 uint32_t       fun,
+                                 uint32_t       len) {
+	nowdb_err_t err;
+
+	*expr = calloc(1,sizeof(nowdb_op_t));
 	if (*expr == NULL)  {
 		NOMEM("allocating expression");
 		return err;
@@ -121,9 +128,9 @@ nowdb_err_t nowdb_expr_newOp(nowdb_expr_t  *expr,
 	OP(*expr)->results = NULL;
 
 	OP(*expr)->fun = fun;
-	OP(*expr)->args  = ops->len;
+	OP(*expr)->args  = len;
 
-	OP(*expr)->types = calloc(ops->len, sizeof(nowdb_type_t));
+	OP(*expr)->types = calloc(len, sizeof(nowdb_type_t));
 	if (OP(*expr)->types == NULL) {
 		NOMEM("allocating expression operand types");
 		nowdb_expr_destroy(*expr);
@@ -131,7 +138,7 @@ nowdb_err_t nowdb_expr_newOp(nowdb_expr_t  *expr,
 		return err;
 	}
 
-	OP(*expr)->results = calloc(ops->len, sizeof(uint64_t));
+	OP(*expr)->results = calloc(len, sizeof(uint64_t));
 	if (OP(*expr)->results == NULL) {
 		NOMEM("allocating expression operand results");
 		nowdb_expr_destroy(*expr);
@@ -139,16 +146,52 @@ nowdb_err_t nowdb_expr_newOp(nowdb_expr_t  *expr,
 		return err;
 	}
 
-	OP(*expr)->argv = calloc(ops->len, sizeof(nowdb_expr_t));
+	OP(*expr)->argv = calloc(len, sizeof(nowdb_expr_t));
 	if (OP(*expr)->argv == NULL) {
 		NOMEM("allocating expression operands");
 		nowdb_expr_destroy(*expr);
 		free(*expr); *expr = NULL;
 		return err;
 	}
+
+	return NOWDB_OK;
+}
+
+nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t  *expr,
+                              uint32_t        fun,
+                              ts_algo_list_t *ops) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *run;
+	int i=0;
+
+	if (ops == NULL) INVALID("list parameter is NULL");
+
+	err = initOp(expr, fun, ops->len);
+	if (err != NOWDB_OK) return err;
+
 	for(run = ops->head;run!=NULL;run=run->nxt) {
 		OP(*expr)->argv[i] = run->cont; i++;
 	}
+	return NOWDB_OK;
+}
+
+nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...) {
+	nowdb_err_t err;
+	va_list args;
+
+	int nr = getArgs(fun);
+
+	if (nr < 0) INVALID("unknown operator");
+
+	err = initOp(expr, fun, nr);
+	if (err != NOWDB_OK) return err;
+	
+	va_start(args,fun);
+	for(int i=0;i<nr;i++) {
+		OP(*expr)->argv[i] = va_arg(args, nowdb_expr_t);
+	}
+	va_end(args);
+
 	return NOWDB_OK;
 }
 
@@ -173,7 +216,7 @@ static void destroyConst(nowdb_const_t *cst) {
 }
 
 /* -----------------------------------------------------------------------
- * Destroy 
+ * Destroy Operator
  * -----------------------------------------------------------------------
  */
 static void destroyOp(nowdb_op_t *op) {
@@ -234,11 +277,18 @@ static nowdb_err_t evalField(nowdb_field_t *field,
  * Evaluate Fun (predeclaration, implementation below)
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t evalFun(uint32_t      fun,
-                           nowdb_type_t *types,
+static nowdb_err_t evalFun(uint32_t     fun,
                            void        **argv,
-                           nowdb_type_t *typ,
-                           void        **res);
+                           nowdb_type_t *types,
+                           nowdb_type_t t,
+                           void         *res);
+
+/* -----------------------------------------------------------------------
+ * Evaluate Fun (predeclaration, implementation below)
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_type_t evalType(uint32_t      fun,
+                                    nowdb_type_t *types);
 
 /* -----------------------------------------------------------------------
  * Evaluate operation
@@ -259,10 +309,15 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 		}
 	}
 
-	err = evalFun(op->fun, op->types, op->results, typ, &op->res);
+	// determine type
+	if (op->types != NULL) { 
+		*typ = evalType(op->fun, op->types);
+		if (*typ < 0) INVALIDTYPE("unknown operation");
+	}
+	err = evalFun(op->fun, op->results, op->types, *typ, &op->res);
 	if (err != NOWDB_OK) return err;
 
-	*res = op->res;
+	*res = &op->res;
 	return NOWDB_OK;
 }
 
@@ -292,43 +347,187 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	}
 }
 
+#define ADD(v0,v1,v2) \
+	v0=v1+v2;
+
+#define SUB(v0,v1,v2) \
+	v0=v1-v2;
+
+#define MUL(v0,v1,v2) \
+	v0=v1*v2;
+
+#define QUOT(v0,v1,v2) \
+	if (v2 != 0) v0=v1/v2;
+
+#define DIV(v0,v1,v2) \
+	if ((double)v2 != 0) v0=(double)v1/(double)v2;
+
+#define REM(v0,v1,v2) \
+	v0 = v2 == 0 ? 0 : v1%v2;
+
+#define POW(v0,v1,v2) \
+	v0 = pow(v1,v2);
+
+#define LOG(v0,v1) \
+	v0 = log(v1);
+
+#define CEIL(v0,v1) \
+	v0 = ceil(v1);
+
+#define FLOOR(v0,v1) \
+	v0 = floor(v1);
+
+#define ROUND(v0,v1) \
+	v0 = round(v1);
+
+#define ABS(v0,v1) \
+	v0 = fabs(v1);
+
+#define MOV(r1,r2) \
+	memcpy(r1, r2, 8);
+
+#define PERFM(o) \
+	switch(t) { \
+	case NOWDB_TYP_UINT: \
+		o(*(uint64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+		o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_FLOAT: \
+		o(*(double*)res, *(double*)argv[0], *(double*)argv[1]); \
+		return NOWDB_OK; \
+	default: return NOWDB_OK; \
+	}
+
+#define PERFMNF(o) \
+	switch(t) { \
+	case NOWDB_TYP_UINT: \
+		o(*(uint64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+		o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+	default: return NOWDB_OK; \
+	}
+
+#define PERFM1(o) \
+	switch(t) { \
+	case NOWDB_TYP_UINT: \
+		o(*(uint64_t*)res, *(uint64_t*)argv[0]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+		o(*(int64_t*)res, *(int64_t*)argv[0]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_FLOAT: \
+		o(*(double*)res, *(double*)argv[0]); \
+		return NOWDB_OK; \
+	default: return NOWDB_OK; \
+	}
+
+#define TOFLOAT() \
+	switch(types[0]) { \
+	case NOWDB_TYP_UINT: \
+		f = (double)(*(uint64_t*)argv[0]); \
+		MOV(res, &f); break; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+		f = (double)(*(int64_t*)argv[0]); \
+		MOV(res, &f); break; \
+	default: \
+		MOV(res, argv[0]); break; \
+	}
+
+#define TOINT() \
+	switch(types[0]) { \
+	case NOWDB_TYP_UINT: \
+		l = (int64_t)(*(uint64_t*)argv[0]); \
+		MOV(res, &l); break; \
+	case NOWDB_TYP_FLOAT: \
+		l = (int64_t)(*(double*)argv[0]); \
+		MOV(res, &l); break; \
+	default: \
+		MOV(res, argv[0]); break; \
+	}
+
+#define TOUINT() \
+	switch(types[0]) { \
+	case NOWDB_TYP_FLOAT: \
+		u = (uint64_t)(*(double*)argv[0]); \
+		MOV(res, &u); break; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+		u = (uint64_t)(*(int64_t*)argv[0]); \
+		MOV(res, &u); break; \
+	default: \
+		MOV(res, argv[0]); break; \
+	}
+
 /* -----------------------------------------------------------------------
  * Evaluate Fun
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t evalFun(uint32_t      fun,
-                           nowdb_type_t *types,
                            void        **argv,
-                           nowdb_type_t *typ,
-                           void        **res) {
+                           nowdb_type_t *types,
+                           nowdb_type_t  t,
+                           void         *res) {
+	double f;
+	int64_t l;
+	uint64_t u;
+
 	switch(fun) {
 
 	/* -----------------------------------------------------------------------
 	 * Conversions
 	 * -----------------------------------------------------------------------
 	 */
-	case NOWDB_EXPR_OP_FLOAT:
-	case NOWDB_EXPR_OP_INT:
-	case NOWDB_EXPR_OP_UINT:
-	case NOWDB_EXPR_OP_TIME:
-	case NOWDB_EXPR_OP_TEXT:
+	case NOWDB_EXPR_OP_FLOAT: TOFLOAT(); break;
+	case NOWDB_EXPR_OP_UINT: TOUINT(); break; 
+	case NOWDB_EXPR_OP_INT: 
+	case NOWDB_EXPR_OP_TIME: TOINT(); break;
+	case NOWDB_EXPR_OP_TEXT: 
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
 	/* -----------------------------------------------------------------------
 	 * Arithmetic
 	 * -----------------------------------------------------------------------
 	 */
-	case NOWDB_EXPR_OP_ADD:
-	case NOWDB_EXPR_OP_SUB:
-	case NOWDB_EXPR_OP_MUL:
+	case NOWDB_EXPR_OP_ADD: PERFM(ADD);
+	case NOWDB_EXPR_OP_SUB: PERFM(SUB);
+	case NOWDB_EXPR_OP_MUL: PERFM(MUL);
 	case NOWDB_EXPR_OP_DIV:
+		if (t == NOWDB_TYP_FLOAT) {
+			PERFM(DIV);
+		} else {
+			PERFM(QUOT);
+		}
+
 	case NOWDB_EXPR_OP_REM:
-	case NOWDB_EXPR_OP_POW:
+		if (t == NOWDB_TYP_FLOAT) {
+			INVALIDTYPE("remainder with float");
+		} else {
+			PERFMNF(REM);
+		}
+
+	case NOWDB_EXPR_OP_POW: PERFM(POW);
+
 	case NOWDB_EXPR_OP_ROOT:
-	case NOWDB_EXPR_OP_LOG:
-	case NOWDB_EXPR_OP_CEIL:
-	case NOWDB_EXPR_OP_FLOOR:
-	case NOWDB_EXPR_OP_ROUND:
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
+
+	case NOWDB_EXPR_OP_LOG: PERFM1(LOG);
+
+	case NOWDB_EXPR_OP_CEIL: PERFM1(CEIL);
+	case NOWDB_EXPR_OP_FLOOR: PERFM1(FLOOR);
+	case NOWDB_EXPR_OP_ROUND: PERFM1(ROUND);
+	case NOWDB_EXPR_OP_ABS: PERFM1(ABS);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
 	/* -----------------------------------------------------------------------
@@ -385,4 +584,60 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	default: INVALID("unknown function");
 
 	}
+	return NOWDB_OK;
 }
+
+static inline int getArgs(int o) {
+	switch(o) {
+	case NOWDB_EXPR_OP_FLOAT:
+	case NOWDB_EXPR_OP_INT:
+	case NOWDB_EXPR_OP_UINT:
+	case NOWDB_EXPR_OP_TIME:
+	case NOWDB_EXPR_OP_TEXT: return 1;
+
+	case NOWDB_EXPR_OP_ADD:
+	case NOWDB_EXPR_OP_SUB: 
+	case NOWDB_EXPR_OP_MUL: 
+	case NOWDB_EXPR_OP_DIV: 
+	case NOWDB_EXPR_OP_REM:
+	case NOWDB_EXPR_OP_POW: return 2;
+
+	case NOWDB_EXPR_OP_LOG: 
+	case NOWDB_EXPR_OP_ABS:
+	case NOWDB_EXPR_OP_CEIL:
+	case NOWDB_EXPR_OP_FLOOR:
+	case NOWDB_EXPR_OP_ROUND: return 1;
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Evaluate Type
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_type_t evalType(uint32_t        fun,
+                                    nowdb_type_t *types) {
+	switch(fun) {
+
+	case NOWDB_EXPR_OP_FLOAT: return NOWDB_TYP_FLOAT;
+	case NOWDB_EXPR_OP_INT: return NOWDB_TYP_INT;
+	case NOWDB_EXPR_OP_UINT: return NOWDB_TYP_UINT;
+	case NOWDB_EXPR_OP_TIME: return NOWDB_TYP_TIME;
+	case NOWDB_EXPR_OP_TEXT: return NOWDB_TYP_TEXT;
+
+	case NOWDB_EXPR_OP_ADD:
+	case NOWDB_EXPR_OP_SUB: 
+	case NOWDB_EXPR_OP_MUL: 
+	case NOWDB_EXPR_OP_DIV: 
+	case NOWDB_EXPR_OP_REM:
+	case NOWDB_EXPR_OP_POW: return types[0];
+
+	case NOWDB_EXPR_OP_LOG: 
+	case NOWDB_EXPR_OP_ABS:
+	case NOWDB_EXPR_OP_CEIL:
+	case NOWDB_EXPR_OP_FLOOR:
+	case NOWDB_EXPR_OP_ROUND: return types[0];
+	default: return -1;
+	}
+}
+

@@ -68,7 +68,8 @@ typedef struct {
 	nowdb_expr_t  *argv;  /* Operands                    */
 	nowdb_type_t  *types; /* types of the arg results    */
 	void      **results;  /* arg results                 */
-	void           *res;  /* result                      */
+	nowdb_value_t   res;  /* result                      */
+	                      /* text????                    */
 } nowdb_op_t;
 
 /* ------------------------------------------------------------------------
@@ -101,6 +102,7 @@ typedef struct {
 #define NOWDB_EXPR_OP_CEIL  18
 #define NOWDB_EXPR_OP_FLOOR 19
 #define NOWDB_EXPR_OP_ROUND 20
+#define NOWDB_EXPR_OP_ABS   21
 
 /* -----------------------------------------------------------------------
  * Logic
@@ -165,9 +167,11 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
                                    void         *value,
                                    nowdb_type_t  type);
 
-nowdb_err_t nowdb_expr_newOp(nowdb_expr_t   *expr,
-                             uint32_t         fun,
-                             ts_algo_list_t  *ops);
+nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t   *expr,
+                              uint32_t         fun,
+                              ts_algo_list_t  *ops);
+
+nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...);
 
 
 // newAgg
