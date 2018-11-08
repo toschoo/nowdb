@@ -183,15 +183,15 @@ static inline nowdb_err_t getVRow(nowdb_vrow_t   *vrow,
  * Insert a property into propmap
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t insertProperty(nowdb_vrow_t  *vrow,
-                                         nowdb_filter_t *src,
-                                         int            *cnt) {
+static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
+                                         void         *val,
+                                         int          *cnt) {
 	nowdb_err_t err;
 	propmap_t pattern, *res;
 
 	// find offset
 	// fprintf(stderr, "inserting property %lu\n", *(uint64_t*)src->val);
-	memcpy(&pattern.propid, src->val, KEYSZ);
+	memcpy(&pattern.propid, val, KEYSZ);
 	res = ts_algo_tree_find(vrow->pspec, &pattern);
 	if (res == NULL) {
 		res = calloc(1, sizeof(propmap_t));
@@ -199,7 +199,7 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t  *vrow,
 			NOMEM("allocating propmap");
 			return err;
 		}
-		memcpy(&res->propid, src->val, KEYSZ);
+		memcpy(&res->propid, val, KEYSZ);
  		res->off = ROLESZ+KEYSZ*(*cnt);(*cnt)++;
 
 		if (ts_algo_tree_insert(vrow->pspec, res) != TS_ALGO_OK) {
@@ -256,11 +256,11 @@ static inline nowdb_err_t getProperty(nowdb_vrow_t  *vrow,
  * Copy filter recursively
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
-                            int             *cnt,
-                            int             *off,
-                            nowdb_filter_t  *src,
-                            nowdb_filter_t **trg) {
+static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
+                             int             *cnt,
+                             int             *off,
+                             nowdb_filter_t  *src,
+                             nowdb_filter_t **trg) {
 	nowdb_err_t err;
 	ts_algo_list_t *in, *in2=NULL;
 
@@ -272,7 +272,7 @@ static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
 		err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
 		if (err != NOWDB_OK) return err;
 
-		err = insertProperty(vrow, src, cnt);
+		err = insertProperty(vrow, src->val, cnt);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(*trg);
 			free(*trg); *trg = NULL;
@@ -338,7 +338,7 @@ static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
 	// go left (here we expect the propid)
 	if (src->left != NULL) {
 		*off = -1;
-		err = copyNode(vrow, cnt, off, src->left, &(*trg)->left);
+		err = copyFNode(vrow, cnt, off, src->left, &(*trg)->left);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(*trg);
 			free(*trg); *trg = NULL;
@@ -347,12 +347,50 @@ static nowdb_err_t copyNode(nowdb_vrow_t   *vrow,
 	}
 	// go left (here we expect the value)
 	if (src->right != NULL) {
-		err = copyNode(vrow, cnt, off, src->right, &(*trg)->right);
+		err = copyFNode(vrow, cnt, off, src->right, &(*trg)->right);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(*trg);
 			free(*trg); *trg = NULL;
 			return err;
 		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Update expression recursively
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
+                            int          *cnt,
+                            int          *off,
+                            nowdb_expr_t expr) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "updXNode with %d\n", nowdb_expr_type(expr));
+	switch(nowdb_expr_type(expr)) {
+	case NOWDB_EXPR_CONST: return NOWDB_OK;
+	case NOWDB_EXPR_OP: 
+		for(int i=0; i<NOWDB_EXPR_TOOP(expr)->args; i++) {
+			err = updXNode(vrow, cnt, off,
+			  NOWDB_EXPR_TOOP(expr)->argv[i]);
+			if (err != NOWDB_OK) return err;
+		}
+		return NOWDB_OK;
+
+	case NOWDB_EXPR_FIELD: 
+		fprintf(stderr, "FIELD with %d\n", NOWDB_EXPR_TOFIELD(expr)->off);
+		// if (NOWDB_EXPR_TOFIELD(expr)->off == NOWDB_OFF_VALUE) {
+	
+			err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
+			                            expr)->propid,cnt);
+			if (err != NOWDB_OK) return err;
+
+			*off=ROLESZ+KEYSZ*(*cnt-1);
+			NOWDB_EXPR_TOFIELD(expr)->off = *off;
+			fprintf(stderr, "%s has off %d\n", NOWDB_EXPR_TOFIELD(expr)->name, *off);
+		// } // what else?
+		break;
 	}
 	return NOWDB_OK;
 }
@@ -372,7 +410,7 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
 	nowdb_filter_show(fil, stderr); fprintf(stderr, "\n");
 	*/
 
-	err = copyNode(vrow, &cnt, &off, fil, &vrow->filter);
+	err = copyFNode(vrow, &cnt, &off, fil, &vrow->filter);
 	if (err != NOWDB_OK) return err;
 
 	vrow->np = (uint32_t)cnt;
@@ -384,16 +422,60 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
 }
 
 /* ------------------------------------------------------------------------
+ * Copy/Change Expression
+ * ------------------------------------------------------------------------
+ */
+/*
+static nowdb_err_t copyExpr(nowdb_vrow_t *vrow,
+                            nowdb_expr_t  expr) {
+	nowdb_err_t err;
+	int off=-1;
+	int cnt=0;
+
+	err = nowdb_expr_copy(expr, &vrow->expr);
+	if (err != NOWDB_OK) return err;
+
+	err = updXNode(vrow, &cnt, &off, vrow->expr);
+
+	vrow->np = (uint32_t)cnt;
+	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
+
+	return NOWDB_OK;
+}
+*/
+
+/* ------------------------------------------------------------------------
  * Create a vertex row for a given filter
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_vrow_create(nowdb_roleid_t role,
-                              nowdb_vrow_t **vrow,
-                              nowdb_filter_t *fil) {
+nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
+                                  nowdb_vrow_t **vrow,
+                                  nowdb_filter_t *fil) {
+	nowdb_err_t err;
+
+	if (fil  == NULL) INVALID("filter is NULL");
+
+	err = nowdb_vrow_new(role, vrow);
+	if (err != NOWDB_OK) return err;
+
+	err = copyFilter(*vrow, fil);
+	if (err != NOWDB_OK) {
+		nowdb_vrow_destroy(*vrow);
+		free(*vrow); *vrow = NULL;
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Create a vertex row for a given expression
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
+                           nowdb_vrow_t **vrow) {
 	nowdb_err_t err;
 
 	if (vrow == NULL) INVALID("vrow pointer is NULL");
-	if (fil  == NULL) INVALID("filter is NULL");
 
 	*vrow = calloc(1, sizeof(nowdb_vrow_t));
 	if (*vrow == NULL) {
@@ -433,14 +515,38 @@ nowdb_err_t nowdb_vrow_create(nowdb_roleid_t role,
 		return err;
 	}
 
-	err = copyFilter(*vrow, fil);
+	/*
+	err = copyExpr(*vrow, expr);
 	if (err != NOWDB_OK) {
 		nowdb_vrow_destroy(*vrow);
 		free(*vrow); *vrow = NULL;
 		return err;
 	}
+	*/
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * Add expression to an existing vrow
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_vrow_addExpr(nowdb_vrow_t *vrow, 
+                               nowdb_expr_t  expr) {
+	nowdb_err_t err;
+	int off=-1;
+	int cnt=0;
+
+	cnt = (int)vrow->np;
+
+	err = updXNode(vrow, &cnt, &off, expr);
+	if (err != NOWDB_OK) return err;
+
+	vrow->np = (uint32_t)cnt;
+	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
+
+	return NOWDB_OK;
+}
+
 
 /* ------------------------------------------------------------------------
  * Destroy the vertex row
@@ -463,6 +569,10 @@ void nowdb_vrow_destroy(nowdb_vrow_t *vrow) {
 		nowdb_filter_destroy(vrow->filter);
 		free(vrow->filter); vrow->filter = NULL;
 	} 
+	if (vrow->expr != NULL) {
+		nowdb_expr_destroy(vrow->expr);
+		free(vrow->expr); vrow->expr = NULL;
+	} 
 }
 
 /* ------------------------------------------------------------------------
@@ -479,6 +589,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	*added = 0;
 
 	// not our kind
+	// be careful: for joins, we have to relax that
 	if (vertex->role != vrow->role) return NOWDB_OK;
 
 	// find offset in propmap
@@ -519,6 +630,29 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	}
 	*added=1;
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Check for complete vertex
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
+                                 uint32_t     *size,
+                                 char        **row) {
+	ts_algo_list_node_t *node;
+	vrow_t *v;
+
+	if (vrow->ready->len == 0) return 0;
+
+	*size = vrow->size;
+	node = vrow->ready->head;
+	v = node->cont;
+	*row = v->row;
+	v->row = NULL;
+	ts_algo_list_remove(vrow->ready, node);
+	free(node); destroyVRow(v);
+		
+	return 1;
 }
 
 /* ------------------------------------------------------------------------

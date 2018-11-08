@@ -1241,6 +1241,30 @@ static inline nowdb_err_t getConstValue(uint16_t typ,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get vertex field
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
+                                         nowdb_expr_t       *exp,
+                                         nowdb_model_vertex_t *v,
+                                         nowdb_ast_t      *field) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	err = nowdb_model_getPropByName(scope->model,
+	                                   v->roleid,
+	                            field->value, &p);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_expr_newVertexField(exp, field->value,
+	                             v->roleid, p->propid);
+	if (err != NOWDB_OK) return err;
+	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
+	fprintf(stderr, "prop %p.%s has type %u\n", *exp, p->name, NOWDB_EXPR_TOFIELD(*exp)->type);
+	return NOWDB_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Get fields for projection, grouping and ordering 
  * -----------------------------------------------------------------------
@@ -1255,7 +1279,10 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	nowdb_ast_t *field;
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_expr_t exp;
+	nowdb_type_t typ;
 	int off=-1;
+	void *value;
+
 
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
@@ -1281,19 +1308,25 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
-			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
+			fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 			// flags = NOWDB_FIELD_AGG;
 
 			err = makeFun(trg, field, aggs);
 			if (err != NOWDB_OK) break;
-		}
-		if (field->ntype == NOWDB_AST_VALUE) {
-			err = nowdb_expr_newConstant(&exp, field->value,
-			                   nowdb_ast_type(field->stype));
+
+		} else if (field->ntype == NOWDB_AST_VALUE) {
+			typ = nowdb_ast_type(field->stype);
+			err = getConstValue(typ, field->value, &value);
 			if (err != NOWDB_OK) break;
 
-			// fprintf(stderr, "type: %d\n", field->vtype);
+			err = nowdb_expr_newConstant(&exp, value, typ);
+			if (err != NOWDB_OK) break;
+
+			// fprintf(stderr, "type: %d / %d\n",
+			//        field->vtype, field->stype);
+
+			free(value);
 
 		} else {
 			/* we need to distinguish the target! */
@@ -1308,8 +1341,9 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 			} else if (trg->stype == NOWDB_AST_TYPE) {
 				// get roleid and propid 
-				err = nowdb_expr_newVertexField(&exp, field->value, 0, 0);
+				err = getVertexField(scope, &exp, v, field);
 				if (err != NOWDB_OK) break;
+				fprintf(stderr, "TYPE: %u\n", NOWDB_EXPR_TOFIELD(exp)->type);
 			} else {
 				/*
 				fprintf(stderr, "STYPE: %d\n",

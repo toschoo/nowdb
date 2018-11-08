@@ -448,7 +448,7 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 
 static inline uint32_t getSize(nowdb_type_t t, void *val) {
 	switch(t) {
-	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val);
+	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val)+1;
 	case NOWDB_TYP_BOOL: return 1;
 	case NOWDB_TYP_NOTHING: return 0;
 	default: return 8;
@@ -469,7 +469,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *cnt, char *ok) {
 	nowdb_err_t err;
 	void *val=NULL;
-	nowdb_type_t t;
+	nowdb_type_t typ;
+	char t;
 	uint32_t s=0;
 
 	ROWNULL();
@@ -489,13 +490,14 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	}
 	for(int i=row->cur; i<row->sz; i++) {
 		err = nowdb_expr_eval(row->fields[i], &row->eval,
-		                                   src, &t, &val);
+		                                 src, &typ, &val);
 		if (err != NOWDB_OK) return err;
 
 		if (*osz + 1 >= sz) {
 			row->cur = i; *full=1;
 			return NOWDB_OK;
 		}
+		t = (char)typ;
 		memcpy(buf+(*osz), &t, 1); (*osz)++;
 		s = getSize(t, val);
 		if (*osz + s >= sz) {
@@ -503,6 +505,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			return NOWDB_OK;
 		}
 		memcpy(buf+(*osz), val, s); *osz += s;
+		// fprintf(stderr, "%u: %s\n", t, (char*)val);
 
 		/*
 		if (row->fields[i].target == NOWDB_TARGET_NULL) {

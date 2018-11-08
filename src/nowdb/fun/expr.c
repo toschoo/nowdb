@@ -38,6 +38,15 @@ typedef struct {
 	((dummy_t*)x)
 
 /* -----------------------------------------------------------------------
+ * Get expression type
+ * -----------------------------------------------------------------------
+ */
+int nowdb_expr_type(nowdb_expr_t expr) {
+	if (expr == NULL) return -1;
+	return EXPR(expr)->etype;
+}
+
+/* -----------------------------------------------------------------------
  * Create expression
  * -----------------------------------------------------------------------
  */
@@ -76,7 +85,7 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->target = NOWDB_TARGET_VERTEX;
-	FIELD(*expr)->off = -1;
+	FIELD(*expr)->off = NOWDB_OFF_PROP;
 	FIELD(*expr)->role = role;
 	FIELD(*expr)->propid = propid;
 	FIELD(*expr)->pk = 0;
@@ -104,8 +113,23 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 
 	CONST(*expr)->etype = NOWDB_EXPR_CONST;
 	CONST(*expr)->type = type;
-	CONST(*expr)->value = value;
 
+	if (type == NOWDB_TYP_TEXT) {
+		CONST(*expr)->value = strdup(value);
+		if (CONST(*expr)->value == NULL) {
+			NOMEM("allocating value");
+			free(*expr); *expr = NULL;
+			return err;
+		}
+	} else {
+		CONST(*expr)->value = malloc(8);
+		if (CONST(*expr)->value == NULL) {
+			NOMEM("allocating value");
+			free(*expr); *expr = NULL;
+			return err;
+		}
+		memcpy(CONST(*expr)->value, value, 8);
+	}
 	return NOWDB_OK;
 }
 
@@ -269,14 +293,9 @@ void nowdb_expr_destroy(nowdb_expr_t expr) {
 
 static void destroyVertexList(ts_algo_list_t *vm) {
 	ts_algo_list_node_t *run;
-	nowdb_vertex_helper_t *v;
 
 	for(run=vm->head; run!=NULL; run=run->nxt) {
-		v = run->cont;
-		if (v->p != NULL) {
-			free(v->p); v->p = NULL;
-		}
-		free(v);
+		free(run->cont);
 	}
 	ts_algo_list_destroy(vm);
 }
@@ -301,14 +320,19 @@ void nowdb_eval_destroy(nowdb_eval_t *eval) {
 }
 
 static nowdb_err_t copyField(nowdb_field_t *src,
-                             nowdb_expr_t  *trg) 
-{
+                             nowdb_expr_t  *trg)  {
+	nowdb_err_t err;
+
 	if (src->target == NOWDB_TARGET_EDGE) {
 		return nowdb_expr_newEdgeField(trg, src->off); 	
 	} else {
-		return nowdb_expr_newVertexField(trg, src->name,
-		                                      src->role,
-		                                      src->propid); 	
+		err = nowdb_expr_newVertexField(trg, src->name,
+		                                     src->role,
+		                                     src->propid);
+		if (err != NOWDB_OK) return err;
+		FIELD(*trg)->type = src->type;
+		fprintf(stderr, "copy: %u -> %u\n", src->type, FIELD(*trg)->type);
+		return NOWDB_OK;
 	}
 }
 
@@ -431,10 +455,13 @@ static inline nowdb_err_t findVertex(nowdb_eval_t *hlp,char *src) {
 	ts_algo_list_node_t *run;
 	nowdb_vertex_helper_t *vm;
 
+	if (hlp->cv != NULL &&
+	    hlp->cv->v->roleid == *(nowdb_roleid_t*)src) return NOWDB_OK;
+
 	for(run=hlp->vm->head; run!=NULL; run=run->nxt) {
 		v = run->cont;
 		if (vm->v->roleid == *(nowdb_roleid_t*)src &&
-		    (vm->p->propid == *(nowdb_roleid_t*)(src+off))) {
+		    (vm->p->propid == *(nowdb_propid_t*)(src+off))) {
 			return NOWDB_OK;
 		}
 	}
@@ -443,21 +470,12 @@ static inline nowdb_err_t findVertex(nowdb_eval_t *hlp,char *src) {
 		NOMEM("allocating vertex helper");
 		return err;
 	}
-	// I need the property map 
-	if (hlp->p == NULL) {
-		row->p = calloc(row->sz, sizeof(nowdb_model_prop_t*));
-		if (row->p == NULL) {
-			NOMEM("allocating props");
-			return err;
-		}
-		for(int i=0;i<row->sz;i++) {
-			if (row->fields[i].name == NULL) continue;
-			err = nowdb_model_getPropByName(row->model,
-			                            row->v->roleid,
-			                       row->fields[i].name,
-                                                         row->p+i);
-			if (err != NOWDB_OK) return err;
-		}
+	if (row->fields[i].name == NULL) continue;
+		err = nowdb_model_getPropById(hlp->model,
+		                   *(nowdb_roleid_t*)src,
+		                   *(nowdb_propid_t*)(src+off),
+                                                        &vm->p);
+		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
 	*/
@@ -490,11 +508,11 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 #define HANDLETEXT(what) \
 	*t = (char)NOWDB_TYP_TEXT; \
 	if (hlp->needtxt) { \
-		err = getText(hlp, what, &field->text); \
+		err = getText(hlp, *what, &field->text); \
 		if (err != NOWDB_OK) return err; \
-		*res = hlp->text; \
+		*res = field->text; \
 	} else { \
-		*res=&what; \
+		*res=what; \
 	}
 
 /* ------------------------------------------------------------------------
@@ -522,7 +540,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	case NOWDB_OFF_ORIGIN:
 		if (hlp->ce->o->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->origin);
+			HANDLETEXT(&src->origin);
 		} else {
 			*t = NOWDB_TYP_UINT;
 			*res = &src->origin;
@@ -531,7 +549,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	case NOWDB_OFF_DESTIN:
 		if (hlp->ce->d->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->destin);
+			HANDLETEXT(&src->destin);
 		} else {
 			*t = NOWDB_TYP_UINT;
 			*res = &src->destin;
@@ -540,7 +558,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	case NOWDB_OFF_LABEL:
 		if (hlp->ce->e->label == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->label);
+			HANDLETEXT(&src->label);
 		} else {
 			*t = NOWDB_TYP_UINT;
 			*res = &src->label;
@@ -564,7 +582,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		switch(*t) {
 		case NOWDB_TYP_TEXT:
 			if (hlp->needtxt)  {
-				HANDLETEXT(*w);
+				HANDLETEXT(w);
 			}
 			break;
 
@@ -591,6 +609,17 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          char          *src,
                                          nowdb_type_t  *t,
                                          void         **res) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "by magic %p.type is now: %d\n", field, field->type);
+	*t = field->type;
+	if (*t == NOWDB_TYP_TEXT) {
+		fprintf(stderr, "getting text: %d/%lu\n", field->off, *(nowdb_key_t*)(src+field->off));
+		HANDLETEXT((nowdb_key_t*)(src+field->off));
+	} else {
+		fprintf(stderr, "getting raw value (%u) %d\n", *t, field->off);
+		*res = src+field->off;
+	}
 	return NOWDB_OK;
 }
 
@@ -622,15 +651,19 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 		if (err != NOWDB_OK) return err;
 		
 	} else {
+		/*
 		err = findVertex(hlp, row);
 		if (err != NOWDB_OK) return err;
+		*/
 
 		err = getVertexValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	}
 
+	/*
 	*typ = field->type;
 	*res = row+field->off;
+	*/
 
 	return NOWDB_OK;
 }
