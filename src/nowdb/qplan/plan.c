@@ -1087,14 +1087,13 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
  */
 static inline void destroyFieldList(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner, *tmp;
-	nowdb_field_t *f;
+	nowdb_expr_t exp;
 
 	if (list == NULL) return;
 	runner=list->head;
 	while(runner!=NULL) {
-		f = runner->cont;
-		if (f->name != NULL) free(f->name);
-		free(f);
+		exp = runner->cont;
+		nowdb_expr_destroy(exp); free(exp);
 		tmp = runner->nxt;
 		ts_algo_list_remove(list, runner);
 		free(runner); runner=tmp;
@@ -1251,11 +1250,11 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
                                     nowdb_ast_t     *ast,
                                     ts_algo_list_t **fields, 
                                     ts_algo_list_t **aggs) {
-	nowdb_bitmap8_t flags;
+	// nowdb_bitmap8_t flags;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_ast_t *field;
 	nowdb_model_vertex_t *v=NULL;
-	nowdb_field_t *f;
+	nowdb_expr_t exp;
 	int off=-1;
 
 	// get vertex type
@@ -1278,45 +1277,39 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		// fprintf(stderr, "%s\n", (char*)field->value);
 
-		flags = 0;
+		// flags = 0;
 
 		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
 			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
-			flags = NOWDB_FIELD_AGG;
+			// flags = NOWDB_FIELD_AGG;
 
 			err = makeFun(trg, field, aggs);
 			if (err != NOWDB_OK) break;
 		}
-
-		f = calloc(1, sizeof(nowdb_field_t));
-		if (f == NULL) {
-			NOMEM("allocating field");
-			break;
-		}
 		if (field->ntype == NOWDB_AST_VALUE) {
-			f->target = NOWDB_TARGET_NULL;
-			f->name = NULL;
-			f->off = -1;
-			f->typ = nowdb_ast_type(field->stype);
+			err = nowdb_expr_newConstant(&exp, field->value,
+			                   nowdb_ast_type(field->stype));
+			if (err != NOWDB_OK) break;
 
 			// fprintf(stderr, "type: %d\n", field->vtype);
-			err = getConstValue(f->typ, field->value,
-			                               &f->value);
-			if (err != NOWDB_OK) break;
 
 		} else {
 			/* we need to distinguish the target! */
 			if (trg->stype == NOWDB_AST_CONTEXT) {
-				f->target = NOWDB_TARGET_EDGE;
-				if (flags == 0) {
-					off = nowdb_edge_offByName(
-					              field->value);
+
+				off = nowdb_edge_offByName(field->value);
+				if (off < 0) {
+					INVALIDAST("unknown field name");
 				}
+				err = nowdb_expr_newEdgeField(&exp, off);
+				if (err != NOWDB_OK) break;
+
 			} else if (trg->stype == NOWDB_AST_TYPE) {
-				f->target = NOWDB_TARGET_VERTEX;
-				if (flags == 0) off = -1;
+				// get roleid and propid 
+				err = nowdb_expr_newVertexField(&exp, field->value, 0, 0);
+				if (err != NOWDB_OK) break;
 			} else {
 				/*
 				fprintf(stderr, "STYPE: %d\n",
@@ -1326,6 +1319,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 			}
 
 			/* name or offset */
+			/*
 			if (flags == 0 && off < 0) {
 				f->name = strdup(field->value);
 				if (f->name == NULL) {
@@ -1338,14 +1332,14 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 				f->off = (uint32_t)off;
 				f->name = NULL;
 			}
+			*/
 		}
 
-		f->flags = flags | NOWDB_FIELD_SELECT;
-		f->agg    = 0;
+		// f->flags = flags | NOWDB_FIELD_SELECT;
+		// f->agg    = 0;
 
-		if (ts_algo_list_append(*fields, f) != TS_ALGO_OK) {
-			if (f->name != NULL) free(f->name);
-			free(f);
+		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
+			nowdb_expr_destroy(exp); free(exp);
 			NOMEM("list.append");
 			break;
 		}
@@ -1365,6 +1359,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
  */
 static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
                                              ts_algo_list_t *sel) {
+	/*
 	ts_algo_list_node_t *grun, *srun;
 	nowdb_field_t *gf, *sf;
 
@@ -1393,6 +1388,7 @@ static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
 		if (sf->flags & NOWDB_FIELD_AGG) continue;
 		INVALIDAST("projection and grouping differ");
 	}
+	*/
 	return NOWDB_OK;
 }
 

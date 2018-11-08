@@ -10,6 +10,10 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/types/time.h>
+#include <nowdb/model/types.h>
+#include <nowdb/model/model.h>
+#include <nowdb/text/text.h>
+#include <nowdb/mem/ptlru.h>
 
 #include <tsalgo/list.h>
 
@@ -76,6 +80,92 @@ typedef struct {
  * Aggregate Expression
  * ------------------------------------------------------------------------
  */
+
+/* ------------------------------------------------------------------------
+ * Edge Model Helper
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_model_edge_t   *e;
+	nowdb_model_vertex_t *o;
+	nowdb_model_vertex_t *d;
+} nowdb_edge_helper_t;
+
+/* ------------------------------------------------------------------------
+ * Vertex Model Helper
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_model_vertex_t *v;
+	nowdb_model_prop_t   *p;
+} nowdb_vertex_helper_t;
+
+/* ------------------------------------------------------------------------
+ * Evaluation helper
+ * the models (v, p, e, o, d) shall be lists!
+ * one list for edge  : e, o, d
+ * one list for vertex: v, with a tree of p
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_model_t      *model; /* the model to use for evaluation   */
+	nowdb_text_t        *text; /* the text  to use for evaluation   */
+	nowdb_ptlru_t       *tlru; /* private text lru cache            */
+	ts_algo_list_t         em; /* edge model helper                 */
+	ts_algo_list_t         vm; /* vertex model helper (tree???)     */
+	nowdb_edge_helper_t   *ce; /* current edge helper               */
+	nowdb_vertex_helper_t *cv; /* currrent vertext helper           */
+	char            needtxt; /* we need to evaluate text          */
+} nowdb_eval_t;
+
+void nowdb_eval_destroy(nowdb_eval_t *eval);
+
+/* -----------------------------------------------------------------------
+ * Create expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
+
+nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
+                                      char      *propname,
+                                      nowdb_roleid_t role,
+                                      nowdb_key_t propid);
+
+nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
+                                   void         *value,
+                                   nowdb_type_t  type);
+
+nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t   *expr,
+                              uint32_t         fun,
+                              ts_algo_list_t  *ops);
+
+nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...);
+
+
+// newAgg
+
+/* -----------------------------------------------------------------------
+ * Destroy expression
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_destroy(nowdb_expr_t expr);
+
+/* -----------------------------------------------------------------------
+ * Copy expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
+                            nowdb_expr_t *trg);
+
+/* -----------------------------------------------------------------------
+ * Evaluate expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
+                            nowdb_eval_t *hlp,
+                            char         *row,
+                            nowdb_type_t *typ,
+                            void        **res);
 
 /* -----------------------------------------------------------------------
  * Conversions
@@ -151,51 +241,4 @@ typedef struct {
 #define NOWDB_EXPR_OP_LENGTH 10002
 #define NOWDB_EXPR_OP_STRCAT 10003
 #define NOWDB_EXPR_OP_POS    10004
-
-/* -----------------------------------------------------------------------
- * Create expression
- * -----------------------------------------------------------------------
- */
-nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
-
-nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
-                                      char      *propname,
-                                      nowdb_roleid_t role,
-                                      nowdb_key_t propid);
-
-nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
-                                   void         *value,
-                                   nowdb_type_t  type);
-
-nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t   *expr,
-                              uint32_t         fun,
-                              ts_algo_list_t  *ops);
-
-nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...);
-
-
-// newAgg
-
-/* -----------------------------------------------------------------------
- * Destroy expression
- * -----------------------------------------------------------------------
- */
-void nowdb_expr_destroy(nowdb_expr_t expr);
-
-/* -----------------------------------------------------------------------
- * Copy expression
- * -----------------------------------------------------------------------
- */
-nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
-                            nowdb_expr_t *trg);
-
-/* -----------------------------------------------------------------------
- * Evaluate expression
- * -----------------------------------------------------------------------
- */
-nowdb_err_t nowdb_expr_eval(nowdb_expr_t  expr,
-                            char         *row,
-                            nowdb_type_t *typ,
-                            void        **res);
-
 #endif
