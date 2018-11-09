@@ -1124,12 +1124,12 @@ static inline void destroyFunList(ts_algo_list_t *list) {
  */
 static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
                                   nowdb_ast_t     *fun,
-                                  ts_algo_list_t **aggs) {
+                                  nowdb_expr_t    *exp) {
+	/*
 	nowdb_ast_t *param;
 	nowdb_err_t err;
 	uint16_t off;
 	nowdb_content_t cont;
-	nowdb_fun_t *f;
 	uint32_t ftype;
 
 	if (*aggs == NULL) {
@@ -1149,7 +1149,7 @@ static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
 	} else if (cont == NOWDB_CONT_EDGE) {
 		off = nowdb_edge_offByName(param->value);
 	} else {
-		off = -1; /* get off by vertex */
+		off = -1; // get off by vertex
 	}
 
 	ftype = nowdb_fun_fromName(fun->value);
@@ -1169,10 +1169,7 @@ static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
 	if (err != NOWDB_OK) {
 		free(f); return err;
 	}
-	if (ts_algo_list_append(*aggs, f) != TS_ALGO_OK) {
-		NOMEM("list.append");
-		free(f); return err;
-	}
+	*/
 	return NOWDB_OK;
 }
 
@@ -1263,6 +1260,175 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 }
 
 /* -----------------------------------------------------------------------
+ * Predeclaration for recursive call
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t getExpr(nowdb_scope_t    *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t      *field,
+                           nowdb_expr_t      *expr,
+                           char               *agg);
+
+/* -----------------------------------------------------------------------
+ * Recursively get operator
+ * -----------------------------------------------------------------------
+ */
+#define DESTROYLIST(l) \
+	ts_algo_list_node_t *run, *tmp; \
+	run = l.head; \
+	while(run!=NULL) { \
+		nowdb_expr_destroy(run->cont); \
+		free(run->cont); \
+		tmp = run->nxt; \
+		free(run); \
+		run=tmp; \
+	}
+	
+static nowdb_err_t makeOp(nowdb_scope_t *scope,
+                          nowdb_model_vertex_t *v,
+                          nowdb_ast_t   *trg,
+                          nowdb_ast_t   *field,
+                          nowdb_expr_t  *expr,
+                          char          *agg) {
+	ts_algo_list_t ops;
+	nowdb_expr_t exp;
+	nowdb_err_t err;
+	nowdb_ast_t *o;
+	char *str;
+	int op;
+
+	str = field->value;
+	
+	op = nowdb_op_fromName(str);
+	if (op < 0) {
+		INVALIDAST("unknown operator");
+	}
+
+	// get operators
+	ts_algo_list_init(&ops);
+	o = nowdb_ast_param(field);
+	while (o != NULL) {
+		err = getExpr(scope, v, trg, o, &exp, agg);
+		if (err != NOWDB_OK) {
+			// destroy list and values, etc.
+			DESTROYLIST(ops);
+			return err;
+		}
+		if (ts_algo_list_append(&ops, exp) != TS_ALGO_OK) {
+			DESTROYLIST(ops);
+			nowdb_expr_destroy(exp); free(exp);
+			NOMEM("list.append");
+			return err;
+		}
+		o = nowdb_ast_param(o);
+	}
+
+	err = nowdb_expr_newOpL(expr, op, &ops);
+	if (err != NOWDB_OK) {
+		DESTROYLIST(ops);
+		return err;
+	}
+	ts_algo_list_destroy(&ops);
+	return NOWDB_OK;
+}
+#undef DESTROYLIST
+
+/* -----------------------------------------------------------------------
+ * Recursively get expression
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t getExpr(nowdb_scope_t    *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t      *field,
+                           nowdb_expr_t      *expr,
+                           char               *agg) {
+	nowdb_err_t err;
+	nowdb_type_t typ;
+	int off=-1;
+	void *value;
+
+	*agg = 0;
+
+	/* expression */
+	if (field->ntype == NOWDB_AST_FUN) {
+		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
+
+		// flags = NOWDB_FIELD_AGG;
+
+		// distinguish here between agg and ordinary function
+		err = makeFun(trg, field, expr);
+		if (err != NOWDB_OK) return err;
+
+	} else if (field->ntype == NOWDB_AST_OP) {
+
+		// fprintf(stderr, "OP: %s\n", (char*)field->value);
+
+		err = makeOp(scope, v, trg, field, expr, agg);
+		if (err != NOWDB_OK) return err;
+		
+
+	} else if (field->ntype == NOWDB_AST_VALUE) {
+		typ = nowdb_ast_type(field->stype);
+		err = getConstValue(typ, field->value, &value);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_expr_newConstant(expr, value, typ);
+		if (err != NOWDB_OK) return err;
+
+		// fprintf(stderr, "type: %d / %d\n",
+		//        field->vtype, field->stype);
+
+		free(value);
+
+	} else {
+		/* we need to distinguish the target! */
+		if (trg->stype == NOWDB_AST_CONTEXT) {
+
+			off = nowdb_edge_offByName(field->value);
+			if (off < 0) {
+				INVALIDAST("unknown field name");
+			}
+			err = nowdb_expr_newEdgeField(expr, off);
+			if (err != NOWDB_OK) return err;
+
+		} else if (trg->stype == NOWDB_AST_TYPE) {
+			// get roleid and propid 
+			err = getVertexField(scope, expr, v, field);
+			if (err != NOWDB_OK) return err;
+		} else {
+			/*
+			fprintf(stderr, "STYPE: %d\n",
+			trg->stype);
+			*/
+			INVALIDAST("unknown target");
+		}
+
+		/* name or offset */
+		/*
+		if (flags == 0 && off < 0) {
+			f->name = strdup(field->value);
+			if (f->name == NULL) {
+				NOMEM("allocating field name");
+				free(f); break;
+			}
+			if (v != NULL) f->roleid = v->roleid;
+			f->pk = 0;
+		} else {
+			f->off = (uint32_t)off;
+			f->name = NULL;
+		}
+		*/
+	}
+
+	// f->flags = flags | NOWDB_FIELD_SELECT;
+	// f->agg    = 0;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Get fields for projection, grouping and ordering 
  * -----------------------------------------------------------------------
  */
@@ -1273,13 +1439,10 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
                                     ts_algo_list_t **aggs) {
 	// nowdb_bitmap8_t flags;
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_ast_t *field;
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_expr_t exp;
-	nowdb_type_t typ;
-	int off=-1;
-	void *value;
-
+	nowdb_ast_t *field;
+	char agg;
 
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
@@ -1301,82 +1464,26 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		// fprintf(stderr, "%s\n", (char*)field->value);
 
-		// flags = 0;
-
-		/* expression */
-		if (field->ntype == NOWDB_AST_FUN) {
-			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
-
-			// flags = NOWDB_FIELD_AGG;
-
-			err = makeFun(trg, field, aggs);
-			if (err != NOWDB_OK) break;
-
-		} else if (field->ntype == NOWDB_AST_VALUE) {
-			typ = nowdb_ast_type(field->stype);
-			err = getConstValue(typ, field->value, &value);
-			if (err != NOWDB_OK) break;
-
-			err = nowdb_expr_newConstant(&exp, value, typ);
-			if (err != NOWDB_OK) break;
-
-			// fprintf(stderr, "type: %d / %d\n",
-			//        field->vtype, field->stype);
-
-			free(value);
-
-		} else {
-			/* we need to distinguish the target! */
-			if (trg->stype == NOWDB_AST_CONTEXT) {
-
-				off = nowdb_edge_offByName(field->value);
-				if (off < 0) {
-					INVALIDAST("unknown field name");
-				}
-				err = nowdb_expr_newEdgeField(&exp, off);
-				if (err != NOWDB_OK) break;
-
-			} else if (trg->stype == NOWDB_AST_TYPE) {
-				// get roleid and propid 
-				err = getVertexField(scope, &exp, v, field);
-				if (err != NOWDB_OK) break;
-			} else {
-				/*
-				fprintf(stderr, "STYPE: %d\n",
-				                   trg->stype);
-				*/
+		err = getExpr(scope, v, trg, field, &exp, &agg);
+		if (err != NOWDB_OK) break;
+		
+		if (agg) {
+			if (ts_algo_list_append(*aggs, exp) != TS_ALGO_OK) {
+				nowdb_expr_destroy(exp); free(exp);
+				NOMEM("list.append");
 				break;
 			}
-
-			/* name or offset */
-			/*
-			if (flags == 0 && off < 0) {
-				f->name = strdup(field->value);
-				if (f->name == NULL) {
-					NOMEM("allocating field name");
-					free(f); break;
-				}
-				if (v != NULL) f->roleid = v->roleid;
-				f->pk = 0;
-			} else {
-				f->off = (uint32_t)off;
-				f->name = NULL;
+		} else {
+			if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
+				nowdb_expr_destroy(exp); free(exp);
+				NOMEM("list.append");
+				break;
 			}
-			*/
 		}
-
-		// f->flags = flags | NOWDB_FIELD_SELECT;
-		// f->agg    = 0;
-
-		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
-			nowdb_expr_destroy(exp); free(exp);
-			NOMEM("list.append");
-			break;
-		}
-
 		field = nowdb_ast_field(field);
 	}
 	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: "); nowdb_err_print(err);
 		destroyFieldList(*fields);
 		free(*fields);
 	}

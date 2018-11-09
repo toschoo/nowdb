@@ -195,8 +195,9 @@
 #define NOWDB_AST_FIELD    10303
 #define NOWDB_AST_DECL     10305
 #define NOWDB_AST_OFF      10306
-#define NOWDB_AST_FUN      10307
-#define NOWDB_AST_PARAM    10308
+#define NOWDB_AST_OP       10307
+#define NOWDB_AST_FUN      10308
+#define NOWDB_AST_PARAM    10309
 
 /* -----------------------------------------------------------------------
  * Values
@@ -296,6 +297,12 @@ void nowdb_ast_setValueAsString(nowdb_ast_t *n, int vtype, void *val);
  * -----------------------------------------------------------------------
  */
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k);
+
+/* -----------------------------------------------------------------------
+ * Add a kid to this AST node as parameter
+ * -----------------------------------------------------------------------
+ */
+int nowdb_ast_addParam(nowdb_ast_t *n, nowdb_ast_t *k);
 
 /* -----------------------------------------------------------------------
  * Show the AST (prints to stdout)

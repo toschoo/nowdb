@@ -102,6 +102,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_DECL: ASTCALLOC(3);
 	case NOWDB_AST_OFF: ASTCALLOC(0);
 	case NOWDB_AST_FUN: ASTCALLOC(2);
+	case NOWDB_AST_OP: ASTCALLOC(2);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 	case NOWDB_AST_FETCH: ASTCALLOC(0);
@@ -165,6 +166,8 @@ static inline char *tellType(int ntype, int stype) {
 		}
 
 	case NOWDB_AST_FUN: return "function"; 
+	case NOWDB_AST_OP: return "operator"; 
+
 	case NOWDB_AST_VALUE:
 		switch(stype) {
 		case NOWDB_AST_TEXT: return "text value"; 
@@ -528,6 +531,7 @@ static inline int addsel(nowdb_ast_t *n,
 	case NOWDB_AST_FIELD: ADDKID(0);
 	case NOWDB_AST_VALUE: ADDKID(0);
 	case NOWDB_AST_FUN: ADDKID(0);
+	case NOWDB_AST_OP: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -662,6 +666,7 @@ static inline int addfield(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD: ADDKID(0);
 	case NOWDB_AST_FUN: ADDKID(0);
+	case NOWDB_AST_OP: ADDKID(0);
 	case NOWDB_AST_VALUE: ADDKID(0);
 	default: return -1;
 	}
@@ -675,12 +680,54 @@ static inline int addfun(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD:
-		if (k->stype == NOWDB_AST_PARAM) {
-			ADDKID(0);
-		} else {
-			ADDKID(1);
-		}
+	case NOWDB_AST_VALUE:
+	case NOWDB_AST_OP:
 	case NOWDB_AST_FUN: ADDKID(1);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to fun (parameter or function list)
+ * -----------------------------------------------------------------------
+ */
+static inline int addparfun(nowdb_ast_t *n,
+                            nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+	case NOWDB_AST_VALUE:
+	case NOWDB_AST_OP:
+	case NOWDB_AST_FUN: ADDKID(0);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to operator (operator list)
+ * -----------------------------------------------------------------------
+ */
+static inline int addop(nowdb_ast_t *n,
+                        nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+	case NOWDB_AST_VALUE:
+	case NOWDB_AST_FUN:
+	case NOWDB_AST_OP: ADDKID(1);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add parameter (operator list)
+ * -----------------------------------------------------------------------
+ */
+static inline int addparop(nowdb_ast_t *n,
+                           nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+	case NOWDB_AST_VALUE:
+	case NOWDB_AST_FUN:
+	case NOWDB_AST_OP: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -771,8 +818,21 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_FIELD: return addfield(n,k);
 	case NOWDB_AST_DECL: return ad3ecl(n,k);
 	case NOWDB_AST_FUN: return addfun(n,k);
+	case NOWDB_AST_OP: return addop(n,k);
 	case NOWDB_AST_VALUE: return addval(n,k);
 
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Add kid to any node as parameter
+ * -----------------------------------------------------------------------
+ */
+int nowdb_ast_addParam(nowdb_ast_t *n, nowdb_ast_t *k) {
+	switch(n->ntype) {
+	case NOWDB_AST_OP: return addparop(n,k);
+	case NOWDB_AST_FUN: return addparfun(n,k);
 	default: return -1;
 	}
 }
@@ -914,6 +974,7 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 	case NOWDB_AST_ORDER: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];
 	case NOWDB_AST_FUN: return ast->kids[1];
+	case NOWDB_AST_OP: return ast->kids[1];
 	case NOWDB_AST_VALUE: return ast->kids[0];
 	default: return NULL;
 	}
@@ -940,8 +1001,10 @@ nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
 	if (ast == NULL) return NULL;
 	switch(ast->ntype) {
 	case NOWDB_AST_FUN: return ast->kids[0];
+	case NOWDB_AST_OP: return ast->kids[0];
 	case NOWDB_AST_EXEC: return ast->kids[0];
 	case NOWDB_AST_VALUE: return ast->kids[0];
+	case NOWDB_AST_FIELD: return ast->kids[0];
 	default: return NULL;
 	}
 }

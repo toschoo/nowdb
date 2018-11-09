@@ -170,7 +170,14 @@ nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t   *expr,
                               uint32_t         fun,
                               ts_algo_list_t  *ops);
 
+nowdb_err_t nowdb_expr_newOpV(nowdb_expr_t  *expr,
+                              uint32_t        fun,
+                              uint32_t        len,
+                              nowdb_expr_t   *ops);
+
 nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...);
+
+int nowdb_op_fromName(char *op);
 
 
 // newAgg

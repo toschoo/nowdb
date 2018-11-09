@@ -313,7 +313,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		cur->recsize = 32;
 		store = &scope->vertices;
 
-		fprintf(stderr, "TARGET NAME: %s\n", rplan->name);
+		// fprintf(stderr, "TARGET NAME: %s\n", rplan->name);
 
 		if (rplan->name != NULL) {
 			err = nowdb_model_getVertexByName(scope->model,

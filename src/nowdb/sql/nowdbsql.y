@@ -9,14 +9,14 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
- * - expression in select and where
+ * - wexpression in select and where
  * - qualified names
  * - aliases
  * - joins
  * - NULL
  * - TRUE and FALSE
  * - alter
- * - insert and update
+ * - update and delete
  * - make load more versatile (csv, json, binary, avron)
  * - multi-line comments
  * ========================================================================
@@ -82,6 +82,9 @@
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
 
+%type wexpr {nowdb_ast_t*}
+%destructor wexpr {nowdb_ast_destroyAndFree($$);}
+
 %type sizing {nowdb_ast_t*}
 %destructor sizing {nowdb_ast_destroyAndFree($$);}
 
@@ -118,11 +121,8 @@
 %type field_list {nowdb_ast_t*}
 %destructor field_list {nowdb_ast_destroyAndFree($$);}
 
-%type pj_list {nowdb_ast_t*}
-%destructor pj_list {nowdb_ast_destroyAndFree($$);}
-
-%type pj {nowdb_ast_t*}
-%destructor pj {nowdb_ast_destroyAndFree($$);}
+%type expr_list {nowdb_ast_t*}
+%destructor expr_list {nowdb_ast_destroyAndFree($$);}
 
 %type val_list {nowdb_ast_t*}
 %destructor val_list {nowdb_ast_destroyAndFree($$);}
@@ -302,7 +302,7 @@ misc ::= CLOSE UINTEGER(I). {
 	NOWDB_SQL_MAKE_CLOSE(I);	
 }
 
-/* val_list shall be expression list! */
+/* val_list shall be wexpression list! */
 misc ::= EXECUTE IDENTIFIER(I) LPAR RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,NULL);
 }
@@ -667,7 +667,7 @@ projection_clause(P) ::= SELECT STAR. {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_STAR);
 }
 
-projection_clause(P) ::= SELECT pj_list(F). {
+projection_clause(P) ::= SELECT expr_list(F). {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
 	NOWDB_SQL_ADDKID(P,F);
 }
@@ -700,34 +700,74 @@ order_clause(O) ::= ORDER BY field_list(F). {
 }
 
 /* ------------------------------------------------------------------------
- * projectable
+ * expression
  * ------------------------------------------------------------------------
  */
-pj_list(L) ::= pj(F). {
+%left OR.
+%left AND.
+%right NOT.
+/* %left IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
+%left GT LE LT GE.
+/* %right ESCAPE. */
+/* %left BITAND BITOR LSHIFT RSHIFT. */
+%left PLUS MINUS.
+%left STAR DIV PER.
+%left POW.
+/* %left CONCAT. */
+/* %left COLLATE. */
+/* %right BITNOT. */
+
+expr_list(L) ::= expr(F). {
 	NOWDB_SQL_CHECKSTATE();
 	L = F;
 }
  
-pj_list(L) ::= pj(F) COMMA pj_list(PL). {
+expr_list(L) ::= expr(F) COMMA expr_list(PL). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADDKID(F,PL);
 	L = F;
 }
 
-pj(P) ::= field(F). {
+expr(P) ::= field(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
 }
 
-pj(P) ::= value(V). {
+expr(P) ::= value(V). {
         P=V;
 }
 
-pj(P) ::= fun(F). {
+expr(P) ::= LPAR expr(E) RPAR. {
+	P=E;
+}
+
+expr(P) ::= expr(O1) PLUS|MINUS(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= expr(O1) STAR|DIV|PER(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= expr(O1) POW(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= fun(F). {
 	P=F;
 }
 
+/* distinguish AGG and FUN! */
 fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
@@ -738,9 +778,9 @@ fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 	nowdb_ast_t *a;
-	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, NOWDB_AST_PARAM);
+	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, L);
-	NOWDB_SQL_ADDKID(F,a);
+	NOWDB_SQL_ADDPARAM(F,a);
 }
 
 fun(F) ::= IDENTIFIER(I) LPAR RPAR. {
@@ -790,43 +830,39 @@ table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * where clause and expr
+ * where clause and wexpr
  * ------------------------------------------------------------------------
  */
-%left OR.
-%left AND.
-%right NOT.
-
-where_clause(W) ::= WHERE expr(E). {
+where_clause(W) ::= WHERE wexpr(E). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&W, NOWDB_AST_WHERE, 0);
 	NOWDB_SQL_ADDKID(W, E);
 }
 
-expr(E) ::= condition(C). {
+wexpr(E) ::= condition(C). {
 	E=C;
 }
 
-expr(E) ::= expr(A) AND expr(B). {
+wexpr(E) ::= wexpr(A) AND wexpr(B). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_AND, 0);
 	NOWDB_SQL_ADDKID(E,A);
 	NOWDB_SQL_ADDKID(E,B);
 }
 
-expr(E) ::= expr(A) OR expr(B). {
+wexpr(E) ::= wexpr(A) OR wexpr(B). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OR, 0);
 	NOWDB_SQL_ADDKID(E,A);
 	NOWDB_SQL_ADDKID(E,B);
 }
 
-expr(E) ::= LPAR expr(A) RPAR. {
+wexpr(E) ::= LPAR wexpr(A) RPAR. {
 	NOWDB_SQL_CHECKSTATE();
 	E=A;
 } 
 
-expr(E) ::= NOT expr(A). {
+wexpr(E) ::= NOT wexpr(A). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 0);
 	NOWDB_SQL_ADDKID(E,A);
