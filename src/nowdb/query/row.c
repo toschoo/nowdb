@@ -43,9 +43,9 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->eval.needtxt = 1;
 	row->cur = 0;
 	row->fur = 0;
-	row->vcur = 0;
+	// row->vcur = 0;
 	row->dirty = 0;
-	row->vrtx = NULL;
+	// row->vrtx = NULL;
 
 	row->fields = NULL;
 
@@ -60,17 +60,19 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 		NOMEM("allocating fields");
 		return err;
 	}
+	/*
 	row->vrtx = calloc(row->sz, sizeof(nowdb_vertex_t));
 	if (row->vrtx == NULL) {
 		NOMEM("allocating vertex memory");
 		free(row->fields); row->fields = NULL;
 		return err;
 	}
+	*/
 	row->eval.tlru = calloc(1, sizeof(nowdb_ptlru_t));
 	if (row->eval.tlru == NULL) {
 		NOMEM("allocating text lru");
 		free(row->fields); row->fields = NULL;
-		free(row->vrtx); row->vrtx = NULL;
+		// free(row->vrtx); row->vrtx = NULL;
 		return err;
 	}
 	err = nowdb_ptlru_init(row->eval.tlru, 100000);
@@ -127,9 +129,11 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 		}
 		free(row->fields); row->fields = NULL;
 	}
+	/*
 	if (row->vrtx != NULL) {
 		free(row->vrtx); row->vrtx = NULL;
 	}
+	*/
 	nowdb_eval_destroy(&row->eval);
 	
 }
@@ -476,36 +480,37 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	ROWNULL();
 
 	*full=0;
-	*ok = 0;
-	*cnt = 0;
+	*ok  =0;
+	*cnt =0;
+
+	// we still need to write the linebreak
+	// of the previous row
 	if (row->cur == 0 && row->dirty) {
 		if ((*osz)+1 < sz) {
 			buf[*osz] = '\n';
 			(*osz)++;
 			row->dirty = 0;
-			// fprintf(stderr, "dirty love\n");
 			(*cnt)++; *ok=1;
 			return NOWDB_OK;
 		}
 	}
+
+	// project the fields
 	for(int i=row->cur; i<row->sz; i++) {
 		err = nowdb_expr_eval(row->fields[i], &row->eval,
 		                                 src, &typ, &val);
 		if (err != NOWDB_OK) return err;
 
-		if (*osz + 1 >= sz) {
-			row->cur = i; *full=1;
-			return NOWDB_OK;
-		}
 		t = (char)typ;
-		memcpy(buf+(*osz), &t, 1); (*osz)++;
 		s = getSize(t, val);
-		if (*osz + s >= sz) {
+		if (*osz + s + 1 >= sz) {
 			row->cur = i; *full=1;
 			return NOWDB_OK;
 		}
-		memcpy(buf+(*osz), val, s); *osz += s;
-		// fprintf(stderr, "%u: %s\n", t, (char*)val);
+		memcpy(buf+(*osz), &t, 1); (*osz)++;
+		memcpy(buf+(*osz), val, s); *osz+=s;
+
+		// fprintf(stderr, "%d: %u\n", i, *osz);
 
 		/*
 		if (row->fields[i].target == NOWDB_TARGET_NULL) {
@@ -575,6 +580,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		}
 	}
 	*/
+	// terminate line
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';
 		(*osz)++;

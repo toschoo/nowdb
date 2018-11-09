@@ -367,7 +367,6 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
                             nowdb_expr_t expr) {
 	nowdb_err_t err;
 
-	fprintf(stderr, "updXNode with %d\n", nowdb_expr_type(expr));
 	switch(nowdb_expr_type(expr)) {
 	case NOWDB_EXPR_CONST: return NOWDB_OK;
 	case NOWDB_EXPR_OP: 
@@ -379,7 +378,6 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 		return NOWDB_OK;
 
 	case NOWDB_EXPR_FIELD: 
-		fprintf(stderr, "FIELD with %d\n", NOWDB_EXPR_TOFIELD(expr)->off);
 		// if (NOWDB_EXPR_TOFIELD(expr)->off == NOWDB_OFF_VALUE) {
 	
 			err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
@@ -388,7 +386,6 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 
 			*off=ROLESZ+KEYSZ*(*cnt-1);
 			NOWDB_EXPR_TOFIELD(expr)->off = *off;
-			fprintf(stderr, "%s has off %d\n", NOWDB_EXPR_TOFIELD(expr)->name, *off);
 		// } // what else?
 		break;
 	}
@@ -629,6 +626,42 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 		}
 	}
 	*added=1;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Filter vrow with np > 0
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t oneProp(void *ignore, const void *one,
+                                            const void *two) 
+{
+	return (VROW(two)->np > 0);
+}
+
+/* ------------------------------------------------------------------------
+ * Force completion of all rows
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *run;
+
+	// filter all with np > 0
+	for(run=vrow->ready->head; run!=NULL;) {
+		if (run->nxt == NULL) break;
+	}
+	if (ts_algo_tree_filter(vrow->vrtx, vrow->ready,
+	                  NULL, &oneProp) != TS_ALGO_OK) 
+	{
+		NOMEM("tree.filter");
+		return err;
+	}
+	if (run==NULL) run=vrow->ready->head;
+	for(;run!=NULL;run=run->nxt) {
+		ts_algo_tree_delete(vrow->vrtx, run->cont);
+	}
+	fprintf(stderr, "ready: %d\n", vrow->ready->len);
 	return NOWDB_OK;
 }
 

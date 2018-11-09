@@ -76,6 +76,12 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
                            char           *added);
 
 /* ------------------------------------------------------------------------
+ * Force completion of all leftovers
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow);
+
+/* ------------------------------------------------------------------------
  * Try to evaluate
  * ---------------
  * vertices that are complete

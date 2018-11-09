@@ -331,7 +331,6 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 		                                     src->propid);
 		if (err != NOWDB_OK) return err;
 		FIELD(*trg)->type = src->type;
-		fprintf(stderr, "copy: %u -> %u\n", src->type, FIELD(*trg)->type);
 		return NOWDB_OK;
 	}
 }
@@ -611,13 +610,10 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          void         **res) {
 	nowdb_err_t err;
 
-	fprintf(stderr, "by magic %p.type is now: %d\n", field, field->type);
 	*t = field->type;
 	if (*t == NOWDB_TYP_TEXT) {
-		fprintf(stderr, "getting text: %d/%lu\n", field->off, *(nowdb_key_t*)(src+field->off));
 		HANDLETEXT((nowdb_key_t*)(src+field->off));
 	} else {
-		fprintf(stderr, "getting raw value (%u) %d\n", *t, field->off);
 		*res = src+field->off;
 	}
 	return NOWDB_OK;

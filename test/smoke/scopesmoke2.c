@@ -570,11 +570,13 @@ int main() {
 	}
 
 	// test count with fullscan
+	/*
 	fprintf(stderr, "COUNT W FULLSCAN\n");
 	for(int i=0; i<1; i++) {
 		READRESULT("select count(*) from sales", 0);
 		CHECKRESULT(5, 0, 0, 0);
 	}
+	*/
 
 	// test index
 	fprintf(stderr, "INDEX SEARCH\n");
@@ -592,19 +594,23 @@ int main() {
 	}
 
 	// test count with group
+	/*
 	fprintf(stderr, "COUNT with GROUP\n");
 	for(int i=0; i<1; i++) {    // RANGE SCAN
 		READRESULT(SQLCOUNT, 2); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
+	*/
 
 	// test count without group
+	/*
 	fprintf(stderr, "COUNT W/O GROUP\n");
 	for(int i=0; i<ITER; i++) {
 		GETRANDOM(5, &o, &d, &tp, SQLCIDX, &sql);
 		READRESULT(sql, 0);
 		CHECKRESULT(5, o, d, tp);
 	}
+	*/
 
 	// KRANGE
 	fprintf(stderr, "KRANGE\n");

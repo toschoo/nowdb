@@ -347,8 +347,6 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 	nowdb_err_t err;
 	char *tmp;
 
-	fprintf(stderr, "VALUE %s: %u\n", prop->name, prop->value);
-
 	*value = malloc(sizeof(nowdb_key_t));
 	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		             FALSE, OBJECT, "allocating buffer");
@@ -1261,7 +1259,6 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	                             v->roleid, p->propid);
 	if (err != NOWDB_OK) return err;
 	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
-	fprintf(stderr, "prop %p.%s has type %u\n", *exp, p->name, NOWDB_EXPR_TOFIELD(*exp)->type);
 	return NOWDB_OK;
 }
 
@@ -1308,7 +1305,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		/* expression */
 		if (field->ntype == NOWDB_AST_FUN) {
-			fprintf(stderr, "FUN: %s\n", (char*)field->value);
+			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 			// flags = NOWDB_FIELD_AGG;
 
@@ -1343,7 +1340,6 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 				// get roleid and propid 
 				err = getVertexField(scope, &exp, v, field);
 				if (err != NOWDB_OK) break;
-				fprintf(stderr, "TYPE: %u\n", NOWDB_EXPR_TOFIELD(exp)->type);
 			} else {
 				/*
 				fprintf(stderr, "STYPE: %d\n",

@@ -99,7 +99,13 @@ nowdb_err_t nowdb_err_cascade(nowdb_err_t error,
 		nowdb_err_release(cause);
 		return NOWDB_OK;
 	}
-	error->cause = cause;
+	if (error == cause) return error;
+	if (error->cause == cause) return error;
+	if (error->cause != NOWDB_OK) {
+		return nowdb_err_cascade(error->cause, cause);
+	} else {
+		error->cause = cause;
+	}
 	return error;
 }
 

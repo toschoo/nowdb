@@ -1,0 +1,6 @@
+bug in scopetool
+----------------
+1) when "row_print" needs to start with a ';'
+   it is omitted.
+   Solution: leftovers like in client tool!
+2) make the output real csv (for strings containing ';')

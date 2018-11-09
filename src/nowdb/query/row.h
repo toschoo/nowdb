@@ -46,10 +46,10 @@ typedef struct {
 	uint32_t             sz; /* number of fields                  */
 	uint32_t            cur; /* current field                     */
 	uint32_t            fur; /* current function field            */
-	uint32_t           vcur; /* current vertex field              */
+	// uint32_t           vcur; /* current vertex field              */
 	uint32_t          dirty; /* we are in the middle of something */
 	nowdb_expr_t    *fields; /* the projection fields             */
-	nowdb_vertex_t    *vrtx; /* remember what we have seen        */
+	// nowdb_vertex_t    *vrtx; /* remember what we have seen        */
 	nowdb_eval_t       eval; /* evaluation helper                 */
 	/*
 	nowdb_model_t    *model; // the model to use for projection   

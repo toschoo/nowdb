@@ -1236,7 +1236,9 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 		cur->off = 0;
 		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
 	}
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		return nowdb_err_cascade(err, old);
+	}
 
 	err = nowdb_row_project(cur->row, g,
 	                          cur->tmp2,
@@ -1340,7 +1342,12 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
-		/* add vertex property to prow */
+		// add vertex property to prow
+		// NOTE:
+		// as soon as we *always* use the internal index
+		// for vertices, we can enforce completion, i.e.
+		// we complete the previous vertex when we see
+		// a new vid
 		if (cur->prow != NULL) {
 			err = nowdb_vrow_add(cur->prow,
 			              (nowdb_vertex_t*)(src+cur->off), &x);
