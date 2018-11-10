@@ -1087,10 +1087,13 @@ static inline void destroyFieldList(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner, *tmp;
 	nowdb_expr_t exp;
 
+	fprintf(stderr, "destroying field list\n");
 	if (list == NULL) return;
 	runner=list->head;
 	while(runner!=NULL) {
+		fprintf(stderr, "destroying...\n");
 		exp = runner->cont;
+		fprintf(stderr, "destroying %d\n", nowdb_expr_type(exp));
 		nowdb_expr_destroy(exp); free(exp);
 		tmp = runner->nxt;
 		ts_algo_list_remove(list, runner);
@@ -1132,14 +1135,6 @@ static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
 	nowdb_content_t cont;
 	uint32_t ftype;
 
-	if (*aggs == NULL) {
-		*aggs = calloc(1, sizeof(ts_algo_list_t));
-		if (*aggs == NULL) {
-			NOMEM("allocating list");
-			return err;
-		}
-		ts_algo_list_init(*aggs);
-	}
 
 	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
 	                                       NOWDB_CONT_VERTEX;
@@ -1432,6 +1427,34 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
  * Get fields for projection, grouping and ordering 
  * -----------------------------------------------------------------------
  */
+static inline nowdb_err_t filterAgg(nowdb_expr_t expr,
+                                    ts_algo_list_t *l) {
+	nowdb_err_t          err;
+	ts_algo_list_t       tmp;
+	ts_algo_list_node_t *run;
+	nowdb_agg_t         *agg;
+
+	ts_algo_list_init(&tmp);
+	err = nowdb_expr_filter(expr, NOWDB_EXPR_AGG, &tmp);
+	if (err != NOWDB_OK) return err;
+
+	for(run=tmp.head; run!=NULL; run=run->nxt) {
+		agg = run->cont;
+		fprintf(stderr, "appending %d\n", ((nowdb_fun_t*)agg->agg)->fun);
+		if (ts_algo_list_append(l, agg->agg) != TS_ALGO_OK) {
+			ts_algo_list_destroy(&tmp);
+			NOMEM("list.append");
+			return err;
+		}
+	}
+	ts_algo_list_destroy(&tmp);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Get fields for projection, grouping and ordering 
+ * -----------------------------------------------------------------------
+ */
 static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
                                     nowdb_ast_t     *trg,
                                     nowdb_ast_t     *ast,
@@ -1443,6 +1466,9 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	nowdb_expr_t exp;
 	nowdb_ast_t *field;
 	char agg;
+	char dagg=0;
+
+	fprintf(stderr, "GET FIELDS for %d\n", ast->ntype);
 
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
@@ -1456,36 +1482,49 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 		NOMEM("allocating list");
 		return err;
 	}
-
 	ts_algo_list_init(*fields);
 
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		// fprintf(stderr, "%s\n", (char*)field->value);
+		fprintf(stderr, "%s\n", (char*)field->value);
 
 		err = getExpr(scope, v, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
 		if (agg) {
-			if (ts_algo_list_append(*aggs, exp) != TS_ALGO_OK) {
+			if (*aggs == NULL) {
+				*aggs = calloc(1, sizeof(ts_algo_list_t));
+				if (*aggs == NULL) {
+					NOMEM("allocating list");
+					break;
+				}
+				ts_algo_list_init(*aggs);
+				dagg=1;
+			}
+			err = filterAgg(exp, *aggs);
+			if (err != NOWDB_OK) {
 				nowdb_expr_destroy(exp); free(exp);
-				NOMEM("list.append");
 				break;
 			}
-		} else {
-			if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
-				nowdb_expr_destroy(exp); free(exp);
-				NOMEM("list.append");
-				break;
-			}
+		}
+		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
+			nowdb_expr_destroy(exp); free(exp);
+			NOMEM("list.append");
+			break;
 		}
 		field = nowdb_ast_field(field);
 	}
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: "); nowdb_err_print(err);
+
 		destroyFieldList(*fields);
-		free(*fields);
+		free(*fields); *fields=NULL;
+
+		if (dagg) {
+			destroyFunList(*aggs);
+			free(*aggs); *aggs=NULL;
+		}
 	}
 	return err;
 }
@@ -1496,36 +1535,23 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
  */
 static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
                                              ts_algo_list_t *sel) {
-	/*
 	ts_algo_list_node_t *grun, *srun;
-	nowdb_field_t *gf, *sf;
+	nowdb_expr_t gf, sf;
 
 	srun = sel->head;
 	for(grun=grp->head; grun != NULL; grun=grun->nxt) {
 		if (srun == NULL) INVALIDAST("projection incomplete");
 		gf = grun->cont;
 		sf = srun->cont;
-		if (gf->name != NULL) {
-			if (sf->name == NULL) {
-				INVALIDAST("projection and grouping differ");
-			}
-			if (strcmp(gf->name, sf->name) != 0) {
-				INVALIDAST("projection and grouping differ");
-			}
-		} else if (sf->name != NULL) {
-			INVALIDAST("projection and grouping differ");
-
-		} else if (gf->off != sf->off) {
+		if (!nowdb_expr_equal(gf, sf)) {
 			INVALIDAST("projection and grouping differ");
 		}
 		srun = srun->nxt;
 	}
 	for (;srun != NULL; srun=srun->nxt) {
-		sf = srun->cont;
-		if (sf->flags & NOWDB_FIELD_AGG) continue;
+		if (nowdb_expr_has(srun->cont, NOWDB_EXPR_AGG)) continue;
 		INVALIDAST("projection and grouping differ");
 	}
-	*/
 	return NOWDB_OK;
 }
 
@@ -1965,6 +1991,7 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 	runner = plan->head;
 	while(runner!=NULL) {
 		node = runner->cont;
+		fprintf(stderr, "destroying node [%d]\n", node->ntype);
 		if (node->load != NULL) {
 			if (cont && node->ntype == NOWDB_PLAN_FILTER) {
 				nowdb_filter_destroy(node->load);

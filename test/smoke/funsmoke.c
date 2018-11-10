@@ -310,12 +310,7 @@ int testFun(uint32_t ftype,
 	nowdb_err_t  err;
 	int mx;
 
-	fun = calloc(1, sizeof(nowdb_fun_t));
-	if (fun == NULL) {
-		fprintf(stderr, "out-of-mem\n");
-		return -1;
-	}
-	err = nowdb_fun_init(fun, ftype,
+	err = nowdb_fun_new(&fun, ftype,
 	                NOWDB_CONT_EDGE,
 	            off, 8, dtype, init);
 	if (err != NOWDB_OK) {

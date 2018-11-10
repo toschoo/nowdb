@@ -30,8 +30,9 @@
 #define NOWDB_EXPR_CONST 1
 #define NOWDB_EXPR_FIELD 2
 #define NOWDB_EXPR_OP    3
-#define NOWDB_EXPR_FUN   4
-#define NOWDB_EXPR_AGG   5
+#define NOWDB_EXPR_USR   4
+#define NOWDB_EXPR_REF   5
+#define NOWDB_EXPR_AGG   6
 
 /* ------------------------------------------------------------------------
  * Expression is an anonymous type
@@ -108,9 +109,42 @@ typedef struct {
 	((nowdb_op_t*)x)
 
 /* ------------------------------------------------------------------------
+ * Reference Expression (???)
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	uint32_t    etype; /* expression type     */
+	nowdb_expr_t  ref; /* from where it comes */
+} nowdb_ref_t;
+
+/* ------------------------------------------------------------------------
+ * Convert expression to ref
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_EXPR_TOREF(x) \
+	((nowdb_ref_t*)x)
+
+/* ------------------------------------------------------------------------
+ * Anonymous aggregate
+ * ------------------------------------------------------------------------
+ */
+typedef struct nowdb_fun_t* nowdb_aggfun_t;
+
+/* ------------------------------------------------------------------------
  * Aggregate Expression
  * ------------------------------------------------------------------------
  */
+typedef struct {
+	uint32_t  etype;    /* expression type     */
+	nowdb_aggfun_t agg; /* from where it comes */
+} nowdb_agg_t;
+
+/* ------------------------------------------------------------------------
+ * Convert expression to ref
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_EXPR_TOAGG(x) \
+	((nowdb_agg_t*)x)
 
 /* ------------------------------------------------------------------------
  * Edge Model Helper
@@ -149,38 +183,75 @@ typedef struct {
 	char            needtxt; /* we need to evaluate text          */
 } nowdb_eval_t;
 
+/* -----------------------------------------------------------------------
+ * Destroy evaluation helper
+ * -----------------------------------------------------------------------
+ */
 void nowdb_eval_destroy(nowdb_eval_t *eval);
 
 /* -----------------------------------------------------------------------
- * Create expression
+ * Create EdgeField expression
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
 
+/* -----------------------------------------------------------------------
+ * Create VertexField expression
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
                                       nowdb_key_t propid);
 
+/* -----------------------------------------------------------------------
+ * Create Constant expression
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
                                    void         *value,
                                    nowdb_type_t  type);
 
+/* -----------------------------------------------------------------------
+ * Create Operator expression (with arguments passed in as list)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t   *expr,
                               uint32_t         fun,
                               ts_algo_list_t  *ops);
 
+/* -----------------------------------------------------------------------
+ * Create Operator expression (with arguments passed in as argv)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOpV(nowdb_expr_t  *expr,
                               uint32_t        fun,
                               uint32_t        len,
                               nowdb_expr_t   *ops);
 
+/* -----------------------------------------------------------------------
+ * Create Operator expression (with arguments passed in as va_list)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...);
 
+/* -----------------------------------------------------------------------
+ * Create Reference expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newRef(nowdb_expr_t *expr, nowdb_expr_t ref);
+
+/* -----------------------------------------------------------------------
+ * Create Agg expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newAgg(nowdb_expr_t *expr, nowdb_aggfun_t agg);
+
+/* -----------------------------------------------------------------------
+ * Get operator code from name
+ * -----------------------------------------------------------------------
+ */
 int nowdb_op_fromName(char *op);
-
-
-// newAgg
 
 /* -----------------------------------------------------------------------
  * Destroy expression
@@ -194,6 +265,28 @@ void nowdb_expr_destroy(nowdb_expr_t expr);
  */
 nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
                             nowdb_expr_t *trg);
+
+/* -----------------------------------------------------------------------
+ * Two expressions are equivalent
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_equal(nowdb_expr_t one,
+                      nowdb_expr_t two);
+
+/* -----------------------------------------------------------------------
+ * Filter expressions of certain type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_filter(nowdb_expr_t   expr,
+                              uint32_t       type,
+                              ts_algo_list_t *res);
+
+/* -----------------------------------------------------------------------
+ * Has expressions of certain type
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_has(nowdb_expr_t   expr,
+                    uint32_t       type);
 
 /* -----------------------------------------------------------------------
  * Evaluate expression

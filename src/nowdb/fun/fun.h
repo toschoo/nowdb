@@ -55,6 +55,18 @@ typedef struct {
 } nowdb_fun_t;
 
 /* -----------------------------------------------------------------------
+ * Allocate and init function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
+                          uint32_t             type,
+                          nowdb_content_t     ctype,
+                          uint16_t            field,
+                          uint16_t            fsize,
+                          nowdb_type_t        dtype,
+                          nowdb_value_t       *init);
+
+/* -----------------------------------------------------------------------
  * Init already allocated function
  * -----------------------------------------------------------------------
  */

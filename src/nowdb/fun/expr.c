@@ -5,6 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/fun/expr.h>
+#include <nowdb/fun/fun.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -29,6 +30,15 @@ static char *OBJECT = "EXPR";
 
 #define OP(x) \
 	((nowdb_op_t*)x)
+
+#define REF(x) \
+	((nowdb_ref_t*)x)
+
+#define AGG(x) \
+	((nowdb_agg_t*)x)
+
+#define FUN(x) \
+	((nowdb_fun_t*)x)
 
 typedef struct {
 	uint32_t etype;
@@ -235,6 +245,44 @@ nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...) {
 }
 
 /* -----------------------------------------------------------------------
+ * Create Reference expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newRef(nowdb_expr_t *expr, nowdb_expr_t ref) {
+	nowdb_err_t err;
+
+	*expr = calloc(1,sizeof(nowdb_ref_t));
+	if (*expr == NULL)  {
+		NOMEM("allocating expression");
+		return err;
+	}
+
+	REF(*expr)->etype = NOWDB_EXPR_REF;
+	REF(*expr)->ref = ref;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Create Agg expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newAgg(nowdb_expr_t *expr, nowdb_aggfun_t agg) {
+	nowdb_err_t err;
+
+	*expr = calloc(1,sizeof(nowdb_agg_t));
+	if (*expr == NULL)  {
+		NOMEM("allocating expression");
+		return err;
+	}
+
+	AGG(*expr)->etype = NOWDB_EXPR_AGG;
+	AGG(*expr)->agg = agg;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Destroy Field
  * -----------------------------------------------------------------------
  */
@@ -287,6 +335,8 @@ void nowdb_expr_destroy(nowdb_expr_t expr) {
 		destroyConst(CONST(expr)); break;
 	case NOWDB_EXPR_OP:
 		destroyOp(OP(expr)); break;
+	case NOWDB_EXPR_REF: return;
+	case NOWDB_EXPR_AGG: return;
 	default: return;
 	}
 }
@@ -376,6 +426,22 @@ static nowdb_err_t copyOp(nowdb_op_t   *src,
 }
 
 /* -----------------------------------------------------------------------
+ * Copy reference
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t copyRef(nowdb_ref_t *src, nowdb_expr_t *trg) {
+	return nowdb_expr_newRef(trg, src->ref);
+}
+
+/* -----------------------------------------------------------------------
+ * Copy aggregate
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t copyAgg(nowdb_agg_t *src, nowdb_expr_t *trg) {
+	return nowdb_expr_newAgg(trg, src->agg);
+}
+
+/* -----------------------------------------------------------------------
  * Copy expression
  * -----------------------------------------------------------------------
  */
@@ -388,8 +454,141 @@ nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
 		return copyConst(CONST(src), trg);
 	case NOWDB_EXPR_OP:
 		return copyOp(OP(src), trg);
+	case NOWDB_EXPR_REF:
+		return copyRef(REF(src), trg);
+	case NOWDB_EXPR_AGG:
+		return copyAgg(AGG(src), trg);
 	default: INVALID("unknown expression type");
 	}
+}
+
+/* -----------------------------------------------------------------------
+ * Two field expressions are equivalent
+ * -----------------------------------------------------------------------
+ */
+static inline char fieldEqual(nowdb_field_t *one,
+                              nowdb_field_t *two) 
+{
+	if (one->target != two->target) return 0;
+
+	// different edges???
+	if (one->target == NOWDB_TARGET_EDGE) {
+		return (one->off  == two->off);
+	}
+	if (one->role != two->role) return 0;
+	if (strcasecmp(one->name, two->name) == 0) return 1;
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Two const expressions are equivalent
+ * -----------------------------------------------------------------------
+ */
+static inline char constEqual(nowdb_const_t *one,
+                              nowdb_const_t *two) 
+{
+	if (one->type != two->type) return 0;
+	if (one->value == NULL && two->value == NULL) return 1;
+	switch(one->type) {
+	case NOWDB_TYP_TEXT:
+		return (strcmp((char*)one->value, (char*)two->value) == 0);
+	case NOWDB_TYP_INT:
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_TIME:
+		return (*(uint64_t*)one->value == *(uint64_t*)two->value);
+
+	case NOWDB_TYP_UINT:
+		return (*(int64_t*)one->value == *(int64_t*)two->value);
+
+	case NOWDB_TYP_FLOAT:
+		return (*(double*)one->value == *(double*)two->value);
+
+	case NOWDB_TYP_BOOL:
+		return (*(char*)one->value == *(char*)two->value);
+
+	default: return 0;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Two op expressions are equivalent
+ * -----------------------------------------------------------------------
+ */
+static inline char opEqual(nowdb_op_t *one,
+                           nowdb_op_t *two) 
+{
+	if (one->fun != two->fun) return 0;
+	if (one->args != two->args) return 0;
+
+	for(int i=0; i<one->args; i++) {
+		if (!nowdb_expr_equal(one->argv[i],
+		                      two->argv[i])) return 0;
+	}
+	return 1;
+}
+
+/* -----------------------------------------------------------------------
+ * Two expressions are equivalent
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_equal(nowdb_expr_t one,
+                      nowdb_expr_t two) {
+
+	if (one == NULL && two == NULL) return 1;
+	else if (one == NULL || two == NULL) return 0;
+	if (EXPR(one)->etype != EXPR(two)->etype) return 0;
+
+	switch(EXPR(one)->etype) {
+	case NOWDB_EXPR_FIELD: return fieldEqual(FIELD(one), FIELD(two));
+	case NOWDB_EXPR_CONST: return constEqual(CONST(one), CONST(two));
+	case NOWDB_EXPR_REF: return (REF(one)->ref == REF(two)->ref);
+	case NOWDB_EXPR_AGG: return (AGG(one)->agg == AGG(two)->agg);
+	case NOWDB_EXPR_OP: return opEqual(OP(one), OP(two));
+	default: return 0;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Filter expressions of certain type
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_filter(nowdb_expr_t   expr,
+                              uint32_t       type,
+                              ts_algo_list_t *res) {
+	nowdb_err_t err;
+
+	if (EXPR(expr)->etype == type) {
+		if (ts_algo_list_append(res, expr) != TS_ALGO_OK) {
+			NOMEM("list.append");
+			return err;
+		}
+	} else if (EXPR(expr)->etype == NOWDB_EXPR_OP) {
+		for(int i=0;i<OP(expr)->args;i++) {
+			err = nowdb_expr_filter(OP(expr)->argv[i],
+			                               type, res);
+			if (err != NOWDB_OK) {
+				ts_algo_list_destroy(res);
+				ts_algo_list_init(res);
+				return err;
+			}
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Has expressions of certain type
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_has(nowdb_expr_t   expr,
+                    uint32_t       type) {
+	if (EXPR(expr)->etype == type) return 1;
+	if (EXPR(expr)->etype == NOWDB_EXPR_OP) {
+		for(int i=0;i<OP(expr)->args;i++) {
+			if (nowdb_expr_has(OP(expr)->argv[i], type)) return 1;
+		}
+	}
+	return 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -633,12 +832,6 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 
 	if (field->off < 0) INVALID("uninitialised expression");
 
-	// if hlp.needtxt
-	// then like projectEdge for edge
-	// for vertex: get the off and lookup
-	//             type in hlp.p
-	// else: as below!
-
 	if (field->target == NOWDB_TARGET_EDGE) {
 		err = findEdge(hlp, (nowdb_edge_t*)row);
 		if (err != NOWDB_OK) return err;
@@ -715,6 +908,24 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 }
 
 /* -----------------------------------------------------------------------
+ * Evaluate aggregate
+ * TODO:
+ * When we will have expressions within aggregates,
+ * this needds to be changed!!!
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t evalAgg(nowdb_agg_t  *agg,
+                           nowdb_eval_t *hlp,
+                           char         *row,
+                           nowdb_type_t *typ,
+                           void        **res) 
+{
+	*typ = FUN(agg->agg)->otype;
+	*res = &FUN(agg->agg)->r1;
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Evaluate expression
  * -----------------------------------------------------------------------
  */
@@ -736,6 +947,12 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 
 	case NOWDB_EXPR_OP:
 		return evalOp(OP(expr), hlp, row, typ, res);
+
+	case NOWDB_EXPR_REF:
+		return nowdb_expr_eval(REF(expr)->ref, hlp, row, typ, res);
+
+	case NOWDB_EXPR_AGG:
+		return evalAgg(AGG(expr), hlp, row, typ, res);
 
 	default:
 		INVALID("unknown expression type");
@@ -760,6 +977,8 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define REM(v0,v1,v2) \
 	v0 = v2 == 0 ? 0 : v1%v2;
 
+// distinguish types!!!
+// there are versions for double and long!
 #define POW(v0,v1,v2) \
 	v0 = pow(v1,v2);
 

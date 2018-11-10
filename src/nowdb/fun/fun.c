@@ -199,6 +199,32 @@ static inline void reset(nowdb_fun_t *fun) {
 }
 
 /* -----------------------------------------------------------------------
+ * Allocate and init function
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
+                          uint32_t             type,
+                          nowdb_content_t     ctype,
+                          uint16_t            field,
+                          uint16_t            fsize,
+                          nowdb_type_t        dtype,
+                          nowdb_value_t       *init) {
+	nowdb_err_t err;
+
+	*fun = calloc(1, sizeof(nowdb_fun_t));
+	if (*fun == NULL) {
+		NOMEM("allocating aggregate");
+		return err;
+	}
+	err = nowdb_fun_init(*fun, type, ctype, field, fsize, dtype, init);
+	if (err != NOWDB_OK) {
+		free(*fun); *fun=NULL;
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Init already allocated function
  * -----------------------------------------------------------------------
  */
