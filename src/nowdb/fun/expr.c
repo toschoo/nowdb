@@ -1255,13 +1255,17 @@ static inline nowdb_type_t evalType(uint32_t        fun,
 	}
 }
 
-int nowdb_op_fromName(char *op) {
+int nowdb_op_fromName(char *op, char *agg) {
+	*agg = 0;
 	if (strcmp(op, "+") == 0) return NOWDB_EXPR_OP_ADD;
 	if (strcmp(op, "-") == 0) return NOWDB_EXPR_OP_SUB;
 	if (strcmp(op, "*") == 0) return NOWDB_EXPR_OP_MUL;
 	if (strcmp(op, "/") == 0) return NOWDB_EXPR_OP_DIV;
 	if (strcmp(op, "%") == 0) return NOWDB_EXPR_OP_REM;
 	if (strcmp(op, "^") == 0) return NOWDB_EXPR_OP_POW;
-	return -1;
+
+	*agg = 1;
+
+	return nowdb_fun_fromName(op);
 }
 

@@ -21,17 +21,17 @@
 #define NOWDB_FUN_MANY  3
 #define NOWDB_FUN_TREE  4
 
-#define NOWDB_FUN_COUNT     10
-#define NOWDB_FUN_SUM       20
-#define NOWDB_FUN_PROD      30
-#define NOWDB_FUN_MAX       40
-#define NOWDB_FUN_MIN       50
-#define NOWDB_FUN_SPREAD    60
-#define NOWDB_FUN_AVG       70
-#define NOWDB_FUN_MEDIAN    80
-#define NOWDB_FUN_MODE      90
-#define NOWDB_FUN_STDDEV   100
-#define NOWDB_FUN_INTEGRAL 110
+#define NOWDB_FUN_COUNT     10000000
+#define NOWDB_FUN_SUM       20000000
+#define NOWDB_FUN_PROD      30000000
+#define NOWDB_FUN_MAX       40000000
+#define NOWDB_FUN_MIN       50000000
+#define NOWDB_FUN_SPREAD    60000000
+#define NOWDB_FUN_AVG       70000000
+#define NOWDB_FUN_MEDIAN    80000000
+#define NOWDB_FUN_MODE      90000000
+#define NOWDB_FUN_STDDEV   100000000
+#define NOWDB_FUN_INTEGRAL 110000000
 
 typedef struct {
 	uint32_t              fun; /* the function code             */
@@ -106,6 +106,6 @@ nowdb_err_t nowdb_fun_reduce(nowdb_fun_t *fun);
  * Function type from name
  * -----------------------------------------------------------------------
  */
-uint32_t nowdb_fun_fromName(const char *name);
+int nowdb_fun_fromName(const char *name);
 
 #endif

@@ -1123,9 +1123,10 @@ static inline void destroyFunList(ts_algo_list_t *list) {
 
 /* -----------------------------------------------------------------------
  * Make agg function
+ * shall be recursive (for future use with expressions)
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
+static inline nowdb_err_t makeAgg(nowdb_ast_t     *trg,
                                   nowdb_ast_t     *fun,
                                   nowdb_expr_t    *exp) {
 	/*
@@ -1284,21 +1285,13 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
                           nowdb_model_vertex_t *v,
                           nowdb_ast_t   *trg,
                           nowdb_ast_t   *field,
+                          int            op,
                           nowdb_expr_t  *expr,
                           char          *agg) {
 	ts_algo_list_t ops;
 	nowdb_expr_t exp;
 	nowdb_err_t err;
 	nowdb_ast_t *o;
-	char *str;
-	int op;
-
-	str = field->value;
-	
-	op = nowdb_op_fromName(str);
-	if (op < 0) {
-		INVALIDAST("unknown operator");
-	}
 
 	// get operators
 	ts_algo_list_init(&ops);
@@ -1330,6 +1323,26 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 #undef DESTROYLIST
 
 /* -----------------------------------------------------------------------
+ * Make function
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t makeFun(nowdb_scope_t *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t   *trg,
+                           nowdb_ast_t   *field,
+                           nowdb_expr_t  *expr,
+                           char          *agg) {
+	int op;
+
+	op = nowdb_op_fromName(field->value, agg);
+	if (op < 0) {
+		INVALIDAST("unknown operator");
+	}
+	if (*agg) return makeAgg(trg, field, expr);
+	return makeOp(scope, v, trg, field, op, expr, agg);
+}
+
+/* -----------------------------------------------------------------------
  * Recursively get expression
  * -----------------------------------------------------------------------
  */
@@ -1347,22 +1360,27 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 	*agg = 0;
 
 	/* expression */
-	if (field->ntype == NOWDB_AST_FUN) {
-		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
+	if (field->ntype == NOWDB_AST_FUN ||
+	    field->ntype == NOWDB_AST_OP) {
+
+		fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 		// flags = NOWDB_FIELD_AGG;
 
 		// distinguish here between agg and ordinary function
-		err = makeFun(trg, field, expr);
+		// err = makeFun(trg, field, expr);
+
+		err = makeFun(scope, v, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
 
+	/*
 	} else if (field->ntype == NOWDB_AST_OP) {
 
-		// fprintf(stderr, "OP: %s\n", (char*)field->value);
+		fprintf(stderr, "OP: %s\n", (char*)field->value);
 
 		err = makeOp(scope, v, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
-		
+	*/
 
 	} else if (field->ntype == NOWDB_AST_VALUE) {
 		typ = nowdb_ast_type(field->stype);
@@ -1489,6 +1507,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		fprintf(stderr, "%s\n", (char*)field->value);
 
+		exp = NULL; // testing
 		err = getExpr(scope, v, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
@@ -1508,6 +1527,13 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 				break;
 			}
 		}
+		
+		/* testing only! */
+		if (exp == NULL) {
+			field = nowdb_ast_field(field);
+			continue;
+		}
+		fprintf(stderr, "appending %d\n", nowdb_expr_type(exp));
 		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
 			nowdb_expr_destroy(exp); free(exp);
 			NOMEM("list.append");

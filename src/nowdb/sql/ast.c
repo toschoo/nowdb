@@ -741,6 +741,7 @@ static inline int addval(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_FIELD:
 	case NOWDB_AST_FUN:
+	case NOWDB_AST_OP:
 	case NOWDB_AST_VALUE: ADDKID(0);
 	default: return -1;
 	}

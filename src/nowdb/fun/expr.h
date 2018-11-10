@@ -251,7 +251,7 @@ nowdb_err_t nowdb_expr_newAgg(nowdb_expr_t *expr, nowdb_aggfun_t agg);
  * Get operator code from name
  * -----------------------------------------------------------------------
  */
-int nowdb_op_fromName(char *op);
+int nowdb_op_fromName(char *op, char *agg);
 
 /* -----------------------------------------------------------------------
  * Destroy expression

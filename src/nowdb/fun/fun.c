@@ -678,7 +678,7 @@ nowdb_err_t nowdb_fun_reduce(nowdb_fun_t *fun) {
  * Function type from name
  * -----------------------------------------------------------------------
  */
-uint32_t nowdb_fun_fromName(const char *name) {
+int nowdb_fun_fromName(const char *name) {
 	if (strcasecmp(name, "COUNT") == 0) return NOWDB_FUN_COUNT;
 	if (strcasecmp(name, "SUM") == 0) return NOWDB_FUN_SUM;
 	if (strcasecmp(name, "PROD") == 0) return NOWDB_FUN_PROD;
