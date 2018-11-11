@@ -902,8 +902,6 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	}
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
 	if (err != NOWDB_OK) return err;
-
-	fprintf(stderr, "%d: %u\n", op->fun, *typ);
 	*res=&op->res;
 	return NOWDB_OK;
 }

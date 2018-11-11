@@ -1129,7 +1129,7 @@ static nowdb_err_t makeAgg(nowdb_ast_t     *trg,
                            nowdb_expr_t    *exp) {
 	nowdb_ast_t *param;
 	nowdb_err_t err;
-	uint16_t off;
+	int16_t off;
 	nowdb_content_t cont;
 	nowdb_fun_t *f;
 
@@ -1325,12 +1325,16 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
                            nowdb_expr_t  *expr,
                            char          *agg) {
 	int op;
+	char x;
 
-	op = nowdb_op_fromName(field->value, agg);
+	op = nowdb_op_fromName(field->value, &x);
 	if (op < 0) {
 		INVALIDAST("unknown operator");
 	}
-	if (*agg) return makeAgg(trg, field, op, expr);
+	if (x) {
+		*agg=1;
+		return makeAgg(trg, field, op, expr);
+	}
 	return makeOp(scope, v, trg, field, op, expr, agg);
 }
 
@@ -1492,7 +1496,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		fprintf(stderr, "%s\n", (char*)field->value);
+		// fprintf(stderr, "%s\n", (char*)field->value);
 
 		agg = 0;
 		err = getExpr(scope, v, trg, field, &exp, &agg);
