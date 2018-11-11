@@ -767,20 +767,16 @@ expr(P) ::= fun(F). {
 	P=F;
 }
 
-/* distinguish AGG and FUN! */
 fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
-fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
+fun(F) ::= IDENTIFIER(I) LPAR expr(L) RPAR. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-	nowdb_ast_t *a;
-	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, L);
-	NOWDB_SQL_ADDPARAM(F,a);
+	NOWDB_SQL_ADDPARAM(F,L);
 }
 
 fun(F) ::= IDENTIFIER(I) LPAR RPAR. {

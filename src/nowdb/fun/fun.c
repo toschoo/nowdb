@@ -341,7 +341,7 @@ static inline void correcttype(nowdb_fun_t     *fun,
 {
 	if (fun->ctype == NOWDB_CONT_EDGE) {
 		if (field == NOWDB_OFF_WEIGHT) {
-			memcpy(mytype, record+NOWDB_OFF_WTYPE,
+			memcpy(mytype, record+NOWDB_OFF_WTYPE, // from model!
 				         sizeof(nowdb_type_t));
 		} else {
 			memcpy(mytype, record+NOWDB_OFF_WTYPE2,

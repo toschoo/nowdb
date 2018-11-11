@@ -673,7 +673,7 @@ static inline int addfield(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
- * Add kid to fun (parameter or function list)
+ * Add kid to fun (list)
  * -----------------------------------------------------------------------
  */
 static inline int addfun(nowdb_ast_t *n,
@@ -688,7 +688,7 @@ static inline int addfun(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
- * Add kid to fun (parameter or function list)
+ * Add kid to fun (parameter)
  * -----------------------------------------------------------------------
  */
 static inline int addparfun(nowdb_ast_t *n,
@@ -703,7 +703,7 @@ static inline int addparfun(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
- * Add kid to operator (operator list)
+ * Add kid to operator (list)
  * -----------------------------------------------------------------------
  */
 static inline int addop(nowdb_ast_t *n,
@@ -876,7 +876,10 @@ static void showme(nowdb_ast_t *n, char *before) {
 	}
 	sprintf(nxtbefore, "+--%s", before);
 	for(int i=0;i<n->nKids;i++) {
-		if (n->kids[i] != NULL) showme(n->kids[i],nxtbefore);
+		if (n->kids[i] != NULL) {
+			fprintf(stderr, "%s[%d]...\n", before, i);
+			showme(n->kids[i],nxtbefore);
+		}
 	}
 	free(nxtbefore);
 }
@@ -1003,6 +1006,22 @@ nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *ast) {
 	switch(ast->ntype) {
 	case NOWDB_AST_FUN: return ast->kids[0];
 	case NOWDB_AST_OP: return ast->kids[0];
+	case NOWDB_AST_EXEC: return ast->kids[0];
+	case NOWDB_AST_VALUE: return ast->kids[0];
+	case NOWDB_AST_FIELD: return ast->kids[0];
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get next param
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_nextParam(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_FUN: return ast->kids[1];
+	case NOWDB_AST_OP: return ast->kids[1];
 	case NOWDB_AST_EXEC: return ast->kids[0];
 	case NOWDB_AST_VALUE: return ast->kids[0];
 	case NOWDB_AST_FIELD: return ast->kids[0];

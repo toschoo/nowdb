@@ -125,6 +125,7 @@ void nowdb_group_destroy(nowdb_group_t *group) {
  */
 void nowdb_group_reset(nowdb_group_t *group) {
 	for(int i=0; i<group->lst; i++) {
+		// fprintf(stderr, "GROUP: resetting %d\n", i);
 		nowdb_fun_reset(group->fun[i]);
 	}
 	group->mapped = 0;
@@ -142,6 +143,7 @@ nowdb_err_t nowdb_group_map(nowdb_group_t *group,
 
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
+			// fprintf(stderr, "GROUP: mapping %d\n", i);
 			err = nowdb_fun_map(group->fun[i], record);
 			if (err != NOWDB_OK) return err;
 		}

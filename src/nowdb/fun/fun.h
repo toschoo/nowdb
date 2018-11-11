@@ -11,6 +11,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/index/index.h>
 #include <nowdb/mem/blist.h>
+#include <nowdb/fun/expr.h>
 
 #include <stdint.h>
 
@@ -77,6 +78,13 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
                            uint16_t            fsize,
                            nowdb_type_t        dtype,
                            nowdb_value_t       *init);
+
+/* -----------------------------------------------------------------------
+ * Convert fun to aggfun (for compatibility with expr)
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_FUN_AS_AGG(f) \
+	((nowdb_aggfun_t)f)
 
 /* -----------------------------------------------------------------------
  * Destroy

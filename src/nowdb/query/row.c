@@ -508,7 +508,9 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			return NOWDB_OK;
 		}
 		memcpy(buf+(*osz), &t, 1); (*osz)++;
-		memcpy(buf+(*osz), val, s); *osz+=s;
+		if (s > 0) {
+			memcpy(buf+(*osz), val, s); *osz+=s;
+		}
 
 		// fprintf(stderr, "%d: %u\n", i, *osz);
 

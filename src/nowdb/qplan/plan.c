@@ -1087,13 +1087,10 @@ static inline void destroyFieldList(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner, *tmp;
 	nowdb_expr_t exp;
 
-	fprintf(stderr, "destroying field list\n");
 	if (list == NULL) return;
 	runner=list->head;
 	while(runner!=NULL) {
-		fprintf(stderr, "destroying...\n");
 		exp = runner->cont;
-		fprintf(stderr, "destroying %d\n", nowdb_expr_type(exp));
 		nowdb_expr_destroy(exp); free(exp);
 		tmp = runner->nxt;
 		ts_algo_list_remove(list, runner);
@@ -1126,16 +1123,15 @@ static inline void destroyFunList(ts_algo_list_t *list) {
  * shall be recursive (for future use with expressions)
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t makeAgg(nowdb_ast_t     *trg,
-                                  nowdb_ast_t     *fun,
-                                  nowdb_expr_t    *exp) {
-	/*
+static nowdb_err_t makeAgg(nowdb_ast_t     *trg,
+                           nowdb_ast_t     *fun,
+                           int               op,
+                           nowdb_expr_t    *exp) {
 	nowdb_ast_t *param;
 	nowdb_err_t err;
 	uint16_t off;
 	nowdb_content_t cont;
-	uint32_t ftype;
-
+	nowdb_fun_t *f;
 
 	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
 	                                       NOWDB_CONT_VERTEX;
@@ -1148,24 +1144,16 @@ static inline nowdb_err_t makeAgg(nowdb_ast_t     *trg,
 		off = -1; // get off by vertex
 	}
 
-	ftype = nowdb_fun_fromName(fun->value);
-	if (ftype < 0) {
-		return nowdb_err_get(nowdb_err_fun,
-		        FALSE, OBJECT, fun->value);                                 
-	}
+	err = nowdb_fun_new(&f, op, cont, off,
+	                sizeof(nowdb_value_t),
+	             NOWDB_TYP_NOTHING, NULL);
+	if (err != NOWDB_OK) return err;
 
-	f = calloc(1, sizeof(nowdb_fun_t));
-	if (f == NULL) {
-		NOMEM("allocating function");
+	err = nowdb_expr_newAgg(exp, NOWDB_FUN_AS_AGG(f));
+	if (err != NOWDB_OK) {
+		nowdb_fun_destroy(f); free(f);
 		return err;
 	}
-	err = nowdb_fun_init(f, ftype, cont, off,
-	                   sizeof(nowdb_value_t),
-	                NOWDB_TYP_NOTHING, NULL);
-	if (err != NOWDB_OK) {
-		free(f); return err;
-	}
-	*/
 	return NOWDB_OK;
 }
 
@@ -1297,6 +1285,10 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 	ts_algo_list_init(&ops);
 	o = nowdb_ast_param(field);
 	while (o != NULL) {
+		/*
+		fprintf(stderr, "%s param %s\n", (char*)field->value,
+		                                 (char*)o->value);
+		*/
 		err = getExpr(scope, v, trg, o, &exp, agg);
 		if (err != NOWDB_OK) {
 			// destroy list and values, etc.
@@ -1309,7 +1301,7 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 			NOMEM("list.append");
 			return err;
 		}
-		o = nowdb_ast_param(o);
+		o = nowdb_ast_nextParam(o);
 	}
 
 	err = nowdb_expr_newOpL(expr, op, &ops);
@@ -1338,7 +1330,7 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
 	if (op < 0) {
 		INVALIDAST("unknown operator");
 	}
-	if (*agg) return makeAgg(trg, field, expr);
+	if (*agg) return makeAgg(trg, field, op, expr);
 	return makeOp(scope, v, trg, field, op, expr, agg);
 }
 
@@ -1357,13 +1349,11 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 	int off=-1;
 	void *value;
 
-	*agg = 0;
-
 	/* expression */
 	if (field->ntype == NOWDB_AST_FUN ||
 	    field->ntype == NOWDB_AST_OP) {
 
-		fprintf(stderr, "FUN: %s\n", (char*)field->value);
+		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
 		// flags = NOWDB_FIELD_AGG;
 
@@ -1458,7 +1448,6 @@ static inline nowdb_err_t filterAgg(nowdb_expr_t expr,
 
 	for(run=tmp.head; run!=NULL; run=run->nxt) {
 		agg = run->cont;
-		fprintf(stderr, "appending %d\n", ((nowdb_fun_t*)agg->agg)->fun);
 		if (ts_algo_list_append(l, agg->agg) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&tmp);
 			NOMEM("list.append");
@@ -1486,8 +1475,6 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 	char agg;
 	char dagg=0;
 
-	fprintf(stderr, "GET FIELDS for %d\n", ast->ntype);
-
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
 		err = nowdb_model_getVertexByName(scope->model,
@@ -1507,7 +1494,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		fprintf(stderr, "%s\n", (char*)field->value);
 
-		exp = NULL; // testing
+		agg = 0;
 		err = getExpr(scope, v, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
@@ -1529,11 +1516,6 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 		}
 		
 		/* testing only! */
-		if (exp == NULL) {
-			field = nowdb_ast_field(field);
-			continue;
-		}
-		fprintf(stderr, "appending %d\n", nowdb_expr_type(exp));
 		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
 			nowdb_expr_destroy(exp); free(exp);
 			NOMEM("list.append");
@@ -2017,7 +1999,7 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 	runner = plan->head;
 	while(runner!=NULL) {
 		node = runner->cont;
-		fprintf(stderr, "destroying node [%d]\n", node->ntype);
+		// fprintf(stderr, "destroying node [%d]\n", node->ntype);
 		if (node->load != NULL) {
 			if (cont && node->ntype == NOWDB_PLAN_FILTER) {
 				nowdb_filter_destroy(node->load);

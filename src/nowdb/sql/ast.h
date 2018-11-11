@@ -401,10 +401,16 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_value(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
- * Get field list from fun
+ * Get param list from fun
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get next param from param
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_nextParam(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get 'from' from the current AST node (DQL only)
