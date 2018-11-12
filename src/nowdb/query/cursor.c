@@ -1168,9 +1168,6 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		if (err != NOWDB_OK) return err;
 	}
 	memcpy(cur->tmp, src+cur->off, cur->recsize);
-	if (cur->tmp2 != NULL && src != cur->tmp2) {
-		memcpy(cur->tmp2, cur->tmp, cur->recsize);
-	}
 	return NOWDB_OK;
 }
 
@@ -1345,6 +1342,11 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			if (complete) {
 				cur->off+=recsz;
 				(*count)+=cc;
+
+				if (cur->tmp2 != NULL && src != cur->tmp2) {
+					memcpy(cur->tmp2, cur->tmp,
+					       cur->recsize);
+				}
 
 			/* this is an awful hack to force
 			 * a krange reader to present us
