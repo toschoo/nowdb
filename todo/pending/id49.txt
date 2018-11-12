@@ -1,0 +1,6 @@
+strftime and strptime for py
+----------------------------
+
+python strftime and strptime only allow microsecond precision.
+provide a C version for python that allows nanosecond precision.
+(Not having nanosecond precision is annoying for insert!)

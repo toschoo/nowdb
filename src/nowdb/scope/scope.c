@@ -1788,8 +1788,11 @@ static nowdb_err_t addPropids(nowdb_scope_t  *scope,
 		err = nowdb_text_insert(scope->text, prop->name,
 		                                  &prop->propid);
 		if (err != NOWDB_OK) break;
+		/*
+		fprintf(stderr, "add prop %s (=%lu) as %u\n",
+		         prop->name, prop->propid, prop->pos);
+		*/
 	}
-
 	return err;
 }
 

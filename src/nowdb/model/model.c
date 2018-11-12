@@ -119,6 +119,16 @@ static ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
 }
 
 /* ------------------------------------------------------------------------
+ * Sort by pos
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t sortByPos(void *one, void *two) {
+	if (PROP(one)->pos < PROP(two)->pos) return ts_algo_cmp_less;
+	if (PROP(one)->pos > PROP(two)->pos) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
  * compare vertex by id 
  * ------------------------------------------------------------------------
  */
@@ -427,9 +437,11 @@ static uint32_t computePropSize(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t *p;
 
+	/* size(prop) = strlen(name) + '\0' + propid (8)
+	 *            + roleid(4) + pos(4) + value(4) + pk(1) */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		p = runner->cont;
-		sz+=strlen(p->name) + 1 + 8 + 8 + 1;
+		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1;
 	}
 	return sz;
 }
@@ -480,6 +492,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		p = runner->cont;
 		memcpy(buf+sz, &p->propid, 8); sz+=8;
 		memcpy(buf+sz, &p->roleid, 4); sz+=4;
+		memcpy(buf+sz, &p->pos, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
 		memcpy(buf+sz, &p->pk, 1); sz+=1;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
@@ -487,7 +500,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: write property to buffer
+ * Helper: write edge to buffer
  * ------------------------------------------------------------------------
  */
 static void edge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
@@ -652,6 +665,7 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		}
 		memcpy(&p->propid, buf+off, 8); off+=8;
 		memcpy(&p->roleid, buf+off, 4); off+=4;
+		memcpy(&p->pos, buf+off, 4); off+=4;
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->pk, buf+off, 1); off+=1;
 		s = strnlen(buf+off, 4097);
@@ -1520,6 +1534,25 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: copy list
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copyList(ts_algo_list_t *src,
+                                   ts_algo_list_t *trg) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *run;
+
+	for(run=src->head; run!=NULL; run=run->nxt) {
+		if (ts_algo_list_append(trg, run->cont) != TS_ALGO_OK) {
+			NOMEM("list.append");
+			ts_algo_list_destroy(trg);
+			return err;
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Get all properties of vertex (roleid)
  * ------------------------------------------------------------------------
  */
@@ -1528,15 +1561,35 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
                                       ts_algo_list_t *props) {
 	nowdb_err_t err;
 	nowdb_model_prop_t tmp;
+	ts_algo_list_t unsorted, *sorted;
 
 	MODELNULL();
 	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                           FALSE, OBJECT, "list is NULL");
+
+	ts_algo_list_init(&unsorted);
 	tmp.roleid = roleid;
 
-	if (ts_algo_tree_filter(model->propById, props, &tmp,
+	// filter properties using tmp (i.e. roleid)
+	if (ts_algo_tree_filter(model->propById, &unsorted, &tmp,
 	                        propsByRoleid) != TS_ALGO_OK) {
 		NOMEM("tree.filter");
+		return err;
+	}
+
+	// sort properties by pos
+	sorted = ts_algo_list_sort(&unsorted, sortByPos);
+	ts_algo_list_destroy(&unsorted);
+	if (sorted == NULL) {
+		NOMEM("list.sort");
+		return err;
+	}
+
+	// copy sorted list to result list
+	err = copyList(sorted, props);
+	ts_algo_list_destroy(sorted); free(sorted);
+	if (err != NOWDB_OK) {
+		NOMEM("list.copy");
 		return err;
 	}
 	return NOWDB_OK;

@@ -5,12 +5,15 @@ create table sales;
 
 create type client (
     client_key uint primary key,
-    client_name text
+    client_name text,
+    client_birth time
 );
 
 create type product (
     prod_key uint primary key,
     prod_desc text,
+    prod_cat  uint,
+    prod_packing uint,
     prod_price float
 );
 

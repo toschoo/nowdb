@@ -8,14 +8,7 @@ import datetime
 import time
 import random
 
-MYRANGE = (6000000, 6999999)
-MYKEY = MYRANGE[0]
 ERR_DUP_KEY = 27
-
-def getNextKey():
-    global MYKEY
-    MYKEY += 1
-    return MYKEY
 
 # select primary key where primary key
 def vidwherevid(c):
@@ -249,12 +242,14 @@ def vidwhereatts(c):
 	found=False
         for row in cur:
             n+=1
+            print "%d" % row.field(0)
             if row.field(0) == k:
                found=True
         if n<1:
           raise db.TestFailed("nothing found")
         if not found:
-          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+          raise db.TestFailed("cannot find %d: %s (%f)" % 
+                          (k, ps[idx].desc, ps[idx].price))
 
     # non-key and non-key or non-key
     stmt = "select prod_key from product \
@@ -394,14 +389,16 @@ def attswhereatts(c):
     stmt = "select prod_desc, prod_cat from product \
              where prod_desc = '%s' \
                and prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    print stmt
     with c.execute(stmt) as cur:
         if not cur.ok():
-          raise db.TestFailed("found nothing")
+            raise db.TestFailed("cursor not ok: %d/%s" % 
+                             (cur.code(), cur.details()))
         n=0
         for row in cur:
             n+=1
         if n<1:
-          raise db.TestFailed("found nothing")
+          raise db.TestFailed("found nothing for %d/%s" % (ps[idx].key,ps[idx].desc))
 
     # prod_desc, prod_key where key and non-key
     stmt = "select prod_desc, prod_key from product \
@@ -507,7 +504,7 @@ def attswhere1att(c):
            raise db.TestFailed("found product %d more than once: %d" % (k, n))
 
     # 2 atts (including vid) where 2 conditions
-    stmt = "select prod_key, prod_desc from product \
+    stmt = "select prod_key, prod_price from product \
              where prod_price <= %f \
                and prod_price >= %f" % (ps[idx].price+0.0001, ps[idx].price-0.0001)
     with c.execute(stmt) as cur:
@@ -517,10 +514,10 @@ def attswhere1att(c):
         for row in cur:
             if k == row.field(0):
                n+=1
-               if row.field(1) != ps[idx].desc:
-                  raise db.TestFailed("wrong product %d: %f" % (k, row.field(0)))
-        if n != 1:
-           raise db.TestFailed("found product %d more than once: %d" % (k, n))
+               if row.field(1) != ps[idx].price:
+                  raise db.TestFailed("wrong price %d: %f" % (k, row.field(0)))
+        if n < 1:
+           raise db.TestFailed("did not find product %d" % k)
 
     # 2 atts where 2 conditions
     stmt = "select prod_desc, prod_price from product \
