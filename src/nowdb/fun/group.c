@@ -124,6 +124,7 @@ void nowdb_group_destroy(nowdb_group_t *group) {
  * -----------------------------------------------------------------------
  */
 void nowdb_group_reset(nowdb_group_t *group) {
+	if (group == NULL) return;
 	for(int i=0; i<group->lst; i++) {
 		// fprintf(stderr, "GROUP: resetting %d\n", i);
 		nowdb_fun_reset(group->fun[i]);
@@ -163,6 +164,7 @@ nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
 	if (group->reduced) return NOWDB_OK;
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
+			// fprintf(stderr, "GROUP: reduce%d\n", i);
 			err = nowdb_fun_reduce(group->fun[i]);
 			if (err != NOWDB_OK) return err;
 		}

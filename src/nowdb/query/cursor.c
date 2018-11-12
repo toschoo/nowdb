@@ -1407,6 +1407,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				cur->off+=recsz;
 				(*count)+=cc;
 
+				nowdb_group_reset(cur->group);
+
 			/* this is an awful hack to force
 			 * a krange reader to present us
 			 * the same record once again */
