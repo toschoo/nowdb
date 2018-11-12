@@ -155,7 +155,6 @@ void randomString(char *str, int max) {
 
 inline int prepareProducts(int halves) {
 	int x = halves * HALFVRTX;
-	int p = 0;
 
 	products = calloc(x, sizeof(vrtx_t));
 	if (products == NULL) {
@@ -163,8 +162,7 @@ inline int prepareProducts(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do p = rand()%(2*x); while(p==0);
-		products[i].id = p;
+		products[i].id = i;
 		randomString(products[i].str, 60);
 	}
 	return 0;
@@ -180,7 +178,7 @@ inline int prepareClients(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do c = rand()%(2*x); while(c==0);
+		c = i+1;
 		c += 9000000;
 		clients[i].id = c;
 		randomString(clients[i].str, 60);

@@ -1200,10 +1200,18 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		if (err != NOWDB_OK) return err;
 	}
 	memcpy(cur->tmp, src+cur->off, cur->recsize);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Finalise the group
+ * ------------------------------------------------------------------------
+ */
+static inline void finalizeGroup(nowdb_cursor_t *cur, char *src) {
 	if (cur->tmp2 != NULL && src != cur->tmp2) {
 		memcpy(cur->tmp2, cur->tmp, cur->recsize);
 	}
-	return NOWDB_OK;
+	nowdb_group_reset(cur->group);
 }
 
 /* ------------------------------------------------------------------------
@@ -1407,7 +1415,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				cur->off+=recsz;
 				(*count)+=cc;
 
-				nowdb_group_reset(cur->group);
+				// finalise the group (if there is one)
+				finalizeGroup(cur, src);
 
 			/* this is an awful hack to force
 			 * a krange reader to present us
