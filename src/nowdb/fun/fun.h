@@ -39,9 +39,10 @@ typedef struct {
 	int                 ftype; /* function type                 */
 	nowdb_content_t     ctype; /* content type                  */
 	uint32_t            recsz; /* record size                   */
-	uint16_t            field; /* identifies the field          */
-	uint16_t            fsize; /* field size                    */
-	nowdb_type_t        dtype; /* field type                    */
+	uint16_t            field; /* to be removed                 */
+	uint16_t            fsize; /* size of the field             */
+	nowdb_type_t        dtype; /* type of the field             */
+	nowdb_expr_t         expr; /* expression to evaluate        */
 	nowdb_type_t        otype; /* output type of that function  */
 	ts_algo_list_t       many; /* list of blocks                */
 	nowdb_value_t        init; /* initial value                 */
@@ -59,25 +60,21 @@ typedef struct {
  * Allocate and init function
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
-                          uint32_t             type,
-                          nowdb_content_t     ctype,
-                          uint16_t            field,
-                          uint16_t            fsize,
-                          nowdb_type_t        dtype,
-                          nowdb_value_t       *init);
+nowdb_err_t nowdb_fun_new(nowdb_fun_t    **fun,
+                          uint32_t        type,
+                          nowdb_content_t ctype,
+                          nowdb_expr_t    expr,
+                          nowdb_value_t  *init);
 
 /* -----------------------------------------------------------------------
  * Init already allocated function
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
-                           uint32_t             type,
-                           nowdb_content_t     ctype,
-                           uint16_t            field,
-                           uint16_t            fsize,
-                           nowdb_type_t        dtype,
-                           nowdb_value_t       *init);
+nowdb_err_t nowdb_fun_init(nowdb_fun_t      *fun,
+                           uint32_t         type,
+                           nowdb_content_t ctype,
+                           nowdb_expr_t     expr,
+                           nowdb_value_t   *init);
 
 /* -----------------------------------------------------------------------
  * Convert fun to aggfun (for compatibility with expr)
@@ -102,7 +99,9 @@ void nowdb_fun_reset(nowdb_fun_t *fun);
  * Collect
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_map(nowdb_fun_t *fun, void *record);
+nowdb_err_t nowdb_fun_map(nowdb_fun_t  *fun,
+                          nowdb_eval_t *hlp,
+                          void      *record);
 
 /* -----------------------------------------------------------------------
  * Reduce

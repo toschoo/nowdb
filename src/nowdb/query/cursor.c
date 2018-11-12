@@ -405,6 +405,8 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
 		if (err != NOWDB_OK) return err;
 	}
+	// if prow->np == 0:
+	// add primary key
 	return NOWDB_OK;
 }
 
@@ -999,9 +1001,19 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			if ((*cur)->rdr->type == NOWDB_READER_MERGE) {
 				err = nowdb_group_fromList(&(*cur)->group,
 				                               stp->load);
+				if ((*cur)->group != NULL &&
+				    (*cur)->row   != NULL) {
+					nowdb_group_setEval((*cur)->group,
+					              &(*cur)->row->eval);
+				}
 			} else {
 				err = nowdb_group_fromList(&(*cur)->nogrp,
 				                               stp->load);
+				if ((*cur)->nogrp != NULL &&
+				    (*cur)->row   != NULL) {
+					nowdb_group_setEval((*cur)->nogrp,
+					              &(*cur)->row->eval);
+				}
 			}
 			if (err != NOWDB_OK) {
 				nowdb_cursor_destroy(*cur);
@@ -1226,9 +1238,8 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
                                           uint32_t *osz,
                                         uint32_t *count) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_group_t *g;
+	nowdb_group_t *g=NULL;
 	char complete=0, cc=0, full=0;
-	char x;
 	
 	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
 
@@ -1239,10 +1250,14 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	if (cur->nogrp != NULL) {
 		g = cur->nogrp;
 		err = nowdb_group_reduce(cur->nogrp, ctype);
-	} else {
+	} else if (cur->group != NULL) {
 		g = cur->group;
 		cur->off = 0;
-		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+		// err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+		err = nowdb_group_map(cur->group, ctype,
+			                      cur->tmp2);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_group_reduce(cur->group, ctype);
 	}
 	if (err != NOWDB_OK) {
 		return nowdb_err_cascade(err, old);
@@ -1361,6 +1376,16 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			              (nowdb_vertex_t*)(src+cur->off), &x);
 			if (err != NOWDB_OK) return err;
 		}
+		if (cur->prow != NULL) {
+			if (!nowdb_vrow_complete(cur->prow,
+			                 &realsz, &realsrc)) 
+			{
+				cur->off += recsz; continue;
+			}
+		} else {
+			realsz = recsz;
+			realsrc = src+cur->off;
+		}
 
 		// review!!!
 		/* if keys-only, group or no-group aggregates */
@@ -1376,17 +1401,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				if (err != NOWDB_OK) return err;
 				if (!x) continue;
 			}
-		}
-
-		if (cur->prow != NULL) {
-			if (!nowdb_vrow_complete(cur->prow,
-			                 &realsz, &realsrc)) 
-			{
-				cur->off += recsz; continue;
-			}
-		} else {
-			realsz = recsz;
-			realsrc = src+cur->off;
 		}
 
 		/* copy the record to the output buffer */

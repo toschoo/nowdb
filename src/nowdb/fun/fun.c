@@ -194,6 +194,7 @@ static inline void reset(nowdb_fun_t *fun) {
 	fun->r4    = 0;
 	fun->off   = 0;
 	fun->first = 1;
+	fun->otype = 0;
 
 	memcpy(&fun->r1, &fun->init, fun->fsize);
 }
@@ -202,13 +203,11 @@ static inline void reset(nowdb_fun_t *fun) {
  * Allocate and init function
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
-                          uint32_t             type,
-                          nowdb_content_t     ctype,
-                          uint16_t            field,
-                          uint16_t            fsize,
-                          nowdb_type_t        dtype,
-                          nowdb_value_t       *init) {
+nowdb_err_t nowdb_fun_new(nowdb_fun_t     **fun,
+                          uint32_t         type,
+                          nowdb_content_t ctype,
+                          nowdb_expr_t     expr,
+                          nowdb_value_t   *init) {
 	nowdb_err_t err;
 
 	*fun = calloc(1, sizeof(nowdb_fun_t));
@@ -216,7 +215,7 @@ nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
 		NOMEM("allocating aggregate");
 		return err;
 	}
-	err = nowdb_fun_init(*fun, type, ctype, field, fsize, dtype, init);
+	err = nowdb_fun_init(*fun, type, ctype, expr, init);
 	if (err != NOWDB_OK) {
 		free(*fun); *fun=NULL;
 		return err;
@@ -228,13 +227,11 @@ nowdb_err_t nowdb_fun_new(nowdb_fun_t         **fun,
  * Init already allocated function
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
-                           uint32_t             type,
-                           nowdb_content_t     ctype,
-                           uint16_t            field,
-                           uint16_t            fsize,
-                           nowdb_type_t        dtype,
-                           nowdb_value_t       *init) {
+nowdb_err_t nowdb_fun_init(nowdb_fun_t      *fun,
+                           uint32_t         type,
+                           nowdb_content_t ctype,
+                           nowdb_expr_t     expr,
+                           nowdb_value_t   *init) {
 	nowdb_err_t err;
 
 	if (fun == NULL) INVALID("fun pointer is NULL");
@@ -244,17 +241,18 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 	fun->ftype = getFType(type);
 
 	// we need a valid field if ftype is not ZERO
-	if ((short)field  == -1 && fun->ftype != NOWDB_FUN_ZERO) {
+	if (expr == NULL && fun->ftype != NOWDB_FUN_ZERO) {
 		INVALID("no field for function that needs a field");
 	}
 
 	fun->fun   = type;
 	fun->ctype = ctype;
-	fun->field = field;
-	fun->fsize = fsize;
-	fun->dtype = dtype;
+	fun->expr  = expr;
+	fun->fsize = 8;
+	fun->dtype = 0;
 	fun->flist = NULL;
 
+	/*
 	if (dtype == NOWDB_TYP_NOTHING) {
 		switch(field) {
 		case NOWDB_OFF_TMSTMP:
@@ -266,6 +264,7 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 		}
 	}
 	fun->otype = getOType(fun);
+	*/
 
 	if (init != NULL) {
 		memcpy(&fun->init, init, fun->fsize);
@@ -285,7 +284,6 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t          *fun,
 		err = initFlist(fun);
 		if (err != NOWDB_OK) return err;
 	}
-
 	return NOWDB_OK;
 }
 
@@ -318,6 +316,9 @@ void nowdb_fun_destroy(nowdb_fun_t *fun) {
 	if (fun->flist != NULL) {
 		nowdb_blist_destroy(fun->flist);
 		free(fun->flist); fun->flist = NULL;
+	}
+	if (fun->expr != NULL) {
+		nowdb_expr_destroy(fun->expr); free(fun->expr);
 	}
 	destroyList(&fun->many);
 }
@@ -358,20 +359,29 @@ static inline void correcttype(nowdb_fun_t     *fun,
  * Helper: collect values
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t collect(nowdb_fun_t *fun, char *record) {
-	nowdb_err_t err;
+static inline nowdb_err_t collect(nowdb_fun_t  *fun,
+                                  nowdb_eval_t *hlp,
+                                  char      *record) {
+	nowdb_err_t  err;
 	nowdb_block_t *b;
+	void *value=NULL;
 
+	err = nowdb_expr_eval(fun->expr, hlp, record,
+	                     &fun->dtype, &value);
+	if (err != NOWDB_OK) return err;
+
+	/*
 	if (fun->dtype == NOWDB_TYP_NOTHING) {
 		correcttype(fun, fun->field, record, &fun->dtype);
 	}
+	*/
 	if (fun->many.len == 0 || fun->off >= BLOCKSIZE) {
 		err = nowdb_blist_give(fun->flist, &fun->many);
 		if (err != NOWDB_OK) return err;
 		fun->off = 0;
 	}
 	b = fun->many.head->cont;
-	memcpy(b->block+fun->off, record+fun->field, fun->fsize);
+	memcpy(b->block+fun->off, value, fun->fsize);
 	fun->off += fun->fsize;
 	b->sz = fun->off;
 	return NOWDB_OK;
@@ -393,56 +403,63 @@ static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
  * Helper: apply function
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t apply(nowdb_fun_t *fun,  int ftype,
-                                uint16_t field, char *record) {
+static inline nowdb_err_t apply(nowdb_fun_t *fun,     int ftype,
+                                nowdb_eval_t *hlp, char *record) {
 	nowdb_err_t err;
+	void  *value=NULL;
 
+	/*
 	if (fun->dtype == NOWDB_TYP_NOTHING) {
 		correcttype(fun, field, record, &fun->dtype);
 	}
+	*/
+
+	err = nowdb_expr_eval(fun->expr, hlp, record,
+	                     &fun->dtype, &value);
+	if (err != NOWDB_OK) return err;
 
 	switch(ftype) {
 	case NOWDB_FUN_SUM:
-		return nowadd(&fun->r1, record+field, fun->dtype);
+		return nowadd(&fun->r1, value, fun->dtype);
 	case NOWDB_FUN_PROD:
-		return nowmul(&fun->r1, record+field, fun->dtype);
+		return nowmul(&fun->r1, value, fun->dtype);
 	case NOWDB_FUN_MIN:
 		if (fun->first) {
-			memcpy(&fun->r1, record+field, fun->fsize);
+			memcpy(&fun->r1, value, fun->fsize);
 			return NOWDB_OK;
 		}
-		return nowmin(&fun->r1, record+field, fun->dtype);
+		return nowmin(&fun->r1, value, fun->dtype);
 	case NOWDB_FUN_MAX:
 		if (fun->first) {
-			memcpy(&fun->r1, record+field, fun->fsize);
+			memcpy(&fun->r1, value, fun->fsize);
 			return NOWDB_OK;
 		}
-		return nowmax(&fun->r1, record+field, fun->dtype);
+		return nowmax(&fun->r1, value, fun->dtype);
 
 	case NOWDB_FUN_SPREAD:
 		if (fun->first) {
-			memcpy(&fun->r1, record+field, fun->fsize);
-			memcpy(&fun->r2, record+field, fun->fsize);
+			memcpy(&fun->r1, value, fun->fsize);
+			memcpy(&fun->r2, value, fun->fsize);
 			return NOWDB_OK;
 		}
-		err = nowmax(&fun->r1, record+field, fun->dtype);
+		err = nowmax(&fun->r1, value, fun->dtype);
 		if (err != NOWDB_OK) return err;
-		return nowmin(&fun->r2, record+field, fun->dtype);
+		return nowmin(&fun->r2, value, fun->dtype);
 
 	case NOWDB_FUN_AVG:
 		fun->r2++;
-		return nowadd(&fun->r1, record+field, fun->dtype);
+		return nowadd(&fun->r1, value, fun->dtype);
 
 	case NOWDB_FUN_STDDEV:
-		now2float(record+field, record+field, fun->dtype);
+		now2float(value, value, fun->dtype);
 
-		err = nowsub(record+field, &fun->r2, NOWDB_TYP_FLOAT);
+		err = nowsub(value, &fun->r2, NOWDB_TYP_FLOAT);
 		if (err != NOWDB_OK) return err;
 
-		err = nowmul(record+field, record+field, NOWDB_TYP_FLOAT);
+		err = nowmul(value, value, NOWDB_TYP_FLOAT);
 		if (err != NOWDB_OK) return err;
 
-		return nowadd(&fun->r1, record+field, NOWDB_TYP_FLOAT);
+		return nowadd(&fun->r1, value, NOWDB_TYP_FLOAT);
 	
 	default: INVALID("function cannot be applied here");
 	}
@@ -452,14 +469,16 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun,  int ftype,
  * Map
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_fun_map(nowdb_fun_t *fun, void *record) {
+nowdb_err_t nowdb_fun_map(nowdb_fun_t  *fun,
+                          nowdb_eval_t *hlp,
+                          void      *record) {
 	nowdb_err_t err;
 	switch(fun->ftype) {
 	case NOWDB_FUN_ZERO: err = apply_(fun); break;
 	case NOWDB_FUN_ONE:
-		err = apply(fun, fun->fun, fun->field, record); break;
+		err = apply(fun, fun->fun, hlp, record); break;
 
-	case NOWDB_FUN_MANY: err = collect(fun, record); break;
+	case NOWDB_FUN_MANY: err = collect(fun, hlp, record); break;
 	case NOWDB_FUN_TREE:
 		err = nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                     "tree functions not implemented");
@@ -584,6 +603,10 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 static nowdb_err_t reduce(nowdb_fun_t *fun, uint32_t ftype) {
 	nowdb_err_t err;
 	double x,z,n;
+
+	if (fun->otype == 0) {
+		fun->otype = getOType(fun);
+	}
 
 	switch(ftype) {
 	case NOWDB_FUN_COUNT:

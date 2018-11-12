@@ -1118,45 +1118,6 @@ static inline void destroyFunList(ts_algo_list_t *list) {
 	}
 }
 
-/* -----------------------------------------------------------------------
- * Make agg function
- * shall be recursive (for future use with expressions)
- * -----------------------------------------------------------------------
- */
-static nowdb_err_t makeAgg(nowdb_ast_t     *trg,
-                           nowdb_ast_t     *fun,
-                           int               op,
-                           nowdb_expr_t    *exp) {
-	nowdb_ast_t *param;
-	nowdb_err_t err;
-	int16_t off;
-	nowdb_content_t cont;
-	nowdb_fun_t *f;
-
-	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
-	                                       NOWDB_CONT_VERTEX;
-	param = nowdb_ast_param(fun);
-	if (param == NULL) {
-		off = -1;
-	} else if (cont == NOWDB_CONT_EDGE) {
-		off = nowdb_edge_offByName(param->value);
-	} else {
-		off = -1; // get off by vertex
-	}
-
-	err = nowdb_fun_new(&f, op, cont, off,
-	                sizeof(nowdb_value_t),
-	             NOWDB_TYP_NOTHING, NULL);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_expr_newAgg(exp, NOWDB_FUN_AS_AGG(f));
-	if (err != NOWDB_OK) {
-		nowdb_fun_destroy(f); free(f);
-		return err;
-	}
-	return NOWDB_OK;
-}
-
 /* ------------------------------------------------------------------------
  * Get const value
  * ------------------------------------------------------------------------
@@ -1255,7 +1216,43 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            char               *agg);
 
 /* -----------------------------------------------------------------------
- * Recursively get operator
+ * Make agg function
+ * shall be recursive (for future use with expressions)
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t makeAgg(nowdb_scope_t *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t   *trg,
+                           nowdb_ast_t   *fun,
+                           int            op,
+                           nowdb_expr_t  *expr) {
+	nowdb_ast_t *param;
+	nowdb_err_t err;
+	nowdb_content_t cont;
+	nowdb_fun_t *f;
+	nowdb_expr_t myx=NULL;
+	char dummy;
+
+	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
+	                                       NOWDB_CONT_VERTEX;
+	param = nowdb_ast_param(fun);
+	if (param != NULL) {
+		err = getExpr(scope, v, trg, param, &myx, &dummy);
+		if (err != NOWDB_OK) return err;
+	}
+	err = nowdb_fun_new(&f, op, cont, myx, NULL);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_expr_newAgg(expr, NOWDB_FUN_AS_AGG(f));
+	if (err != NOWDB_OK) {
+		nowdb_fun_destroy(f); free(f);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper for makeOp
  * -----------------------------------------------------------------------
  */
 #define DESTROYLIST(l) \
@@ -1268,7 +1265,11 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 		free(run); \
 		run=tmp; \
 	}
-	
+
+/* -----------------------------------------------------------------------
+ * Recursively get operator
+ * -----------------------------------------------------------------------
+ */
 static nowdb_err_t makeOp(nowdb_scope_t *scope,
                           nowdb_model_vertex_t *v,
                           nowdb_ast_t   *trg,
@@ -1333,7 +1334,7 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
 	}
 	if (x) {
 		*agg=1;
-		return makeAgg(trg, field, op, expr);
+		return makeAgg(scope, v, trg, field, op, expr);
 	}
 	return makeOp(scope, v, trg, field, op, expr, agg);
 }

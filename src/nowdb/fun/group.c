@@ -28,6 +28,7 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
 	if (group == NULL) INVALID("group is NULL");
 	group->sz = sz;
 	group->lst = 0;
+	group->hlp = NULL;
 	group->mapped = 0;
 	group->reduced = 0;
 
@@ -103,6 +104,14 @@ nowdb_err_t nowdb_group_add(nowdb_group_t *group, nowdb_fun_t *fun)
 }
 
 /* -----------------------------------------------------------------------
+ * Set evaluation helper
+ * -----------------------------------------------------------------------
+ */
+void nowdb_group_setEval(nowdb_group_t *group, nowdb_eval_t *hlp) {
+	group->hlp = hlp;
+}
+
+/* -----------------------------------------------------------------------
  * Destroy
  * -----------------------------------------------------------------------
  */
@@ -145,7 +154,9 @@ nowdb_err_t nowdb_group_map(nowdb_group_t *group,
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
 			// fprintf(stderr, "GROUP: mapping %d\n", i);
-			err = nowdb_fun_map(group->fun[i], record);
+			err = nowdb_fun_map(group->fun[i],
+			                    group->hlp,
+			                    record);
 			if (err != NOWDB_OK) return err;
 		}
 	}

@@ -6,6 +6,7 @@
  * ========================================================================
  */
 #include <nowdb/reader/vrow.h>
+#include <nowdb/fun/fun.h>
 
 static char *OBJECT = "vrow";
 
@@ -369,6 +370,15 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 
 	switch(nowdb_expr_type(expr)) {
 	case NOWDB_EXPR_CONST: return NOWDB_OK;
+
+	case NOWDB_EXPR_REF: return updXNode(vrow, cnt, off,
+	                        NOWDB_EXPR_TOREF(expr)->ref);
+
+	case NOWDB_EXPR_AGG:
+		return updXNode(vrow, cnt, off,
+	               ((nowdb_fun_t*)NOWDB_EXPR_TOAGG(
+	                             expr)->agg)->expr);
+
 	case NOWDB_EXPR_OP: 
 		for(int i=0; i<NOWDB_EXPR_TOOP(expr)->args; i++) {
 			err = updXNode(vrow, cnt, off,
@@ -618,7 +628,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	}
 
 	// if complete, delete and add to ready
-	if (v->np == vrow->np) {
+	if (v->np >= vrow->np) {
 		ts_algo_tree_delete(vrow->vrtx, v);
 		if (ts_algo_list_append(vrow->ready, v) != TS_ALGO_OK) {
 			NOMEM("ready.append");
