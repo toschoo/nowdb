@@ -33,6 +33,9 @@ static char *OBJECT = "model";
 #define NOMEM(s) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s);
 
+#define INVALID(s) \
+	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
+
 #define PROP(x) \
 	((nowdb_model_prop_t*)x)
 
@@ -115,6 +118,17 @@ static ts_algo_cmp_t propnamecompare(void *ignore, void *one, void *two) {
 static ts_algo_bool_t propsByRoleid(void *ignore, const void *pattern,
                                                   const void *node) {
 	if (PROP(pattern)->roleid == PROP(node)->roleid) return TRUE;
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------
+ * Filter by roleid and pk
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t pkByRoleid(void *ignore, const void *pattern,
+                                                  const void *node) {
+	if (PROP(pattern)->roleid == PROP(node)->roleid &&
+	    PROP(node)->pk) return TRUE;
 	return FALSE;
 }
 
@@ -1549,6 +1563,27 @@ static inline nowdb_err_t copyList(ts_algo_list_t *src,
 			return err;
 		}
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get Primary key of that vertex (roleid)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPK(nowdb_model_t      *model,
+                              nowdb_roleid_t     roleid,
+                              nowdb_model_prop_t **prop) {
+	nowdb_model_prop_t tmp;
+
+	MODELNULL();
+
+	if (prop == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                          FALSE, OBJECT, "prop is NULL");
+
+	tmp.roleid = roleid;
+
+	*prop = ts_algo_tree_search(model->propById, &tmp, pkByRoleid);
+	if (*prop == NULL) INVALID("no PK found for this vertex");
 	return NOWDB_OK;
 }
 

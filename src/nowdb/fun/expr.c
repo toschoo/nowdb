@@ -95,7 +95,7 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->target = NOWDB_TARGET_VERTEX;
-	FIELD(*expr)->off = NOWDB_OFF_PROP;
+	FIELD(*expr)->off = NOWDB_OFF_VALUE;
 	FIELD(*expr)->role = role;
 	FIELD(*expr)->propid = propid;
 	FIELD(*expr)->pk = 0;
@@ -108,7 +108,6 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 	}
 	return NOWDB_OK;
 }
-
 
 nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
                                    void        *value,
@@ -808,6 +807,11 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          nowdb_type_t  *t,
                                          void         **res) {
 	nowdb_err_t err;
+
+	/*
+	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
+	                     *(uint64_t*)(src+field->off), field->type);
+	*/
 
 	*t = field->type;
 	if (*t == NOWDB_TYP_TEXT) {

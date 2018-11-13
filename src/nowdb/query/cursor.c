@@ -394,6 +394,8 @@ static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
  */
 static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+	nowdb_expr_t px;
 
 	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
 	if (cur->row == NULL) return NOWDB_OK;
@@ -405,8 +407,17 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
 		if (err != NOWDB_OK) return err;
 	}
-	// if prow->np == 0:
-	// add primary key
+	if (cur->prow->np == 0) {
+		err = nowdb_model_getPK(cur->model, cur->v->roleid, &p);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_expr_newVertexField(&px, p->name,
+		                  cur->v->roleid, p->propid);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_vrow_addExpr(cur->prow, px);
+		if (err != NOWDB_OK) return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -902,6 +913,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	} 
 
+	(*cur)->model = scope->model;
 	(*cur)->rdr = NULL;
 	(*cur)->tmp = NULL;
 	(*cur)->row   = NULL;
@@ -1149,12 +1161,11 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 	nowdb_err_t err;
 
 	if (memcmp(cur->tmp, nowdb_nullrec, recsz) == 0) {
-		memcpy(cur->tmp, src+cur->off, recsz);
+		memcpy(cur->tmp, src, recsz);
 		memcpy(cur->tmp2, cur->tmp, recsz);
 	}
-	err = nowdb_group_map(cur->nogrp, ctype, src+cur->off);
+	err = nowdb_group_map(cur->nogrp, ctype, src);
 	if (err != NOWDB_OK) return err;
-	cur->off += recsz;
 	return NOWDB_OK;
 }
 
@@ -1375,8 +1386,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			err = nowdb_vrow_add(cur->prow,
 			              (nowdb_vertex_t*)(src+cur->off), &x);
 			if (err != NOWDB_OK) return err;
-		}
-		if (cur->prow != NULL) {
+
 			if (!nowdb_vrow_complete(cur->prow,
 			                 &realsz, &realsrc)) 
 			{
@@ -1391,12 +1401,14 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* if keys-only, group or no-group aggregates */
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, recsz, src);
+				err = nogroup(cur, ctype, realsz, realsrc);
 				if (err != NOWDB_OK) return err;
+				cur->off += recsz;
 				continue;
 			}
 
 			if (cur->group != NULL || cur->rdr->ko) {
+				// review for vertex !
 				err = groupswitch(cur, ctype, recsz, src, &x);
 				if (err != NOWDB_OK) return err;
 				if (!x) continue;

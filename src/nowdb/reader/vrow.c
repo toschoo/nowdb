@@ -554,7 +554,6 @@ nowdb_err_t nowdb_vrow_addExpr(nowdb_vrow_t *vrow,
 	return NOWDB_OK;
 }
 
-
 /* ------------------------------------------------------------------------
  * Destroy the vertex row
  * ------------------------------------------------------------------------
@@ -610,10 +609,12 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	if (err != NOWDB_OK) return err;
 
 	// add according to offset
+	
 	/*
-	fprintf(stderr, "putting %lu/%lu into %u\n",
-	  vertex->vertex, vertex->property, pm->off);
+	fprintf(stderr, "putting %lu/%lu/%lu into %u\n",
+	  vertex->vertex, vertex->property, vertex->value, pm->off);
 	*/
+	
 	memcpy(v->row+pm->off, &vertex->value, KEYSZ);
 	v->np++;
 
