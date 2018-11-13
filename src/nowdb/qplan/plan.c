@@ -672,13 +672,13 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 		err = getCondition(scope, trg, e, v, &(*b)->left,
 		                       nowdb_ast_operand(ast,1));
 		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*b); free(*b);
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
 			return err;
 		}
 		err = getCondition(scope, trg, e, v, &(*b)->right,
 		                         nowdb_ast_operand(ast,2));
 		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*b); free(*b);
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
 			return err;
 		}
 		return NOWDB_OK;
