@@ -38,7 +38,6 @@ typedef struct {
 	uint32_t              fun; /* the function code             */
 	int                 ftype; /* function type                 */
 	nowdb_content_t     ctype; /* content type                  */
-	uint32_t            recsz; /* record size                   */
 	uint16_t            field; /* to be removed                 */
 	uint16_t            fsize; /* size of the field             */
 	nowdb_type_t        dtype; /* type of the field             */

@@ -26,7 +26,7 @@ fi
 
 # sqlprefix
 csvsqlprfx="select count(*) from loc "
-nowsqlprfx="use db500;select id,name,lon,lat from loc "
+nowsqlprfx="use db500;select count(*) from loc "
 csvsqlsufx=""
 nowsqlsufx=";"
 
@@ -148,14 +148,13 @@ do
 		exit 1
 	fi
 	csvres=$(echo $csvout | awk -F" " '{print $2}')
-	nowout=$(echo $nowdbsql | bin/scopetool $base 2>&1 >/dev/null | grep Read)
+	nowres=$(echo $nowdbsql | bin/scopetool $base 2>/dev/null)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in scopetool '%s':\n" "$nowdbsql"
 		echo "$nowout"
 		exit 1
 	fi
-	nowres=$(echo $nowout | cut -d" " -f2)
 	if [ $csvres -ne $nowres ]
 	then
 		printf "FAILED in '%s': %d != %d\n" $csvsql $csvres $nowres

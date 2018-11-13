@@ -609,8 +609,6 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
 	ts_algo_list_node_t *run;
 	int i=0;
 
-	fprintf(stderr, "SEARCH\n");
-
 	// get the internal index on vertex
 	err = nowdb_index_man_getByName(scope->iman,
 	                              VINDEX, &desc);

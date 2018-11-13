@@ -773,7 +773,7 @@ fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
-fun(F) ::= IDENTIFIER(I) LPAR expr(L) RPAR. {
+fun(F) ::= IDENTIFIER(I) LPAR expr_list(L) RPAR. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 	NOWDB_SQL_ADDPARAM(F,L);

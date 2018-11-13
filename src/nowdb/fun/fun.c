@@ -252,20 +252,6 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t      *fun,
 	fun->dtype = 0;
 	fun->flist = NULL;
 
-	/*
-	if (dtype == NOWDB_TYP_NOTHING) {
-		switch(field) {
-		case NOWDB_OFF_TMSTMP:
-			fun->dtype = NOWDB_TYP_TIME; break;
-		case NOWDB_OFF_WEIGHT:
-		case NOWDB_OFF_WEIGHT2:
-		default:
-			fun->dtype = NOWDB_TYP_NOTHING;
-		}
-	}
-	fun->otype = getOType(fun);
-	*/
-
 	if (init != NULL) {
 		memcpy(&fun->init, init, fun->fsize);
 	} else {
@@ -275,10 +261,6 @@ nowdb_err_t nowdb_fun_init(nowdb_fun_t      *fun,
 	reset(fun);
 
 	if (fun->ftype < 0) INVALID("unknown function type");
-
-	fun->recsz = ctype == NOWDB_CONT_EDGE?
-	                      NOWDB_EDGE_SIZE:
-	                      NOWDB_VERTEX_SIZE;
 
 	if (fun->ftype == NOWDB_FUN_MANY) {
 		err = initFlist(fun);
@@ -332,30 +314,6 @@ void nowdb_fun_reset(nowdb_fun_t *fun) {
 }
 
 /* -----------------------------------------------------------------------
- * Helper: type correction
- * -----------------------------------------------------------------------
- */
-static inline void correcttype(nowdb_fun_t     *fun,
-                               uint16_t       field,
-                               char         *record,
-                               nowdb_type_t *mytype) 
-{
-	if (fun->ctype == NOWDB_CONT_EDGE) {
-		if (field == NOWDB_OFF_WEIGHT) {
-			memcpy(mytype, record+NOWDB_OFF_WTYPE, // from model!
-				         sizeof(nowdb_type_t));
-		} else {
-			memcpy(mytype, record+NOWDB_OFF_WTYPE2,
-				          sizeof(nowdb_type_t));
-		}
-	} else {
-		memcpy(mytype, record+NOWDB_OFF_VTYPE,
-				sizeof(nowdb_type_t));
-	}
-	fun->otype = getOType(fun);
-}
-
-/* -----------------------------------------------------------------------
  * Helper: collect values
  * -----------------------------------------------------------------------
  */
@@ -370,11 +328,6 @@ static inline nowdb_err_t collect(nowdb_fun_t  *fun,
 	                     &fun->dtype, &value);
 	if (err != NOWDB_OK) return err;
 
-	/*
-	if (fun->dtype == NOWDB_TYP_NOTHING) {
-		correcttype(fun, fun->field, record, &fun->dtype);
-	}
-	*/
 	if (fun->many.len == 0 || fun->off >= BLOCKSIZE) {
 		err = nowdb_blist_give(fun->flist, &fun->many);
 		if (err != NOWDB_OK) return err;
@@ -407,12 +360,6 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun,     int ftype,
                                 nowdb_eval_t *hlp, char *record) {
 	nowdb_err_t err;
 	void  *value=NULL;
-
-	/*
-	if (fun->dtype == NOWDB_TYP_NOTHING) {
-		correcttype(fun, field, record, &fun->dtype);
-	}
-	*/
 
 	if (hlp == NULL) {
 		value = record;

@@ -186,7 +186,6 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 		free(*expr); *expr = NULL;
 		return err;
 	}
-
 	return NOWDB_OK;
 }
 
@@ -875,8 +874,7 @@ static nowdb_err_t evalFun(uint32_t     fun,
  * Evaluate Fun (predeclaration, implementation below)
  * -----------------------------------------------------------------------
  */
-static inline nowdb_type_t evalType(uint32_t      fun,
-                                    nowdb_type_t *types);
+static inline int evalType(nowdb_op_t *op);
 
 /* -----------------------------------------------------------------------
  * Evaluate operation
@@ -901,8 +899,8 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 
 	// determine type
 	if (op->types != NULL) { 
-		*typ = evalType(op->fun, op->types);
-		if (*typ < 0) INVALIDTYPE("unknown operation");
+		*typ = evalType(op);
+		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
 	}
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
 	if (err != NOWDB_OK) return err;
@@ -1048,44 +1046,44 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	default: return NOWDB_OK; \
 	}
 
-#define TOFLOAT() \
-	switch(types[0]) { \
+#define TOFLOAT(t,x,z) \
+	switch(t) { \
 	case NOWDB_TYP_UINT: \
-		f = (double)(*(uint64_t*)argv[0]); \
-		MOV(res, &f); break; \
+		f = (double)(*(uint64_t*)x); \
+		MOV(z, &f); break; \
 	case NOWDB_TYP_DATE: \
 	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_INT: \
-		f = (double)(*(int64_t*)argv[0]); \
-		MOV(res, &f); break; \
+		f = (double)(*(int64_t*)x); \
+		MOV(z, &f); break; \
 	default: \
-		MOV(res, argv[0]); break; \
+		MOV(z, x); break; \
 	}
 
-#define TOINT() \
-	switch(types[0]) { \
+#define TOINT(t,x,z) \
+	switch(t) { \
 	case NOWDB_TYP_UINT: \
-		l = (int64_t)(*(uint64_t*)argv[0]); \
-		MOV(res, &l); break; \
+		l = (int64_t)(*(uint64_t*)x); \
+		MOV(z, &l); break; \
 	case NOWDB_TYP_FLOAT: \
-		l = (int64_t)(*(double*)argv[0]); \
-		MOV(res, &l); break; \
+		l = (int64_t)(*(double*)x); \
+		MOV(z, &l); break; \
 	default: \
-		MOV(res, argv[0]); break; \
+		MOV(z, x); break; \
 	}
 
-#define TOUINT() \
-	switch(types[0]) { \
+#define TOUINT(t,x,z) \
+	switch(t) { \
 	case NOWDB_TYP_FLOAT: \
-		u = (uint64_t)(*(double*)argv[0]); \
-		MOV(res, &u); break; \
+		u = (uint64_t)(*(double*)x); \
+		MOV(z, &u); break; \
 	case NOWDB_TYP_DATE: \
 	case NOWDB_TYP_TIME: \
 	case NOWDB_TYP_INT: \
-		u = (uint64_t)(*(int64_t*)argv[0]); \
-		MOV(res, &u); break; \
+		u = (uint64_t)(*(int64_t*)x); \
+		MOV(z, &u); break; \
 	default: \
-		MOV(res, argv[0]); break; \
+		MOV(z, x); break; \
 	}
 
 /* -----------------------------------------------------------------------
@@ -1107,10 +1105,10 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 * Conversions
 	 * -----------------------------------------------------------------------
 	 */
-	case NOWDB_EXPR_OP_FLOAT: TOFLOAT(); break;
-	case NOWDB_EXPR_OP_UINT: TOUINT(); break; 
+	case NOWDB_EXPR_OP_FLOAT: TOFLOAT(types[0], argv[0], res); break;
+	case NOWDB_EXPR_OP_UINT: TOUINT(types[0], argv[0], res); break; 
 	case NOWDB_EXPR_OP_INT: 
-	case NOWDB_EXPR_OP_TIME: TOINT(); break;
+	case NOWDB_EXPR_OP_TIME: TOINT(types[0], argv[0], res); break;
 	case NOWDB_EXPR_OP_TEXT: 
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
@@ -1230,12 +1228,87 @@ static inline int getArgs(int o) {
 }
 
 /* -----------------------------------------------------------------------
+ * Check if type is numeric
+ * -----------------------------------------------------------------------
+ */
+static inline char isNumeric(nowdb_type_t t) {
+	switch(t) {
+	case NOWDB_TYP_TEXT:
+	case NOWDB_TYP_BOOL: return 0;
+	default: return 1;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Enforce type x
+ * -----------------------------------------------------------------------
+ */
+static inline void enforceType(nowdb_op_t *op,
+                               nowdb_type_t t) {
+	double  f;
+	int64_t l;
+
+	for(int i=0; i<op->args; i++) {
+		switch(t) {
+		case NOWDB_TYP_FLOAT:
+			TOFLOAT(op->types[i], op->results[i],
+			                      op->results[i]);
+			op->types[i] = t;
+			break;
+
+		case NOWDB_TYP_INT:
+		case NOWDB_TYP_TIME:
+		case NOWDB_TYP_DATE:
+			TOINT(op->types[i], op->results[i],
+			                    op->results[i]);
+			op->types[i] = t;
+			break;
+
+		default: return;
+		} 
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Check and correct
+ * -----------------------------------------------------------------------
+ */
+static inline int correctNumTypes(nowdb_op_t *op) {
+	char differ=0;
+	int t = op->types[0];
+
+	if (t == NOWDB_TYP_TEXT) return -1;
+	if (t == NOWDB_TYP_BOOL) return -1;
+
+	for(int i=1; i<op->args; i++) {
+		if (op->types[i] == NOWDB_TYP_TEXT) return -1;
+		if (op->types[i] == NOWDB_TYP_BOOL) return -1;
+
+		if (t != op->types[i]) {
+			differ=1;
+			if (t            != NOWDB_TYP_FLOAT &&
+			    op->types[i] == NOWDB_TYP_FLOAT) {
+				t = NOWDB_TYP_FLOAT; continue;
+			}
+			if (t            == NOWDB_TYP_UINT &&
+			   (op->types[i] == NOWDB_TYP_INT  ||
+			    op->types[i] == NOWDB_TYP_TIME ||
+			    op->types[i] == NOWDB_TYP_DATE)){ 
+				t = op->types[i]; continue;
+			}
+		}
+	}
+	if (!differ) return t;
+	enforceType(op, t);
+	return t;
+}
+
+/* -----------------------------------------------------------------------
  * Evaluate Type
  * -----------------------------------------------------------------------
  */
-static inline nowdb_type_t evalType(uint32_t        fun,
-                                    nowdb_type_t *types) {
-	switch(fun) {
+static inline int evalType(nowdb_op_t *op) {
+	switch(op->fun) {
 
 	case NOWDB_EXPR_OP_FLOAT: return NOWDB_TYP_FLOAT;
 	case NOWDB_EXPR_OP_INT: return NOWDB_TYP_INT;
@@ -1247,14 +1320,28 @@ static inline nowdb_type_t evalType(uint32_t        fun,
 	case NOWDB_EXPR_OP_SUB: 
 	case NOWDB_EXPR_OP_MUL: 
 	case NOWDB_EXPR_OP_DIV: 
-	case NOWDB_EXPR_OP_REM:
-	case NOWDB_EXPR_OP_POW: return types[0]; /* check and correct */
+	case NOWDB_EXPR_OP_POW: return correctNumTypes(op);
 
-	case NOWDB_EXPR_OP_LOG: 
+	case NOWDB_EXPR_OP_REM:
+		if (!isNumeric(op->types[0]) ||
+		    !isNumeric(op->types[1])) return -1;
+		if (op->types[0] == NOWDB_TYP_FLOAT ||
+		    op->types[1] == NOWDB_TYP_FLOAT) return -1;
+		return correctNumTypes(op);
+
 	case NOWDB_EXPR_OP_ABS:
+		if (!isNumeric(op->types[0])) return -1;
+		return op->types[0];
+
+	case NOWDB_EXPR_OP_LOG:
 	case NOWDB_EXPR_OP_CEIL:
 	case NOWDB_EXPR_OP_FLOOR:
-	case NOWDB_EXPR_OP_ROUND: return types[0];
+	case NOWDB_EXPR_OP_ROUND:
+		if (op->types[0] != NOWDB_TYP_FLOAT) {
+			enforceType(op, NOWDB_TYP_FLOAT);
+		}
+		return NOWDB_TYP_FLOAT;
+
 	default: return -1;
 	}
 }
