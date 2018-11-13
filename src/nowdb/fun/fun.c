@@ -414,9 +414,13 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun,     int ftype,
 	}
 	*/
 
-	err = nowdb_expr_eval(fun->expr, hlp, record,
-	                     &fun->dtype, &value);
-	if (err != NOWDB_OK) return err;
+	if (hlp == NULL) {
+		value = record;
+	} else {
+		err = nowdb_expr_eval(fun->expr, hlp, record,
+		                     &fun->dtype, &value);
+		if (err != NOWDB_OK) return err;
+	}
 
 	switch(ftype) {
 	case NOWDB_FUN_SUM:
@@ -509,7 +513,7 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 			b = runner->cont;
 			off = 0;
 		}
-		err = apply(fun, ftype, 0, b->block+off);
+		err = apply(fun, ftype, NULL, b->block+off);
 		if (err != NOWDB_OK) return err;
 		off += fun->fsize;
 	}
