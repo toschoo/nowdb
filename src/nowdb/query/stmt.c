@@ -408,7 +408,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 
 		p->name  = strdup(d->value);
 		if (p->name == NULL) {
-			destroyProps(&props);
+			destroyProps(&props); free(p);
 			NOMEM("allocating property name");
 			return err;
 		}
@@ -423,7 +423,7 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		if (o != NULL) p->pk = TRUE;
 
 		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
-			destroyProps(&props);
+			destroyProps(&props); free(p);
 			NOMEM("list.addpend");
 			return err;
 		}
@@ -1453,7 +1453,10 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
 			if (err != NOWDB_OK) return err;
 		}
 	}
-	if (op->value == NULL) INVALIDAST("no path in load operation");
+	if (op->value == NULL) {
+		if (epath != NULL) free(epath);
+		INVALIDAST("no path in load operation");
+	}
 
 	err = getString(op, &path);
 	if (err != NOWDB_OK) {

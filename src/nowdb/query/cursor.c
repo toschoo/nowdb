@@ -530,12 +530,14 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		uint64_t *vid = malloc(8);
 		if (vid == NULL) {
 			NOMEM("allocating vid");
+			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
 		memcpy(vid, run->cont, 8);
 		if (ts_algo_list_append(&vids, vid) != TS_ALGO_OK) {
 			NOMEM("list.append");
+			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
@@ -544,7 +546,9 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	// create a boolean filter:
 	// (role = mytype) and (vid in (...))
 	err = nowdb_filter_newBool(&f, NOWDB_FILTER_AND);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		free(role); return err;
+	}
 
 	// role = mytype
 	err = nowdb_filter_newCompare(&f->left,
@@ -553,7 +557,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	                      NOWDB_TYP_UINT, role, NULL);
 	if (err != NOWDB_OK) {
 		nowdb_filter_destroy(f); free(f);
-		DESTROYVIDS(vids);
+		DESTROYVIDS(vids); free(role);
 		return err;
 	}
 	nowdb_filter_own(f->left);

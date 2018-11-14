@@ -139,10 +139,12 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
 		}
 		b->block = malloc(blist->sz);
 		if (b->block == NULL) {
+			free(b);
 			NOMEM("allocating block");
 			return err;
 		}
 		if (ts_algo_list_insert(&blist->flist, b) != TS_ALGO_OK) {
+			free(b->block); free(b);
 			NOMEM("list.insert");
 			return err;
 		}

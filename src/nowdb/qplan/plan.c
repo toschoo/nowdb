@@ -1178,7 +1178,9 @@ static inline nowdb_err_t getConstValue(uint16_t typ,
 		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
 		break;
 
-	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	default:
+		if (*value != NULL) free(*value);
+		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
 	if (*tmp != 0) {

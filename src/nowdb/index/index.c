@@ -525,7 +525,7 @@ nowdb_err_t nowdb_index_drop(char *base, char *path) {
 	err = removePath(tmp);
 	free(tmp); free(ep);
 	if (err != NOWDB_OK) {
-		free(ep); free(hp);
+		free(hp);
 		return err;
 	}
 	tmp = nowdb_path_append(base, hp);

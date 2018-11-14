@@ -10,7 +10,7 @@ fi
 
 p=$!
 
-sleep 1
+sleep 5 # remove that!
 echo "SERVER $p RUNNING" >> log/pysmoke.log
 
 echo "RUNNING baicsmoke.py" >> log/pysmoke.log
