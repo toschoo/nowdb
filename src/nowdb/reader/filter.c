@@ -83,7 +83,7 @@ static void valdestroy(void *ignore, void **n) {
 static nowdb_err_t createInTree(nowdb_filter_t *filter,
                                 ts_algo_list_t *in) {
 	nowdb_err_t          err;
-	ts_algo_list_node_t *run;
+	ts_algo_list_node_t *run,*tmp;
 
 	filter->in = ts_algo_tree_new(&eqcompare, NULL,
 	                              &noupdate,
@@ -94,13 +94,18 @@ static nowdb_err_t createInTree(nowdb_filter_t *filter,
 		return err;
 	}
 	filter->in->rsc = (void*)(uint64_t)filter->typ;
-	for(run=in->head; run!=NULL; run=run->nxt) {
+
+	run=in->head;
+	while(run!=NULL) {
 		if (ts_algo_tree_insert(filter->in,
 		                         run->cont) != TS_ALGO_OK)
 		{
 			NOMEM("tree.insert");
 			return err;
 		}
+		tmp = run->nxt;
+		ts_algo_list_remove(in, run); free(run);
+		run=tmp;
 	}
 	return NOWDB_OK;
 }

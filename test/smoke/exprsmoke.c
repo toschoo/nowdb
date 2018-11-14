@@ -538,7 +538,8 @@ int testINTRem() {
 
 int testUINTPow() {
 	nowdb_expr_t c1, c2;
-	uint64_t a, b, c, r;
+	uint64_t a, b;
+	double   c, r;
 	nowdb_type_t t = NOWDB_TYP_UINT;
 
 	a = rand()%1000;
@@ -552,13 +553,13 @@ int testUINTPow() {
 		return -1;
 	}
 	if (binaryOp(NOWDB_EXPR_OP_POW, c1, c2, &t, &r) != 0) return -1;
-	if (t != NOWDB_TYP_UINT) {
+	if (t != NOWDB_TYP_FLOAT) {
 		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
 		return -1;
 	}
-	fprintf(stderr, "COMPUTING %lu ^ %lu = %lu\n", a, b, r);
+	fprintf(stderr, "COMPUTING %lu ^ %lu = %f\n", a, b, r);
 	if (r != c) {
-		fprintf(stderr, "ERROR: results differ: %lu ^ %lu\n", c, r);
+		fprintf(stderr, "ERROR: results differ: %f != %f\n", c, r);
 		return -1;
 	}
 	return 0;
@@ -566,7 +567,8 @@ int testUINTPow() {
 
 int testINTPow() {
 	nowdb_expr_t c1, c2;
-	int64_t a, b, c, r;
+	int64_t a, b;
+	double  c, r;
 	nowdb_type_t t = NOWDB_TYP_INT;
 
 	a = rand()%1000;
@@ -583,13 +585,13 @@ int testINTPow() {
 		return -1;
 	}
 	if (binaryOp(NOWDB_EXPR_OP_POW, c1, c2, &t, &r) != 0) return -1;
-	if (t != NOWDB_TYP_INT) {
+	if (t != NOWDB_TYP_FLOAT) {
 		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
 		return -1;
 	}
-	fprintf(stderr, "COMPUTING %ld ^ %ld = %ld\n", a, b, r);
+	fprintf(stderr, "COMPUTING %ld ^ %ld = %f\n", a, b, r);
 	if (r != c) {
-		fprintf(stderr, "ERROR: results differ: %ld ^ %ld\n", c, r);
+		fprintf(stderr, "ERROR: results differ: %f /= %f\n", c, r);
 		return -1;
 	}
 	return 0;
@@ -994,7 +996,7 @@ int main() {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		if (testUINTPow() != 0) {
-			fprintf(stderr, "testIntPow failed\n");
+			fprintf(stderr, "testUIntPow failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		// INT

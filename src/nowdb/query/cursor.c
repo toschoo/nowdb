@@ -416,6 +416,7 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 		if (err != NOWDB_OK) return err;
 
 		err = nowdb_vrow_addExpr(cur->prow, px);
+		nowdb_expr_destroy(px); free(px);
 		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
@@ -1400,6 +1401,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
 				err = nogroup(cur, ctype, realsz, realsrc);
+				if (realsrc != src+cur->off) free(realsrc);
 				if (err != NOWDB_OK) return err;
 				cur->off += recsz;
 				continue;

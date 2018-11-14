@@ -71,12 +71,19 @@ typedef struct {
 
 /* ------------------------------------------------------------------------
  * Constant Expression
+ * -------------------
+ * notice the backup value:
+ * the value of a constant might change due to conversions,
+ * the type information, however, will not.
+ * we therefore recreate the original value from the backup
+ * on each evaluation.
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t    etype; /* expression type         */
-	void       *value; /* the value    */
-	nowdb_type_t type; /* and its type */
+	uint32_t    etype; /* expression type  */
+	void       *value; /* the value        */
+	void       *valbk; /* backup           */
+	nowdb_type_t type; /* and its type     */
 } nowdb_const_t;
 
 /* ------------------------------------------------------------------------

@@ -137,7 +137,14 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 			free(*expr); *expr = NULL;
 			return err;
 		}
+		CONST(*expr)->valbk = malloc(8);
+		if (CONST(*expr)->valbk == NULL) {
+			NOMEM("allocating value");
+			free(*expr); *expr = NULL;
+			return err;
+		}
 		memcpy(CONST(*expr)->value, value, 8);
+		memcpy(CONST(*expr)->valbk, value, 8);
 	}
 	return NOWDB_OK;
 }
@@ -297,6 +304,9 @@ static void destroyField(nowdb_field_t *field) {
 static void destroyConst(nowdb_const_t *cst) {
 	if (cst->value != NULL) {
 		free(cst->value); cst->value = NULL;
+	}
+	if (cst->valbk != NULL) {
+		free(cst->valbk); cst->valbk = NULL;
 	}
 }
 
@@ -943,6 +953,8 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 
 	case NOWDB_EXPR_CONST:
 		// text ???
+		memcpy(CONST(expr)->value,
+		       CONST(expr)->valbk, 8);
 		*typ = CONST(expr)->type;
 		*res = CONST(expr)->value;
 		return NOWDB_OK;
@@ -1319,8 +1331,13 @@ static inline int evalType(nowdb_op_t *op) {
 	case NOWDB_EXPR_OP_ADD:
 	case NOWDB_EXPR_OP_SUB: 
 	case NOWDB_EXPR_OP_MUL: 
-	case NOWDB_EXPR_OP_DIV: 
-	case NOWDB_EXPR_OP_POW: return correctNumTypes(op);
+	case NOWDB_EXPR_OP_DIV: return correctNumTypes(op);
+
+	case NOWDB_EXPR_OP_POW: 
+		if (!isNumeric(op->types[0]) ||
+		    !isNumeric(op->types[1])) return -1;
+                enforceType(op,NOWDB_TYP_FLOAT);
+		return NOWDB_TYP_FLOAT;
 
 	case NOWDB_EXPR_OP_REM:
 		if (!isNumeric(op->types[0]) ||

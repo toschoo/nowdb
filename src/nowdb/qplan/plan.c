@@ -283,18 +283,20 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 				nowdb_err_release(err); err = NOWDB_OK;
 			}
 		}
-		if (err != NOWDB_OK) {
-			free(*value); *value = NULL;
-		}
-		return err;
+		break;
 
-	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	default:
+		if (*value != NULL) free(*value);
+		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
 	if (err != NOWDB_OK) {
 		if (*value != NULL) free(*value);
+		return err;
+		/*
 		return nowdb_err_get(nowdb_err_invalid,FALSE, OBJECT,
 		                          "value conversion failed");
+		*/
 	}
 	return NOWDB_OK;
 }
@@ -322,6 +324,7 @@ static inline nowdb_err_t getValues(nowdb_scope_t *scope,
 		err = getValue(scope, v->value, off, sz, typ, stype, &value);
 		if (err != NOWDB_OK) break;
 		if (ts_algo_list_append(vals, value) != TS_ALGO_OK) {
+			if (value != NULL) free(value);
 			NOMEM("list.append"); break;
 		}
 		v = nowdb_ast_value(v);
@@ -660,8 +663,13 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 	case NOWDB_AST_NOT:
 		err = nowdb_filter_newBool(b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
-		return getCondition(scope, trg, e, v, &(*b)->left,
-		                       nowdb_ast_operand(ast, 1));
+		err = getCondition(scope, trg, e, v, &(*b)->left,
+		                      nowdb_ast_operand(ast, 1));
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
+			return err;
+		}
+		return NOWDB_OK;
 
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:
