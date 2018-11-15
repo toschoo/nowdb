@@ -827,6 +827,7 @@ def whereinatts(c):
                 raise db.TestFailed("wrong cat selected: %d" % row.field(1))
         if n < 1:
             raise db.TestFailed("nothing found")
+        print "found %d" % n
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:

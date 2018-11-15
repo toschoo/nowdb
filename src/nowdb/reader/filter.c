@@ -67,6 +67,7 @@ static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
 }
 
 static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
+	free(n);
 	return TS_ALGO_OK;
 }
 
