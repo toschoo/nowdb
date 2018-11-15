@@ -97,12 +97,14 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
  * ------------------------------------------------------------------------
  */
 #define DESTROYREADERS(n,rs) \
-	for(int i=0; i<n; i++) { \
-		if (rs[n] != NULL) { \
-			nowdb_reader_destroy(rs[n]); free(rs[n]); \
+	if (rs != NULL) {\
+		for(int i=0; i<n; i++) { \
+			if (rs[n] != NULL) { \
+				nowdb_reader_destroy(rs[n]); free(rs[n]); \
+			} \
 		} \
 	} \
-	free(rs);
+	free(rs);rs=NULL;
 
 #define DESTROYFILES(f) \
 	for(ts_algo_list_node_t *rr=f->head; \
@@ -200,7 +202,8 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 	
 	err = nowdb_reader_vseq(&cur->rdr, count+1, rds);
 	if (err != NOWDB_OK) {
-		DESTROYREADERS(count+1,rds);
+		// DESTROYREADERS(count+1,rds);
+		DESTROYREADERS(count,rds);
 		return err;
 	}
 	return NOWDB_OK;
@@ -313,7 +316,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		cur->recsize = 32;
 		store = &scope->vertices;
 
-		fprintf(stderr, "TARGET NAME: %s\n", rplan->name);
+		// fprintf(stderr, "TARGET NAME: %s\n", rplan->name);
 
 		if (rplan->name != NULL) {
 			err = nowdb_model_getVertexByName(scope->model,
@@ -380,12 +383,46 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 }
 
 /* ------------------------------------------------------------------------
- * init vertex props
+ * init vertex props for where
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t initVrow(nowdb_cursor_t *cur) {
+static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
 	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
-	return nowdb_vrow_create(cur->v->roleid, &cur->vrow, cur->filter);
+	return nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow, cur->filter);
+}
+
+/* ------------------------------------------------------------------------
+ * init vertex props for where
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+	nowdb_expr_t px;
+
+	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
+	if (cur->row == NULL) return NOWDB_OK;
+
+	err = nowdb_vrow_new(cur->v->roleid, &cur->prow);
+	if (err != NOWDB_OK) return err;
+
+	for(int i=0; i<cur->row->sz; i++) {
+		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
+		if (err != NOWDB_OK) return err;
+	}
+	if (cur->prow->np == 0) {
+		err = nowdb_model_getPK(cur->model, cur->v->roleid, &p);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_expr_newVertexField(&px, p->name,
+		                  cur->v->roleid, p->propid);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_vrow_addExpr(cur->prow, px);
+		nowdb_expr_destroy(px); free(px);
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -496,12 +533,14 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		uint64_t *vid = malloc(8);
 		if (vid == NULL) {
 			NOMEM("allocating vid");
+			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
 		memcpy(vid, run->cont, 8);
 		if (ts_algo_list_append(&vids, vid) != TS_ALGO_OK) {
 			NOMEM("list.append");
+			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
@@ -510,7 +549,9 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	// create a boolean filter:
 	// (role = mytype) and (vid in (...))
 	err = nowdb_filter_newBool(&f, NOWDB_FILTER_AND);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		free(role); return err;
+	}
 
 	// role = mytype
 	err = nowdb_filter_newCompare(&f->left,
@@ -519,7 +560,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	                      NOWDB_TYP_UINT, role, NULL);
 	if (err != NOWDB_OK) {
 		nowdb_filter_destroy(f); free(f);
-		DESTROYVIDS(vids);
+		DESTROYVIDS(vids); free(role);
 		return err;
 	}
 	nowdb_filter_own(f->left);
@@ -575,8 +616,6 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
 	nowdb_index_desc_t *desc;
 	ts_algo_list_node_t *run;
 	int i=0;
-
-	fprintf(stderr, "SEARCH\n");
 
 	// get the internal index on vertex
 	err = nowdb_index_man_getByName(scope->iman,
@@ -750,7 +789,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	cur->eof = 0;
 
 	// initialise the vertex row handler
-	err = initVrow(cur);
+	err = initWRow(cur);
 	if (err != NOWDB_OK) goto cleanup;
 
 	// open it
@@ -831,9 +870,9 @@ cleanup:
 	if (buf != NULL) free(buf);
 
 	// destroy the cursor
-	if (cur->vrow != NULL) {
-		nowdb_vrow_destroy(cur->vrow);
-		free(cur->vrow); cur->vrow = NULL;
+	if (cur->wrow != NULL) {
+		nowdb_vrow_destroy(cur->wrow);
+		free(cur->wrow); cur->wrow = NULL;
 	}
 	free(cur);
 
@@ -880,6 +919,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	} 
 
+	(*cur)->model = scope->model;
 	(*cur)->rdr = NULL;
 	(*cur)->tmp = NULL;
 	(*cur)->row   = NULL;
@@ -979,9 +1019,19 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			if ((*cur)->rdr->type == NOWDB_READER_MERGE) {
 				err = nowdb_group_fromList(&(*cur)->group,
 				                               stp->load);
+				if ((*cur)->group != NULL &&
+				    (*cur)->row   != NULL) {
+					nowdb_group_setEval((*cur)->group,
+					              &(*cur)->row->eval);
+				}
 			} else {
 				err = nowdb_group_fromList(&(*cur)->nogrp,
 				                               stp->load);
+				if ((*cur)->nogrp != NULL &&
+				    (*cur)->row   != NULL) {
+					nowdb_group_setEval((*cur)->nogrp,
+					              &(*cur)->row->eval);
+				}
 			}
 			if (err != NOWDB_OK) {
 				nowdb_cursor_destroy(*cur);
@@ -998,6 +1048,14 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	// we are not yet done.
 	if ((*cur)->target == NOWDB_TARGET_VERTEX) {
 		char ok;
+
+		// make mom->prow from field list
+		err = initPRow(*cur);
+		if (err != NOWDB_OK) {
+			nowdb_cursor_destroy(*cur);
+			free(*cur); return err;
+		}
+
 	        err = hasOnlyVid((*cur)->row, (*cur)->filter, &ok);
 		if (err != NOWDB_OK) {
 			nowdb_cursor_destroy(*cur);
@@ -1047,9 +1105,13 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
 	}
-	if (cur->vrow != NULL) {
-		nowdb_vrow_destroy(cur->vrow);
-		free(cur->vrow); cur->vrow = NULL;
+	if (cur->wrow != NULL) {
+		nowdb_vrow_destroy(cur->wrow);
+		free(cur->wrow); cur->wrow = NULL;
+	}
+	if (cur->prow != NULL) {
+		nowdb_vrow_destroy(cur->prow);
+		free(cur->prow); cur->prow = NULL;
 	}
 	if (cur->tmp != NULL) {
 		free(cur->tmp); cur->tmp = NULL;
@@ -1105,12 +1167,11 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 	nowdb_err_t err;
 
 	if (memcmp(cur->tmp, nowdb_nullrec, recsz) == 0) {
-		memcpy(cur->tmp, src+cur->off, recsz);
+		memcpy(cur->tmp, src, recsz);
 		memcpy(cur->tmp2, cur->tmp, recsz);
 	}
-	err = nowdb_group_map(cur->nogrp, ctype, src+cur->off);
+	err = nowdb_group_map(cur->nogrp, ctype, src);
 	if (err != NOWDB_OK) return err;
-	cur->off += recsz;
 	return NOWDB_OK;
 }
 
@@ -1172,6 +1233,17 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 }
 
 /* ------------------------------------------------------------------------
+ * Finalise the group
+ * ------------------------------------------------------------------------
+ */
+static inline void finalizeGroup(nowdb_cursor_t *cur, char *src) {
+	if (cur->tmp2 != NULL && src != cur->tmp2 && cur->tmp != NULL) {
+		memcpy(cur->tmp2, cur->tmp, cur->recsize);
+	}
+	nowdb_group_reset(cur->group);
+}
+
+/* ------------------------------------------------------------------------
  * The last turn
  * ------------------------------------------------------------------------
  */
@@ -1183,9 +1255,8 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
                                           uint32_t *osz,
                                         uint32_t *count) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_group_t *g;
+	nowdb_group_t *g=NULL;
 	char complete=0, cc=0, full=0;
-	char x;
 	
 	if (old == NOWDB_OK || old->errcode != nowdb_err_eof) return old;
 
@@ -1196,12 +1267,18 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	if (cur->nogrp != NULL) {
 		g = cur->nogrp;
 		err = nowdb_group_reduce(cur->nogrp, ctype);
-	} else {
+	} else if (cur->group != NULL) {
 		g = cur->group;
 		cur->off = 0;
-		err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+		// err = groupswitch(cur, ctype, recsz, cur->tmp2, &x);
+		err = nowdb_group_map(cur->group, ctype,
+			                      cur->tmp2);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_group_reduce(cur->group, ctype);
 	}
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		return nowdb_err_cascade(err, old);
+	}
 
 	err = nowdb_row_project(cur->row, g,
 	                          cur->tmp2,
@@ -1232,6 +1309,8 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 {
 	nowdb_err_t err;
 	uint32_t recsz = cur->rdr->recsize;
+	uint32_t realsz;
+	char *realsrc=NULL;
 	nowdb_filter_t *filter = cur->rdr->filter;
 	char *src = nowdb_reader_page(cur->rdr);
 	char complete=0, cc=0, x=1, full=0;
@@ -1280,12 +1359,12 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		}
 
 		/* apply filter to vertex row */
-		if (cur->vrow != NULL) {
+		if (cur->wrow != NULL) {
 			nowdb_key_t vid;
 			char x=0;
 
 			// we add one more property
-			err = nowdb_vrow_add(cur->vrow,
+			err = nowdb_vrow_add(cur->wrow,
 			    (nowdb_vertex_t*)(src+cur->off), &x);
 			if (err != NOWDB_OK) return err;
 			if (!x) {
@@ -1293,7 +1372,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			}
 			// the only record that could have been completed
 			// by that is the one to which the current belongs
-			if (!nowdb_vrow_eval(cur->vrow, &vid)) {
+			if (!nowdb_vrow_eval(cur->wrow, &vid)) {
 				cur->off += recsz; continue;
 			}
 
@@ -1303,15 +1382,39 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			cur->off += recsz; continue;
 		}
 
+		// add vertex property to prow
+		// NOTE:
+		// as soon as we *always* use the internal index
+		// for vertices, we can enforce completion, i.e.
+		// we complete the previous vertex when we see
+		// a new vid
+		if (cur->prow != NULL) {
+			err = nowdb_vrow_add(cur->prow,
+			              (nowdb_vertex_t*)(src+cur->off), &x);
+			if (err != NOWDB_OK) return err;
+
+			if (!nowdb_vrow_complete(cur->prow,
+			                 &realsz, &realsrc)) 
+			{
+				cur->off += recsz; continue;
+			}
+		} else {
+			realsz = recsz;
+			realsrc = src+cur->off;
+		}
+
+		// review!!!
 		/* if keys-only, group or no-group aggregates */
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, recsz, src);
+				err = nogroup(cur, ctype, realsz, realsrc);
+				if (realsrc != src+cur->off) free(realsrc);
 				if (err != NOWDB_OK) return err;
+				cur->off += recsz;
 				continue;
 			}
-
 			if (cur->group != NULL || cur->rdr->ko) {
+				// review for vertex !
 				err = groupswitch(cur, ctype, recsz, src, &x);
 				if (err != NOWDB_OK) return err;
 				if (!x) continue;
@@ -1328,7 +1431,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		} else {
 			if (cur->group == NULL) {
 				err = nowdb_row_project(cur->row, NULL,
-				                   src+cur->off, recsz,
+				                       realsrc, realsz,
 				                   buf, sz, osz, &full,
  				                       &cc, &complete);
 			} else {
@@ -1338,15 +1441,18 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				             buf, sz, osz, &full,
 				                 &cc, &complete);
 			}
+			if (realsrc != (src+cur->off)) {
+				free(realsrc); realsrc = NULL;
+			}
 			if (err != NOWDB_OK) return err;
 			if (complete) {
 				cur->off+=recsz;
 				(*count)+=cc;
 
-				if (cur->tmp2 != NULL && src != cur->tmp2) {
-					memcpy(cur->tmp2, cur->tmp,
-					       cur->recsize);
-				}
+				// finalise the group (if there is one)
+				// CAUTION: this uses src, which has 
+				//          another meaning with vertices!
+				finalizeGroup(cur, src);
 
 			/* this is an awful hack to force
 			 * a krange reader to present us

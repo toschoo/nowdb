@@ -337,6 +337,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 
 	/* lists of files */
 	err = initAllFiles(store);
+	if (err != NOWDB_OK) return err;
 
 	/* lock */ 
 	err = nowdb_rwlock_init(&store->lock);
@@ -695,7 +696,7 @@ static inline nowdb_err_t remapWriter(nowdb_store_t *store) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	uint32_t pos = 0;
 
 	while (store->writer->pos < store->writer->capacity) {
@@ -1616,8 +1617,9 @@ nowdb_err_t nowdb_store_findSpare(nowdb_store_t *store,
 
 	STORENULL();
 	FILENULL();
-	if (found != NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                       "found parameter is NULL");
+
+	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                FALSE, OBJECT, "found parameter is NULL");
 	*found = FALSE;
 
 	err = nowdb_lock_read(&store->lock);
@@ -1644,8 +1646,9 @@ nowdb_err_t nowdb_store_findWaiting(nowdb_store_t *store,
 
 	STORENULL();
 	FILENULL();
-	if (found == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                       "found parameter is NULL");
+
+	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                 FALSE, OBJECT, "found parameter is NULL");
 	*found = FALSE;
 
 	err = nowdb_lock_read(&store->lock);
@@ -1672,8 +1675,9 @@ nowdb_err_t nowdb_store_findReader(nowdb_store_t *store,
 
 	STORENULL();
 	FILENULL();
-	if (found == NULL) nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                       "found parameter is NULL");
+
+	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                 FALSE, OBJECT, "found parameter is NULL");
 
 	*found = FALSE;
 

@@ -155,7 +155,6 @@ void randomString(char *str, int max) {
 
 inline int prepareProducts(int halves) {
 	int x = halves * HALFVRTX;
-	int p = 0;
 
 	products = calloc(x, sizeof(vrtx_t));
 	if (products == NULL) {
@@ -163,8 +162,7 @@ inline int prepareProducts(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do p = rand()%(2*x); while(p==0);
-		products[i].id = p;
+		products[i].id = i;
 		randomString(products[i].str, 60);
 	}
 	return 0;
@@ -180,7 +178,7 @@ inline int prepareClients(int halves) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
-		do c = rand()%(2*x); while(c==0);
+		c = i+1;
 		c += 9000000;
 		clients[i].id = c;
 		randomString(clients[i].str, 60);
@@ -371,8 +369,6 @@ int main() {
 	// yet another error
 	EXECFAULTY("select edge from nosuchcontext");
 
-	EXEC("create index vidx_ropo on vertex (role, property)");
-
 	EXEC("create tiny table sales set stress=constant");
 
 	EXEC("create index cidx_ctx_de on sales (destin, edge)");
@@ -453,6 +449,8 @@ int main() {
 	timestamp(&t1);
 
 	int havedata = 1;
+	if (count == 0) havedata = 0;
+
 	sprintf(q, "select edge, destin, timestamp, weight from sales\
 	             where edge = 'buys' and origin=%lu", wanted);
 	EXECCUR(q);
@@ -513,7 +511,7 @@ int main() {
 			rc = EXIT_FAILURE; break;
 		}
 	}
-	if (!nowdb_cursor_eof(cur)) {
+	if (havedata && !nowdb_cursor_eof(cur)) {
 		fprintf(stderr, "this is not EOF!\n");
 		fprintf(stderr, "ERROR %d in cursor: %s\n",
 		        nowdb_cursor_errcode(cur),
@@ -530,12 +528,17 @@ int main() {
 	timestamp(&t2);
 	fprintf(stderr, "time: %ldus\n", minus(&t2, &t1)/1000);
 
-	if (cnt != count) {
+	if (havedata) {
+		if (cnt != count) {
+			fprintf(stderr, "unexpected count: %lu != %lu\n", cnt, count);
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (wt != s) {
+			fprintf(stderr, "unexpected sum: %.4f != %.4f\n", wt, s);
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+	} else if (cnt != 0) {
 		fprintf(stderr, "unexpected count: %lu != %lu\n", cnt, count);
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	if (wt != s) {
-		fprintf(stderr, "unexpected sum: %.4f != %.4f\n", wt, s);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

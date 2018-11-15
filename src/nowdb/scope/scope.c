@@ -792,7 +792,7 @@ static inline nowdb_err_t readCatalog(nowdb_scope_t *scope) {
 static nowdb_err_t dropIndex(nowdb_scope_t     *scope,
                              nowdb_index_desc_t *desc)  {
 	nowdb_err_t err;
-	char *tmp, *path;
+	char *tmp, *path=NULL;
 	
 	if (desc->ctx != NULL) {
 		err = mkthisctxpath(NULL, desc->ctx->name, &path);
@@ -845,7 +845,8 @@ static nowdb_err_t dropAllIndices(nowdb_scope_t *scope,
 static inline nowdb_err_t removeAllIndices(nowdb_scope_t *scope,
                                            nowdb_context_t *ctx) {
 	nowdb_err_t  err;
-	char *tmp, *path;
+	char *tmp = NULL;
+	char *path= NULL;
 	
 	if (ctx != NULL) {
 		err = mkthisctxpath(scope, ctx->name, &tmp);
@@ -1120,7 +1121,7 @@ static inline nowdb_err_t createIndex(nowdb_scope_t     *scope,
 	nowdb_index_desc_t *desc=NULL;
 	nowdb_index_keys_t *k;
 	char *path = NULL;
-	char *tmp;
+	char *tmp  = NULL;
 
 	if (context != NULL) {
 		err = findContext(scope, context, &ctx);

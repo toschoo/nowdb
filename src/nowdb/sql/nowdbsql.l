@@ -40,6 +40,12 @@
 "!="			return NOWDB_SQL_NE;
 "<>"			return NOWDB_SQL_NE;
 
+"+"			return NOWDB_SQL_PLUS;
+"-"			return NOWDB_SQL_MINUS;
+"/"			return NOWDB_SQL_DIV;
+"%"			return NOWDB_SQL_PER;
+"^"			return NOWDB_SQL_POW;
+
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
 	/*

@@ -737,7 +737,8 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 			i++; break;
 
 		case NOWDB_NOTHING:
-			i+=8; break;
+			fprintf(stream, "NULL");
+			i++; break;
 
 		default:
 			return NOWDB_ERR_PROTO;
