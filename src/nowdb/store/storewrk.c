@@ -318,7 +318,6 @@ static inline nowdb_err_t getContent(nowdb_worker_t *wrk,
 static inline void destroyIndexer(nowdb_indexer_t *xer,
                                   uint32_t           n) {
 	if (xer == NULL) return;
-	if (n == 0) return;
 	for(int i=0; i<n; i++) {
 		nowdb_indexer_destroy(xer+i);
 	}

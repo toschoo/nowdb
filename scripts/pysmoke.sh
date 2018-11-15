@@ -1,7 +1,7 @@
 
 echo "RUNNING TEST BATTERY 'PYSMOKE'" > log/pysmoke.log
 
-nohup valgrind --leak-check=full nowdbd -b rsc > log/nowdb.log 2>&1 &
+nohup nowdbd -b rsc > log/nowdb.log 2>&1 &
 if [ $? -ne 0 ]
 then
 	echo "FAILED: cannot run server"
@@ -10,7 +10,6 @@ fi
 
 p=$!
 
-sleep 5 # remove that!
 echo "SERVER $p RUNNING" >> log/pysmoke.log
 
 echo "RUNNING baicsmoke.py" >> log/pysmoke.log

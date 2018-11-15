@@ -214,13 +214,20 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 	nowdb_err_t err=NOWDB_OK;
 	int rc;
 
+	// check this branch! value is never allocated or set!
 	if (*typ == 0) {
+		fprintf(stderr, "IN THAT BRANCH\n");
 		switch(stype) {
 		case NOWDB_AST_FLOAT: *typ = NOWDB_TYP_FLOAT; break;
 		case NOWDB_AST_UINT: *typ = NOWDB_TYP_UINT; break;
 		case NOWDB_AST_INT: *typ = NOWDB_TYP_INT; break;
+		case NOWDB_AST_DATE:
+		case NOWDB_AST_TIME: *typ = NOWDB_TYP_INT; break;
 		case NOWDB_AST_TEXT: *typ = NOWDB_TYP_TEXT; break;
-		default: *value = NULL; return NOWDB_OK;
+		case NOWDB_AST_BOOL: *typ = NOWDB_TYP_BOOL; break;
+		default: 
+			*value = NULL;
+			INVALIDAST("unknown type in AST");
 		}
 	}
 
@@ -286,17 +293,17 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		break;
 
 	default:
-		if (*value != NULL) free(*value);
+		if (*value != NULL) {
+			free(*value); *value = NULL;
+		}
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
 	if (err != NOWDB_OK) {
-		if (*value != NULL) free(*value);
+		if (*value != NULL) {
+			free(*value); *value=NULL;
+		}
 		return err;
-		/*
-		return nowdb_err_get(nowdb_err_invalid,FALSE, OBJECT,
-		                          "value conversion failed");
-		*/
 	}
 	return NOWDB_OK;
 }
@@ -795,6 +802,9 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_index_t  *idx,
 	nowdb_filter_t    *node;
 	int i=0;
 
+	if (nodes == NULL || nodes->len == 0) {
+		INVALIDAST("no nodes");
+	}
 	pidx = calloc(1, sizeof(nowdb_plan_idx_t));
 	if (pidx == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                  FALSE, OBJECT, "allocating plan idx");
@@ -903,9 +913,9 @@ static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
                                              ts_algo_list_t *fields, 
                                              ts_algo_list_t *res) {
 	nowdb_index_keys_t *keys=NULL;
-	nowdb_index_desc_t *desc;
-	nowdb_context_t    *ctx;
-	nowdb_plan_idx_t   *idx;
+	nowdb_index_desc_t *desc=NULL;
+	nowdb_context_t    *ctx=NULL;
+	nowdb_plan_idx_t   *idx=NULL;
 	nowdb_err_t err;
 
 	err = fields2keys(fields, &keys);
@@ -1179,7 +1189,9 @@ static inline nowdb_err_t getConstValue(uint16_t typ,
 		break;
 
 	default:
-		if (*value != NULL) free(*value);
+		if (*value != NULL) {
+			free(*value); *value = NULL;
+		}
 		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
@@ -1202,6 +1214,9 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	nowdb_err_t err;
 	nowdb_model_prop_t *p;
 
+	if (v == NULL) {
+		INVALIDAST("vertex not allowed here");
+	}
 	err = nowdb_model_getPropByName(scope->model,
 	                                   v->roleid,
 	                            field->value, &p);
@@ -1514,6 +1529,9 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 		if (err != NOWDB_OK) break;
 		
 		if (agg) {
+			if (aggs == NULL) {
+				INVALIDAST("aggregates not allowed here");
+			}
 			if (*aggs == NULL) {
 				*aggs = calloc(1, sizeof(ts_algo_list_t));
 				if (*aggs == NULL) {

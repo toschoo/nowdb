@@ -1279,11 +1279,13 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
-				more = 0; err = NOWDB_OK;
+				err = NOWDB_OK;
 			}
 			break;
 		}
 		src = nowdb_reader_page(full);
+		if (src == NULL) return nowdb_err_get(nowdb_err_panic,
+		                 FALSE, OBJECT, "reader has no page");
 		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
 
 			/* we hit the nullrecord */
@@ -1335,6 +1337,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		uint32_t tmp = sz / NOWDB_IDX_PAGE;
 		tmp *= NOWDB_IDX_PAGE;
 		if (tmp < sz) tmp += NOWDB_IDX_PAGE;
+		sz = tmp;
 	}
 
 	err = newReader(reader);
@@ -1388,6 +1391,7 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 
 	(*reader)->page2 = calloc(1, NOWDB_IDX_PAGE);
 	if ((*reader)->page2 == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
 		NOMEM("allocating secondary page");
 		return err;
 	}
@@ -1446,7 +1450,7 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
                                   int type, uint32_t nr,
                                   nowdb_reader_t **sub) {
 
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 
 	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
 	        FALSE, OBJECT, "pointer to reader object is NULL");
@@ -1465,12 +1469,18 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 		if ((*reader)->sub[i] == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                 OBJECT, "subreader is NULL");
+			break;
 		}
 		if ((*reader)->sub[i]->ikeys == NULL &&
 		    type == NOWDB_READER_MERGE) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                OBJECT, "not a range reader");
+			break;
 		}
+	}
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(*reader); *reader = NULL;
+		return err;
 	}
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;

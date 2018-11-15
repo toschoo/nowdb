@@ -641,28 +641,31 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 	}
 
 	fprintf(stderr, "parameters: %u\n", pd->argn);
-	pd->args = calloc(pd->argn, sizeof(nowdb_proc_arg_t));
-	if (pd->args == NULL) {
-		nowdb_proc_desc_destroy(pd); free(pd);
-		NOMEM("allocating procedure parameters");
-		return err;
-	}
 
-	p = nowdb_ast_declare(op); i=0;
-	while(p!=NULL) {
-		fprintf(stderr, "parameter %s (%d)\n",
-		            (char*)p->value, p->stype);
-
-		pd->args[i].name = strdup(p->value);
-		if (pd->args[i].name == NULL) {
+	if (pd->argn > 0) {
+		pd->args = calloc(pd->argn, sizeof(nowdb_proc_arg_t));
+		if (pd->args == NULL) {
 			nowdb_proc_desc_destroy(pd); free(pd);
-			NOMEM("allocating parameter name");
+			NOMEM("allocating procedure parameters");
 			return err;
 		}
-		pd->args[i].typ = nowdb_ast_type(p->stype);
-		pd->args[i].pos = i; // caution!
-
-		p = nowdb_ast_declare(p); i++;
+	
+		p = nowdb_ast_declare(op); i=0;
+		while(p!=NULL) {
+			fprintf(stderr, "parameter %s (%d)\n",
+			            (char*)p->value, p->stype);
+	
+			pd->args[i].name = strdup(p->value);
+			if (pd->args[i].name == NULL) {
+				nowdb_proc_desc_destroy(pd); free(pd);
+				NOMEM("allocating parameter name");
+				return err;
+			}
+			pd->args[i].typ = nowdb_ast_type(p->stype);
+			pd->args[i].pos = i; // caution!
+	
+			p = nowdb_ast_declare(p); i++;
+		}
 	}
 	
 	err = nowdb_scope_createProcedure(scope, pd);
@@ -1430,7 +1433,8 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
                               nowdb_scope_t *scope,
                               nowdb_qry_result_t *res) {
 	nowdb_err_t  err;
-	nowdb_path_t path, epath=NULL;
+	nowdb_path_t path=NULL;
+	nowdb_path_t epath=NULL;
 	nowdb_ast_t *opts, *o;
 	nowdb_ast_t *m;
 	nowdb_bitmap32_t flgs = 0;

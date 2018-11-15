@@ -328,7 +328,9 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
                                                    src->typ,
 		                                   src->val, in2);
 		if (err != NOWDB_OK) {
-			DESTROYIN(in2); free(in2);
+			if (in2 != NULL) {
+				DESTROYIN(in2); free(in2);
+			}
 			return err;
 		}
 		if (in2 != NULL) {

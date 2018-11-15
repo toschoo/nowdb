@@ -710,8 +710,10 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 		goto unlock;
 	}
 
-	ts_algo_list_remove(lib->fthreads, n);
-	addNode(lib->uthreads, n);
+	if (n != NULL) {
+		ts_algo_list_remove(lib->fthreads, n);
+		addNode(lib->uthreads, n);
+	}
 
 unlock:
 	err2 = nowdb_unlock_write(lib->lock);
@@ -1453,13 +1455,13 @@ static void runSession(nowdb_session_t *ses) {
 		// broken pipe: close session
 		if (rc == NOWDB_SQL_ERR_CLOSED) {
 			LOGMSG("SOCKET CLOSED\n");
-			rc = 0; break;
+			break;
 		}
 
 		// EOF: continue, there may come more
 		if (rc == NOWDB_SQL_ERR_EOF) {
 			LOGMSG("EOF\n");
-			rc = 0; continue;
+			continue;
 		}
 
 		// parser error

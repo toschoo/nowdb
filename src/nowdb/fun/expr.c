@@ -170,6 +170,8 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 	OP(*expr)->fun = fun;
 	OP(*expr)->args  = len;
 
+	if (len == 0) return NOWDB_OK;
+
 	OP(*expr)->types = calloc(len, sizeof(nowdb_type_t));
 	if (OP(*expr)->types == NULL) {
 		NOMEM("allocating expression operand types");
@@ -497,6 +499,8 @@ static inline char constEqual(nowdb_const_t *one,
 {
 	if (one->type != two->type) return 0;
 	if (one->value == NULL && two->value == NULL) return 1;
+	if (one->value == NULL) return 0;
+	if (two->value == NULL) return 0;
 	switch(one->type) {
 	case NOWDB_TYP_TEXT:
 		return (strcmp((char*)one->value, (char*)two->value) == 0);
@@ -713,7 +717,7 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
  */
 #define HANDLETEXT(what) \
 	*t = (char)NOWDB_TYP_TEXT; \
-	if (hlp->needtxt) { \
+	if (hlp->needtxt && what != NULL) { \
 		err = getText(hlp, *what, &field->text); \
 		if (err != NOWDB_OK) return err; \
 		*res = field->text; \

@@ -97,12 +97,14 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
  * ------------------------------------------------------------------------
  */
 #define DESTROYREADERS(n,rs) \
-	for(int i=0; i<n; i++) { \
-		if (rs[n] != NULL) { \
-			nowdb_reader_destroy(rs[n]); free(rs[n]); \
+	if (rs != NULL) {\
+		for(int i=0; i<n; i++) { \
+			if (rs[n] != NULL) { \
+				nowdb_reader_destroy(rs[n]); free(rs[n]); \
+			} \
 		} \
 	} \
-	free(rs);
+	free(rs);rs=NULL;
 
 #define DESTROYFILES(f) \
 	for(ts_algo_list_node_t *rr=f->head; \
@@ -200,7 +202,8 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 	
 	err = nowdb_reader_vseq(&cur->rdr, count+1, rds);
 	if (err != NOWDB_OK) {
-		DESTROYREADERS(count+1,rds);
+		// DESTROYREADERS(count+1,rds);
+		DESTROYREADERS(count,rds);
 		return err;
 	}
 	return NOWDB_OK;
@@ -1234,7 +1237,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
  * ------------------------------------------------------------------------
  */
 static inline void finalizeGroup(nowdb_cursor_t *cur, char *src) {
-	if (cur->tmp2 != NULL && src != cur->tmp2) {
+	if (cur->tmp2 != NULL && src != cur->tmp2 && cur->tmp != NULL) {
 		memcpy(cur->tmp2, cur->tmp, cur->recsize);
 	}
 	nowdb_group_reset(cur->group);
@@ -1410,7 +1413,6 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				cur->off += recsz;
 				continue;
 			}
-
 			if (cur->group != NULL || cur->rdr->ko) {
 				// review for vertex !
 				err = groupswitch(cur, ctype, recsz, src, &x);
@@ -1439,13 +1441,17 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 				             buf, sz, osz, &full,
 				                 &cc, &complete);
 			}
-			if (realsrc != (src+cur->off)) free(realsrc);
+			if (realsrc != (src+cur->off)) {
+				free(realsrc); realsrc = NULL;
+			}
 			if (err != NOWDB_OK) return err;
 			if (complete) {
 				cur->off+=recsz;
 				(*count)+=cc;
 
 				// finalise the group (if there is one)
+				// CAUTION: this uses src, which has 
+				//          another meaning with vertices!
 				finalizeGroup(cur, src);
 
 			/* this is an awful hack to force

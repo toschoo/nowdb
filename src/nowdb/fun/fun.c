@@ -493,6 +493,7 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 		MOV(&fun->r1, &x);
 		return NOWDB_OK;
 
+	// this is problematic if fsize == 0
 	} else if (k == fun->fsize) {
 		now2float(&fun->r1, BLOCK(
                            fun->many.head->cont)->block,
@@ -513,6 +514,8 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 		if (i + BLOCK(runner->cont)->sz >= c) break;
 		i+=BLOCK(runner->cont)->sz;
 	}
+	if (runner==NULL) return nowdb_err_get(nowdb_err_panic,
+	           FALSE, OBJECT, "median not found in block");
 	while(i<c) {
 		i++; j++;
 	}

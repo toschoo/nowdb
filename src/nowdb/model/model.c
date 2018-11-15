@@ -543,7 +543,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	nowdb_err_t err = NOWDB_OK;
 	ts_algo_list_t *list;
 	nowdb_path_t p,f;
-	char *buf;
+	char *buf=NULL;
 	uint32_t sz;
 	ts_algo_tree_t *tree;
 
@@ -572,6 +572,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	  FALSE, OBJECT, "impossible value in switch");
 	}
 
+	if (sz == 0) return NOWDB_OK;
 	buf = malloc(sz);
 	if (buf == NULL) {
 		ts_algo_list_destroy(list); free(list);
@@ -759,7 +760,7 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	ts_algo_list_t list;
 	ts_algo_list_node_t *runner;
 	nowdb_path_t p,f;
-	char *buf;
+	char *buf=NULL;
 	uint32_t sz=0;
 	ts_algo_tree_t *byId, *byName;
 	thing_t *thing;
@@ -786,6 +787,9 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 		free(p); return err;
 	}
 
+	if (sz == 0) {
+		free(p); return NOWDB_OK;
+	}
 	buf = malloc(sz);
 	if (buf == NULL) {
 		free(p);

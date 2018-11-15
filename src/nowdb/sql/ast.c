@@ -16,8 +16,10 @@
  * -----------------------------------------------------------------------
  */
 #define ASTCALLOC(k) \
-	n->kids = calloc(k, sizeof(nowdb_ast_t*)); \
-	if (n->kids == NULL) return -1; \
+	if (k > 0) { \
+		n->kids = calloc(k, sizeof(nowdb_ast_t*)); \
+		if (n->kids == NULL) return -1; \
+	} \
 	n->nKids = k; \
 	return 0
 
