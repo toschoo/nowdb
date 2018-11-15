@@ -366,6 +366,469 @@ A cursor is a server-side resource
 and shall be closed using the directive \term{close}.
 \end{minipage}
 
+\section{Exressions}
+Some \sql\ clauses, like \term{select}, 
+\term{where} or \term{insert},
+allow the use of \term{expressions}.
+Which expressions are valid 
+in a specific context varies between
+clauses.
+In all clauses that allow expressions,
+a constant value is a valid expression,
+\eg\ $1, +4, 3.14159,$ \etc\
+
+In some clauses, such as \term{select},
+field names are also valid expressions.
+This will be discussed later.
+
+Expressions are evaluated when the
+\sql\ statement is processed.
+The result of the evaluation is
+a value with a static type.
+In the case of a constant value,
+the result is just that constant value.
+In the case of a field name,
+the result is the value stored in
+the corresponding field in the
+row that is currently processed.
+
+Expressions may be combined
+with operators or functions
+to form more complex expressions.
+If $\circ$ is binary operator
+and $a$ and $b$ are valid expressions,
+then
+$a \circ b$
+is a valid expression too.
+In consequence, $a \circ b$ can
+again be used with an operator
+to form an even more complex
+expression, \eg:
+$a \circ b \circ c$.
+Examples of binary operators are
+$+, -, /$ and $\times$.
+
+To enforce a specific order of
+evaluation, parentheses may be used.
+So, if $a$ is a valid expression,
+$(a)$ is as well.
+That means that $(a+b)/2$
+is a valid expression.
+
+Besides binary operators, there are also
+unary operators, \ie\ operators that
+take only one operand. Those operators
+are usually prefixes. An example of
+a unary operator is $not$:
+if $a$ is a valid expression,
+so is $not~a$.
+
+Expressions may also be defined
+by functions. Functions are very
+similar to operators, but differ
+in the syntax. Functions have the
+form
+
+\identifier{function}(
+\identifier{argument},
+\identifier{argument},
+$\dots$),
+
+where \term{function} is the name
+of the function and the \term{arguments}
+are again expressions.
+If $\Phi$ is a function
+that takes one argument and
+$a$ is a valid expression,
+then $\Phi(a)$ is a valid expression too.
+An example of a function is $log$,
+which computes the natural logarithm
+for a number $a$. Valid expressions,
+hence, are $log(a)$, $log(a)/log(2)$ and
+$log(2.718281828)$.
+
+The validity of an expression depends
+also on types. Operators and functions
+expects arguments of certain types.
+Some operators and functions are limited
+to numeric types or to text; when applied
+to values of types they do not expect,
+the expression evaluates to a type error
+and the related \sql\ statement fails.
+
+In some cases, arguments are \term{promoted}
+to other types. Binary operators typically
+expect both operands to be of the same type.
+If one differs from the other, one of them
+may be promoted.
+
+Promotion for numerical types usually follows 
+the following precedence:
+$\term{float} > \term{int} > \term{uint}$.
+In the following example, we try to
+add a \term{float} and an \term{int}:
+$3.14159 + 1$. In this case, the \term{int}
+is promoted to a \term{float} and the
+result is a \term{float}.
+In general, if at least one of the
+operands or arguments is a \term{float},
+all values are promoted to \term{float}.
+Likewise, it at least one of the operands
+is an \term{int} (but none of them is a \term{float}),
+then all others are promoted to \term{int}.
+Non-numerical types (like \term{bool} and \term{text}),
+however, are never promoted to another type.
+
+\subsection{Operators and Functions}
+\subsubsection{Arithmetic}
+Arithmetic operators and functions
+accept only numerical values.
+If not mentioned otherwise,
+promotion follows precedence as described above.
+The basic arithmetic operators are
+\begin{verbatim}
++, -, /, *, %
+\end{verbatim}
+The first three of them have the obvious meaning.
+
+Division (/), however, is different in that it
+has different meaning for different numerical types.
+For \term{float} values it performs floating point
+division. For integral values (type \term{int} and
+\term{uint}), however, it computes the quotient
+of the Euclidean division, \eg\ $5/2$ is $2$.
+However, $5.0/2$ is $2.5$, because $2$ is promoted
+to \term{float} according to the precedence rule.
+
+The fourth operator (\%) is the remainder of
+the Euclidean division.
+It operates only on integral values and results
+in a type error if applied to a \term{float}.
+
+It should be noted that this is not the modular
+operator ($mod$) with which the remainder is
+often confused. People often expect the 
+remainder to always return a non-negative result.
+But that is not the case. The remainder the
+unique number $r$ for which
+
+$a = qb + r, r < b$,
+
+where $q$ is the quotient $a/b$.
+
+In consequence, if $a$ is negative and $b$
+is positive, then the quotient and the 
+remainder are negative, \eg\
+$-7 = -2\times 3 -1$ for $a=-7$ and $b=3$.
+
+If $a$ is positive and $b$ is negative, then
+the quotient is negative but the remainder
+is positive, \eg\
+$7 = -2\times -3 + 1$.
+
+If both, $a$ and $b$, are negative,
+then then quotient is positive and 
+the remainder is negative, \eg\
+$-7 = -2\times -3 -1$.
+
+\paragraph{Power}
+The power operator is
+\begin{verbatim}
+^
+\end{verbatim}
+
+It always promotes all its arguments to \term{float}
+and always returns a \term{float}.
+
+Please notice that there is no \term{root} operator.
+Instead, the root is computed by raising to the power
+of a fraction, \eg:
+$\sqrt[2]{n} = n^{(1/2)}$
+$\sqrt[3]{n} = n^{(1/3)}$
+$\sqrt[4]{n} = n^{(1/4)}$, \etc
+
+\paragraph{Log}
+As mentioned, the function $log$
+implements the natural logarithm.
+The function promotes its argument to \term{float}
+and always returns a \term{float}.
+
+The natural logarithm finds $x$ in the equation
+$n=e^{x}$ for a given $n$, where $e$ is the
+\term{Euler-Napier} constant, which is
+$\approx 2.718281828$.
+
+Logarithms to any base other than $e$
+can be easily found by the formula
+$\log(n)/\log(b)$, where $b$ is the
+desired base. The binary logarithm
+of $n$, for instance, is
+$\log(n)/\log(2)$.
+
+\paragraph{Abs and Rounding}
+The function $abs$ computes the
+absolute value of argument, \eg:
+$abs(-1)$ is 1.
+The function accepts any numerical type
+and returns a value of the same type as the argument.
+
+The rounding functions are $round$, $ceil$ and $floor$.
+All of them promote their argument to \term{float}
+and always return a \term{float} value.
+$round(n)$ returns the integer closest to $n$,
+which may be $n$ itself; if the next greater and
+next smaller integer are equally far away,
+\ie\ if the digital part of $n$ is $.5$,
+the result is the next greater integer.
+
+$ceil(n)$ returns $n$ if $n$ is an integer or,
+otherwise, the next integer; \eg: $ceil(1.1)$ is 2.
+
+$floor(n)$ returns either $n$ (if $n$ is an integer)
+or, otherwise, the previous integer, \ie\ it always rounds down;
+\eg: $floor(1.9)$ is 1.
+
+\subsubsection{Conversions}
+\nowdb\ provides explicit conversion functions
+between numerical types. The conversion functions
+are   
+$tofloat, toint$ and $touint$.
+If conversion is applied according to precedence,
+the respective function has the obvious result,
+\ie\ converting upwards preserves the full value
+if possible.
+$tofloat(1)$, for instance, is $1.0$ and
+$toint(1)$ is $1$.
+$toint(18446744073709551615)$, however, is $-1$.
+This is because $18446744073709551615$ is
+$2^{64}-1$ and, hence, out of range of \term{int}.
+Similar effects happen with applications of
+$tofloat$ on values out of range.
+Please refer to the 
+\acronym{ieee}-754 specification for details.
+
+Converting against precedence,
+\ie\ converting downwards,
+does not always preserve the value.
+In particular, when converting a \term{float}
+value to an integral type, the decimal part
+is lost, \eg\ $toint(3.14159)$ is 3.
+
+Converting negative numbers to \term{uint},
+does not preserve value, but the bit pattern.
+$touint(-1)$, for instance, is
+$18446744073709551615$.
+
+There is also a way to create a textual
+representation of a number, namely $totext$.
+This function always produces a textual
+representation of the constructor for that
+number expression,
+\eg\ $totext(1.0)$ is '1.0',
+$totext(1)$ is '1' and
+$totext(+1)$ is '+1'.
+\comment{totext is not yet available.
+Further missing are the inverse functions
+parsefloat, parseint, parseuint, parsebool.}
+
+\subsubsection{Boolean}
+Boolean operators and functions
+are those that result in a Boolean value.
+They are, hence, not defined by the type
+of their argument, but by their result type.
+
+There are different categories of Boolean
+operators (or functions):
+boolean operators in the strict sense,
+comparisons and special Operators.
+
+\paragraph{Boolean Operators in the Strict Sense}
+are \keyword{and}, \keyword{or} and \keyword{not}.
+What makes them strict Boolean operators is
+that their operands must be Boolean values.
+Boolean operators can be used in all clauses
+where expressions can be used.
+But they are especially important for the
+\term{where} clause and will be discussed
+in more detail there (please refer to section
+\ref{subsec_where}.
+
+\paragraph{Comparisons}
+compare values and return
+a Boolean value according to the comparison.
+Some comparisons are restricted in terms
+of the types of their arguments;
+others are unlimited. All comparisons, however,
+must always compare values of the same type.
+Otherwise, a type error is generated.
+
+The comparison operators are
+\begin{verbatim}
+= < > <= >= != <>
+\end{verbatim}
+These translate to the mathematical operations
+$=,<,>,\le,\ge,\neq$,
+where for $\neq$ two ways of writing are
+permitted, namely
+\begin{verbatim} 
+!= <>
+\end{verbatim} 
+
+\paragraph{Special Operators}
+\term{in},
+\term{between},
+\term{exists}
+ \term{any}, \term{all},
+
+
+\subsubsection{Time}
+year, month, week, mday, wday, hour, min,
+sec, milli, micro, nano, format
+\comment{Not yet available}
+
+\subsubsection{Text}
+\comment{Not yet available}
+
+\subsection{Aggregates}\label{sec_agg}
+\subsubsection{count}
+The function is applied either to the row (\keyword{count}(*))
+or to a field (\keyword{count}(\identifier{field}).
+Applied to the entire row, it counts the number of elements
+in the result set.
+When applied to a field, it is usually combined with
+\keyword{distinct} (\comment{which is not yet available}),
+otherwise the result would be the same as applying it to the row.
+Common examples are therefore:
+
+\keyword{select} \keyword{count}(*) \keyword{from} \identifier{sales}
+
+and
+
+\keyword{select} \keyword{count}(\keyword{distinct} \keyword{edge})
+\keyword{from} \identifier{sales}
+
+The return type is always \keyword{uint}.
+
+\comment{
+In the following sections, we leave the option to qualify
+a field with \keyword{distinct} out (as well as any other
+qualifiers). It is not yet available anyway.
+}
+
+\subsubsection{sum}
+The function is always applied to a field.
+and produces the sum of the values in that field over the result set.
+The return type depends on the type of the input field.
+Example:
+
+\keyword{select} \keyword{sum}(\keyword{weight}) \keyword{from} \identifier{sales}
+
+\subsubsection{max and min}
+The functions are always applied to a field.
+Function \term{max} produces the greatest value in the result set
+and function \term{min} produces the smallest value in the result set.
+The return type depends on the type of the input field.
+Example:
+
+\keyword{select} \keyword{max}(\keyword{weight}), \keyword{min}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\subsubsection{spread}
+The Function is always applied to a field.
+It produces the difference $max - min$,
+where $max$ is the greatest value in the result set
+and $min$ is the smallest value in the result set.
+The return type depends on the type of the input field.
+Example:
+
+\keyword{select} \keyword{spread}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\subsubsection{avg}
+The Function is always applied to a field.
+It produces the arithmetic mean of the values
+of this field in the result set, \ie
+$\left(\sum{x}\right)/n$, where $x$ represents the
+field values in the result set and $n$
+is the number of rows (\ie\ \keyword{count}(*)).
+The return type is \keyword{float}.
+Example:
+
+\keyword{select} \keyword{avg}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\subsubsection{median}
+The function is always applied to a field.
+It finds the central point (or, in case
+the number of rows is even, the average
+of the two central points), when all
+rows are ordered according to the field.
+The return type is \keyword{float}.
+Example:
+
+\keyword{select} \keyword{median}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+No precaution is currently taken for the case
+that the result set outgrows available memory.
+In that case the query will fail (and probably the queries
+in other sessions too).
+}
+
+\subsubsection{mode}
+The function is always applied to a field.
+It finds the most frequent value in the result set.
+The return type depends on the type of the input field.
+
+\keyword{select} \keyword{mode}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+Not yet available
+}
+
+\subsubsection{stddev}
+The function is always applied to a field.
+It finds the standard deviation according to the formula:
+
+\[
+\sqrt{\frac{\sum_{i=N}^{N}{(x_i - \overline{x})^2}}{N-1}},
+\]
+
+where $N$ is the number of rows in the result set,
+$x_i$ is the $i$th element and $\overline{x}$ is
+the arithmetic mean (\ie\ \keyword{avg}).
+
+The return type is \keyword{float}.
+
+\keyword{select} \keyword{stddev}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+\comment{
+Note that there is not much optimisation done in aggregates.
+For instance, \term{median} and \term{stddev} create a
+collection of all values, but each one creates its own collection.
+That is, the values are collected twice.
+}
+
+\subsubsection{integral}
+The function is always applied to a field and
+can only be applied to edges.
+It computes the area under the curve with
+\term{timestamp} on the $x$-axis and the field,
+to which \term{integral} is applied,
+on the $y$-axis. Example:
+
+\keyword{select} \keyword{integral}(\keyword{weight})
+\keyword{from} \identifier{sales}
+
+The return type is \keyword{float}.
+
+\comment{
+Not yet available
+}
+
 \section{Data Definition}
 \comment{Due to some time pressure in producing this document,
 there are no syntax diagrams, which would make things much
@@ -1328,7 +1791,7 @@ Correlation combines two or more edges.
 in support libraries of high-level languages than in \sql.
 Some input from an expert would help ;-)}
 
-\subsection{Where Clause}
+\subsection{Where Clause}\label{subsec_where}
 The \term{where} clause adds criteria for the selection
 of specific rows. \term{where} clauses can be very complex.
 Indeed, a \term{where} clause is one complex \term{Boolean} expression.
@@ -1779,163 +2242,6 @@ sorted in memory and, since there are few rows in one
 micro-period, that is fast and does not impact latency.
 The whole query may be slow, but there are always
 data for the caller to make progress.
-}
-
-\subsection{Operators and Functions}
-\subsubsection{Boolean}
-$=,<,>,\le,\ge,\neq$,
-\term{between},
-\term{and}, \term{or}, \term{not},
-\term{in}, \term{any}, \term{all},
-\term{exists}
-
-\subsubsection{Arithmetic}
-$+,-,\times, \div, \%, m^n, \sqrt[m]{n}$,
-$\log, \mod, \dots$
-
-\comment{Not yet available}
-
-\subsubsection{Text}
-\comment{Not yet available}
-
-\subsection{Aggregates}\label{sec_agg}
-\subsubsection{count}
-The function is applied either to the row (\keyword{count}(*))
-or to a field (\keyword{count}(\identifier{field}).
-Applied to the entire row, it counts the number of elements
-in the result set.
-When applied to a field, it is usually combined with
-\keyword{distinct} (\comment{which is not yet available}),
-otherwise the result would be the same as applying it to the row.
-Common examples are therefore:
-
-\keyword{select} \keyword{count}(*) \keyword{from} \identifier{sales}
-
-and
-
-\keyword{select} \keyword{count}(\keyword{distinct} \keyword{edge})
-\keyword{from} \identifier{sales}
-
-The return type is always \keyword{uint}.
-
-\comment{
-In the following sections, we leave the option to qualify
-a field with \keyword{distinct} out (as well as any other
-qualifiers). It is not yet available anyway.
-}
-
-\subsubsection{sum}
-The function is always applied to a field.
-and produces the sum of the values in that field over the result set.
-The return type depends on the type of the input field.
-Example:
-
-\keyword{select} \keyword{sum}(\keyword{weight}) \keyword{from} \identifier{sales}
-
-\subsubsection{max and min}
-The functions are always applied to a field.
-Function \term{max} produces the greatest value in the result set
-and function \term{min} produces the smallest value in the result set.
-The return type depends on the type of the input field.
-Example:
-
-\keyword{select} \keyword{max}(\keyword{weight}), \keyword{min}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\subsubsection{spread}
-The Function is always applied to a field.
-It produces the difference $max - min$,
-where $max$ is the greatest value in the result set
-and $min$ is the smallest value in the result set.
-The return type depends on the type of the input field.
-Example:
-
-\keyword{select} \keyword{spread}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\subsubsection{avg}
-The Function is always applied to a field.
-It produces the arithmetic mean of the values
-of this field in the result set, \ie
-$\left(\sum{x}\right)/n$, where $x$ represents the
-field values in the result set and $n$
-is the number of rows (\ie\ \keyword{count}(*)).
-The return type is \keyword{float}.
-Example:
-
-\keyword{select} \keyword{avg}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\subsubsection{median}
-The function is always applied to a field.
-It finds the central point (or, in case
-the number of rows is even, the average
-of the two central points), when all
-rows are ordered according to the field.
-The return type is \keyword{float}.
-Example:
-
-\keyword{select} \keyword{median}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\comment{
-No precaution is currently taken for the case
-that the result set outgrows available memory.
-In that case the query will fail (and probably the queries
-in other sessions too).
-}
-
-\subsubsection{mode}
-The function is always applied to a field.
-It finds the most frequent value in the result set.
-The return type depends on the type of the input field.
-
-\keyword{select} \keyword{mode}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\comment{
-Not yet available
-}
-
-\subsubsection{stddev}
-The function is always applied to a field.
-It finds the standard deviation according to the formula:
-
-\[
-\sqrt{\frac{\sum_{i=N}^{N}{(x_i - \overline{x})^2}}{N-1}},
-\]
-
-where $N$ is the number of rows in the result set,
-$x_i$ is the $i$th element and $\overline{x}$ is
-the arithmetic mean (\ie\ \keyword{avg}).
-
-The return type is \keyword{float}.
-
-\keyword{select} \keyword{stddev}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-\comment{
-Note that there is not much optimisation done in aggregates.
-For instance, \term{median} and \term{stddev} create a
-collection of all values, but each one creates its own collection.
-That is, the values are collected twice.
-}
-
-\subsubsection{integral}
-The function is always applied to a field and
-can only be applied to edges.
-It computes the area under the curve with
-\term{timestamp} on the $x$-axis and the field,
-to which \term{integral} is applied,
-on the $y$-axis. Example:
-
-\keyword{select} \keyword{integral}(\keyword{weight})
-\keyword{from} \identifier{sales}
-
-The return type is \keyword{float}.
-
-\comment{
-Not yet available
 }
 
 \section{Miscellaneous}
