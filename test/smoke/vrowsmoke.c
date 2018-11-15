@@ -55,7 +55,7 @@ nowdb_vrow_t *createVrow(nowdb_filter_t *filter) {
 	nowdb_vrow_t *vrow;
 	nowdb_err_t err;
 
-	err = nowdb_vrow_create(ROLE, &vrow, filter);
+	err = nowdb_vrow_fromFilter(ROLE, &vrow, filter);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create VRow: ");
 		nowdb_err_print(err);

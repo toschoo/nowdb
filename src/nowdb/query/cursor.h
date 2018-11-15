@@ -40,7 +40,8 @@ typedef struct {
 	nowdb_group_t     *group; /* grouping                      */
 	nowdb_group_t     *nogrp; /* apply aggs without grouping   */
 	nowdb_model_vertex_t  *v; /* type if this is not a join!   */
-	nowdb_vrow_t       *vrow; /* vertex row                    */
+	nowdb_vrow_t       *wrow; /* vertex row for where          */
+	nowdb_vrow_t       *prow; /* vertex row for projection     */
 	uint32_t             off; /* offset in the current reader  */
 	uint32_t         recsize; /* record size                   */
 	char                *tmp; /* temporary buffer              */

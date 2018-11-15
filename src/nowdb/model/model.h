@@ -158,6 +158,14 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
                                       nowdb_model_prop_t **prop);
 
 /* ------------------------------------------------------------------------
+ * Get Primary key of that vertex (roleid)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPK(nowdb_model_t      *model,
+                              nowdb_roleid_t     roleid,
+                              nowdb_model_prop_t **prop);
+
+/* ------------------------------------------------------------------------
  * Get all properties of vertex (roleid)
  * ------------------------------------------------------------------------
  */

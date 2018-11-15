@@ -91,6 +91,16 @@ typedef struct {
 	}
 
 /* ------------------------------------------------------------------------
+ * Macro to add a kid as param to an existing ast node
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_ADDPARAM(n, k) \
+	if (nowdb_ast_addParam(n,k) != 0) { \
+		nowdbres->errcode = NOWDB_SQL_ERR_NO_MEM; \
+		return; \
+	}
+
+/* ------------------------------------------------------------------------
  * Macro to set a string, removing '
  * ------------------------------------------------------------------------
  */

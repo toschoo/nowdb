@@ -751,6 +751,84 @@ def wherein1att(c):
         if n < 1:
             raise db.TestFailed("nothing found")
 
+# select primary key where att IN
+def whereinatts(c):
+
+    print "RUNNING TEST 'whereinatts'"
+
+    idx = random.randint(2,len(ps)-1)
+    k = ps[idx].key
+    d1 = ps[idx].desc
+    c1 = ps[idx].cat
+
+    l = ps[idx-1].key
+    d2 = ps[idx-1].desc
+    c2 = ps[idx-1].cat
+
+    if idx < len(ps)-1:
+       m = ps[idx+1].key
+       d3 = ps[idx+1].desc
+       c3 = ps[idx+1].cat
+    else:
+       m = ps[idx-2].key
+       d3 = ps[idx-2].desc
+       c3 = ps[idx-2].cat
+
+    # select atts where att in (...)
+    stmt = "select prod_desc, prod_price from product where prod_desc in ('%s', '%s', '%s')" % (d1,d2,d3)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != d1 and \
+               row.field(0) != d2 and \
+               row.field(0) != d3:
+                raise db.TestFailed("wrong desc selected: %d" % row.field(0))
+        if n < 1:
+            raise db.TestFailed("nothing found")
+
+    # select atts where att in (...) and key in
+    stmt = "select prod_desc, prod_price from product \
+             where prod_desc in ('%s', '%s', '%s')    \
+               and prod_key in (%d, %d, %d)" % (d1,d2,d3,k,l,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != d1 and \
+               row.field(0) != d2 and \
+               row.field(0) != d3:
+                raise db.TestFailed("wrong desc selected: %d" % row.field(0))
+        if n < 1:
+            raise db.TestFailed("nothing found")
+
+    # this one causes a mem leak in filter -- but why???
+    # select atts where att in (...) and att in
+    stmt = "select prod_desc, prod_cat, prod_price from product \
+             where prod_desc in ('%s', '%s', '%s')    \
+               and prod_cat in (%d, %d, %d)" % (d1,d2,d3,c1,c2,c3)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d (%d): %s" % (k, cur.code(), cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != d1 and \
+               row.field(0) != d2 and \
+               row.field(0) != d3:
+                raise db.TestFailed("wrong desc selected: %d" % row.field(0))
+            if row.field(1) != c1 and \
+               row.field(1) != c2 and \
+               row.field(1) != c3:
+                raise db.TestFailed("wrong cat selected: %d" % row.field(1))
+        if n < 1:
+            raise db.TestFailed("nothing found")
+        print "found %d" % n
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
@@ -763,10 +841,6 @@ if __name__ == "__main__":
         attswhereatts(c)
         whereinvid(c)
         wherein1att(c)
-        # whereinatts(c)
-        # constwhereatts(c)
-        # constwherevid(c)
+        whereinatts(c)
 
         print "PASSED"
-
-

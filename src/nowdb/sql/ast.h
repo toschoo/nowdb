@@ -195,8 +195,9 @@
 #define NOWDB_AST_FIELD    10303
 #define NOWDB_AST_DECL     10305
 #define NOWDB_AST_OFF      10306
-#define NOWDB_AST_FUN      10307
-#define NOWDB_AST_PARAM    10308
+#define NOWDB_AST_OP       10307
+#define NOWDB_AST_FUN      10308
+#define NOWDB_AST_PARAM    10309
 
 /* -----------------------------------------------------------------------
  * Values
@@ -298,6 +299,12 @@ void nowdb_ast_setValueAsString(nowdb_ast_t *n, int vtype, void *val);
 int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k);
 
 /* -----------------------------------------------------------------------
+ * Add a kid to this AST node as parameter
+ * -----------------------------------------------------------------------
+ */
+int nowdb_ast_addParam(nowdb_ast_t *n, nowdb_ast_t *k);
+
+/* -----------------------------------------------------------------------
  * Show the AST (prints to stdout)
  * -----------------------------------------------------------------------
  */
@@ -394,10 +401,16 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *node);
 nowdb_ast_t *nowdb_ast_value(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
- * Get field list from fun
+ * Get param list from fun
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_param(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
+ * Get next param from param
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_nextParam(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
  * Get 'from' from the current AST node (DQL only)

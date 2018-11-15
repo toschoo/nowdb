@@ -363,6 +363,7 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 		free(qr); qr = NULL;
 		ROW(row)->res.resType = NOWDB_QRY_RESULT_NOTHING;
 		ROW(row)->res.result  = NULL;
+		return -1;
 	}
 	qr->row = tmp;
 	ROW(row)->res.result = qr;

@@ -139,10 +139,12 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
 		}
 		b->block = malloc(blist->sz);
 		if (b->block == NULL) {
+			free(b);
 			NOMEM("allocating block");
 			return err;
 		}
 		if (ts_algo_list_insert(&blist->flist, b) != TS_ALGO_OK) {
+			free(b->block); free(b);
 			NOMEM("list.insert");
 			return err;
 		}
@@ -160,7 +162,7 @@ nowdb_err_t nowdb_blist_get(nowdb_blist_t  *blist,
 nowdb_err_t nowdb_blist_give(nowdb_blist_t   *blist,
                              ts_algo_list_t *blocks) {
 	nowdb_err_t err;
-	ts_algo_list_node_t *tmp;
+	ts_algo_list_node_t *tmp=NULL;
 
 	err = nowdb_blist_get(blist, &tmp);
 	if (err != NOWDB_OK) return err;
@@ -177,7 +179,7 @@ nowdb_err_t nowdb_blist_give(nowdb_blist_t   *blist,
 nowdb_err_t nowdb_blist_giva(nowdb_blist_t   *blist,
                              ts_algo_list_t *blocks) {
 	nowdb_err_t err;
-	ts_algo_list_node_t *tmp;
+	ts_algo_list_node_t *tmp=NULL;
 
 	err = nowdb_blist_get(blist, &tmp);
 	if (err != NOWDB_OK) return err;

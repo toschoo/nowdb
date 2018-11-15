@@ -25,7 +25,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
                            ts_algo_list_t *fields) {
 	nowdb_err_t err=NOWDB_OK;
 	ts_algo_list_node_t *runner;
-	nowdb_field_t *tmp;
+	nowdb_expr_t tmp;
 	int i=0;
 
 	ROWNULL();
@@ -35,50 +35,61 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	if (scope == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                           FALSE, OBJECT, "scope is NULL");
 
-	row->model = scope->model;
-	row->text  = scope->text;
-	row->tlru = NULL;
-	row->v = NULL;
-	row->p = NULL;
-	row->e = NULL;
-	row->o = NULL;
-	row->d = NULL;
+	row->eval.model = scope->model;
+	row->eval.text  = scope->text;
+	row->eval.tlru = NULL;
+	row->eval.ce = NULL;
+	row->eval.cv = NULL;
+	row->eval.needtxt = 1;
 	row->cur = 0;
 	row->fur = 0;
-	row->vcur = 0;
+	// row->vcur = 0;
 	row->dirty = 0;
-	row->vrtx = NULL;
+	// row->vrtx = NULL;
 
 	row->fields = NULL;
 
 	row->sz = fields->len;
 	if (row->sz == 0) return NOWDB_OK;
 
-	row->fields = calloc(row->sz,sizeof(nowdb_field_t));
+	ts_algo_list_init(&row->eval.em);
+	ts_algo_list_init(&row->eval.vm);
+
+	row->fields = calloc(row->sz,sizeof(nowdb_expr_t));
 	if (row->fields == NULL) {
 		NOMEM("allocating fields");
 		return err;
 	}
+	/*
 	row->vrtx = calloc(row->sz, sizeof(nowdb_vertex_t));
 	if (row->vrtx == NULL) {
 		NOMEM("allocating vertex memory");
 		free(row->fields); row->fields = NULL;
 		return err;
 	}
-	row->tlru = calloc(1, sizeof(nowdb_ptlru_t));
-	if (row->tlru == NULL) {
+	*/
+	row->eval.tlru = calloc(1, sizeof(nowdb_ptlru_t));
+	if (row->eval.tlru == NULL) {
 		NOMEM("allocating text lru");
 		free(row->fields); row->fields = NULL;
-		free(row->vrtx); row->vrtx = NULL;
+		// free(row->vrtx); row->vrtx = NULL;
 		return err;
 	}
-	err = nowdb_ptlru_init(row->tlru, 100000);
+	err = nowdb_ptlru_init(row->eval.tlru, 100000);
 	if (err != NOWDB_OK) {
 		nowdb_row_destroy(row);
 		return err;
 	}
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
 		tmp = runner->cont;
+
+		err = nowdb_expr_copy(tmp, row->fields+i);
+		if (err != NOWDB_OK) {
+			// destroy what we created
+			break;
+		}
+
+		/*
 		memcpy(row->fields+i, tmp, sizeof(nowdb_field_t));
 		row->fields[i].name = NULL;
 		if (tmp->name != NULL) {
@@ -92,6 +103,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 			           &row->fields[i].propid);
 			if (err != NOWDB_OK) break;
 		}
+		*/
 		i++;
 	}
 	if (err != NOWDB_OK) {
@@ -109,47 +121,21 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 	if (row == NULL) return;
 	if (row->fields != NULL) {
 		for(int i=0;i<row->sz;i++) {
-			if (row->fields[i].name != NULL) {
-				free(row->fields[i].name);
-				row->fields[i].name = NULL;
-			}
-			if (row->fields[i].value != NULL) {
-				free(row->fields[i].value);
-				row->fields[i].value = NULL;
+			if (row->fields[i] != NULL) {
+				nowdb_expr_destroy(row->fields[i]);
+				free(row->fields[i]);
+				row->fields[i] = NULL;
 			}
 		}
 		free(row->fields); row->fields = NULL;
 	}
+	/*
 	if (row->vrtx != NULL) {
 		free(row->vrtx); row->vrtx = NULL;
 	}
-	if (row->p != NULL) {
-		free(row->p); row->p = NULL;
-	}
-	if (row->tlru != NULL) {
-		nowdb_ptlru_destroy(row->tlru);
-		free(row->tlru); row->tlru = NULL;
-	}
-}
-
-/* ------------------------------------------------------------------------
- * Helper: get text and cache it
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t getText(nowdb_row_t *row,
-                                  nowdb_key_t  key,
-                                  char       **str) {
-	nowdb_err_t err;
-
-	err = nowdb_ptlru_get(row->tlru, key, str);
-	if (err != NOWDB_OK) return err;
-
-	if (*str != NULL) return NOWDB_OK;
-
-	err = nowdb_text_getText(row->text, key, str);
-	if (err != NOWDB_OK) return err;
-
-	return nowdb_ptlru_add(row->tlru, key, *str);
+	*/
+	nowdb_eval_destroy(&row->eval);
+	
 }
 
 /* ------------------------------------------------------------------------
@@ -214,6 +200,7 @@ static inline nowdb_err_t projectFun(nowdb_row_t *row,
  * Helper: constant projection
  * ------------------------------------------------------------------------
  */
+/*
 static inline nowdb_err_t projectConst(nowdb_field_t *field,
                                        char *buf, uint32_t sz,
                                        uint32_t *osz, char *nsp) {
@@ -253,11 +240,13 @@ static inline nowdb_err_t projectConst(nowdb_field_t *field,
 	}
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Helper: edge projection
  * ------------------------------------------------------------------------
  */
+/*
 static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
                                            nowdb_edge_t *src,
                                            int i,
@@ -285,7 +274,11 @@ static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
 		err = nowdb_model_getVertexById(row->model,
 		                   row->e->destin, &row->d);
 		if (err != NOWDB_OK) return err;
+
 	}
+
+	// evaluate expression
+
 	switch(row->fields[i].off) {
 
 	case NOWDB_OFF_EDGE:
@@ -351,11 +344,13 @@ static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
 	}
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Helper: get vertex model
  * ------------------------------------------------------------------------
  */
+/*
 static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
 	nowdb_err_t err;
 
@@ -381,11 +376,13 @@ static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
 	}
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Helper: vertex projection
  * ------------------------------------------------------------------------
  */
+/*
 static inline nowdb_err_t projectVertex(nowdb_row_t *row,
                                         char *buf,
                                         uint32_t sz,
@@ -423,6 +420,7 @@ static inline nowdb_err_t projectVertex(nowdb_row_t *row,
 	row->vcur = 0;
 	return NOWDB_OK;
 }
+*/
 
 static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 	int k=-1;
@@ -436,8 +434,11 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 			v->property);
 		*/
 
+
+		/*
 		if (row->fields[i].target != NOWDB_TARGET_VERTEX) continue;
 		if (row->fields[i].propid == v->property) return i;
+		*/
 
 		/* this is stupid */
 		/*
@@ -447,6 +448,15 @@ static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
 		*/
 	}
 	return k;
+}
+
+static inline uint32_t getSize(nowdb_type_t t, void *val) {
+	switch(t) {
+	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val)+1;
+	case NOWDB_TYP_BOOL: return 1;
+	case NOWDB_TYP_NOTHING: return 0;
+	default: return 8;
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -462,24 +472,49 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               uint32_t *osz, char *full,
                               char *cnt, char *ok) {
 	nowdb_err_t err;
-	char nsp = 0;
+	void *val=NULL;
+	nowdb_type_t typ;
+	char t;
+	uint32_t s=0;
 
 	ROWNULL();
 
 	*full=0;
-	*ok = 0;
-	*cnt = 0;
+	*ok  =0;
+	*cnt =0;
+
+	// we still need to write the linebreak
+	// of the previous row
 	if (row->cur == 0 && row->dirty) {
 		if ((*osz)+1 < sz) {
 			buf[*osz] = '\n';
 			(*osz)++;
 			row->dirty = 0;
-			// fprintf(stderr, "dirty love\n");
 			(*cnt)++; *ok=1;
 			return NOWDB_OK;
 		}
 	}
+
+	// project the fields
 	for(int i=row->cur; i<row->sz; i++) {
+		err = nowdb_expr_eval(row->fields[i], &row->eval,
+		                                 src, &typ, &val);
+		if (err != NOWDB_OK) return err;
+
+		t = (char)typ;
+		s = getSize(t, val);
+		if (*osz + s + 1 >= sz) {
+			row->cur = i; *full=1;
+			return NOWDB_OK;
+		}
+		memcpy(buf+(*osz), &t, 1); (*osz)++;
+		if (s > 0) {
+			memcpy(buf+(*osz), val, s); *osz+=s;
+		}
+
+		// fprintf(stderr, "%d: %u\n", i, *osz);
+
+		/*
 		if (row->fields[i].target == NOWDB_TARGET_NULL) {
 			fprintf(stderr, "projecting constant\n");
 			if (row->fields[i].value == NULL) continue;
@@ -506,13 +541,13 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			}
 
 		} else {
-			/* this is all quite disgusting.
-			 * we urgently need a clean solution
-			 * vor vertices! */
+			// this is all quite disgusting.
+			// we urgently need a clean solution
+			// vor vertices! 
 			*ok = 1;
 
-			/* we need the vertex model to decide
-			 * what is primary key */
+			// we need the vertex model to decide
+			// what is primary key
 			if (row->v == NULL) {
 				memcpy(row->vrtx, src,
 				  sizeof(nowdb_vertex_t));
@@ -524,8 +559,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			if (!row->dirty) row->dirty = 1;
 			memcpy(row->vrtx+k, src, sizeof(nowdb_vertex_t));
 
-			/* if we have the primary key, force
-			 * the primary key vertex into value */
+			// if we have the primary key, force
+			// the primary key vertex into value
 			if (row->p != NULL && row->p[k]->pk) {
 				memcpy(&row->vrtx[k].value,
 				       &row->vrtx[k].vertex,8);
@@ -535,7 +570,9 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			return NOWDB_OK;
 		}
 		if (!row->dirty) row->dirty = 1;
+		*/
 	}
+	/*
 	if (*ok && recsz == sizeof(nowdb_vertex_t)) {
 		err = projectVertex(row, buf, sz, osz, &nsp);
 		if (err != NOWDB_OK) return err;
@@ -544,6 +581,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 			return NOWDB_OK;
 		}
 	}
+	*/
+	// terminate line
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';
 		(*osz)++;

@@ -290,7 +290,7 @@ static inline void cleanBuf(nowdb_loader_t *ldr) {
  */
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	nowdb_err_t err;
-	size_t r, sz, off=0;
+	size_t r, sz=0, off=0;
 	struct timespec t1, t2;
 
 	ldr->loaded = 0;
