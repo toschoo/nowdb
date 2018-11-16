@@ -3,7 +3,7 @@
 and query data in a database; traditionally
 \sql\ is used with relational databases.
 In recent years, however, people have
-started to use \sql\ also in other context,
+started to use \sql\ also in other contexts,
 such as \term{graph} and \term{timeseries}
 databases and new patterns are evolving
 in the language to better address those
@@ -47,7 +47,7 @@ a \acronym{dql} statement, for instance,
 typically has a \term{select} clause and
 a \term{from} clause and may have
 additional clauses (\term{where},
-\term{order by}, \etc).
+\term{order by}, \term{group by} and so on).
 
 Some clauses can appear in more than
 one type of statement. \term{update}
@@ -120,10 +120,10 @@ urgent to-do.}
 
 Keywords and identifiers are case-insensitive.
 There is no difference between
-\term{SELECT}, \term{select} or \term{Select}
+`\acronym{select}', `select' or `Select'
 and so on.
 Text, by contrast, is case-sensitive;
-\term{'hello world'} and \term{hello World}
+`hello world' and `hello World'
 are not the same thing!
 
 \sql\ is a \term{guest} language
@@ -139,7 +139,7 @@ Another way is a host language
 that provides means to pass \sql\ statements
 to the database and means to receive
 and interpret the results produced by such statements.
-For \nowdb, Python, C and Lua (\comment{Lua not yet})
+For \nowdb, Python, C, Go and Lua (\comment{Go and Lua not yet})
 are available as host languages.
 
 The protocol that defines how data are exchanged
@@ -204,6 +204,8 @@ Likewise, signed or unsigned integers are converted to floats
 if necessary (and possible) and a float might be converted
 to an integer (or unsigned integer) if it actually
 represents an integer.
+
+The static types are
 
 \begin{minipage}{\textwidth}
 \textbf{Integer}\\
