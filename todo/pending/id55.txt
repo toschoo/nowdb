@@ -1,0 +1,3 @@
+refactor fetch
+--------------
+refactor fetch, so it's easier to adapt for join

@@ -244,19 +244,11 @@ Values:  \acronym{utc} 1677-09-21T00:12:44 --
          \acronym{utc} 2262-04-11T23:47:16 \\
 Precision: nanosecond. \\
 Note, however, that range and precision depend on server configuration.
-With less precision, a higher range can be reached.
+With less precision, a greater range can be reached.
 Please refer to the database configuration guide. \\
 Timezone: \acronym{utc} \\
 Constructor: any integer or any string following \acronym{iso}-8601 
 or any string following a locally defined time format. \\
-\comment{It should be possible to perform arithmetic
-with time units and timestamps
-in \sql, \eg: \\
-\term{where timestamp = today + 7*day}.\\
-That is, why a null type makes sense for time.
-Currently, arithmetic with time is not possible in \sql.
-(It is possible with the date and time types in host languages, though,
-and therefore not urgent.)} \\
 Examples:\\
 1535284617906179393, \\
 '1940-12-21', \\
@@ -267,7 +259,7 @@ Examples:\\
 \begin{minipage}{\textwidth}
 \textbf{Bool} \\
 Declaration: $bool$ \\
-Values: $true$, $false$ \\
+Values: $true$, $false$
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -325,7 +317,7 @@ Their concrete implementation, therefore,
 depends on that language and any language
 functioning as either client or server-side host
 needs to implement these types.
-For more information on concrete implementation
+For more information on concrete implementations
 of dynamic types, please refer to the
 host language \acronym{api} specifications.
 
@@ -378,20 +370,20 @@ A cursor is a server-side resource
 and shall be closed using the directive \term{close}.
 \end{minipage}
 
-\section{Exressions}
+\section{Expressions}
 Some \sql\ clauses, like \term{select}, 
 \term{where} or \term{insert},
 allow the use of \term{expressions}.
 Which expressions are valid 
 in a specific context varies between
 clauses.
-In all clauses that allow expressions,
-a constant value is a valid expression,
-\eg\ $1, +4, 3.14159,$ \etc\
 
+The simplest expression,
+which is available in all contexts,
+is a constant value,
+\eg\ $true, +4, 3.14159,$ `hello world', \etc\
 In some clauses, such as \term{select},
 field names are also valid expressions.
-This will be discussed later.
 
 Expressions are evaluated when the
 \sql\ statement is processed.
@@ -407,15 +399,15 @@ row that is currently processed.
 Expressions may be combined
 with operators or functions
 to form more complex expressions.
-If $\circ$ is binary operator
+If $\circ$ is a binary operator
 and $a$ and $b$ are valid expressions,
 then
 $a \circ b$
-is a valid expression too.
+is also a valid expression.
 In consequence, $a \circ b$ can
 again be used with an operator
 to form an even more complex
-expression, \eg:
+expression:
 $a \circ b \circ c$.
 Examples of binary operators are
 $+, -, /$ and $\times$.
@@ -423,8 +415,8 @@ $+, -, /$ and $\times$.
 To enforce a specific order of
 evaluation, parentheses may be used.
 So, if $a$ is a valid expression,
-$(a)$ is as well.
-That means that $(a+b)/2$
+$(a)$ is as well, for instance
+$(a+b)/2$
 is a valid expression.
 
 Besides binary operators, there are also
@@ -435,10 +427,10 @@ a unary operator is $not$:
 if $a$ is a valid expression,
 so is $not~a$.
 
-Expressions may also be defined
-by functions. Functions are very
+Expressions may also contain
+functions. Functions are very
 similar to operators, but differ
-in the syntax. Functions have the
+in syntax. Functions have the
 form
 
 \identifier{function}(
@@ -461,7 +453,7 @@ $log(2.718281828)$.
 
 The validity of an expression depends
 also on types. Operators and functions
-expects arguments of certain types.
+expect arguments of certain types.
 Some operators and functions are limited
 to numeric types or to text; when applied
 to values of types they do not expect,
@@ -474,18 +466,20 @@ expect both operands to be of the same type.
 If one differs from the other, one of them
 may be promoted.
 
-Promotion for numerical types usually follows 
-the following precedence:
+Promotion for numerical types follows 
+the precedence:
 $\term{float} > \term{int} > \term{uint}$.
 In the following example, we try to
 add a \term{float} and an \term{int}:
 $3.14159 + 1$. In this case, the \term{int}
 is promoted to a \term{float} and the
-result is a \term{float}.
+result is a \term{float},
+namely $4.14159$.
+
 In general, if at least one of the
 operands or arguments is a \term{float},
 all values are promoted to \term{float}.
-Likewise, it at least one of the operands
+Likewise, if at least one of the operands
 is an \term{int} (but none of them is a \term{float}),
 then all others are promoted to \term{int}.
 Non-numerical types (like \term{bool} and \term{text}),
@@ -499,7 +493,7 @@ If not mentioned otherwise,
 promotion follows precedence as described above.
 The basic arithmetic operators are
 \begin{verbatim}
-+, -, /, *, %
++, -, *, /, %
 \end{verbatim}
 The first three of them have the obvious meaning.
 
@@ -512,16 +506,16 @@ of the Euclidean division, \eg\ $5/2$ is $2$.
 However, $5.0/2$ is $2.5$, because $2$ is promoted
 to \term{float} according to the precedence rule.
 
-The fourth operator (\%) is the remainder of
+The fifth operator (\%) is the remainder of
 the Euclidean division.
 It operates only on integral values and results
-in a type error if applied to a \term{float}.
+in a type error if applied to \term{floats}.
 
 It should be noted that this is not the modular
 operator ($mod$) with which the remainder is
 often confused. People often expect the 
 remainder to always return a non-negative result.
-But that is not the case. The remainder the
+But that is not the case. The remainder is the
 unique number $r$ for which
 
 $a = qb + r, r < b$,
@@ -539,25 +533,23 @@ is positive, \eg\
 $7 = -2\times -3 + 1$.
 
 If both, $a$ and $b$, are negative,
-then then quotient is positive and 
+then the quotient is positive and 
 the remainder is negative, \eg\
-$-7 = -2\times -3 -1$.
+$-7 = 2\times -3 -1$.
 
 \paragraph{Power}
-The power operator is
-\begin{verbatim}
-^
-\end{verbatim}
-
+The power operator is $^{\wedge}$.
 It always promotes all its arguments to \term{float}
 and always returns a \term{float}.
 
 Please notice that there is no \term{root} operator.
 Instead, the root is computed by raising to the power
 of a fraction, \eg:
-$\sqrt[2]{n} = n^{(1/2)}$
-$\sqrt[3]{n} = n^{(1/3)}$
-$\sqrt[4]{n} = n^{(1/4)}$, \etc
+
+$\sqrt[2]{n} = n^{\wedge}{(1/2)}$,\\
+$\sqrt[3]{n} = n^{\wedge}{(1/3)}$,\\
+$\sqrt[4]{n} = n^{\wedge}{(1/4)}$,\\
+$\dots$
 
 \paragraph{Log}
 As mentioned, the function $log$
@@ -577,16 +569,18 @@ desired base. The binary logarithm
 of $n$, for instance, is
 $\log(n)/\log(2)$.
 
-\paragraph{Abs and Rounding}
+\paragraph{Absolute Value}
 The function $abs$ computes the
-absolute value of argument, \eg:
+absolute value of its argument, \eg:
 $abs(-1)$ is 1.
 The function accepts any numerical type
 and returns a value of the same type as the argument.
 
+\paragraph{Rounding}
 The rounding functions are $round$, $ceil$ and $floor$.
 All of them promote their argument to \term{float}
 and always return a \term{float} value.
+
 $round(n)$ returns the integer closest to $n$,
 which may be $n$ itself; if the next greater and
 next smaller integer are equally far away,
@@ -594,9 +588,10 @@ next smaller integer are equally far away,
 the result is the next greater integer.
 
 $ceil(n)$ returns $n$ if $n$ is an integer or,
-otherwise, the next integer; \eg: $ceil(1.1)$ is 2.
+otherwise, the next integer;
+\ie\ it always rounds up, \eg: $ceil(1.1)$ is 2.
 
-$floor(n)$ returns either $n$ (if $n$ is an integer)
+$floor(n)$ returns either $n$ if $n$ is an integer
 or, otherwise, the previous integer, \ie\ it always rounds down;
 \eg: $floor(1.9)$ is 1.
 
@@ -609,6 +604,7 @@ If conversion is applied according to precedence,
 the respective function has the obvious result,
 \ie\ converting upwards preserves the full value
 if possible.
+
 $tofloat(1)$, for instance, is $1.0$ and
 $toint(1)$ is $1$.
 $toint(18446744073709551615)$, however, is $-1$.
@@ -622,7 +618,7 @@ Please refer to the
 Converting against precedence,
 \ie\ converting downwards,
 does not always preserve the value.
-In particular, when converting a \term{float}
+When converting a \term{float}
 value to an integral type, the decimal part
 is lost, \eg\ $toint(3.14159)$ is 3.
 
@@ -648,7 +644,7 @@ parsefloat, parseint, parseuint, parsebool.}
 the \term{where} clause}
 
 Boolean operators and functions
-are those that result in a Boolean value.
+are those resulting in a Boolean value.
 They are, hence, not defined by the type
 of their argument, but by their result type.
 
@@ -683,17 +679,16 @@ The main comparison operators are
 \begin{verbatim}
 = < > <= >= != <>
 \end{verbatim}
-which translate to the mathematical operations
-$=,<,>,\le,\ge,\neq$,
-where for $\neq$ two ways of writing are
-permitted, namely
-\begin{verbatim} 
-!= <>
-\end{verbatim}
+with the obvious meaning for
+the first five operators;
+The last two operators
+are synonym and both implement
+the mathematical operator $\neq$.
+
 The operators $=$ and $\neq$ can be used
 with any type. $=$ evaluates to $true$
 if the values are equal, \ie\
-there type is equal (or compatible
+their type is equal (or compatible
 via promotion) and their value
 is equal. For instance,
 $1 = 1$ is $true$;
@@ -730,7 +725,7 @@ It is incomparable.
 
 \paragraph{Special Operators}
 are similar to comparison operators
-but with specific restrictions.
+but with peculiar operands.
 Special operators are
 \keyword{is},
 \keyword{between},
@@ -741,7 +736,8 @@ Special operators are
 \keyword{all}.
 
 \comment{Available right now is \keyword{in}.
-\keyword{is} and \keyword{between} will be
+\keyword{is}, \keyword{between} 
+and \keyword{having} will be
 available soon. Since \keyword{exists},
 \keyword{any} and \keyword{all} are useful
 only with subqueries, it will take some
@@ -770,11 +766,11 @@ ex- or inclusiveness. The following
 form would exclude the first:
 1 \keyword{between} $]1,2]$,
 which would evaluate to $false$
-since in this form the first
-element of the range is excluded.
+because, in this form, the first
+element is excluded from the range.
 Correspondingly,
 \keyword{between} $[1,2[$
-would exclude the last element of the range
+would exclude the last element from the range
 and
 \keyword{between} $]1,2[$
 would exclude both.
@@ -801,11 +797,12 @@ the second operator of the \keyword{in} operator
 may be a \acronym{dql} statement, \eg\
 1 \keyword{in}
 (\keyword{select} 1 \keyword{from} \identifier{sales}).
-This is also true for the operators
+\acronym{dql} statements may also be used
+for the second operand of the the operators
 \keyword{exists}, \keyword{any} and \keyword{all}.
 
 \keyword{exists} tests whether a set contains
-data (\ie\ is not the empty set.
+data (\ie\ is not the empty set).
 The basic form is \keyword{exists} $(1,2,3)$,
 which is $true$.
 \keyword{exists} is especially useful with subqueries.
@@ -815,8 +812,12 @@ The operators \keyword{any} and \keyword{all}
 are still to be defined.
 }
 
+\subsubsection{Conditionals}
+\comment{Not yet available}
+
 \subsubsection{Bitwise Operators}
-shiftl, shiftr, xor, \&, |, bit
+$\ll, \gg, \&, |,\sim$, xor, bit
+
 \comment{Not yet available.
 Bitwise operators, however, are very interesting
 to store bools. It is not very efficient to
@@ -829,10 +830,11 @@ to provide support for working with bitmaps.}
 year, month, week, mday, wday, hour, min,
 sec, milli, micro, nano, format,
 now, dusk, dawn 
+
 \comment{Not yet available.
 The time component functions (year, month, \etc)
 are extremely interesting.
-At the moment it is hard to select sub periods;
+At the moment it is hard to select subperiods;
 for instance: for the years 2000-2010, show me
 the average temperature of month June:
 }
@@ -1018,7 +1020,7 @@ The Function takes one argument.
 It finds the standard deviation according to the formula:
 
 \[
-\sqrt{\frac{\sum_{i=N}^{N}{(x_i - \overline{x})^2}}{N-1}},
+\sqrt{\frac{\sum_{i=1}^{N}{(x_i - \overline{x})^2}}{N-1}},
 \]
 
 where $N$ is the number of rows in the result set,
@@ -1052,7 +1054,8 @@ The return type is \keyword{float}
 
 Example:
 
-\keyword{select} \identifier{integral}(\keyword{weight})
+\keyword{select} \identifier{integral}(
+\keyword{stamp}, \keyword{weight})
 \keyword{from} \identifier{sales}
 
 \comment{
@@ -1420,7 +1423,7 @@ It has the form:
 \comment{Not yet available}
 
 \subsection{Period}
-\term{Period} is not a \term{first-class citizens}
+\term{Period} is not a \term{first-class citizen}
 like types, edges, procedures, \etc\
 In particular, periods cannot be created or altered.
 They evolve as an effect of inserting edges into
@@ -1439,9 +1442,9 @@ the data would not solve the problem at all,
 because \term{delete} does not physically remove
 the data, but just makes them invisible.
 
-Dropping, by contrast, removes all data files 
-that contain only data belonging to that period.
-Removing files, however, is a very efficient
+Dropping a period, by contrast, removes all data files 
+that contain only data belonging to that period and
+removing files is a very efficient
 operation on most platforms.
 
 The syntax is:
@@ -1460,7 +1463,7 @@ Two remarks are in place. First,
 and this clause must contain exactly one condition,
 namely \keyword{between} related to the timestamp.
 
-The rationale for this restrictions is
+The rationale for this restriction is
 to avoid accidentally dropping entire tables
 using too complex or incomplete \term{drop} statements.
 
@@ -1473,7 +1476,7 @@ time windows):
 \begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
 \keyword{where timestamp between}
-$[$\identifier{dusk}(), '2018-04-01'$[$
+$[$\identifier{dawn}(), '2018-04-01'$[$
 \end{minipage}
 
 Second, \term{drop period} does not guarantee
@@ -1827,7 +1830,7 @@ by the \acronym{dql} statement.
 
 The following are valid \term{select} clauses:
 
-\keyword{select} \identifier{count}(*) \\
+\keyword{select} \identifier{count}($\ast$) \\
 \keyword{select} \identifier{sum}(\keyword{weight}) \\
 \keyword{select} \identifier{sum}(\identifier{log}(\keyword{weight})) \\
 \keyword{select} \identifier{avg}((\keyword{weight} $+$
