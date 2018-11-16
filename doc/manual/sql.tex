@@ -212,7 +212,6 @@ The static types are
 Declaration: $int$, $integer$ \\
 Values: $-2^{63} \dots 2^{63}-1$ \\
 Constructors: $\pm n$, where $n$ is an unsigned integer.\\
-Null: $+0$ \\
 Examples: $-1, +0, +1$
 \end{minipage}
 
@@ -223,7 +222,6 @@ Values: $0 \dots 2^{64}-1$  \\
 Constructors: One digit from the range $0\dots 9$
 or one digit from range $1\dots 9$ followed by
 a sequence of digits ($0\dots9$). \\
-Null: $0$ \\
 Examples: $0, 1, 2, 1024$, but not: $01$.
 \end{minipage}
 
@@ -236,7 +234,6 @@ For possible values, please refer to the standard or to the table in
 Constructors: any integer followed by a dot and a sequence of digits,
               optionally followed by $e$ followed by an integer.
               \comment{The exponential form is not yet available.} \\
-Null: $0.0$ \\
 Examples: $-1.0, 0.0, 1.0, 3.14159, 1.797693e308$ 
 \end{minipage}
 
@@ -252,7 +249,6 @@ Please refer to the database configuration guide. \\
 Timezone: \acronym{utc} \\
 Constructor: any integer or any string following \acronym{iso}-8601 
 or any string following a locally defined time format. \\
-Null: $0$ \\
 \comment{It should be possible to perform arithmetic
 with time units and timestamps
 in \sql, \eg: \\
@@ -272,7 +268,6 @@ Examples:\\
 \textbf{Bool} \\
 Declaration: $bool$ \\
 Values: $true$, $false$ \\
-Null: $false$
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -280,7 +275,6 @@ Null: $false$
 Declaration: $text$ \\
 Values: \acronym{utf}-8 string with up to 255 bytes\\
 Constructor: string enclosed by ' \\
-Null: '' (the empty string),\\
 Examples:\\
 'hello world',\\
 \begin{CJK}{UTF8}{gbsn}
@@ -304,6 +298,22 @@ Values: \acronym{utf}-8 string with up to 4096 bytes\\
 \textbf{Blob} \\
 \comment{Blob is nice to have, but there are currently
 no concrete plans to add such a datatype.}
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\textbf{NULL} \\
+\acronym{null} is a special value available for all types.
+It signals the absence of a value for the requested field.
+For instance, when a vertex was inserted with a subset
+of its attributes, a query on that vertex including
+those attributes in the \term{select} clause
+will produce \acronym{null} as value in the
+columns related to these attributes.
+Note that it is not possible to compare any value to \acronym{null}
+using $= or \neq$. The special operator \keyword{is} must
+be used for that purpose, \eg\
+\keyword{where} \identifier{name} \keyword{is not null}.
+\comment{\acronym{null} is not yet implemented completely!}
 \end{minipage}
 
 \subsection{Dynamic Types}
@@ -1542,6 +1552,7 @@ in the edge definition, must be inserted with
 
 where the fourth position is \acronym{null} and represents
 the label which was not defined.
+\comment{For the time being, please use 0 instead of \acronym{null}.}
 
 It is also possible \comment{(not yet!)} to insert data from
 a query, \eg:
