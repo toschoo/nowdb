@@ -43,9 +43,7 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->eval.needtxt = 1;
 	row->cur = 0;
 	row->fur = 0;
-	// row->vcur = 0;
 	row->dirty = 0;
-	// row->vrtx = NULL;
 
 	row->fields = NULL;
 
@@ -60,19 +58,10 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 		NOMEM("allocating fields");
 		return err;
 	}
-	/*
-	row->vrtx = calloc(row->sz, sizeof(nowdb_vertex_t));
-	if (row->vrtx == NULL) {
-		NOMEM("allocating vertex memory");
-		free(row->fields); row->fields = NULL;
-		return err;
-	}
-	*/
 	row->eval.tlru = calloc(1, sizeof(nowdb_ptlru_t));
 	if (row->eval.tlru == NULL) {
 		NOMEM("allocating text lru");
 		free(row->fields); row->fields = NULL;
-		// free(row->vrtx); row->vrtx = NULL;
 		return err;
 	}
 	err = nowdb_ptlru_init(row->eval.tlru, 100000);
@@ -82,28 +71,8 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	}
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
 		tmp = runner->cont;
-
 		err = nowdb_expr_copy(tmp, row->fields+i);
-		if (err != NOWDB_OK) {
-			// destroy what we created
-			break;
-		}
-
-		/*
-		memcpy(row->fields+i, tmp, sizeof(nowdb_field_t));
-		row->fields[i].name = NULL;
-		if (tmp->name != NULL) {
-			row->fields[i].name = strdup(tmp->name);
-			if (row->fields[i].name == NULL) {
-				NOMEM("allocating field name");
-				row->sz = i; break;
-			}
-			err = nowdb_text_getKey(row->text,
-			              row->fields[i].name,
-			           &row->fields[i].propid);
-			if (err != NOWDB_OK) break;
-		}
-		*/
+		if (err != NOWDB_OK) break;
 		i++;
 	}
 	if (err != NOWDB_OK) {
@@ -129,327 +98,14 @@ void nowdb_row_destroy(nowdb_row_t *row) {
 		}
 		free(row->fields); row->fields = NULL;
 	}
-	/*
-	if (row->vrtx != NULL) {
-		free(row->vrtx); row->vrtx = NULL;
-	}
-	*/
 	nowdb_eval_destroy(&row->eval);
 	
 }
 
 /* ------------------------------------------------------------------------
- * save a lot of code
+ * Compute size necessary to store type
  * ------------------------------------------------------------------------
  */
-#define HANDLETEXT(what) \
-	t = (char)NOWDB_TYP_TEXT; \
-	err = getText(row, what, &str); \
-	if (err != NOWDB_OK) return err; \
-	s = strlen(str); \
-	if ((*osz)+s+2 >= sz) { \
-		*nsp=1; \
-		return NOWDB_OK; \
-	} \
-	memcpy(buf+*osz, &t, 1); (*osz)++; \
-	memcpy(buf+*osz, str, s+1); (*osz)+=s+1;
-
-#define HANDLEBINARY(what, how) \
-	t = (char)how; \
-	if ((*osz)+9 >= sz) { \
-		*nsp=1; return NOWDB_OK; \
-	} \
-	memcpy(buf+*osz, &t, 1); (*osz)++; \
-	memcpy(buf+*osz, what, 8); (*osz)+=8;
-
-/* ------------------------------------------------------------------------
- * Helper: function projection
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t projectFun(nowdb_row_t *row,
-                                     nowdb_group_t *group,
-                                     char *buf, uint32_t sz,
-                                     uint32_t *osz, char *nsp) {
-	nowdb_err_t err;
-	nowdb_type_t s;
-	char t;
-
-	*nsp = 0;
-
-	err = nowdb_group_getType(group, row->fur, &s);
-	if (err != NOWDB_OK) return err;
-	if ((*osz)+8+1 >= sz) {
-		*nsp = 1; return NOWDB_OK;
-	}
-	t = (char)s;
-	memcpy(buf+*osz, &t, 1); (*osz)++;
-	err = nowdb_group_result(group, row->fur, buf+*osz);
-	if (err != NOWDB_OK) return err;
-	(*osz)+=8; row->fur++;
-
-	// fprintf(stderr, "%d, %0.4f\n", t, *(double*)(buf+*osz-8));
-
-	if (row->fur >= group->lst) {
-		nowdb_group_reset(group);
-		row->fur = 0;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: constant projection
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t projectConst(nowdb_field_t *field,
-                                       char *buf, uint32_t sz,
-                                       uint32_t *osz, char *nsp) {
-	uint32_t s;
-	char t=0;
-
-	switch(field->typ) {
-	case NOWDB_TYP_TEXT:
-		s = strlen(field->value);
-		if ((*osz)+s+2 > sz) {
-			*nsp = 1; return NOWDB_OK;
-		}
-		t = (char)NOWDB_TYP_TEXT;
-		memcpy(buf+(*osz), &t, 1); (*osz)++;
-		memcpy(buf+(*osz), field->value, s+1); (*osz)+=s+1;
-		break;
-
-	case NOWDB_TYP_DATE:
-	case NOWDB_TYP_TIME:
-	case NOWDB_TYP_INT:
-	case NOWDB_TYP_UINT:
-	case NOWDB_TYP_FLOAT:
-		HANDLEBINARY(field->value, field->typ);
-		break;
-
-	case NOWDB_TYP_BOOL:
-		if ((*osz)+2 >= sz) {
-			*nsp = 1; return NOWDB_OK;
-		}
-		t = (char)field->typ;
-		memcpy(buf+(*osz), &t, 1); (*osz)++;
-		memcpy(buf+(*osz), field->value, 1); (*osz)++;
-		break;
-
-	default: break;
-	
-	}
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Helper: edge projection
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t projectEdgeField(nowdb_row_t *row,
-                                           nowdb_edge_t *src,
-                                           int i,
-                                           char *buf,
-                                           uint32_t sz,
-                                           uint32_t *osz,
-                                           char *nsp) {
-	nowdb_value_t *w=NULL;
-	nowdb_type_t typ;
-	nowdb_err_t err;
-	size_t s;
-	char   t;
-	char *str;
-
-	*nsp = 0;
-	if (row->e == NULL || row->e->edgeid != src->edge) {
-		err = nowdb_model_getEdgeById(row->model,
-		                      src->edge, &row->e);
-		if (err != NOWDB_OK) return err;
-
-		err = nowdb_model_getVertexById(row->model,
-		                  row->e->origin, &row->o);
-		if (err != NOWDB_OK) return err;
-
-		err = nowdb_model_getVertexById(row->model,
-		                   row->e->destin, &row->d);
-		if (err != NOWDB_OK) return err;
-
-	}
-
-	// evaluate expression
-
-	switch(row->fields[i].off) {
-
-	case NOWDB_OFF_EDGE:
-		t = (char)NOWDB_TYP_TEXT;
-		s = strlen(row->e->name);
-		if ((*osz)+s+2 >= sz) {
-			*nsp = 1; return NOWDB_OK;
-		}
-		memcpy(buf+*osz, &t, 1); (*osz)++;
-		memcpy(buf+*osz, row->e->name, s+1); (*osz)+=s+1;
-		break;
-
-	case NOWDB_OFF_ORIGIN:
-		if (row->o->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->origin);
-		} else {
-			HANDLEBINARY(&src->origin, NOWDB_TYP_UINT);
-		}
-		break;
-
-	case NOWDB_OFF_DESTIN:
-		if (row->d->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->destin);
-		} else {
-			HANDLEBINARY(&src->destin, NOWDB_TYP_UINT);
-		}
-		break;
-
-	case NOWDB_OFF_LABEL:
-		if (row->e->label == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(src->label);
-		} else {
-			HANDLEBINARY(&src->label, NOWDB_TYP_UINT);
-		}
-		break;
-
-	case NOWDB_OFF_TMSTMP:
-		HANDLEBINARY(&src->timestamp, NOWDB_TYP_TIME);
-		break;
-
-	case NOWDB_OFF_WEIGHT:
-		w = &src->weight;
-		typ = row->e->weight;
-
-	case NOWDB_OFF_WEIGHT2:
-		if (w == NULL) {
-			w = &src->weight2;
-			typ = row->e->weight2;
-		}
-		switch(typ) {
-		case NOWDB_TYP_TEXT:
-			HANDLETEXT(*w); break;
-
-		case NOWDB_TYP_DATE:
-		case NOWDB_TYP_TIME:
-		case NOWDB_TYP_FLOAT:
-		case NOWDB_TYP_INT:
-		case NOWDB_TYP_UINT:
-			HANDLEBINARY(w, typ); break;
-
-		default: break;
-		}
-	}
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Helper: get vertex model
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t getVertexModel(nowdb_row_t *row) {
-	nowdb_err_t err;
-
-	if (row->v == NULL) {
-		err = nowdb_model_getVertexById(row->model,
-		                row->vrtx[0].role, &row->v);
-		if (err != NOWDB_OK) return err;
-	}
-	if (row->p == NULL) {
-		row->p = calloc(row->sz, sizeof(nowdb_model_prop_t*));
-		if (row->p == NULL) {
-			NOMEM("allocating props");
-			return err;
-		}
-		for(int i=0;i<row->sz;i++) {
-			if (row->fields[i].name == NULL) continue;
-			err = nowdb_model_getPropByName(row->model,
-			                            row->v->roleid,
-			                       row->fields[i].name,
-                                                         row->p+i);
-			if (err != NOWDB_OK) return err;
-		}
-	}
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Helper: vertex projection
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t projectVertex(nowdb_row_t *row,
-                                        char *buf,
-                                        uint32_t sz,
-                                        uint32_t *osz,
-                                        char *nsp) {
-	nowdb_err_t err;
-	size_t s;
-	char   t;
-	char *str;
-
-	*nsp = 0;
-
-	err = getVertexModel(row);
-	if (err != NOWDB_OK) return err;
-
-	for(int i=row->vcur; i<row->sz; i++) {
-		switch(row->p[i]->value) {
-		case NOWDB_TYP_TEXT:
-			HANDLETEXT(row->vrtx[i].value); break;
-
-		case NOWDB_TYP_DATE:
-		case NOWDB_TYP_TIME:
-		case NOWDB_TYP_FLOAT:
-		case NOWDB_TYP_INT:
-		case NOWDB_TYP_UINT:
-			HANDLEBINARY(&row->vrtx[i].value,
-			                row->p[i]->value);
-			break;
-
-		default:
-			break;
-		}
-		row->vcur++;
-	}
-	row->vcur = 0;
-	return NOWDB_OK;
-}
-*/
-
-static inline int findProp(nowdb_row_t *row, nowdb_vertex_t *v) {
-	int k=-1;
-	for(int i=0; i<row->sz; i++) {
-
-		/*
-		fprintf(stderr, "%s: %lu (%d) == %lu\n",
-			row->fields[i].name,
-			row->fields[i].propid,
-		        row->p[i]->pk,
-			v->property);
-		*/
-
-
-		/*
-		if (row->fields[i].target != NOWDB_TARGET_VERTEX) continue;
-		if (row->fields[i].propid == v->property) return i;
-		*/
-
-		/* this is stupid */
-		/*
-		if (row->sz == 1   &&
-                    row->p != NULL && row->p[i]->pk &&
-		    row->p[i]->roleid == v->role) k=i;
-		*/
-	}
-	return k;
-}
-
 static inline uint32_t getSize(nowdb_type_t t, void *val) {
 	switch(t) {
 	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val)+1;
@@ -513,75 +169,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		}
 
 		// fprintf(stderr, "%d: %u\n", i, *osz);
-
-		/*
-		if (row->fields[i].target == NOWDB_TARGET_NULL) {
-			fprintf(stderr, "projecting constant\n");
-			if (row->fields[i].value == NULL) continue;
-			err = projectConst(row->fields+i, buf, sz, osz, &nsp);
-			if (err != NOWDB_OK) return err;
-			if (nsp) {
-				row->cur = i; *full=1;
-				return NOWDB_OK;
-			}
-
-		} else if (row->fields[i].target == NOWDB_TARGET_EDGE) {
-			if (row->fields[i].flags & NOWDB_FIELD_AGG) {
-				err = projectFun(row, group, buf, sz,
-				                          osz, &nsp);
-			} else {
-				err = projectEdgeField(row,
-				     (nowdb_edge_t*)src, i,
-			               buf, sz, osz, &nsp);
-			}
-			if (err != NOWDB_OK) return err;
-			if (nsp) {
-				row->cur = i; *full=1;
-				return NOWDB_OK;
-			}
-
-		} else {
-			// this is all quite disgusting.
-			// we urgently need a clean solution
-			// vor vertices! 
-			*ok = 1;
-
-			// we need the vertex model to decide
-			// what is primary key
-			if (row->v == NULL) {
-				memcpy(row->vrtx, src,
-				  sizeof(nowdb_vertex_t));
-				err = getVertexModel(row);
-				if (err != NOWDB_OK) return err;
-			}
-			int k = findProp(row, (nowdb_vertex_t*)src);
-			if (k < 0) return NOWDB_OK;
-			if (!row->dirty) row->dirty = 1;
-			memcpy(row->vrtx+k, src, sizeof(nowdb_vertex_t));
-
-			// if we have the primary key, force
-			// the primary key vertex into value
-			if (row->p != NULL && row->p[k]->pk) {
-				memcpy(&row->vrtx[k].value,
-				       &row->vrtx[k].vertex,8);
-			}
-			row->cur++;
-			if (row->cur == row->sz) break;
-			return NOWDB_OK;
-		}
-		if (!row->dirty) row->dirty = 1;
-		*/
 	}
-	/*
-	if (*ok && recsz == sizeof(nowdb_vertex_t)) {
-		err = projectVertex(row, buf, sz, osz, &nsp);
-		if (err != NOWDB_OK) return err;
-		if (nsp) {
-			*full=1;
-			return NOWDB_OK;
-		}
-	}
-	*/
+
 	// terminate line
 	if ((*osz)+1 < sz) {
 		buf[*osz] = '\n';
@@ -593,12 +182,6 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	row->cur = 0;
 	return NOWDB_OK;
 }
-
-/* ------------------------------------------------------------------------
- * switch group
- * ------------------------------------------------------------------------
- */
-nowdb_err_t nowdb_row_group(nowdb_row_t *row);
 
 /* ------------------------------------------------------------------------
  * transform projected buffer to string
