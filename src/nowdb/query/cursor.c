@@ -470,28 +470,6 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 
 	if (*yes == 1) return NOWDB_OK;	
 
-	/* This is irrelevant
-	  
-	*yes = 1;
-
-	for(int i=0; i<row->sz; i++) {
-		if (row->fields[i].target != NOWDB_TARGET_VERTEX) continue;
-		if (row->fields[i].name == NULL) continue;
-		fprintf(stderr, "%u.%s (%lu)\n", row->fields[i].roleid,
-		                                 row->fields[i].name,
-		                                 row->fields[i].propid);
-		err = nowdb_model_getPropById(row->model,
-		                              row->fields[i].roleid,
-		                              row->fields[i].propid,
-		                              &p);
-		if (err != NOWDB_OK) return err;
-		if (p->pk) {
-			row->fields[i].pk = 1;
-		} else {
-			*yes=0;
-		} 
-	}
-	*/
 	return NOWDB_OK;
 }
 

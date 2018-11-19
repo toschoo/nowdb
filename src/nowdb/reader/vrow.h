@@ -114,5 +114,3 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
  */
 void nowdb_vrow_show(nowdb_vrow_t *vrow);
 #endif
-
-

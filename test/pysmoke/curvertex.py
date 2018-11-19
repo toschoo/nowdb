@@ -806,7 +806,6 @@ def whereinatts(c):
         if n < 1:
             raise db.TestFailed("nothing found")
 
-    # this one causes a mem leak in filter -- but why???
     # select atts where att in (...) and att in
     stmt = "select prod_desc, prod_cat, prod_price from product \
              where prod_desc in ('%s', '%s', '%s')    \

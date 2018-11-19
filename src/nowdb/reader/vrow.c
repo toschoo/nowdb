@@ -390,16 +390,14 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 		return NOWDB_OK;
 
 	case NOWDB_EXPR_FIELD: 
-		// if (NOWDB_EXPR_TOFIELD(expr)->off == NOWDB_OFF_VALUE) {
 	
-			err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
-			                            expr)->propid,cnt);
-			if (err != NOWDB_OK) return err;
+		err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
+			                    expr)->propid,cnt);
+		if (err != NOWDB_OK) return err;
 
-			*off=ROLESZ+KEYSZ*(*cnt-1);
-			NOWDB_EXPR_TOFIELD(expr)->off = *off;
-		// } // what else?
-		break;
+		*off=ROLESZ+KEYSZ*(*cnt-1);
+		NOWDB_EXPR_TOFIELD(expr)->off = *off;
+		return NOWDB_OK;
 	}
 	return NOWDB_OK;
 }
@@ -429,29 +427,6 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
 
 	return NOWDB_OK;
 }
-
-/* ------------------------------------------------------------------------
- * Copy/Change Expression
- * ------------------------------------------------------------------------
- */
-/*
-static nowdb_err_t copyExpr(nowdb_vrow_t *vrow,
-                            nowdb_expr_t  expr) {
-	nowdb_err_t err;
-	int off=-1;
-	int cnt=0;
-
-	err = nowdb_expr_copy(expr, &vrow->expr);
-	if (err != NOWDB_OK) return err;
-
-	err = updXNode(vrow, &cnt, &off, vrow->expr);
-
-	vrow->np = (uint32_t)cnt;
-	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
-
-	return NOWDB_OK;
-}
-*/
 
 /* ------------------------------------------------------------------------
  * Create a vertex row for a given filter
@@ -524,14 +499,6 @@ nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
 		return err;
 	}
 
-	/*
-	err = copyExpr(*vrow, expr);
-	if (err != NOWDB_OK) {
-		nowdb_vrow_destroy(*vrow);
-		free(*vrow); *vrow = NULL;
-		return err;
-	}
-	*/
 	return NOWDB_OK;
 }
 
