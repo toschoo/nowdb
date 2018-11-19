@@ -1282,11 +1282,22 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_YDAY:
 	case NOWDB_EXPR_OP_HOUR:
 	case NOWDB_EXPR_OP_MIN:
-	case NOWDB_EXPR_OP_SEC: return getTimeComp(fun, argv[0], res);
+	case NOWDB_EXPR_OP_SEC:
+		if (types[0] != NOWDB_TYP_TIME &&
+		    types[0] != NOWDB_TYP_DATE) {
+			INVALIDTYPE("not a time value");
+		}
+		return getTimeComp(fun, argv[0], res);
 
 	case NOWDB_EXPR_OP_MILLI:
 	case NOWDB_EXPR_OP_MICRO:
-	case NOWDB_EXPR_OP_NANO: return getTimeSubComp(fun, argv[0], res);
+	case NOWDB_EXPR_OP_NANO:
+		if (types[0] != NOWDB_TYP_TIME &&
+		    types[0] != NOWDB_TYP_DATE) 
+		{
+			INVALIDTYPE("not a time value");
+		}
+		return getTimeSubComp(fun, argv[0], res);
 
 	case NOWDB_EXPR_OP_DAWN:
 		(*(nowdb_time_t*)res) = NOWDB_TIME_DAWN; return NOWDB_OK;
