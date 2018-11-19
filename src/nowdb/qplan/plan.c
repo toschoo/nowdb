@@ -1137,25 +1137,56 @@ static inline void destroyFunList(ts_algo_list_t *list) {
 }
 
 /* ------------------------------------------------------------------------
+ * Try to interpret string as time
+ * ------------------------------------------------------------------------
+ */
+static inline int tryTime(char *str, void **value) {
+	size_t s;
+	nowdb_time_t t;
+
+	s = strlen(str);
+	if (s > 30) return -1;
+	if (s == 10) {
+		if (nowdb_time_fromString(str,
+		    NOWDB_DATE_FORMAT, &t)!=0) {
+			return -1;
+		}
+	} else {
+		if (nowdb_time_fromString(str,
+		    NOWDB_TIME_FORMAT, &t)!=0) {
+			return -1;
+		}
+	}
+	*value = malloc(8);
+	if (*value == NULL) return -1;
+	memcpy(*value, &t, 8);
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
  * Get const value
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getConstValue(uint16_t typ,
-                                        char    *str,
-                                        void **value) {
+static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
+                                        char         *str,
+                                        void      **value) {
 	nowdb_err_t err;
 	char x;
 	char *tmp;
 
-	if (typ != NOWDB_TYP_TEXT) {
+	if (*typ != NOWDB_TYP_TEXT) {
 		*value = malloc(sizeof(nowdb_key_t));
 		if (value == NULL) {
 			NOMEM("allocatin value");
 			return err;
 		}
 	}
-	switch(typ) {
+	switch(*typ) {
 	case NOWDB_TYP_TEXT:
+		if (tryTime(str, value) == 0) {
+			*typ = NOWDB_TYP_TIME;
+			return NOWDB_OK;
+		}
 		*value = strdup(str);
 		if (*value == NULL) {
 			NOMEM("allocating value");
@@ -1391,7 +1422,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 
 	} else if (field->ntype == NOWDB_AST_VALUE) {
 		typ = nowdb_ast_type(field->stype);
-		err = getConstValue(typ, field->value, &value);
+		err = getConstValue(&typ, field->value, &value);
 		if (err != NOWDB_OK) return err;
 
 		err = nowdb_expr_newConstant(expr, value, typ);

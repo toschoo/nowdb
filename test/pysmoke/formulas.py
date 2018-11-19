@@ -337,7 +337,7 @@ def grpedge(c):
                        raise db.TestFailed("expected median: %f, but have %f" % (rr.field(0), row.field(2)))
 
 # Beloved fibonacci
-def fibonacci(one,two,x):
+def fibonacci(c,one,two,x):
 
     if x == 0:
        return
@@ -356,26 +356,299 @@ def fibonacci(one,two,x):
             if row.field(0) != one + two:
                raise db.TestFailed("wrong value %d + %d: %d" % (one, two, row.field(0)))
             print "%d" % row.field(0)
-            fibonacci(two, row.field(0), x-1)
+            fibonacci(c, two, row.field(0), x-1)
         if n != 1:
            raise db.TestFailed("wrong number of rows: %d" % (n))
 
-def fibotest(x):
+def fibotest(c,x):
 
     print "RUNNING TEST 'fibonacci %d'" % x
 
     print "1\n1"
-    fibonacci(1,1,x)
+    fibonacci(c,1,1,x)
+
+# constant values
+def constvalues(c):
+
+    print "RUNNING TEST 'constvalues'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+
+    # constant string
+    stmt = "select 'hello' from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 'hello':
+               raise db.TestFailed("wrong value 'hello': '%s'" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % (n))
+
+    # true
+    stmt = "select true from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if not row.field(0):
+               raise db.TestFailed("wrong value True: %s" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % (n))
+
+    # false
+    stmt = "select false from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0):
+               raise db.TestFailed("wrong value False: %s" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % (n))
+
+    # a birthdate
+    stmt = "select '1971-05-18T06:23:10.123456000' from product \
+             where prod_key = %d" % k
+    
+    dt = datetime.datetime(1971, 5, 18, 6, 23, 10, 123456, now.utc)
+    print "%s" % dt
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if now.now2dt(row.field(0)) != dt:
+               raise db.TestFailed("wrong value False: %s" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % (n))
+
+# test time functions
+def timefun(c):
+
+    print "RUNNING TEST 'timefun'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+
+    # a birthdate
+    d = "1971-05-18T06:23:10.123456000"
+
+    # year, month, mday
+    stmt = "select year('%s'), month('%s'), mday('%s') from product \
+             where prod_key = %d" % (d,d,d,k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 1971:
+               raise db.TestFailed("wrong value for year: %d" % (row.field(0)))
+            if row.field(1) != 5:
+               raise db.TestFailed("wrong value for month: %d" % (row.field(1)))
+            if row.field(2) != 18:
+               raise db.TestFailed("wrong value for day: %d" % (row.field(2)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % (n))
+
+    # hour, minute, second
+    stmt = "select hour('%s'), minute('%s'), second('%s') from product \
+             where prod_key = %d" % (d,d,d,k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 6:
+               raise db.TestFailed("wrong value for hour: %d" % (row.field(0)))
+            if row.field(1) != 23:
+               raise db.TestFailed("wrong value for minute: %d" % (row.field(1)))
+            if row.field(2) != 10:
+               raise db.TestFailed("wrong value for second: %d" % (row.field(2)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # milli, micro, nano
+    stmt = "select milli('%s'), micro('%s'), nano('%s') from product \
+             where prod_key = %d" % (d,d,d,k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 123:
+               raise db.TestFailed("wrong value for milli: %d" % (row.field(0)))
+            if row.field(1) != 123456:
+               raise db.TestFailed("wrong value for micro: %d" % (row.field(1)))
+            if row.field(2) != 123456000:
+               raise db.TestFailed("wrong value for nano: %d" % (row.field(2)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Friday
+    stmt = "select wday('2016-01-01') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 5:
+               raise db.TestFailed("wrong value for Jan, 1: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Saturday
+    stmt = "select wday('2016-01-02') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 6:
+               raise db.TestFailed("wrong value for Jan, 2: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Sunday
+    stmt = "select wday('2016-01-03') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 0:
+               raise db.TestFailed("wrong value for Jan, 3: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Monday
+    stmt = "select wday('2016-01-04') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 1:
+               raise db.TestFailed("wrong value for Jan, 4: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Tuesday
+    stmt = "select wday('2016-01-05') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 2:
+               raise db.TestFailed("wrong value for Jan, 5: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Wednesday
+    stmt = "select wday('2016-01-06') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 3:
+               raise db.TestFailed("wrong value for Jan, 6: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # it was a Thursday
+    stmt = "select wday('2016-01-07') from product \
+             where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 4:
+               raise db.TestFailed("wrong value for Jan, 7: %d" % (row.field(0)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # from dusk to dawn
+    stmt = "select epoch(), dawn(), dusk() from product \
+             where prod_key = %d" % (k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != 0:
+               raise db.TestFailed("wrong value for epoch: %d" % (row.field(0)))
+            if row.field(1) != -2**63:
+               raise db.TestFailed("wrong value for dawn: %d" % (row.field(1)))
+            if row.field(2) != 2**63-1:
+               raise db.TestFailed("wrong value for dusk: %d" % (row.field(2)))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
+
+    # now
+    stmt = "select now() from product \
+             where prod_key = %d" % (k)
+
+    tp = now.dt2now(datetime.datetime.now(now.utc)) / 10000000
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            tn = row.field(0) / 10000000
+            if tn > tp + 1 or  \
+               tn < tp - 1:
+               raise db.TestFailed("wrong value for now: %d / %d" % (tn, tp))
+        if n != 1:
+           raise db.TestFailed("wrong number of rows: %d" % n)
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
 
+        constvalues(c)
+        timefun(c)
+
         for i in range(IT):
             simplevrtx(c)
             simpleedge(c)
 
-        fibotest(20)
+        fibotest(c,20)
 
         aggvrtx(c)
         aggedge(c)
