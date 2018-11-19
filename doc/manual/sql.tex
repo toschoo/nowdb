@@ -260,6 +260,9 @@ Examples:\\
 \textbf{Bool} \\
 Declaration: $bool$ \\
 Values: $true$, $false$
+\comment{Currently, Bool cannot be stored in the database.
+The future solution won't be to store single Booleans, anyway,
+but bit patterns.}
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -379,7 +382,8 @@ in a specific context varies between
 clauses.
 
 The simplest expression,
-which is available in all contexts,
+which is available in all clauses
+(that allow expressions),
 is a constant value,
 \eg\ $true, +4, 3.14159,$ `hello world', \etc\
 In some clauses, such as \term{select},
@@ -455,7 +459,9 @@ The validity of an expression depends
 also on types. Operators and functions
 expect arguments of certain types.
 Some operators and functions are limited
-to numeric types or to text; when applied
+to a specific type or type family,
+\eg\ to numeric types,
+to Booleans or to text; when applied
 to values of types they do not expect,
 the expression evaluates to a type error
 and the related \sql\ statement fails.
@@ -496,6 +502,12 @@ The basic arithmetic operators are
 +, -, *, /, %
 \end{verbatim}
 The first three of them have the obvious meaning.
+\comment{There is an annoying ambiguity in the
+tokeniser affecting $+$ and $-$. The parser
+confuses \tech{+b} in \tech{a+b} with the pattern for
+integers. Workaround is to either introduce
+a blank before \tech{b}: \tech{a+ b} or to put parentheses
+around it: \tech{a+(b)}.}
 
 Division (/), however, is different in that it
 has different meaning for different numerical types.
@@ -511,7 +523,7 @@ the Euclidean division.
 It operates only on integral values and results
 in a type error if applied to \term{floats}.
 
-It should be noted that this is not the modular
+It should be noted that this is not the modulo
 operator ($mod$) with which the remainder is
 often confused. People often expect the 
 remainder to always return a non-negative result.
@@ -874,7 +886,7 @@ for details).
 
 The aggregate arguments are expressions.
 There may be restrictions
-on what kind of expressions can be used
+on the type of expression that can be used
 with a particular aggregate.
 In general, however, aggregates may
 be applied to any kind of expression.
@@ -907,11 +919,11 @@ When applied to a field, \identifier{count} is usually combined with
 otherwise the result would be the same as applying it to the row.
 Common examples are therefore:
 
-\keyword{select} \keyword{count}($\ast$) \keyword{from} \identifier{sales}
+\keyword{select} \identifier{count}($\ast$) \keyword{from} \identifier{sales}
 
 and
 
-\keyword{select} \keyword{count}(\keyword{distinct} \keyword{edge})
+\keyword{select} \identifier{count}(\keyword{distinct} \keyword{edge})
 \keyword{from} \identifier{sales}
 
 The return type is always \keyword{uint}.
@@ -922,7 +934,7 @@ produces the sum of the values
 to which its argument evaluates over the result set,
 \eg\ the values in a field.
 
-The arguments must be numeric.
+The argument must be numeric.
 The return type depends on the type of the input field.
 
 Example:
@@ -970,7 +982,7 @@ of this field in the result set, \ie
 
 where $x$ represents the
 field values in the result set and $n$
-is the number of rows (\ie\ \keyword{count}($\ast$)).
+is the number of rows (\ie\ \identifier{count}($\ast$)).
 
 The argument must be numeric.
 The return type is \keyword{float}.
@@ -1040,6 +1052,7 @@ collection of all values, but each one creates its own collection.
 That is, the values are collected twice.
 }
 
+\ignore{
 \subsubsection{integral}
 The Function takes two arguments.
 It computes the area under the curve,
@@ -1057,9 +1070,13 @@ Example:
 \keyword{select} \identifier{integral}(
 \keyword{stamp}, \keyword{weight})
 \keyword{from} \identifier{sales}
+}
 
 \comment{
-Not yet available
+Interesting would be \term{earliest} and \term{latest}
+to find the earliest and latest timestamp;
+this would be used with \keyword{having}, \eg:
+\keyword{having} \identifier{latest}(\keyword{stamp})
 }
 
 \section{Data Definition}
