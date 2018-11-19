@@ -361,7 +361,7 @@ static nowdb_err_t readProc(nowdb_procman_t *pm, char *buf,
 	strcpy(desc->name, buf+*idx);
 	(*idx) += s+1;
 
-	fprintf(stderr, "loading %s\n", desc->name);
+	// fprintf(stderr, "loading %s\n", desc->name);
 
 	// type, language and return type
 	if (*idx+2 >= sz) {

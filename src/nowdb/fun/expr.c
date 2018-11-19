@@ -171,6 +171,7 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
                                  uint32_t       fun,
                                  uint32_t       len) {
 	nowdb_err_t err;
+	int sz;
 
 	*expr = calloc(1,sizeof(nowdb_op_t));
 	if (*expr == NULL)  {
@@ -186,9 +187,9 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 	OP(*expr)->fun = fun;
 	OP(*expr)->args  = len;
 
-	if (len == 0) return NOWDB_OK;
+	sz = len==0?1:len;
 
-	OP(*expr)->types = calloc(len, sizeof(nowdb_type_t));
+	OP(*expr)->types = calloc(sz, sizeof(nowdb_type_t));
 	if (OP(*expr)->types == NULL) {
 		NOMEM("allocating expression operand types");
 		nowdb_expr_destroy(*expr);
@@ -196,7 +197,7 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 		return err;
 	}
 
-	OP(*expr)->results = calloc(len, sizeof(uint64_t));
+	OP(*expr)->results = calloc(sz, sizeof(uint64_t));
 	if (OP(*expr)->results == NULL) {
 		NOMEM("allocating expression operand results");
 		nowdb_expr_destroy(*expr);
@@ -204,7 +205,7 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 		return err;
 	}
 
-	OP(*expr)->argv = calloc(len, sizeof(nowdb_expr_t));
+	OP(*expr)->argv = calloc(sz, sizeof(nowdb_expr_t));
 	if (OP(*expr)->argv == NULL) {
 		NOMEM("allocating expression operands");
 		nowdb_expr_destroy(*expr);
@@ -946,6 +947,21 @@ static nowdb_err_t evalAgg(nowdb_agg_t  *agg,
 }
 
 /* -----------------------------------------------------------------------
+ * Evaluate constant expression
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t evalConst(nowdb_const_t *cst,
+                                    nowdb_type_t  *typ,
+                                    void         **res) {
+	*typ = cst->type;
+	if (cst->type != NOWDB_TYP_TEXT) {
+		memcpy(cst->value, cst->valbk, 8);
+	}
+	*res = cst->value;
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Evaluate expression
  * -----------------------------------------------------------------------
  */
@@ -960,12 +976,7 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 		return evalField(FIELD(expr), hlp, row, typ, res);
 
 	case NOWDB_EXPR_CONST:
-		// text ???
-		memcpy(CONST(expr)->value,
-		       CONST(expr)->valbk, 8);
-		*typ = CONST(expr)->type;
-		*res = CONST(expr)->value;
-		return NOWDB_OK;
+		return evalConst(CONST(expr), typ, res);
 
 	case NOWDB_EXPR_OP:
 		return evalOp(OP(expr), hlp, row, typ, res);
@@ -1133,6 +1144,55 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	}
 
 /* -----------------------------------------------------------------------
+ * Get time component
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getTimeComp(uint32_t fun, void *arg, void *res) {
+	struct tm tm;
+	int64_t c;
+
+	if (nowdb_time_break(*(nowdb_time_t*)arg, &tm) != 0) {
+		return nowdb_err_get(nowdb_err_time, TRUE, OBJECT,
+		                      "cannot convert to OS time");
+	}
+	switch(fun) {
+	case NOWDB_EXPR_OP_YEAR: c = tm.tm_year + 1900; break;
+	case NOWDB_EXPR_OP_MONTH: c = tm.tm_mon + 1; break;
+	case NOWDB_EXPR_OP_MDAY: c = tm.tm_mday; break;
+	case NOWDB_EXPR_OP_WDAY: c = tm.tm_wday; break;
+	case NOWDB_EXPR_OP_YDAY: c = tm.tm_yday; break;
+	case NOWDB_EXPR_OP_HOUR: c = tm.tm_hour; break;
+	case NOWDB_EXPR_OP_MIN: c = tm.tm_min; break;
+	case NOWDB_EXPR_OP_SEC: c = tm.tm_sec; break;
+	default: INVALID("unknown time component");
+	}
+	memcpy(res, &c, 8);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Get time sub-second component
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getTimeSubComp(uint32_t fun, void *arg, void *res) {
+	nowdb_system_time_t tm;
+	int64_t c;
+
+	if (nowdb_time_toSystem(*(nowdb_time_t*)arg, &tm) != 0) {
+		return nowdb_err_get(nowdb_err_time, TRUE, OBJECT,
+		                      "cannot convert to OS time");
+	}
+	switch(fun) {
+	case NOWDB_EXPR_OP_MILLI: c = tm.tv_nsec/1000000; break;
+	case NOWDB_EXPR_OP_MICRO: c = tm.tv_nsec/1000; break;
+	case NOWDB_EXPR_OP_NANO: c = tm.tv_nsec; break;
+	default: INVALID("unknown time component");
+	}
+	memcpy(res, &c, 8);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Evaluate Fun
  * -----------------------------------------------------------------------
  */
@@ -1213,17 +1273,35 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 * -----------------------------------------------------------------------
 	 */
 	case NOWDB_EXPR_OP_CENTURY:
+		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
+
 	case NOWDB_EXPR_OP_YEAR:
 	case NOWDB_EXPR_OP_MONTH:
 	case NOWDB_EXPR_OP_MDAY:
 	case NOWDB_EXPR_OP_WDAY:
-	case NOWDB_EXPR_OP_WEEK:
+	case NOWDB_EXPR_OP_YDAY:
 	case NOWDB_EXPR_OP_HOUR:
 	case NOWDB_EXPR_OP_MIN:
-	case NOWDB_EXPR_OP_SEC:
+	case NOWDB_EXPR_OP_SEC: return getTimeComp(fun, argv[0], res);
+
 	case NOWDB_EXPR_OP_MILLI:
 	case NOWDB_EXPR_OP_MICRO:
-	case NOWDB_EXPR_OP_NANO:
+	case NOWDB_EXPR_OP_NANO: return getTimeSubComp(fun, argv[0], res);
+
+	case NOWDB_EXPR_OP_DAWN:
+		(*(nowdb_time_t*)res) = NOWDB_TIME_DAWN; return NOWDB_OK;
+	case NOWDB_EXPR_OP_DUSK:
+		(*(nowdb_time_t*)res) = NOWDB_TIME_DUSK; return NOWDB_OK;
+	case NOWDB_EXPR_OP_EPOCH:
+		(*(nowdb_time_t*)res) = 0; return NOWDB_OK;
+
+	case NOWDB_EXPR_OP_NOW:
+		if (nowdb_time_now(res) != 0) {
+			return nowdb_err_get(nowdb_err_time, TRUE, OBJECT,
+			                          "getting currrent time");
+		}
+		return NOWDB_OK;
+
 	case NOWDB_EXPR_OP_BIN:
 	case NOWDB_EXPR_OP_FORMAT:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
@@ -1278,6 +1356,24 @@ static inline int getArgs(int o) {
 	case NOWDB_EXPR_OP_CEIL:
 	case NOWDB_EXPR_OP_FLOOR:
 	case NOWDB_EXPR_OP_ROUND: return 1;
+
+	case NOWDB_EXPR_OP_YEAR:
+	case NOWDB_EXPR_OP_MONTH:
+	case NOWDB_EXPR_OP_MDAY:
+	case NOWDB_EXPR_OP_WDAY:
+	case NOWDB_EXPR_OP_YDAY:
+	case NOWDB_EXPR_OP_HOUR:
+	case NOWDB_EXPR_OP_MIN:
+	case NOWDB_EXPR_OP_SEC:
+	case NOWDB_EXPR_OP_MILLI:
+	case NOWDB_EXPR_OP_MICRO:
+	case NOWDB_EXPR_OP_NANO: return 1;
+
+	case NOWDB_EXPR_OP_DAWN:
+	case NOWDB_EXPR_OP_DUSK:
+	case NOWDB_EXPR_OP_EPOCH:
+	case NOWDB_EXPR_OP_NOW: return 0;
+
 	default: return -1;
 	}
 }
@@ -1402,6 +1498,24 @@ static inline int evalType(nowdb_op_t *op) {
 		}
 		return NOWDB_TYP_FLOAT;
 
+	case NOWDB_EXPR_OP_YEAR:
+	case NOWDB_EXPR_OP_MONTH:
+	case NOWDB_EXPR_OP_MDAY:
+	case NOWDB_EXPR_OP_WDAY:
+	case NOWDB_EXPR_OP_YDAY:
+	case NOWDB_EXPR_OP_HOUR:
+	case NOWDB_EXPR_OP_MIN:
+	case NOWDB_EXPR_OP_SEC: return NOWDB_TYP_UINT;
+
+	case NOWDB_EXPR_OP_MILLI:
+	case NOWDB_EXPR_OP_MICRO:
+	case NOWDB_EXPR_OP_NANO: return NOWDB_TYP_UINT;
+
+	case NOWDB_EXPR_OP_DAWN:
+	case NOWDB_EXPR_OP_DUSK:
+	case NOWDB_EXPR_OP_EPOCH:
+	case NOWDB_EXPR_OP_NOW: return NOWDB_TYP_TIME;
+
 	default: return -1;
 	}
 }
@@ -1429,6 +1543,22 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "toint") == 0) return NOWDB_EXPR_OP_INT;
 	if (strcasecmp(op, "touint") == 0) return NOWDB_EXPR_OP_UINT;
 	if (strcasecmp(op, "totime") == 0) return NOWDB_EXPR_OP_TIME;
+
+	if (strcasecmp(op, "year") == 0) return NOWDB_EXPR_OP_YEAR;
+	if (strcasecmp(op, "month") == 0) return NOWDB_EXPR_OP_MONTH;
+	if (strcasecmp(op, "mday") == 0) return NOWDB_EXPR_OP_MDAY;
+	if (strcasecmp(op, "wday") == 0) return NOWDB_EXPR_OP_WDAY;
+	if (strcasecmp(op, "yday") == 0) return NOWDB_EXPR_OP_YDAY;
+	if (strcasecmp(op, "hour") == 0) return NOWDB_EXPR_OP_HOUR;
+	if (strcasecmp(op, "minute") == 0) return NOWDB_EXPR_OP_MIN;
+	if (strcasecmp(op, "second") == 0) return NOWDB_EXPR_OP_SEC;
+	if (strcasecmp(op, "milli") == 0) return NOWDB_EXPR_OP_MILLI;
+	if (strcasecmp(op, "micro") == 0) return NOWDB_EXPR_OP_MICRO;
+	if (strcasecmp(op, "nano") == 0) return NOWDB_EXPR_OP_NANO;
+	if (strcasecmp(op, "dawn") == 0) return NOWDB_EXPR_OP_DAWN;
+	if (strcasecmp(op, "dusk") == 0) return NOWDB_EXPR_OP_DUSK;
+	if (strcasecmp(op, "now") == 0) return NOWDB_EXPR_OP_NOW;
+	if (strcasecmp(op, "epoch") == 0) return NOWDB_EXPR_OP_EPOCH;
 
 	*agg = 1;
 

@@ -356,15 +356,19 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define NOWDB_EXPR_OP_MONTH   1003
 #define NOWDB_EXPR_OP_MDAY    1004
 #define NOWDB_EXPR_OP_WDAY    1005
-#define NOWDB_EXPR_OP_WEEK    1006
+#define NOWDB_EXPR_OP_YDAY    1006
 #define NOWDB_EXPR_OP_HOUR    1007
 #define NOWDB_EXPR_OP_MIN     1008
 #define NOWDB_EXPR_OP_SEC     1009
 #define NOWDB_EXPR_OP_MILLI   1010
 #define NOWDB_EXPR_OP_MICRO   1011
 #define NOWDB_EXPR_OP_NANO    1012
-#define NOWDB_EXPR_OP_BIN     1013
-#define NOWDB_EXPR_OP_FORMAT  1014
+#define NOWDB_EXPR_OP_DAWN    1013
+#define NOWDB_EXPR_OP_DUSK    1014
+#define NOWDB_EXPR_OP_NOW     1015
+#define NOWDB_EXPR_OP_EPOCH   1016
+#define NOWDB_EXPR_OP_BIN     1020
+#define NOWDB_EXPR_OP_FORMAT  1021
 
 /* -----------------------------------------------------------------------
  * Bitwise
