@@ -113,5 +113,4 @@ nowdb_err_t nowdb_fun_reduce(nowdb_fun_t *fun);
  * -----------------------------------------------------------------------
  */
 int nowdb_fun_fromName(const char *name);
-
 #endif

@@ -57,7 +57,7 @@ int nowdb_expr_type(nowdb_expr_t expr) {
 }
 
 /* -----------------------------------------------------------------------
- * Create expression
+ * Create edge field expression
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off) {
@@ -79,6 +79,10 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off) {
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Create vertex field expression
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
@@ -109,6 +113,10 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Create constant value expression
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
                                    void        *value,
                                    nowdb_type_t  type) {
@@ -149,8 +157,16 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Predeclaration get Args
+ * -----------------------------------------------------------------------
+ */
 static inline int getArgs(int o);
 
+/* -----------------------------------------------------------------------
+ * Helper: Initialise Operator
+ * -----------------------------------------------------------------------
+ */
 static inline nowdb_err_t initOp(nowdb_expr_t *expr,
                                  uint32_t       fun,
                                  uint32_t       len) {
@@ -198,6 +214,10 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Create new operator (pass arguments as list)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t  *expr,
                               uint32_t        fun,
                               ts_algo_list_t *ops) {
@@ -216,6 +236,10 @@ nowdb_err_t nowdb_expr_newOpL(nowdb_expr_t  *expr,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Create new operator (pass arguments as array)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOpV(nowdb_expr_t  *expr,
                               uint32_t        fun,
                               uint32_t        len,
@@ -231,6 +255,10 @@ nowdb_err_t nowdb_expr_newOpV(nowdb_expr_t  *expr,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Create new operator (pass arguments as va_list)
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_expr_newOp(nowdb_expr_t *expr, uint32_t fun, ...) {
 	nowdb_err_t err;
 	va_list args;
@@ -351,6 +379,10 @@ void nowdb_expr_destroy(nowdb_expr_t expr) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: destroy vertex list
+ * -----------------------------------------------------------------------
+ */
 static void destroyVertexList(ts_algo_list_t *vm) {
 	ts_algo_list_node_t *run;
 
@@ -360,6 +392,10 @@ static void destroyVertexList(ts_algo_list_t *vm) {
 	ts_algo_list_destroy(vm);
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: destroy edge list
+ * -----------------------------------------------------------------------
+ */
 static void destroyEdgeList(ts_algo_list_t *em) {
 	ts_algo_list_node_t *run;
 
@@ -369,6 +405,10 @@ static void destroyEdgeList(ts_algo_list_t *em) {
 	ts_algo_list_destroy(em);
 }
 
+/* -----------------------------------------------------------------------
+ * Destroy evaluation helper
+ * -----------------------------------------------------------------------
+ */
 void nowdb_eval_destroy(nowdb_eval_t *eval) {
 	if (eval == NULL) return;
 	if (eval->tlru != NULL) {
@@ -379,6 +419,10 @@ void nowdb_eval_destroy(nowdb_eval_t *eval) {
 	destroyEdgeList(&eval->em);
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: copy field
+ * -----------------------------------------------------------------------
+ */
 static nowdb_err_t copyField(nowdb_field_t *src,
                              nowdb_expr_t  *trg)  {
 	nowdb_err_t err;
@@ -395,18 +439,30 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: copy constant value
+ * -----------------------------------------------------------------------
+ */
 static nowdb_err_t copyConst(nowdb_const_t *src,
                              nowdb_expr_t  *trg) {
 	return nowdb_expr_newConstant(trg, src->value,
 	                                   src->type);
 }
 
+/* -----------------------------------------------------------------------
+ * Helper: destropy operands
+ * -----------------------------------------------------------------------
+ */
 #define DESTROYOPS(o,s) \
 	for(int i=0;i<s;i++) { \
 		nowdb_expr_destroy(ops[i]); free(ops[i]); \
 	} \
 	free(ops);
 
+/* -----------------------------------------------------------------------
+ * Helper: copy operation
+ * -----------------------------------------------------------------------
+ */
 static nowdb_err_t copyOp(nowdb_op_t   *src,
                           nowdb_expr_t *trg) {
 	nowdb_expr_t *ops=NULL;
@@ -654,43 +710,6 @@ static inline nowdb_err_t findEdge(nowdb_eval_t *hlp,
 	return NOWDB_OK;
 }
 
-/* -----------------------------------------------------------------------
- * Find vertex model
- * -----------------------------------------------------------------------
- */
-static inline nowdb_err_t findVertex(nowdb_eval_t *hlp,char *src) {
-	return NOWDB_OK;
-	/*
-	nowdb_err_t err;
-	ts_algo_list_node_t *run;
-	nowdb_vertex_helper_t *vm;
-
-	if (hlp->cv != NULL &&
-	    hlp->cv->v->roleid == *(nowdb_roleid_t*)src) return NOWDB_OK;
-
-	for(run=hlp->vm->head; run!=NULL; run=run->nxt) {
-		v = run->cont;
-		if (vm->v->roleid == *(nowdb_roleid_t*)src &&
-		    (vm->p->propid == *(nowdb_propid_t*)(src+off))) {
-			return NOWDB_OK;
-		}
-	}
-	vm = calloc(1,sizeof(nowdb_vertex_helper_t));
-	if (vm == NULL) {
-		NOMEM("allocating vertex helper");
-		return err;
-	}
-	if (row->fields[i].name == NULL) continue;
-		err = nowdb_model_getPropById(hlp->model,
-		                   *(nowdb_roleid_t*)src,
-		                   *(nowdb_propid_t*)(src+off),
-                                                        &vm->p);
-		if (err != NOWDB_OK) return err;
-	}
-	return NOWDB_OK;
-	*/
-}
-
 /* ------------------------------------------------------------------------
  * Helper: get text and cache it
  * ------------------------------------------------------------------------
@@ -835,7 +854,6 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	return NOWDB_OK;
 }
 
-
 /* -----------------------------------------------------------------------
  * Evaluate field
  * -----------------------------------------------------------------------
@@ -857,19 +875,9 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 		if (err != NOWDB_OK) return err;
 		
 	} else {
-		/*
-		err = findVertex(hlp, row);
-		if (err != NOWDB_OK) return err;
-		*/
-
 		err = getVertexValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	}
-
-	/*
-	*typ = field->type;
-	*res = row+field->off;
-	*/
 
 	return NOWDB_OK;
 }
@@ -924,9 +932,6 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 
 /* -----------------------------------------------------------------------
  * Evaluate aggregate
- * TODO:
- * When we will have expressions within aggregates,
- * this needds to be changed!!!
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t evalAgg(nowdb_agg_t  *agg,
@@ -935,7 +940,6 @@ static nowdb_err_t evalAgg(nowdb_agg_t  *agg,
                            nowdb_type_t *typ,
                            void        **res) 
 {
-	// is NOTHING for sum
 	*typ = FUN(agg->agg)->otype;
 	*res = &FUN(agg->agg)->r1;
 	return NOWDB_OK;
@@ -977,6 +981,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Built-in functions and operators
+ * -----------------------------------------------------------------------
+ */
 #define ADD(v0,v1,v2) \
 	v0=v1+v2;
 
@@ -995,8 +1003,6 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define REM(v0,v1,v2) \
 	v0 = v2 == 0 ? 0 : v1%v2;
 
-// distinguish types!!!
-// there are versions for double and long!
 #define POW(v0,v1,v2) \
 	v0 = pow(v1,v2);
 
@@ -1018,6 +1024,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define MOV(r1,r2) \
 	memcpy(r1, r2, 8);
 
+/* -----------------------------------------------------------------------
+ * Perform 2-place operation
+ * -----------------------------------------------------------------------
+ */
 #define PERFM(o) \
 	switch(*t) { \
 	case NOWDB_TYP_UINT: \
@@ -1034,6 +1044,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	default: return NOWDB_OK; \
 	}
 
+/* -----------------------------------------------------------------------
+ * Perform 2-place operation, float not allowd
+ * -----------------------------------------------------------------------
+ */
 #define PERFMNF(o) \
 	switch(*t) { \
 	case NOWDB_TYP_UINT: \
@@ -1046,6 +1060,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	default: return NOWDB_OK; \
 	}
 
+/* -----------------------------------------------------------------------
+ * Perform one-argument operator/function
+ * -----------------------------------------------------------------------
+ */
 #define PERFM1(o) \
 	switch(*t) { \
 	case NOWDB_TYP_UINT: \
@@ -1062,6 +1080,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	default: return NOWDB_OK; \
 	}
 
+/* -----------------------------------------------------------------------
+ * Convert to float
+ * -----------------------------------------------------------------------
+ */
 #define TOFLOAT(t,x,z) \
 	switch(t) { \
 	case NOWDB_TYP_UINT: \
@@ -1076,6 +1098,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 		MOV(z, x); break; \
 	}
 
+/* -----------------------------------------------------------------------
+ * Convert to int
+ * -----------------------------------------------------------------------
+ */
 #define TOINT(t,x,z) \
 	switch(t) { \
 	case NOWDB_TYP_UINT: \
@@ -1088,6 +1114,10 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 		MOV(z, x); break; \
 	}
 
+/* -----------------------------------------------------------------------
+ * Convert to unsigned int
+ * -----------------------------------------------------------------------
+ */
 #define TOUINT(t,x,z) \
 	switch(t) { \
 	case NOWDB_TYP_FLOAT: \
@@ -1199,6 +1229,11 @@ static nowdb_err_t evalFun(uint32_t      fun,
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
 	/* -----------------------------------------------------------------------
+	 * Conditionals
+	 * -----------------------------------------------------------------------
+	 */
+
+	/* -----------------------------------------------------------------------
 	 * Bitwise
 	 * -----------------------------------------------------------------------
 	 */
@@ -1219,6 +1254,10 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	return NOWDB_OK;
 }
 
+/* -----------------------------------------------------------------------
+ * Get number of arguments
+ * -----------------------------------------------------------------------
+ */
 static inline int getArgs(int o) {
 	switch(o) {
 	case NOWDB_EXPR_OP_FLOAT:
@@ -1367,6 +1406,10 @@ static inline int evalType(nowdb_op_t *op) {
 	}
 }
 
+/* -----------------------------------------------------------------------
+ * Get operator, function or aggregate from name/symbol
+ * -----------------------------------------------------------------------
+ */
 int nowdb_op_fromName(char *op, char *agg) {
 	*agg = 0;
 	if (strcmp(op, "+") == 0) return NOWDB_EXPR_OP_ADD;
@@ -1391,4 +1434,3 @@ int nowdb_op_fromName(char *op, char *agg) {
 
 	return nowdb_fun_fromName(op);
 }
-

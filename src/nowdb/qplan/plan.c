@@ -1385,22 +1385,9 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 
 		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
-		// flags = NOWDB_FIELD_AGG;
-
-		// distinguish here between agg and ordinary function
-		// err = makeFun(trg, field, expr);
-
 		err = makeFun(scope, v, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
 
-	/*
-	} else if (field->ntype == NOWDB_AST_OP) {
-
-		fprintf(stderr, "OP: %s\n", (char*)field->value);
-
-		err = makeOp(scope, v, trg, field, expr, agg);
-		if (err != NOWDB_OK) return err;
-	*/
 
 	} else if (field->ntype == NOWDB_AST_VALUE) {
 		typ = nowdb_ast_type(field->stype);
@@ -1437,26 +1424,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 			*/
 			INVALIDAST("unknown target");
 		}
-
-		/* name or offset */
-		/*
-		if (flags == 0 && off < 0) {
-			f->name = strdup(field->value);
-			if (f->name == NULL) {
-				NOMEM("allocating field name");
-				free(f); break;
-			}
-			if (v != NULL) f->roleid = v->roleid;
-			f->pk = 0;
-		} else {
-			f->off = (uint32_t)off;
-			f->name = NULL;
-		}
-		*/
 	}
-
-	// f->flags = flags | NOWDB_FIELD_SELECT;
-	// f->agg    = 0;
 
 	return NOWDB_OK;
 }
