@@ -839,23 +839,73 @@ bitmaps; but the database needs
 to provide support for working with bitmaps.}
 
 \subsubsection{Time}
-year, month, week, mday, wday, hour, min,
-sec, milli, micro, nano, format,
-now, dusk, dawn 
+\paragraph{Time Component Functions}
+Time component functions return a part of the time,
+such as the year, the month, the day of the month,
+\etc\ as \keyword{int} according to the European calendar.
+Example:
 
-\comment{Not yet available.
-The time component functions (year, month, \etc)
-are extremely interesting.
-At the moment it is hard to select subperiods;
-for instance: for the years 2000-2010, show me
-the average temperature of month June:
-}
+\keyword{select} \identifier{year}(\keyword{stamp})
+\keyword{from} \identifier{sales}
 
-\comment{
-\identifier{year}(\keyword{stamp}) \keyword{between} [2000, 2010[
-\keyword{and}
-\identifier{month}(\keyword{stamp}) = 6
-}
+\identifier{year} returns the year, \eg\ 2018.
+
+\identifier{month}
+returns the month starting from January as 1.
+
+\identifier{mday}
+returns the day of the month (1-31).
+
+\identifier{wday}
+returns the day of the week with
+Monday = 1, Tuesday = 2, $\dots$, Saturday = 6 and
+Sunday = 0.
+
+\identifier{yday}
+returns the day of the year.
+
+\identifier{hour}
+returns the hour of the day from $0\dots 23$.
+
+\identifier{minute}
+returns the minute of the hour from $0\dots 59$.
+
+\identifier{second}
+returns the second of the minute,
+which is almost always between $0\dots 59$.
+In case of leap seconds, however, 60 may be returned.
+
+\identifier{milli}
+returns the milliseconds within the second.
+
+\identifier{micro}
+returns the microseconds within the second.
+
+\identifier{nano} 
+returns the nanoseconds within the second.
+
+\paragraph{Points in Time}
+The following functions return specific points in time.
+They take no argument and return a \keyword{time} value.
+Example:
+
+\keyword{select} \identifier{now}()
+\keyword{from} \identifier{sales}
+
+\identifier{now}
+returns the current system time.
+
+\identifier{dawn, dusk}
+return the earliest (\identifier{dawn}) and
+the latest (\identifier{dusk}) point in time
+that can be represented.
+
+\identifier{epoch}
+returns the system's epoch
+(usually `1970-01-01T00:00:00').
+
+\paragraph{Time Formatting}
+\comment{Not yet available}
 
 \subsubsection{Text}
 \comment{Not yet available}
