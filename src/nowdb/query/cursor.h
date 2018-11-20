@@ -42,10 +42,13 @@ typedef struct {
 	nowdb_model_vertex_t  *v; /* type if this is not a join!   */
 	nowdb_vrow_t       *wrow; /* vertex row for where          */
 	nowdb_vrow_t       *prow; /* vertex row for projection     */
+	char           *leftover; /* leftover from previous round  */
+	uint64_t            pmap; /* property map of leftover      */
+	char            freeleft; /* free leftover                 */
 	uint32_t             off; /* offset in the current reader  */
-	uint32_t         recsize; /* record size                   */
-	char                *tmp; /* temporary buffer              */
-	char               *tmp2; /* temporary buffer              */
+	uint32_t           recsz; /* record size                   */
+	char                *tmp; /* temporary buffer for group    */
+	char               *tmp2; /* temporary buffer for row      */
 	char            *fromkey; /* range: fromkey                */
 	char              *tokey; /* range:   tokey                */
 	char               hasid; /* has id to identify model      */

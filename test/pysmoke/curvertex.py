@@ -89,9 +89,10 @@ def vidwhere1att(c):
 
     # prod_key where 1 condition
     stmt = "select prod_key from product where prod_desc = '%s'" % ps[idx].desc
+    print "%s (%d)" % (stmt,k)
     with c.execute(stmt) as cur:
         if not cur.ok():
-          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         n=0
         for row in cur:
             n+=1

@@ -279,13 +279,13 @@ int processCursor(nowdb_cursor_t *cur) {
 		*/
 		total += cnt;
 		// fprintf(stderr, "%lu\n", total);
-		if (cur->recsize == 32) {
+		if (cur->recsz == 32) {
 			if (cur->row != NULL && cur->hasid) {
 				printRow(buf, osz);
 			} else {
 				printVertex((nowdb_vertex_t*)buf, osz/32);
 			}
-		} else if (cur->recsize == 64) {
+		} else if (cur->recsz == 64) {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);
 			} else if (cur->row != NULL && cur->hasid) {
