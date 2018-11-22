@@ -187,6 +187,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		if (s > 0) {
 			memcpy(buf+(*osz), val, s); *osz+=s;
 		}
+		row->dirty = 1;
 
 		// fprintf(stderr, "%d: %u\n", i, *osz);
 	}

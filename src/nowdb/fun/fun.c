@@ -522,7 +522,7 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 
 	// round to fsize and convert to float
 	f = j/fun->fsize; f *= fun->fsize;
-	now2float(&fun->r1, BLOCK(runner->cont)->block+f, fun->fsize);
+	now2float(&fun->r1, BLOCK(runner->cont)->block+f, fun->dtype);
 
 	// odd, we're done
 	if (!two) return NOWDB_OK;
@@ -535,7 +535,7 @@ static inline nowdb_err_t median(nowdb_fun_t *fun) {
 
 	// round to fsize and convert to float
 	f = j/fun->fsize; f *= fun->fsize;
-	now2float(&fun->r2, BLOCK(runner->cont)->block+f, fun->fsize);
+	now2float(&fun->r2, BLOCK(runner->cont)->block+f, fun->dtype);
 
 	// add n/2 and n/2+1
 	err = nowadd(&fun->r1, &fun->r2, NOWDB_TYP_FLOAT);

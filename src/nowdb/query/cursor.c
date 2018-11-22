@@ -1117,9 +1117,10 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
  */
 nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 
+	// initialise offset
 	cur->off = 0;
 
-	/* initialise readers */
+	// initialise readers
 	return nowdb_reader_move(cur->rdr);
 }
 
@@ -1279,6 +1280,15 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	return NOWDB_OK;
 }
 
+#define AFTERMOVE() \
+	src = nowdb_reader_page(cur->rdr); \
+	cur->recsz = cur->rdr->recsize; \
+	recsz = cur->recsz; \
+	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE; \
+	ctype = recsz == NOWDB_EDGE_SIZE? \
+                         NOWDB_CONT_EDGE: \
+                         NOWDB_CONT_VERTEX;
+
 /* ------------------------------------------------------------------------
  * Single reader fetch
  * ------------------------------------------------------------------------
@@ -1294,15 +1304,17 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	uint64_t pmap=fullmap;
 	char *realsrc=NULL;
 	nowdb_filter_t *filter = cur->rdr->filter;
-	char *src = nowdb_reader_page(cur->rdr);
+	char *src;
+	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
 	uint32_t mx;
 
-	// the reader should store the content type
-	nowdb_content_t ctype = recsz == NOWDB_EDGE_SIZE?
-	                                 NOWDB_CONT_EDGE:
-	                                 NOWDB_CONT_VERTEX;
-	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE;
+	// we have already reached eof
+	if (cur->eof) return nowdb_err_get(nowdb_err_eof,
+		                    FALSE, OBJECT, NULL);
+
+	// initialise like after move
+	AFTERMOVE()
 
 	for(;;) {
 		// handle leftovers
@@ -1326,8 +1338,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 					cur->freeleft = 0;
 				}
 				cur->leftover = NULL;
+			} else {
+				if (full) break;
+				continue;
 			}
-			if (full) break;
 		}
 		// handle complete prows
 		if (cur->prow != NULL) {
@@ -1339,6 +1353,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				continue;
 			}
 		}
+		// next page
 		if (cur->off >= mx && !cur->eof) {
 			err = nowdb_reader_move(cur->rdr);
 			if (err != NOWDB_OK) {
@@ -1347,15 +1362,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				                  buf, sz,
 				               osz, count);
 			}
-			src = nowdb_reader_page(cur->rdr);
 			cur->off = 0;
-			cur->recsz = cur->rdr->recsize;
-			recsz = cur->recsz;
-			mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE;
-			ctype = recsz == NOWDB_EDGE_SIZE?
-			                 NOWDB_CONT_EDGE:
-			                 NOWDB_CONT_VERTEX;
+			AFTERMOVE()
 		}
+
 		// we hit the nullrecord and pass on to the next page
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = mx; continue;
@@ -1460,10 +1470,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			// remember if we have to free the leftover!
 			cur->leftover = realsrc;
 			cur->recsz = realsz;
+			recsz = cur->recsz;
 			cur->pmap = pmap;
 		}
 		if (full) break;
-		if (cur->eof) break;
 	}
 	return NOWDB_OK;
 }
