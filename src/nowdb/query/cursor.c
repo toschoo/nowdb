@@ -408,24 +408,25 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_new(cur->v->roleid, &cur->prow);
 	if (err != NOWDB_OK) return err;
 
-	// nowdb_vrow_autoComplete(cur->prow);
+	nowdb_vrow_autoComplete(cur->prow);
 
 	for(int i=0; i<cur->row->sz; i++) {
 		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
 		if (err != NOWDB_OK) return err;
 	}
-	if (cur->prow->np == 0) {
-		err = nowdb_model_getPK(cur->model, cur->v->roleid, &p);
-		if (err != NOWDB_OK) return err;
 
-		err = nowdb_expr_newVertexField(&px, p->name,
-		                  cur->v->roleid, p->propid);
-		if (err != NOWDB_OK) return err;
+	// Always add pk
+	err = nowdb_model_getPK(cur->model, cur->v->roleid, &p);
+	if (err != NOWDB_OK) return err;
 
-		err = nowdb_vrow_addExpr(cur->prow, px);
-		nowdb_expr_destroy(px); free(px);
-		if (err != NOWDB_OK) return err;
-	}
+	err = nowdb_expr_newVertexField(&px, p->name,
+	                  cur->v->roleid, p->propid);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_vrow_addExpr(cur->prow, px);
+	nowdb_expr_destroy(px); free(px);
+	if (err != NOWDB_OK) return err;
+
 	return NOWDB_OK;
 }
 
@@ -1148,6 +1149,7 @@ static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
 static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
                                   nowdb_content_t ctype,
                                   uint32_t        recsz,
+                                  uint64_t        pmap,
                                   char           *src) {
 	nowdb_err_t err;
 
@@ -1155,7 +1157,7 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 		memcpy(cur->tmp, src, recsz);
 		memcpy(cur->tmp2, cur->tmp, recsz);
 	}
-	err = nowdb_group_map(cur->nogrp, ctype, src);
+	err = nowdb_group_map(cur->nogrp, ctype, pmap, src);
 	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
@@ -1167,6 +1169,7 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
                                       nowdb_content_t ctype,
                                       uint32_t        recsz,
+                                      uint64_t         pmap,
                                       char *src,    char *x) {
 	nowdb_err_t err;
 	nowdb_cmp_t cmp;
@@ -1199,7 +1202,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 	if (cmp == NOWDB_SORT_EQUAL) {
 		if (cur->group != NULL) {
 			err = nowdb_group_map(cur->group, ctype,
-			                          src+cur->off);
+			                      pmap,src+cur->off);
 			if (err != NOWDB_OK) return err;
 		}
 		cur->off += recsz; *x=0;
@@ -1208,7 +1211,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 	/* we actually switch the group */
 	if (cur->group != NULL) {
 		err = nowdb_group_map(cur->group, ctype,
-			                      cur->tmp2);
+			                pmap, cur->tmp2);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 		if (err != NOWDB_OK) return err;
@@ -1253,7 +1256,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	} else if (cur->group != NULL) {
 		cur->off = 0;
 		err = nowdb_group_map(cur->group, ctype,
-			                      cur->tmp2);
+			              fullmap,cur->tmp2);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 	}
@@ -1288,6 +1291,13 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	ctype = recsz == NOWDB_EDGE_SIZE? \
                          NOWDB_CONT_EDGE: \
                          NOWDB_CONT_VERTEX;
+#define CHECKEOF() \
+	if (cur->eof) { \
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); \
+	}
+
+#define MKEOF() \
+	err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); 
 
 /* ------------------------------------------------------------------------
  * Single reader fetch
@@ -1310,8 +1320,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	uint32_t mx;
 
 	// we have already reached eof
-	if (cur->eof) return nowdb_err_get(nowdb_err_eof,
-		                    FALSE, OBJECT, NULL);
+	CHECKEOF()
 
 	// initialise like after move
 	AFTERMOVE()
@@ -1319,6 +1328,17 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	for(;;) {
 		// handle leftovers
 		if (cur->leftover != NULL) {
+
+			fprintf(stderr, "LEFTOVER\n");
+
+			realsz = cur->recsz;
+			pmap = cur->pmap;
+			realsrc = cur->leftover;
+			cur->leftover = NULL;
+
+			goto projection;
+
+			/*
 			err = nowdb_row_project(cur->row,
 			       cur->leftover, cur->recsz,
 			              cur->pmap, buf, sz,
@@ -1342,26 +1362,45 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				if (full) break;
 				continue;
 			}
+			*/
 		}
 		// handle complete prows
 		if (cur->prow != NULL) {
 			if (nowdb_vrow_complete(cur->prow,
-			                      &cur->recsz,
-			                      &cur->pmap,
-                                              &cur->leftover)) {
+			                        &realsz,
+			                        &pmap,
+                                                &realsrc)) {
+				// fprintf(stderr, "COMPLETED\n");
+				// before we continue:
+				// group needs to see that
+				// in fact: it's not a leftover
+				//          it's a realsrc
 				cur->freeleft = 1;
-				continue;
+				goto grouping;
 			}
 		}
+		if (cur->eof) {
+			MKEOF();
+			return handleEOF(cur, err, ctype,
+				         recsz, buf, sz,
+				         osz, count);
+		}
+
 		// next page
-		if (cur->off >= mx && !cur->eof) {
+		if (cur->off >= mx) {
 			err = nowdb_reader_move(cur->rdr);
-			if (err != NOWDB_OK) {
-				return handleEOF(cur, err,
-				             ctype, recsz,
-				                  buf, sz,
-				               osz, count);
+			if (err != NOWDB_OK && err->errcode == nowdb_err_eof) {
+				cur->eof = 1;
+				if (cur->prow != NULL) {
+					nowdb_err_release(err);
+					err = nowdb_vrow_force(cur->prow);
+					if (err != NOWDB_OK) return err;
+				}
+				continue;
 			}
+			// handleEOF should go away
+			// we should pass through the grouping
+			// presenting the correct source
 			cur->off = 0;
 			AFTERMOVE()
 		}
@@ -1408,6 +1447,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 
 		// add vertex property to prow
 		if (cur->prow != NULL) {
+			fprintf(stderr, "ADDING\n");
 			err = nowdb_vrow_add(cur->prow,
 			              (nowdb_vertex_t*)(src+cur->off), &x);
 			if (err != NOWDB_OK) return err;
@@ -1422,11 +1462,13 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			realsrc = src+cur->off;
 		}
 
+grouping:
 		// review!!!
 		/* if keys-only, group or no-group aggregates */
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, realsz, realsrc);
+				err = nogroup(cur, ctype, realsz,
+				                   pmap, realsrc);
 				if (realsrc != src+cur->off) free(realsrc);
 				if (err != NOWDB_OK) return err;
 				cur->off += recsz;
@@ -1434,12 +1476,16 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 			if (cur->group != NULL || cur->rdr->ko) {
 				// review for vertex !
-				err = groupswitch(cur, ctype, recsz, src, &x);
+				err = groupswitch(cur, ctype, recsz,
+				                     pmap, src, &x);
 				if (err != NOWDB_OK) return err;
 				if (!x) continue;
 			}
 		}
+
+projection:
 		if (cur->group == NULL) {
+			fprintf(stderr, "PROJECT\n");
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
 			                   pmap, buf, sz,
@@ -1460,18 +1506,24 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			//          another meaning with vertices!
 			finalizeGroup(cur, src);
 
-			if (realsrc != (src+cur->off)) {
-				cur->freeleft = 0;
+			if (ctype == NOWDB_CONT_VERTEX) {
+				fprintf(stderr, "freeing: %d\n", cur->freeleft);
+			}
+			if (cur->freeleft) {
 				free(realsrc); realsrc = NULL;
+				cur->leftover = NULL;
+				cur->freeleft = 0;
 			}
 			(*count)+=cc;
 			cur->off+=recsz;
 		} else {
+			fprintf(stderr, "INCOMPLETE\n");
 			// remember if we have to free the leftover!
 			cur->leftover = realsrc;
 			cur->recsz = realsz;
 			recsz = cur->recsz;
 			cur->pmap = pmap;
+			if (ctype == NOWDB_CONT_VERTEX) cur->freeleft=1;
 		}
 		if (full) break;
 	}
@@ -1583,7 +1635,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 		/* if keys-only, group or no-group aggregates */
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, realsz, realsrc);
+				err = nogroup(cur, ctype, realsz, 0, realsrc);
 				if (realsrc != src+cur->off) free(realsrc);
 				if (err != NOWDB_OK) return err;
 				cur->off += recsz;
@@ -1591,7 +1643,7 @@ static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
 			}
 			if (cur->group != NULL || cur->rdr->ko) {
 				// review for vertex !
-				err = groupswitch(cur, ctype, recsz, src, &x);
+				err = groupswitch(cur, ctype, recsz, 0, src, &x);
 				if (err != NOWDB_OK) return err;
 				if (!x) continue;
 			}

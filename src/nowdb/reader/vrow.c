@@ -631,7 +631,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 			memcpy(vrow->prev, &vertex->vertex, KEYSZ);
 			v2 = ts_algo_tree_find(vrow->vrtx, &vpattern);
 			if (v2 != NULL) {
-				fprintf(stderr, "have old one\n");
+				// fprintf(stderr, "have old one\n");
 				ts_algo_tree_delete(vrow->vrtx, v2);
 				if (ts_algo_list_append(
 				    vrow->ready, v2) != TS_ALGO_OK) {
@@ -640,7 +640,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 				}
 			}
 		} else {
-			fprintf(stderr, "%lu == %lu\n", *vrow->prev, vertex->vertex);
+			// fprintf(stderr, "%lu == %lu\n", *vrow->prev, vertex->vertex);
 		}
 	}
 
@@ -668,6 +668,8 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 static ts_algo_bool_t oneProp(void *ignore, const void *one,
                                             const void *two) 
 {
+	// this is redundant: if there is an entitiy,
+	// its property counter is at least 1...
 	return (VROW(two)->np > 0);
 }
 
@@ -678,6 +680,8 @@ static ts_algo_bool_t oneProp(void *ignore, const void *one,
 nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	nowdb_err_t err;
 	ts_algo_list_node_t *run;
+
+	if (vrow == NULL) return NOWDB_OK;
 
 	// filter all with np > 0
 	for(run=vrow->ready->head; run!=NULL;) {

@@ -153,6 +153,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	*ok  =0;
 	*cnt =0;
 
+	// fprintf(stderr, "my pmap: %lu\n", pmap);
+
 	if (row == NULL) return copybuf(src, recsz,
 	                                buf,    sz,
 	                                osz,   cnt,
@@ -172,11 +174,10 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 
 	// project the fields
 	for(int i=row->cur; i<row->sz; i++) {
-		// pass pmap to eval
-		err = nowdb_expr_eval(row->fields[i], &row->eval,
-		                                 src, &typ, &val);
+		err = nowdb_expr_eval(row->fields[i],
+	                             &row->eval, pmap,
+		                      src, &typ, &val);
 		if (err != NOWDB_OK) return err;
-
 		t = (char)typ;
 		s = getSize(t, val);
 		if (*osz + s + 1 >= sz) {

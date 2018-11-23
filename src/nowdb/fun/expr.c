@@ -836,6 +836,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
  */
 static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          nowdb_eval_t  *hlp,
+                                         uint64_t      rmap,
                                          char          *src,
                                          nowdb_type_t  *t,
                                          void         **res) {
@@ -845,6 +846,12 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
 	                     *(uint64_t*)(src+field->off), field->type);
 	*/
+
+	// this magic formula should be defined somewhere
+	int i = (field->off-4)/8;
+	if ((rmap & 1<<i) == 0) {
+		*t = 0; return NOWDB_OK;
+	}
 
 	*t = field->type;
 	if (*t == NOWDB_TYP_TEXT) {
@@ -861,6 +868,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
  */
 static nowdb_err_t evalField(nowdb_field_t *field,
                              nowdb_eval_t  *hlp,
+                             uint64_t      rmap,
                              char          *row,
                              nowdb_type_t  *typ,
                              void         **res) {
@@ -876,7 +884,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 		if (err != NOWDB_OK) return err;
 		
 	} else {
-		err = getVertexValue(field, hlp, row, typ, res);
+		err = getVertexValue(field, hlp, rmap, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -905,6 +913,7 @@ static inline int evalType(nowdb_op_t *op);
  */
 static nowdb_err_t evalOp(nowdb_op_t   *op,
                           nowdb_eval_t *hlp,
+                          uint64_t     rmap,
                           char         *row,
                           nowdb_type_t *typ,
                           void        **res) {
@@ -913,7 +922,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	if (op->argv != NULL) {
 		for(int i=0; i<op->args; i++) {
 			err = nowdb_expr_eval(op->argv[i],
-			                      hlp, row,
+			                      hlp, rmap, row,
 			                      op->types+i,
 			                      op->results+i);
 			if (err != NOWDB_OK) return err; 
@@ -924,6 +933,10 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	if (op->types != NULL) { 
 		*typ = evalType(op);
 		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
+	}
+	if (*typ == 0) {
+		// treat is null here
+		
 	}
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
 	if (err != NOWDB_OK) return err;
@@ -936,8 +949,6 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t evalAgg(nowdb_agg_t  *agg,
-                           nowdb_eval_t *hlp,
-                           char         *row,
                            nowdb_type_t *typ,
                            void        **res) 
 {
@@ -967,25 +978,27 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
  */
 nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_eval_t *hlp,
+                            uint64_t     rmap,
                             char         *row,
                             nowdb_type_t *typ,
                             void        **res) {
 	if (expr == NULL) return NOWDB_OK;
 	switch(EXPR(expr)->etype) {
 	case NOWDB_EXPR_FIELD:
-		return evalField(FIELD(expr), hlp, row, typ, res);
+		return evalField(FIELD(expr), hlp, rmap, row, typ, res);
 
 	case NOWDB_EXPR_CONST:
 		return evalConst(CONST(expr), typ, res);
 
 	case NOWDB_EXPR_OP:
-		return evalOp(OP(expr), hlp, row, typ, res);
+		return evalOp(OP(expr), hlp, rmap, row, typ, res);
 
 	case NOWDB_EXPR_REF:
-		return nowdb_expr_eval(REF(expr)->ref, hlp, row, typ, res);
+		return nowdb_expr_eval(REF(expr)->ref, hlp,
+		                       rmap, row, typ, res);
 
 	case NOWDB_EXPR_AGG:
-		return evalAgg(AGG(expr), hlp, row, typ, res);
+		return evalAgg(AGG(expr), typ, res);
 
 	default:
 		INVALID("unknown expression type");
@@ -1470,6 +1483,7 @@ static inline int correctNumTypes(nowdb_op_t *op) {
  * -----------------------------------------------------------------------
  */
 static inline int evalType(nowdb_op_t *op) {
+
 	switch(op->fun) {
 
 	case NOWDB_EXPR_OP_FLOAT: return NOWDB_TYP_FLOAT;

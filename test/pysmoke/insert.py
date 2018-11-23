@@ -110,6 +110,38 @@ def insertallvertex(c):
             if row.field(0) != ("product %d" % k):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
 
+    # select a non-existing prop
+    stmt = "select prod_desc, prod_cat from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ("product %d" % k):
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(1) is not None:
+               raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(1)))
+            print "%s, %s" % (row.field(0), row.field(1))
+
+    # select only a non-existing prop
+    stmt = "select prod_cat from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) is not None:
+               raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
+            print "%s" % (row.field(0))
+
+    # test where
+
     # insert with field list (complete)
     k = getNextKey()
     stmt = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \
@@ -150,7 +182,7 @@ def insertallvertex(c):
             if row.field(0) != ("product %d" % k):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
 
-    # insert with field list (complete, no fields)
+    # insert without field list (complete, no fields)
     k = getNextKey()
     stmt = "insert into product (%d, 'product %s', 1, 3, 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
@@ -169,7 +201,7 @@ def insertallvertex(c):
             if row.field(0) != ("product %d" % k):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
 
-    # insert with field list (incomplete, no fields)
+    # insert without field list (incomplete, no fields)
     k = getNextKey()
     stmt = "insert into product (%d, 'product %s', 1, 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
@@ -184,7 +216,7 @@ def insertallvertex(c):
         if cur.code() != now.EOF:
           raise db.TestFailed("Expecting EOF, but have %d: %s" % (cur.code(),cur.details()))
 
-    # insert with field list (complete, no fields, wrong type)
+    # insert without field list (complete, no fields, wrong type)
     k = getNextKey()
     stmt = "insert into product (%d, 'product %s', 1, '3', 1.59)" % (k, str(k))
     with c.execute(stmt) as r:

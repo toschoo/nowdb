@@ -107,7 +107,7 @@ nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t  *vrow,
  * -------------------------
  * Checks whether there is a complete vertex (without evaluation).
  * If there is, its row is copied into row and
- * its size is pass to 'size'.
+ * its size is passed to 'size'.
  * ------------------------------------------------------------------------
  */
 nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
