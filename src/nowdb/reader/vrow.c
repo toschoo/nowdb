@@ -614,9 +614,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 
 	// force completion of prev
 	if (vrow->forcecomp) {
-		fprintf(stderr, "IN FORCECOMP\n");
 		if (vrow->prev == NULL) {
-			fprintf(stderr, "PREV NULL\n");
 			vrow->prev = malloc(KEYSZ);
 			if (vrow->prev == NULL) {
 				NOMEM("allocating vid");
@@ -626,7 +624,7 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 
 		} else if (*vrow->prev != vertex->vertex) {
 			vrow_t *v2, vpattern;
-			fprintf(stderr, "FORCING MATTERS\n");
+			// fprintf(stderr, "FORCING MATTERS\n");
 			vpattern.vertex = *vrow->prev;
 			memcpy(vrow->prev, &vertex->vertex, KEYSZ);
 			v2 = ts_algo_tree_find(vrow->vrtx, &vpattern);
@@ -639,8 +637,6 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 					return err;
 				}
 			}
-		} else {
-			// fprintf(stderr, "%lu == %lu\n", *vrow->prev, vertex->vertex);
 		}
 	}
 
@@ -697,7 +693,6 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	for(;run!=NULL;run=run->nxt) {
 		ts_algo_tree_delete(vrow->vrtx, run->cont);
 	}
-	fprintf(stderr, "ready: %d\n", vrow->ready->len);
 	return NOWDB_OK;
 }
 

@@ -140,7 +140,22 @@ def insertallvertex(c):
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
             print "%s" % (row.field(0))
 
-    # test where
+    # filter a non-existing prop
+    stmt = "select prod_key from product where prod_cat = 3"
+    with c.execute(stmt) as cur:
+        if cur.ok():
+           for row in cur:
+              if row.field(0) == k:
+                 raise db.TestFailed("NULL field filtered %d: %s" % (k, row.field(0)))
+              print "%s" % (row.field(0))
+
+    # filter a non-existing prop
+    stmt = "select prod_key from product where prod_cat != 3"
+    with c.execute(stmt) as cur:
+        if cur.ok():
+           for row in cur:
+              if row.field(0) == k:
+                 raise db.TestFailed("NULL field filtered %d: %s" % (k, row.field(0)))
 
     # insert with field list (complete)
     k = getNextKey()

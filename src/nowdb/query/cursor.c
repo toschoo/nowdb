@@ -1183,29 +1183,25 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 
 	/* group not yet initialised */
 	if (memcmp(cur->tmp, nowdb_nullrec, cur->recsz) == 0) {
-		memcpy(cur->tmp, src+cur->off, cur->recsz);
+		memcpy(cur->tmp, src, cur->recsz);
 		if (cur->group != NULL) {
 			*x=0;
 			memcpy(cur->tmp2, cur->tmp, cur->recsz);
-			cur->off+=cur->recsz;
 		}
 		return NOWDB_OK;
 	}
-	cmp = cur->recsz == NOWDB_EDGE_SIZE?
-	      nowdb_sort_edge_keys_compare(cur->tmp,
-		                       src+cur->off,
-		                    cur->rdr->ikeys):
-	      nowdb_sort_vertex_keys_compare(cur->tmp,
-		                         src+cur->off,
-		                      cur->rdr->ikeys);
+	cmp = cur->recsz == NOWDB_EDGE_SIZE? // won't work for prow
+	      nowdb_sort_edge_keys_compare(cur->tmp, src,
+		                           cur->rdr->ikeys):
+	      nowdb_sort_vertex_keys_compare(cur->tmp, src,
+		                             cur->rdr->ikeys);
 	/* no group switch, just map */
 	if (cmp == NOWDB_SORT_EQUAL) {
 		if (cur->group != NULL) {
-			err = nowdb_group_map(cur->group, ctype,
-			                      pmap,src+cur->off);
+			err = nowdb_group_map(cur->group, ctype, pmap, src);
 			if (err != NOWDB_OK) return err;
 		}
-		cur->off += recsz; *x=0;
+		*x=0;
 		return NOWDB_OK;
 	}
 	/* we actually switch the group */
@@ -1216,7 +1212,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		err = nowdb_group_reduce(cur->group, ctype);
 		if (err != NOWDB_OK) return err;
 	}
-	memcpy(cur->tmp, src+cur->off, cur->recsz);
+	memcpy(cur->tmp, src, cur->recsz);
 	return NOWDB_OK;
 }
 
@@ -1288,6 +1284,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	cur->recsz = cur->rdr->recsize; \
 	recsz = cur->recsz; \
 	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE; \
+	filter = cur->rdr->filter; \
 	ctype = recsz == NOWDB_EDGE_SIZE? \
                          NOWDB_CONT_EDGE: \
                          NOWDB_CONT_VERTEX;
@@ -1299,8 +1296,15 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 #define MKEOF() \
 	err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); 
 
+#define FREESRC(err) \
+	if (cur->freesrc) { \
+		free(realsrc); realsrc = NULL; \
+		cur->leftover = NULL; \
+		cur->freesrc = 0; \
+	}
+
 /* ------------------------------------------------------------------------
- * Single reader fetch
+ * Fetch
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
@@ -1338,31 +1342,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 
 			goto projection;
 
-			/*
-			err = nowdb_row_project(cur->row,
-			       cur->leftover, cur->recsz,
-			              cur->pmap, buf, sz,
-			                      osz, &full,
- 			                 &cc, &complete);
-			if (err != NOWDB_OK) return err;
-			if (complete) {
-				cur->off+=recsz; // not yet
-				(*count)+=cc;
-
-				// finalise the group (if there is one)
-				finalizeGroup(cur, cur->leftover);
-
-				// check whether we need to free!!!
-				if (cur->freeleft) {
-					free(cur->leftover); 
-					cur->freeleft = 0;
-				}
-				cur->leftover = NULL;
-			} else {
-				if (full) break;
-				continue;
-			}
-			*/
 		}
 		// handle complete prows
 		if (cur->prow != NULL) {
@@ -1370,26 +1349,24 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			                        &realsz,
 			                        &pmap,
                                                 &realsrc)) {
-				// fprintf(stderr, "COMPLETED\n");
-				// before we continue:
-				// group needs to see that
-				// in fact: it's not a leftover
-				//          it's a realsrc
-				cur->freeleft = 1;
+				cur->freesrc = 1;
 				goto grouping;
 			}
 		}
+		// END OF FILE
 		if (cur->eof) {
 			MKEOF();
 			return handleEOF(cur, err, ctype,
 				         recsz, buf, sz,
 				         osz, count);
 		}
-
-		// next page
+		// END OF PAGE
 		if (cur->off >= mx) {
 			err = nowdb_reader_move(cur->rdr);
-			if (err != NOWDB_OK && err->errcode == nowdb_err_eof) {
+			if (err != NOWDB_OK) {
+				if (!nowdb_err_contains(err, nowdb_err_eof))
+					return err;
+
 				cur->eof = 1;
 				if (cur->prow != NULL) {
 					nowdb_err_release(err);
@@ -1398,18 +1375,14 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				}
 				continue;
 			}
-			// handleEOF should go away
-			// we should pass through the grouping
-			// presenting the correct source
+
 			cur->off = 0;
 			AFTERMOVE()
 		}
-
-		// we hit the nullrecord and pass on to the next page
+		// NULLRECORD
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = mx; continue;
 		}
-
 		// check content
 		// -------------
 		// here's potential for improvement:
@@ -1418,8 +1391,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		if (!checkpos(cur->rdr, cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
-
-		/* apply filter to vertex row */
+		// FILTER
 		if (cur->wrow != NULL) {
 			nowdb_key_t vid;
 			char x=0;
@@ -1439,53 +1411,50 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				cur->off += recsz; continue;
 			}
 
-		/* apply filter directly */
 		} else if (filter != NULL &&
 		    !nowdb_filter_eval(filter, src+cur->off)) {
 			cur->off += recsz; continue;
 		}
-
-		// add vertex property to prow
+		// PROW
 		if (cur->prow != NULL) {
-			fprintf(stderr, "ADDING\n");
 			err = nowdb_vrow_add(cur->prow,
-			              (nowdb_vertex_t*)(src+cur->off), &x);
+			      (nowdb_vertex_t*)(src+cur->off), &x);
 			if (err != NOWDB_OK) return err;
 			if (!nowdb_vrow_complete(cur->prow,
 			         &realsz, &pmap, &realsrc)) 
 			{
 				cur->off += recsz; continue;
 			}
-			cur->freeleft = 1;
+			cur->freesrc = 1;
 		} else {
 			realsz = recsz;
 			realsrc = src+cur->off;
 		}
-
 grouping:
-		// review!!!
-		/* if keys-only, group or no-group aggregates */
+		// if keys-only, group or no-group aggregates
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
 				err = nogroup(cur, ctype, realsz,
-				                   pmap, realsrc);
-				if (realsrc != src+cur->off) free(realsrc);
+				              pmap, realsrc);
+				FREESRC();
 				if (err != NOWDB_OK) return err;
 				cur->off += recsz;
 				continue;
 			}
 			if (cur->group != NULL || cur->rdr->ko) {
 				// review for vertex !
-				err = groupswitch(cur, ctype, recsz,
-				                     pmap, src, &x);
+				err = groupswitch(cur, ctype, realsz,
+				                  pmap, realsrc, &x);
+				FREESRC();
 				if (err != NOWDB_OK) return err;
-				if (!x) continue;
+				if (!x) {
+					cur->off+=cur->recsz;
+					continue;
+				}
 			}
 		}
-
 projection:
 		if (cur->group == NULL) {
-			fprintf(stderr, "PROJECT\n");
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
 			                   pmap, buf, sz,
@@ -1493,7 +1462,7 @@ projection:
  			                 &cc, &complete);
 		} else {
 			err = nowdb_row_project(cur->row,
-			                cur->tmp2, recsz,
+			               cur->tmp2, realsz,
 			                   pmap, buf, sz,
 			                      osz, &full,
 			                 &cc, &complete);
@@ -1502,28 +1471,19 @@ projection:
 		if (complete) {
 
 			// finalise the group (if there is one)
-			// CAUTION: this uses src, which has 
-			//          another meaning with vertices!
-			finalizeGroup(cur, src);
+			finalizeGroup(cur, realsrc);
 
-			if (ctype == NOWDB_CONT_VERTEX) {
-				fprintf(stderr, "freeing: %d\n", cur->freeleft);
-			}
-			if (cur->freeleft) {
-				free(realsrc); realsrc = NULL;
-				cur->leftover = NULL;
-				cur->freeleft = 0;
-			}
+			FREESRC();
+
 			(*count)+=cc;
 			cur->off+=recsz;
 		} else {
-			fprintf(stderr, "INCOMPLETE\n");
 			// remember if we have to free the leftover!
 			cur->leftover = realsrc;
 			cur->recsz = realsz;
 			recsz = cur->recsz;
 			cur->pmap = pmap;
-			if (ctype == NOWDB_CONT_VERTEX) cur->freeleft=1;
+			if (ctype == NOWDB_CONT_VERTEX) cur->freesrc=1;
 		}
 		if (full) break;
 	}

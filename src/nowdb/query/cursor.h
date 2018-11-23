@@ -44,7 +44,7 @@ typedef struct {
 	nowdb_vrow_t       *prow; /* vertex row for projection     */
 	char           *leftover; /* leftover from previous round  */
 	uint64_t            pmap; /* property map of leftover      */
-	char            freeleft; /* free leftover                 */
+	char             freesrc; /* free the source               */
 	uint32_t             off; /* offset in the current reader  */
 	uint32_t           recsz; /* record size                   */
 	char                *tmp; /* temporary buffer for group    */
