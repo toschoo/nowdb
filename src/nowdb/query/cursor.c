@@ -777,6 +777,8 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	err = initWRow(cur);
 	if (err != NOWDB_OK) goto cleanup;
 
+	// nowdb_filter_show(cur->filter,stderr); fprintf(stderr, "\n");
+
 	// open it
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) goto cleanup;

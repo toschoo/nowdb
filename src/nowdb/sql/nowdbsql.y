@@ -9,12 +9,11 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
- * - wexpression in select and where
+ * - expression in where
  * - qualified names
  * - aliases
  * - joins
  * - NULL
- * - TRUE and FALSE
  * - alter
  * - update and delete
  * - make load more versatile (csv, json, binary, avron)
@@ -302,7 +301,7 @@ misc ::= CLOSE UINTEGER(I). {
 	NOWDB_SQL_MAKE_CLOSE(I);	
 }
 
-/* val_list shall be wexpression list! */
+/* val_list shall be expression list! */
 misc ::= EXECUTE IDENTIFIER(I) LPAR RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,NULL);
 }
@@ -728,14 +727,14 @@ expr_list(L) ::= expr(F) COMMA expr_list(PL). {
 	L = F;
 }
 
+expr(P) ::= value(V). {
+        P=V;
+}
+
 expr(P) ::= field(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
-}
-
-expr(P) ::= value(V). {
-        P=V;
 }
 
 expr(P) ::= LPAR expr(E) RPAR. {
@@ -988,4 +987,8 @@ value(V) ::= FALSE(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
 	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
+}
+value(V) ::= NULL. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_NULL);
 }

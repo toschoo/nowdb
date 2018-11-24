@@ -131,6 +131,7 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 	CONST(*expr)->etype = NOWDB_EXPR_CONST;
 	CONST(*expr)->type = type;
 
+	if (type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 	if (type == NOWDB_TYP_TEXT) {
 		CONST(*expr)->value = strdup(value);
 		if (CONST(*expr)->value == NULL) {
@@ -965,6 +966,7 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
                                     nowdb_type_t  *typ,
                                     void         **res) {
 	*typ = cst->type;
+	if (cst->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 	if (cst->type != NOWDB_TYP_TEXT) {
 		memcpy(cst->value, cst->valbk, 8);
 	}
@@ -1217,6 +1219,14 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	double f;
 	int64_t l;
 	uint64_t u;
+
+	/* -----------------------------------------------------------------------
+	 * Exceptions from this rule:
+ 	 * - IS
+	 * - conditionals
+	 * -----------------------------------------------------------------------
+	 */
+	if (*t == NOWDB_TYP_NOTHING) return NOWDB_OK;
 
 	switch(fun) {
 
@@ -1483,6 +1493,13 @@ static inline int correctNumTypes(nowdb_op_t *op) {
  * -----------------------------------------------------------------------
  */
 static inline int evalType(nowdb_op_t *op) {
+
+	for (int i=0; i<op->args; i++) {
+		if (op->types[i] == NOWDB_TYP_NOTHING) {
+			// exception IS: then its bool
+			return NOWDB_TYP_NOTHING;
+		}
+	}
 
 	switch(op->fun) {
 

@@ -95,6 +95,7 @@
 (?i:STAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:TRUE)		return NOWDB_SQL_TRUE;
 (?i:FALSE)		return NOWDB_SQL_FALSE;
+(?i:NULL)		return NOWDB_SQL_NULL;
 
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:INSERT)		return NOWDB_SQL_INSERT;

@@ -324,12 +324,14 @@ static inline nowdb_err_t collect(nowdb_fun_t  *fun,
 	nowdb_err_t  err;
 	nowdb_block_t *b;
 	void *value=NULL;
+	nowdb_type_t   t;
 
 	err = nowdb_expr_eval(fun->expr, hlp,
                               rmap, record,
-	                     &fun->dtype, &value);
+	                      &t, &value);
 	if (err != NOWDB_OK) return err;
-	if (fun->dtype == 0) return NOWDB_OK;
+	if (t == NOWDB_TYP_NOTHING) return NOWDB_OK;
+	fun->dtype = t;
 
 	if (fun->many.len == 0 || fun->off >= BLOCKSIZE) {
 		err = nowdb_blist_give(fun->flist, &fun->many);
@@ -370,10 +372,15 @@ static inline nowdb_err_t apply(nowdb_fun_t  *fun,
 	if (hlp == NULL) {
 		value = record;
 	} else {
+		nowdb_type_t t;
 		err = nowdb_expr_eval(fun->expr, hlp,
                                       rmap, record,
-		                     &fun->dtype, &value);
+		                      &t, &value);
 		if (err != NOWDB_OK) return err;
+		if (t == NOWDB_TYP_NOTHING) {
+			return NOWDB_OK;
+		}
+		fun->dtype = t;
 	}
 
 	switch(ftype) {
@@ -457,7 +464,6 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 	nowdb_block_t *b;
 	int off=0;
 	nowdb_err_t err;
-
 
 	runner = fun->many.head;
 	if (runner != NULL) b=runner->cont; else return NOWDB_OK;

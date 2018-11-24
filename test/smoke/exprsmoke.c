@@ -39,16 +39,21 @@ char *randstr(uint32_t *sz) {
 
 int mkConst(nowdb_expr_t *c, void *v, nowdb_type_t t) {
 	nowdb_err_t err;
-	void *x = calloc(1,sizeof(uint64_t));
-	if (x == NULL) {
-		fprintf(stderr, "ERROR: cannot allocate value\n");
-		return -1;
-	}
-	memcpy(x,v,8);
-	err = nowdb_expr_newConstant(c, x, t); \
+	err = nowdb_expr_newConstant(c, v, t); \
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: cannot create new constant\n"); \
-		free(x);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
+int mkNull(nowdb_expr_t *c) {
+	nowdb_err_t err;
+
+	err = nowdb_expr_newConstant(c, NULL, 0); \
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot create null\n"); \
 		nowdb_err_print(err); nowdb_err_release(err);
 		return -1;
 	}
@@ -101,6 +106,56 @@ int unaryOp(int op, nowdb_expr_t o1, nowdb_type_t *t, void *r) {
 	}
 	memcpy(r, x, 8);
 	nowdb_expr_destroy(o); free(o);
+	return 0;
+}
+
+int testNULLAdd() {
+	nowdb_expr_t c1, c2;
+	uint64_t a, r;
+	nowdb_type_t t = NOWDB_TYP_UINT;
+
+	a = rand()%1000000;
+
+	if (mkConst(&c1, &a, t) != 0) return -1;
+	if (mkNull(&c2) != 0) {
+		nowdb_expr_destroy(c1); free(c1);
+		return -1;
+	}
+	if (binaryOp(NOWDB_EXPR_OP_ADD, c1, c2, &t, &r) != 0) return -1;
+	if (t != NOWDB_TYP_NOTHING) {
+		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
+		return -1;
+	}
+	fprintf(stderr, "COMPUTING %lu + NULL = NULL\n", a);
+
+	if (mkConst(&c1, &a, t) != 0) return -1;
+	if (mkNull(&c2) != 0) {
+		nowdb_expr_destroy(c1); free(c1);
+		return -1;
+	}
+
+	t = NOWDB_TYP_UINT;
+	if (binaryOp(NOWDB_EXPR_OP_ADD, c2, c1, &t, &r) != 0) return -1;
+	if (t != NOWDB_TYP_NOTHING) {
+		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
+		return -1;
+	}
+	fprintf(stderr, "COMPUTING NULL + %lu = NULL\n", a);
+	return 0;
+}
+
+int testNULL2FLOAT() {
+	nowdb_expr_t c1;
+	double r;
+	nowdb_type_t t = NOWDB_TYP_FLOAT;
+
+	if (mkNull(&c1) != 0) return -1;
+	if (unaryOp(NOWDB_EXPR_OP_FLOAT, c1, &t, &r) != 0) return -1;
+	if (t != NOWDB_TYP_NOTHING) {
+		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
+		return -1;
+	}
+	fprintf(stderr, "COMPUTING float(NULL) = NULL\n");
 	return 0;
 }
 
@@ -1097,6 +1152,16 @@ int main() {
 		}
 		if (testFLOAT2UINT() != 0) {
 			fprintf(stderr, "testFLOAT2UINT\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+
+		// NULL
+		if (testNULLAdd() != 0) {
+			fprintf(stderr, "testNULLAdd failed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+		if (testNULL2FLOAT() != 0) {
+			fprintf(stderr, "testNULL2FLOATfailed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 	}
