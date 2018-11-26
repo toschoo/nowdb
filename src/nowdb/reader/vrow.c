@@ -191,7 +191,8 @@ static inline nowdb_err_t getVRow(nowdb_vrow_t   *vrow,
  */
 static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
                                          void         *val,
-                                         int          *cnt) {
+                                         int          *cnt,
+                                         int          *off) {
 	nowdb_err_t err;
 	propmap_t pattern, *res;
 
@@ -214,6 +215,7 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
 			return err;
 		}
 	}
+	*off = (int)res->off;
 	return NOWDB_OK;
 }
 
@@ -221,8 +223,9 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
  * Insert vertex into propmap
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
-                                       int            *cnt) {
+static inline nowdb_err_t insertVertex(nowdb_vrow_t *vrow,
+                                       int          *cnt,
+                                       int          *off) {
 	nowdb_err_t err;
 	propmap_t pattern, *res;
 
@@ -245,6 +248,7 @@ static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
 			return err;
 		}
 	}
+	*off = (int)res->off;
 	return NOWDB_OK;
 }
 
@@ -280,13 +284,12 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
 		err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
 		if (err != NOWDB_OK) return err;
 
-		err = insertProperty(vrow, src->val, cnt);
+		err = insertProperty(vrow, src->val, cnt, off);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(*trg);
 			free(*trg); *trg = NULL;
 			return err;
 		}
-		*off=ROLESZ+KEYSZ*(*cnt-1);
 		return NOWDB_OK;
 
 	} else {
@@ -304,11 +307,9 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
 		// use the prop offset from the propmap (for vertex)
 		} else if (src->off == NOWDB_OFF_VERTEX) {
 			// fprintf(stderr, "VERTEX\n");
-			err = insertVertex(vrow, cnt);
+			err = insertVertex(vrow, cnt, off);
 			if (err != NOWDB_OK) return err;
 			vrow->wantvrtx = 1;
-			
-			*off=ROLESZ+KEYSZ*(*cnt-1);
 	
 		// ignore anything else	
 		} else {
@@ -399,10 +400,9 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 	case NOWDB_EXPR_FIELD: 
 	
 		err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
-			                    expr)->propid,cnt);
+			                expr)->propid,cnt,off);
 		if (err != NOWDB_OK) return err;
 
-		*off=ROLESZ+KEYSZ*(*cnt-1);
 		NOWDB_EXPR_TOFIELD(expr)->off = *off;
 		return NOWDB_OK;
 	}

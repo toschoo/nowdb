@@ -93,6 +93,7 @@ def insertallvertex(c):
     # insert with field list (partial)
     k = getNextKey()
     dsc = "product %d" % k
+    price = 1.59
     stmt = "insert into product (prod_key, prod_desc, prod_price) \
                                 (%d, 'product %s', 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
@@ -156,6 +157,29 @@ def insertallvertex(c):
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
             if row.field(1) != ('product %d' % k):
                raise db.TestFailed("wrong guy %s: %s" % ('product %d' % k, row.field(1)))
+
+    # select non-existing prop repeatedly
+    stmt = "select prod_desc, prod_cat, prod_cat, prod_price, prod_cat \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ("product %d" % k):
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(1) is not None:
+               raise db.TestFailed("NOT NULL (1) %d: %s" % (k, row.field(1)))
+            if row.field(2) is not None:
+               raise db.TestFailed("NOT NULL (2) %d: %s" % (k, row.field(1)))
+            if row.field(4) is not None:
+               raise db.TestFailed("NOT NULL (3) %d: %s" % (k, row.field(1)))
+            if row.field(3) != 1.59:
+               raise db.TestFailed("wrong price %d: %f (%f)" % (k, row.field(3), price))
+            print "%s, %s" % (row.field(0), row.field(1))
 
     # sum over a non-existing prop
     stmt = "select avg(prod_cat) from product where prod_key = %d" % k

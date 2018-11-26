@@ -177,6 +177,28 @@ def attswherevid(c):
             if row.field(2) != ps[idx].price:
                raise db.TestFailed("wrong price %d: %f" % (k, row.field(2)))
 
+    # repeated fields
+    stmt = "select prod_key, prod_desc, prod_price, prod_desc, prod_price - 1 \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ps[idx].key:
+               raise db.TestFailed("wrong key %d: %d" % (k, row.field(0)))
+            if row.field(1) != ps[idx].desc:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(1)))
+            if row.field(2) != ps[idx].price:
+               raise db.TestFailed("wrong price %d: %f" % (k, row.field(2)))
+            if row.field(4) != ps[idx].price-1:
+               raise db.TestFailed("wrong price (2) %d: %f" % (k, row.field(2)))
+            if row.field(3) != ps[idx].desc:
+               raise db.TestFailed("wrong product (2) %d: %s" % (k, row.field(3)))
+
 # select primary key where one att
 def vidwhere1att(c):
 
