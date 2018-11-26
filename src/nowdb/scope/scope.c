@@ -6,6 +6,7 @@
  */
 #include <nowdb/scope/scope.h>
 #include <nowdb/io/dir.h>
+#include <nowdb/reader/reader.h>
 
 #include <beet/types.h>
 #include <beet/index.h>
@@ -1223,6 +1224,66 @@ static inline nowdb_err_t createVIndex(nowdb_scope_t *scope) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: fill the vache with pending vertices
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t fillVache(nowdb_scope_t *scope) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_t pending;
+	nowdb_reader_t *reader=NULL;
+	nowdb_key_t vid;
+	nowdb_roleid_t role;
+	char *page;
+
+	ts_algo_list_init(&pending);
+
+	err = nowdb_lock_read(&scope->vertices.lock);
+	if (err != NOWDB_OK) return err;
+
+	// this is a generic pattern and
+	// shall go to a generic reader library
+	err = nowdb_store_getAllWaiting(&scope->vertices, &pending);
+	if (err != NULL) goto unlock;
+
+	err = nowdb_reader_fullscan(&reader, &pending, NULL);
+	if (err != NOWDB_OK) goto unlock;
+
+	while((err = nowdb_reader_move(reader)) == NOWDB_OK) {
+		page = nowdb_reader_page(reader);
+		for(int i=0; i<NOWDB_IDX_PAGE; i+=NOWDB_VERTEX_SIZE) {
+			char x=0;
+			if (memcmp(page+i, nowdb_nullrec, 32) == 0) break;
+			memcpy(&vid, page+i+NOWDB_OFF_VERTEX, 8);
+			memcpy(&role, page+i+NOWDB_OFF_ROLE, 4);
+			err = nowdb_plru12_get(scope->vache, role, vid, &x);
+			if (err != NOWDB_OK) break;
+			if (x == 1) continue;
+			err = nowdb_plru12_add(scope->vache, role, vid);
+			if (err != NOWDB_OK) break;
+		}
+	}
+	if (err != NOWDB_OK) {
+		if (nowdb_err_contains(err, nowdb_err_eof)) {
+			nowdb_err_release(err); err = NOWDB_OK;
+		}
+		goto unlock;
+	}
+
+unlock:
+	nowdb_store_destroyFiles(&scope->vertices, &pending);
+	if (reader != NULL) {
+		nowdb_reader_destroy(reader); free(reader);
+	}
+	err2 = nowdb_unlock_read(&scope->vertices.lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Open a scope
  * -----------------------------------------------------------------------
  */
@@ -1262,6 +1323,12 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) goto unlock;
 
 	err = nowdb_store_open(&scope->vertices);
+	if (err != NOWDB_OK) {
+		nowdb_index_man_destroy(scope->iman);
+		free(scope->iman); scope->iman = NULL;
+		goto unlock;
+	}
+	err = fillVache(scope);
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;

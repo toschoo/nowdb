@@ -699,7 +699,7 @@ def attswhereatts(c):
           raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
 
     # prod_key and/or/in prod_key and/or/in non-key and/or/in non-key
-    stmt = "select prod_key from product \
+    stmt = "select prod_key, prod_desc from product \
              where prod_desc = '%s' \
                 or prod_desc = '%s' \
                 or prod_key  = %d \

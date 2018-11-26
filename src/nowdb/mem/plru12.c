@@ -54,9 +54,9 @@ static void destroy(void *ignore, void **n) {
  * ------------------------------------------------------------------------
  */
 static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
+	if (n != NULL) free(n);
 	return TS_ALGO_OK;
 }
-
 
 /* ------------------------------------------------------------------------
  * Init LRU
