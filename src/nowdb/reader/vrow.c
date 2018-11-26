@@ -594,11 +594,12 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	// add according to offset
 	
 	/*
-	fprintf(stderr, "putting %lu/%lu/%lu into %u\n",
+	fprintf(stderr, "property %lu/%lu/%lu into %u\n",
 	  vertex->vertex, vertex->property, vertex->value, pm->off);
 	*/
 	
 	memcpy(v->row+pm->off, &vertex->value, KEYSZ);
+	// fprintf(stderr, "setting %d (%u/%u)\n", 1 << pm->pos, pm->pos, vrow->np);
 	v->pmap |= (1 << pm->pos);
 	v->np++;
 
@@ -608,8 +609,14 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 		err = getProperty(vrow, &pattern, &pm);
 		if (err != NOWDB_OK) return err;
 		if (pm == NULL) return NOWDB_OK; // error
+		/*
+		fprintf(stderr, "vertex %lu/%lu/%lu into %u\n",
+		        vertex->vertex, vertex->property,
+		        vertex->value, pm->off);
+		*/
 		memcpy(v->row+pm->off, &vertex->vertex, KEYSZ);
 		v->np++; v->hasvrtx = 1;
+		v->pmap |= (1 << pm->pos);
 	}
 
 	// force completion of prev

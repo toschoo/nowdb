@@ -141,6 +141,22 @@ def insertallvertex(c):
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
             print "%s" % (row.field(0))
 
+    # select non-existing prop with complex where
+    stmt = "select prod_cat, prod_desc from product \
+             where prod_key = %d \
+                or prod_desc = 'product %d'" % (k,k)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            print "%s;%s" % (row.field(0), row.field(1))
+            if row.field(0) is not None:
+               raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
+            if row.field(1) != ('product %d' % k):
+               raise db.TestFailed("wrong guy %s: %s" % ('product %d' % k, row.field(1)))
+
     # sum over a non-existing prop
     stmt = "select avg(prod_cat) from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
@@ -226,7 +242,7 @@ def insertallvertex(c):
                  raise db.TestFailed("NULL field filtered %d: %s" % (k, row.field(0)))
               print "%s" % (row.field(0))
 
-    # filter a non-existing prop
+    # filter out a non-existing prop
     stmt = "select prod_key from product where prod_cat != 3"
     with c.execute(stmt) as cur:
         if cur.ok():

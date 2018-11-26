@@ -850,6 +850,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 
 	// this magic formula should be defined somewhere
 	int i = (field->off-4)/8;
+	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
 	if ((rmap & 1<<i) == 0) {
 		*t = 0; return NOWDB_OK;
 	}

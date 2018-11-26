@@ -430,6 +430,36 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	return NOWDB_OK;
 }
 
+static nowdb_err_t hasOnlyVidR(nowdb_row_t       *row,
+                               nowdb_filter_t *filter,
+                               char              *yes) {
+	nowdb_err_t err;
+
+	if (filter == NULL) return NOWDB_OK;
+
+	if (filter->ntype == NOWDB_FILTER_BOOL) {
+		err = hasOnlyVidR(row, filter->left, yes);
+		if (err != NOWDB_OK) return err;
+		if (*yes == 0) return NOWDB_OK;
+
+		if (filter->op != NOWDB_FILTER_NOT) {
+			err = hasOnlyVidR(row, filter->right, yes);
+			if (err != NOWDB_OK) return err;
+			if (*yes == 0) return NOWDB_OK;
+		}
+		return NOWDB_OK;
+
+	} else if (filter->ntype == NOWDB_FILTER_COMPARE) {
+		if (filter->off != NOWDB_OFF_ROLE &&
+		    filter->off != NOWDB_OFF_VERTEX) {
+			*yes = 0; return NOWDB_OK;
+		}
+		return NOWDB_OK;
+	}
+	INVALIDPLAN("incomplete filter");
+	
+}
+
 /* ------------------------------------------------------------------------
  * Helper: check whether filter contains nothing but vid
  * ------------------------------------------------------------------------
@@ -448,6 +478,10 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 	if (filter->ntype == NOWDB_FILTER_COMPARE &&
 	    filter->op == NOWDB_FILTER_EQ         &&
 	    filter->off == NOWDB_OFF_ROLE) return NOWDB_OK;
+
+	return hasOnlyVidR(row, filter, yes);
+
+	/*
 
 	// we search for a specific vid, i.e.
 	// (role = mytype) and (vid = myvid)
@@ -476,6 +510,7 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 	if (*yes == 1) return NOWDB_OK;	
 
 	return NOWDB_OK;
+	*/
 }
 
 /* ------------------------------------------------------------------------
@@ -777,7 +812,12 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	err = initWRow(cur);
 	if (err != NOWDB_OK) goto cleanup;
 
-	// nowdb_filter_show(cur->filter,stderr); fprintf(stderr, "\n");
+	/*
+	if (cur->wrow != NULL) {
+		nowdb_filter_show(cur->wrow->filter,stderr);
+		fprintf(stderr, "\n");
+	}
+	*/
 
 	// open it
 	err = nowdb_cursor_open(cur);
@@ -817,6 +857,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 				goto cleanup;
 			}
 			memcpy(vid, buf+i, 8);
+			// fprintf(stderr, "got vid %lu\n", *vid);
 			if (ts_algo_tree_insert(vids, vid) != TS_ALGO_OK) {
 				NOMEM("tree.insert");
 				goto cleanup;
@@ -1398,8 +1439,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			nowdb_key_t vid;
 			char x=0;
 
-			// fprintf(stderr, "WROW\n");
-
 			// we add one more property
 			err = nowdb_vrow_add(cur->wrow,
 			    (nowdb_vertex_t*)(src+cur->off), &x);
@@ -1414,7 +1453,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 
 		} else if (filter != NULL &&
-		    !nowdb_filter_eval(filter, src+cur->off)) {
+		  !nowdb_filter_eval(filter, src+cur->off)) {
 			cur->off += recsz; continue;
 		}
 		// PROW
