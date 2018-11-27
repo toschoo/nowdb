@@ -268,7 +268,8 @@ static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
 	err = mkvtxpath(scope, &p);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_store_init(&scope->vertices, p, ver,
+	err = nowdb_store_init(&scope->vertices, p,
+	                       scope->vache, ver,
 	                       sizeof(nowdb_vertex_t),
 	                       NOWDB_FILE_MAPSIZE,
 	                       NOWDB_MEGA *
@@ -609,7 +610,8 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		                     "allocating context/name path");
 	}
 	err = nowdb_context_err(*ctx,
-	      nowdb_store_init(&(*ctx)->store, p, ver,
+	      nowdb_store_init(&(*ctx)->store, p,
+	                         NULL, ver,
 	                         sizeof(nowdb_edge_t),
 	                               cfg->allocsize,
 	                              cfg->largesize));

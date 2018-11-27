@@ -131,9 +131,21 @@ nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
 	k->role = role;
 	k->key = key;
 
-	if (ts_algo_lru_add(lru, k) != TS_ALGO_OK) {
+	if (ts_algo_lru_addResident(lru, k) != TS_ALGO_OK) {
 		NOMEM("adding content to LRU");
 		free(k);
 	}
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Revoke residence
+ * ------------------------------------------------------------------------
+ */
+void nowdb_plru12_revoke(nowdb_plru12_t *lru,
+                         nowdb_roleid_t  role,
+                         nowdb_key_t      key) {
+	key12_t k;
+	k.key = key; k.role = role;
+	ts_algo_lru_revokeResidence(lru, &k);
 }

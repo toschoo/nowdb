@@ -178,6 +178,12 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 	return NOWDB_OK;
 }
 
+static inline void revokeResidence(nowdb_plru12_t *lru, char *buf) {
+	if (lru == NULL) return;
+	nowdb_plru12_revoke(lru, *(nowdb_roleid_t*)(buf+NOWDB_OFF_ROLE),
+	                         *(nowdb_key_t*)(buf+NOWDB_OFF_VERTEX));
+}
+
 /* ------------------------------------------------------------------------
  * Index a buffer using an array of indexers
  * ------------------------------------------------------------------------
@@ -185,6 +191,7 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
                                 uint32_t         n,
                                 nowdb_pageid_t   pge,
+                                nowdb_plru12_t  *lru,
                                 uint32_t         isz,
                                 uint32_t         bsz ,
                                 char            *buf) {
@@ -205,6 +212,7 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 			err = doxer(xers+i, isz, buf+isz*o);
 			if (err != NOWDB_OK) return err;
 		}
+		revokeResidence(lru, buf+isz*o);
 	}
 	/* insert unique keys into indices */
 	for(int i=0; i<n; i++) {

@@ -49,4 +49,11 @@ nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
                              nowdb_roleid_t role,
                              nowdb_key_t     key);
 
+/* ------------------------------------------------------------------------
+ * Revoke residence
+ * ------------------------------------------------------------------------
+ */
+void nowdb_plru12_revoke(nowdb_plru12_t *lru,
+                         nowdb_roleid_t  role,
+                         nowdb_key_t     key);
 #endif
