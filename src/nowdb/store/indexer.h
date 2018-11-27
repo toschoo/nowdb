@@ -53,7 +53,7 @@ void nowdb_indexer_destroy(nowdb_indexer_t *xer);
 nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
                                 uint32_t         n,
                                 nowdb_pageid_t   pge,
-                                nowdb_plru12_t  *lru,
+                                void            *store,
                                 uint32_t         isz,
                                 uint32_t         bsz ,
                                 char            *buf);

@@ -409,7 +409,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		NOMEM("vertex cache");
 		return err;
 	}
-	err = nowdb_plru12_init(scope->vache, 10000000);
+	err = nowdb_plru12_init(scope->vache, 2500000);
 	if (err != NOWDB_OK) {
 		nowdb_scope_destroy(scope);
 		return err;
@@ -1261,7 +1261,9 @@ static inline nowdb_err_t fillVache(nowdb_scope_t *scope) {
 			err = nowdb_plru12_get(scope->vache, role, vid, &x);
 			if (err != NOWDB_OK) break;
 			if (x == 1) continue;
-			err = nowdb_plru12_add(scope->vache, role, vid);
+			// add as resident!
+			err = nowdb_plru12_addResident(scope->vache,
+			                                  role, vid);
 			if (err != NOWDB_OK) break;
 		}
 	}
@@ -2078,7 +2080,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	char key[12];
 	char found=0;
 
-	err = nowdb_lock_write(&scope->lock);
+	err = nowdb_lock_write(&scope->vertices.lock);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_plru12_get(scope->vache, role, vid, &found);
@@ -2093,16 +2095,18 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	memcpy(key, &role, 4); memcpy(key+4, &vid, 8);
 	ber = beet_index_doesExist(scope->vindex->idx, key);
 	if (ber == BEET_ERR_KEYNOF) {
-		err = nowdb_plru12_add(scope->vache, role, vid);
+		err = nowdb_plru12_addResident(scope->vache, role, vid);
 		goto unlock;
 	}
 	if (ber != BEET_OK) {
 		err = makeBeetError(ber); goto unlock;
 	}
+	err = nowdb_plru12_add(scope->vache, role, vid);
+	if (err != NOWDB_OK) goto unlock;
 	err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, "vertex");
 
 unlock:
-	err2 = nowdb_unlock_write(&scope->lock);
+	err2 = nowdb_unlock_write(&scope->vertices.lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}

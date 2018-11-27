@@ -111,12 +111,13 @@ nowdb_err_t nowdb_plru12_get(nowdb_plru12_t  *lru,
 }
 
 /* ------------------------------------------------------------------------
- * Add data to LRU
+ * Add data to LRU (either resident or not)
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
-                            nowdb_roleid_t  role,
-                            nowdb_key_t      key) {
+static inline nowdb_err_t add2lru(nowdb_plru12_t *lru,
+                                  nowdb_roleid_t role,
+                                  nowdb_key_t     key,
+                                  char          rsdnt) {
 	nowdb_err_t err=NOWDB_OK;
 	key12_t *k;
 	
@@ -131,11 +132,38 @@ nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
 	k->role = role;
 	k->key = key;
 
-	if (ts_algo_lru_addResident(lru, k) != TS_ALGO_OK) {
-		NOMEM("adding content to LRU");
-		free(k);
+	if (rsdnt) {
+		if (ts_algo_lru_addResident(lru, k) != TS_ALGO_OK) {
+			NOMEM("adding content to LRU");
+			free(k);
+		}
+	} else {
+		if (ts_algo_lru_add(lru, k) != TS_ALGO_OK) {
+			NOMEM("adding content to LRU");
+			free(k);
+		}
 	}
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Add data to LRU as resident
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_plru12_addResident(nowdb_plru12_t *lru,
+                                     nowdb_roleid_t  role,
+                                     nowdb_key_t      key) {
+	return add2lru(lru,role,key,1);
+}
+
+/* ------------------------------------------------------------------------
+ * Add data to LRU
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
+                            nowdb_roleid_t  role,
+                            nowdb_key_t      key) {
+	return add2lru(lru,role,key,0);
 }
 
 /* ------------------------------------------------------------------------

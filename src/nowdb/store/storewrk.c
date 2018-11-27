@@ -421,7 +421,7 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 		/* write to index... */
 		if (store->iman != NULL) {
 			err = nowdb_indexer_index(xer, n, pge,
-			                          store->lru,
+			                          store,
 			                          store->recsize, 
 			                          file->bufsize,
 			                          buf+i);

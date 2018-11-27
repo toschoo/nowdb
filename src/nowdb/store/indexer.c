@@ -5,6 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/store/indexer.h>
+#include <nowdb/store/store.h>
 #include <tsalgo/list.h>
 
 static char *OBJECT = "xer";
@@ -178,10 +179,21 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 	return NOWDB_OK;
 }
 
-static inline void revokeResidence(nowdb_plru12_t *lru, char *buf) {
-	if (lru == NULL) return;
-	nowdb_plru12_revoke(lru, *(nowdb_roleid_t*)(buf+NOWDB_OFF_ROLE),
-	                         *(nowdb_key_t*)(buf+NOWDB_OFF_VERTEX));
+static inline nowdb_err_t revokeResidence(nowdb_store_t *store, char *buf) {
+	nowdb_err_t err;
+
+	if (store->lru == NULL) return NOWDB_OK;
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	nowdb_plru12_revoke(store->lru,
+	                  *(nowdb_roleid_t*)(buf+NOWDB_OFF_ROLE),
+	                  *(nowdb_key_t*)(buf+NOWDB_OFF_VERTEX));
+
+	err = nowdb_unlock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -191,7 +203,7 @@ static inline void revokeResidence(nowdb_plru12_t *lru, char *buf) {
 nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
                                 uint32_t         n,
                                 nowdb_pageid_t   pge,
-                                nowdb_plru12_t  *lru,
+                                void            *store,
                                 uint32_t         isz,
                                 uint32_t         bsz ,
                                 char            *buf) {
@@ -212,7 +224,8 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 			err = doxer(xers+i, isz, buf+isz*o);
 			if (err != NOWDB_OK) return err;
 		}
-		revokeResidence(lru, buf+isz*o);
+		err = revokeResidence(store, buf+isz*o);
+		if (err != NOWDB_OK) return err;
 	}
 	/* insert unique keys into indices */
 	for(int i=0; i<n; i++) {
