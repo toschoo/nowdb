@@ -699,6 +699,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	vrtx.role = dml->v->roleid;
 
 	// now register the vertex...
+	// (we should lock here and keep the lock)
 	err = nowdb_scope_registerVertex(dml->scope,
 	                                 vrtx.role,
 	                                 vrtx.vertex);

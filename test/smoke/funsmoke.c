@@ -20,6 +20,8 @@
 
 #define ITER 1000
 
+uint64_t fullmap = 0xffffffffffffffff;
+
 nowdb_edge_t *edges;
 
 uint64_t uzero = 0;
@@ -354,7 +356,7 @@ int testFun(uint32_t ftype,
 	}
 	fprintf(stderr, "testing on %d edges\n", mx);
 	for(int i=0; i<mx; i++) {
-		err = nowdb_fun_map(fun, &_hlp, edges+i);
+		err = nowdb_fun_map(fun, &_hlp, fullmap, edges+i);
 		if (err != NOWDB_OK) break;
 	}
 	if (err != NOWDB_OK) {

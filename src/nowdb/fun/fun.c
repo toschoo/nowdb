@@ -319,14 +319,19 @@ void nowdb_fun_reset(nowdb_fun_t *fun) {
  */
 static inline nowdb_err_t collect(nowdb_fun_t  *fun,
                                   nowdb_eval_t *hlp,
+                                  uint64_t     rmap,
                                   char      *record) {
 	nowdb_err_t  err;
 	nowdb_block_t *b;
 	void *value=NULL;
+	nowdb_type_t   t;
 
-	err = nowdb_expr_eval(fun->expr, hlp, record,
-	                     &fun->dtype, &value);
+	err = nowdb_expr_eval(fun->expr, hlp,
+                              rmap, record,
+	                      &t, &value);
 	if (err != NOWDB_OK) return err;
+	if (t == NOWDB_TYP_NOTHING) return NOWDB_OK;
+	fun->dtype = t;
 
 	if (fun->many.len == 0 || fun->off >= BLOCKSIZE) {
 		err = nowdb_blist_give(fun->flist, &fun->many);
@@ -356,17 +361,26 @@ static inline nowdb_err_t apply_(nowdb_fun_t *fun) {
  * Helper: apply function
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t apply(nowdb_fun_t *fun,     int ftype,
-                                nowdb_eval_t *hlp, char *record) {
+static inline nowdb_err_t apply(nowdb_fun_t  *fun,
+                                int         ftype,
+                                nowdb_eval_t *hlp,
+                                uint64_t     rmap,
+                                char      *record) {
 	nowdb_err_t err;
 	void  *value=NULL;
 
 	if (hlp == NULL) {
 		value = record;
 	} else {
-		err = nowdb_expr_eval(fun->expr, hlp, record,
-		                     &fun->dtype, &value);
+		nowdb_type_t t;
+		err = nowdb_expr_eval(fun->expr, hlp,
+                                      rmap, record,
+		                      &t, &value);
 		if (err != NOWDB_OK) return err;
+		if (t == NOWDB_TYP_NOTHING) {
+			return NOWDB_OK;
+		}
+		fun->dtype = t;
 	}
 
 	switch(ftype) {
@@ -422,14 +436,15 @@ static inline nowdb_err_t apply(nowdb_fun_t *fun,     int ftype,
  */
 nowdb_err_t nowdb_fun_map(nowdb_fun_t  *fun,
                           nowdb_eval_t *hlp,
+                          uint64_t     rmap,
                           void      *record) {
 	nowdb_err_t err;
 	switch(fun->ftype) {
 	case NOWDB_FUN_ZERO: err = apply_(fun); break;
 	case NOWDB_FUN_ONE:
-		err = apply(fun, fun->fun, hlp, record); break;
+		err = apply(fun, fun->fun, hlp, rmap, record); break;
 
-	case NOWDB_FUN_MANY: err = collect(fun, hlp, record); break;
+	case NOWDB_FUN_MANY: err = collect(fun, hlp, rmap, record); break;
 	case NOWDB_FUN_TREE:
 		err = nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                     "tree functions not implemented");
@@ -450,7 +465,6 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 	int off=0;
 	nowdb_err_t err;
 
-
 	runner = fun->many.head;
 	if (runner != NULL) b=runner->cont; else return NOWDB_OK;
 	for(;;) {
@@ -460,7 +474,7 @@ static inline nowdb_err_t map2(nowdb_fun_t *fun, uint32_t ftype) {
 			b = runner->cont;
 			off = 0;
 		}
-		err = apply(fun, ftype, NULL, b->block+off);
+		err = apply(fun, ftype, NULL, 1, b->block+off);
 		if (err != NOWDB_OK) return err;
 		off += fun->fsize;
 	}

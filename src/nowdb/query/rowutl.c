@@ -68,7 +68,7 @@ int nowdb_row_print(char *buf, uint32_t sz, FILE *stream) {
 
 		case NOWDB_TYP_NOTHING: 
 			fprintf(stream, "NULL");
-			break;
+			i++; break;
 
 		default:
 			fprintf(stderr, "unknown type (%d): %d\n", i, (int)t);
@@ -121,6 +121,10 @@ int nowdb_row_findEOR(char *buf, uint32_t sz, int idx) {
 			i = findEndOfStr(buf,sz,i);
 			if (i < 0) return -1;
 			continue;
+		} else if (buf[i] == NOWDB_TYP_BOOL ||
+		           buf[i] == NOWDB_TYP_NOTHING) {
+			i+=2;
+			continue;
 		}
 		i+=9;
 	}
@@ -147,6 +151,10 @@ int nowdb_row_findLastRow(char *buf, int sz) {
 			i = findEndOfStr(buf, sz, i);
 			if (i < 0) return i;
 			continue;
+		} else if (buf[i] == NOWDB_TYP_BOOL ||
+		           buf[i] == NOWDB_TYP_NOTHING) {
+			i+=2;
+			continue;
 		}
 		i+=9;
 	}
@@ -169,7 +177,8 @@ int nowdb_row_len(char *row) {
 			if (i < 0) return -1;
 			continue;
 
-		} else if (row[i] == NOWDB_TYP_BOOL) {
+		} else if (row[i] == NOWDB_TYP_BOOL ||
+		           row[i] == NOWDB_TYP_NOTHING) {
 			i+=2; continue;
 		}
 		i+=9;
@@ -219,7 +228,8 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_FLOAT:
 	case NOWDB_TYP_BOOL:
-		s = t==NOWDB_TYP_BOOL?2:9;
+	case NOWDB_TYP_NOTHING:
+		s = t==NOWDB_TYP_BOOL||t==NOWDB_TYP_NOTHING?2:9;
 		m = s-1;
 
 		if (row == NULL) {

@@ -354,7 +354,7 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 	*n = 0;
 	for(runner=idxes.head; runner!=NULL; runner=runner->nxt) {
 		nowdb_index_desc_t *desc= runner->cont;
-		err = nowdb_indexer_init((*xer)+(*n), 
+		err = nowdb_indexer_init((*xer)+(*n),
 		                         desc->idx,
 		                         store->recsize);
 		if (err != NOWDB_OK) break;
@@ -421,6 +421,7 @@ static inline nowdb_err_t putContent(nowdb_store_t     *store,
 		/* write to index... */
 		if (store->iman != NULL) {
 			err = nowdb_indexer_index(xer, n, pge,
+			                          store,
 			                          store->recsize, 
 			                          file->bufsize,
 			                          buf+i);
