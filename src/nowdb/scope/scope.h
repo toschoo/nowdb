@@ -29,19 +29,20 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     lock; /* read/write lock   */
-	uint32_t          state; /* open or closed    */
-	nowdb_path_t       path; /* base path         */
-	nowdb_path_t    catalog; /* catalog path      */
-	nowdb_version_t     ver; /* db version        */
-	nowdb_store_t  vertices; /* vertices          */
-	nowdb_index_t   *vindex; /* index on vertices */
-	nowdb_plru12_t   *vache; /* vertex cache      */
-	ts_algo_tree_t contexts; /* contexts          */
-	nowdb_index_man_t *iman; /* index manager     */
-	nowdb_model_t    *model; /* model             */
-	nowdb_text_t      *text; /* strings           */
-	nowdb_procman_t   *pman; /* stored procedures */
+	nowdb_rwlock_t     lock; /* read/write lock       */
+	uint32_t          state; /* open or closed        */
+	nowdb_path_t       path; /* base path             */
+	nowdb_path_t    catalog; /* catalog path          */
+	nowdb_version_t     ver; /* db version            */
+	nowdb_store_t  vertices; /* vertices              */
+	nowdb_index_t   *vindex; /* index on vertices     */
+	nowdb_plru12_t  *evache; /* external vertex cache */
+	nowdb_plru12_t  *ivache; /* internal vertex cache */
+	ts_algo_tree_t contexts; /* contexts              */
+	nowdb_index_man_t *iman; /* index manager         */
+	nowdb_model_t    *model; /* model                 */
+	nowdb_text_t      *text; /* strings               */
+	nowdb_procman_t   *pman; /* stored procedures     */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
