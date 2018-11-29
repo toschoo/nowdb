@@ -106,9 +106,13 @@ void nowdb_row_destroy(nowdb_row_t *row) {
  * Compute size necessary to store type
  * ------------------------------------------------------------------------
  */
-static inline uint32_t getSize(nowdb_type_t t, void *val) {
-	switch(t) {
-	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val)+1;
+static inline uint32_t getSize(char *t, void *val) {
+	switch(*t) {
+	case NOWDB_TYP_TEXT:
+		if (val == NULL) {
+			*t = 0; return 1;
+		}
+		return (uint32_t)strlen(val)+1;
 	case NOWDB_TYP_BOOL: return 1;
 	case NOWDB_TYP_NOTHING: return 1;
 	default: return 8;
@@ -179,7 +183,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		                      src, &typ, &val);
 		if (err != NOWDB_OK) return err;
 		t = (char)typ;
-		s = getSize(t, val);
+		s = getSize(&t, val);
 		if (*osz + s + 1 >= sz) {
 			row->cur = i; *full=1;
 			return NOWDB_OK;
