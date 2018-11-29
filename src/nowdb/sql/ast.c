@@ -177,6 +177,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_UINT: return "uint value"; 
 		case NOWDB_AST_INT: return "int value"; 
 		case NOWDB_AST_BOOL: return "bool value"; 
+		case NOWDB_AST_NULL: return "null value"; 
 		default: return "unknown type of value";
 		}
 
@@ -1193,6 +1194,7 @@ nowdb_type_t nowdb_ast_type(uint32_t type) {
 	case NOWDB_AST_DATE: return NOWDB_TYP_DATE;
 	case NOWDB_AST_TIME: return NOWDB_TYP_TIME;
 	case NOWDB_AST_BOOL: return NOWDB_TYP_BOOL;
+	case NOWDB_AST_NULL: return NOWDB_TYP_NOTHING;
 	default: return NOWDB_TYP_NOTHING;
 	}
 	return NOWDB_TYP_NOTHING;

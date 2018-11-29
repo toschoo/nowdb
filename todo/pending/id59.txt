@@ -1,0 +1,8 @@
+lru resident
+------------
+A 'resident' is a cache entry
+that is never pushed out.
+
+Mark vertices always as resident.
+When vertices are indexed,
+remove the marker.

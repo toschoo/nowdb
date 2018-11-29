@@ -29,6 +29,105 @@ def vidwherevid(c):
             if row.field(0) != k:
                raise db.TestFailed("wrong product %d: %d" % (k, row.field(0)))
 
+# select primary key where primary keys
+def vidwherevids(c):
+
+    print "RUNNING TEST 'vidwherevids'"
+
+    id1 = random.randint(1,len(ps)-1)
+    k = ps[id1].key
+    id2 = id1
+    while id2 == id1:
+        id2 = random.randint(1,len(ps)-1)
+    m = ps[id2].key
+
+    # vid or vid
+    stmt = "select prod_key from product \
+             where prod_key = %d \
+                or prod_key = %d" % (k,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n > 1:
+               raise db.TestFailed("multiple rows for %d or %d" % (k,m))
+            n+=1
+            if row.field(0) != k and row.field(0) != m:
+               raise db.TestFailed("wrong product %d or %d: %d" % (k, m, row.field(0)))
+        if n != 2:
+            raise db.TestFailed("too many rows %d" % n)
+
+    # in (vid)
+    stmt = "select prod_key from product \
+             where prod_key in (%d, %d)" % (k,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n > 1:
+               raise db.TestFailed("multiple rows for %d or %d" % (k,m))
+            n+=1
+            if row.field(0) != k and row.field(0) != m:
+               raise db.TestFailed("wrong product %d or %d: %d" % (k, m, row.field(0)))
+        if n != 2:
+            raise db.TestFailed("too many rows %d" % n)
+
+    # vid and vid
+    stmt = "select prod_key from product \
+             where prod_key = %d \
+               and prod_key = %d" % (k,m)
+    with c.execute(stmt) as cur:
+        if cur.ok():
+          raise db.TestFailed("ok with contradiction")
+        if cur.code() != 8:
+          raise db.TestFailed("unexpected error: %d / %s" % (cur.code(), cur.details()))
+
+    # not in (vid)
+    stmt = "select prod_key from product \
+             where not prod_key in (%d, %d)" % (k,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) == k or row.field(0) == m:
+               raise db.TestFailed("wrong product %d or %d: %d" % (k, m, row.field(0)))
+        if n != len(ps) - 2:
+            raise db.TestFailed("wrong number of rows %d" % n)
+
+    # vid NE
+    stmt = "select prod_key from product \
+             where prod_key != %d \
+               and prod_key != %d" % (k,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) == k or row.field(0) == m:
+               raise db.TestFailed("wrong product %d or %d: %d" % (k, m, row.field(0)))
+        if n != len(ps) - 2:
+            raise db.TestFailed("wrong number of rows %d" % n)
+
+    # vid not EQ
+    stmt = "select prod_key from product \
+             where not (prod_key = %d \
+                     or prod_key = %d)" % (k,m)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) == k or row.field(0) == m:
+               raise db.TestFailed("wrong product %d or %d: %d" % (k, m, row.field(0)))
+        if n != len(ps) - 2:
+            raise db.TestFailed("wrong number of rows %d" % n)
+
 # select anything where primary key
 def attswherevid(c):
 
@@ -78,6 +177,28 @@ def attswherevid(c):
             if row.field(2) != ps[idx].price:
                raise db.TestFailed("wrong price %d: %f" % (k, row.field(2)))
 
+    # repeated fields
+    stmt = "select prod_key, prod_desc, prod_price, prod_desc, prod_price - 1 \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ps[idx].key:
+               raise db.TestFailed("wrong key %d: %d" % (k, row.field(0)))
+            if row.field(1) != ps[idx].desc:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(1)))
+            if row.field(2) != ps[idx].price:
+               raise db.TestFailed("wrong price %d: %f" % (k, row.field(2)))
+            if row.field(4) != ps[idx].price-1:
+               raise db.TestFailed("wrong price (2) %d: %f" % (k, row.field(2)))
+            if row.field(3) != ps[idx].desc:
+               raise db.TestFailed("wrong product (2) %d: %s" % (k, row.field(3)))
+
 # select primary key where one att
 def vidwhere1att(c):
 
@@ -89,9 +210,10 @@ def vidwhere1att(c):
 
     # prod_key where 1 condition
     stmt = "select prod_key from product where prod_desc = '%s'" % ps[idx].desc
+    print "%s (%d)" % (stmt,k)
     with c.execute(stmt) as cur:
         if not cur.ok():
-          raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         n=0
         for row in cur:
             n+=1
@@ -179,11 +301,70 @@ def vidwhereatts(c):
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
     k = ps[idx].key
 
+    id2 = idx
+    while id2 == idx:
+       id2 = random.randint(1,len(ps)-1)
+
     # prod_key where key and non-key
     stmt = "select prod_key from product where prod_desc = '%s' and prod_key=%d" % (ps[idx].desc, ps[idx].key)
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key where key and non-key
+    stmt = "select prod_key from product \
+             where prod_desc = '%s' \
+                or prod_key in (%d,%d)" % (ps[idx].desc, ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key where key and non-key
+    stmt = "select prod_key from product \
+             where prod_desc = '%s' \
+                or (prod_key = %d or prod_key = %d)" % (ps[idx].desc, ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key and/or/in prod_key and non-key
+    stmt = "select prod_key from product \
+             where prod_desc = '%s' \
+                or prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key and/or/in prod_key and/or/in non-key and/or/in non-key
+    stmt = "select prod_key from product \
+             where prod_desc = '%s' \
+                or prod_desc = '%s' \
+                or prod_key  = %d \
+                or prod_key  = %d" % (ps[idx].desc, ps[id2].desc, \
+                                      ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         n=0
         for row in cur:
             n+=1
@@ -385,6 +566,10 @@ def attswhereatts(c):
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
     k = ps[idx].key
 
+    id2 = idx
+    while id2 == idx:
+       id2 = random.randint(1,len(ps)-1)
+
     # prod_key where key and non-key
     stmt = "select prod_desc, prod_cat from product \
              where prod_desc = '%s' \
@@ -455,6 +640,127 @@ def attswhereatts(c):
           raise db.TestFailed("found nothing")
         if not found:
           raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key where key and non-key
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc = '%s' \
+                or prod_key in (%d,%d)" % (ps[idx].desc, ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if ps[idx].desc != row.field(1) and \
+               ps[id2].desc != row.field(1) and \
+               ps[idx].key  != row.field(0) and \
+               ps[id2].key  != row.field(0):
+                 raise db.TestFailed("wrong field: %d/%d: %d" % (ps[idx].key, \
+                                                                 ps[id2].key, \
+                                                                 row.field(0)))
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key where key and non-key
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc = '%s' \
+                or (prod_key = %d or prod_key = %d)" % (ps[idx].desc, ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if ps[idx].desc != row.field(1) and \
+               ps[id2].desc != row.field(1) and \
+               ps[idx].key  != row.field(0) and \
+               ps[id2].key  != row.field(0):
+                 raise db.TestFailed("wrong field: %d/%d: %d" % (ps[idx].key, \
+                                                                 ps[id2].key, \
+                                                                 row.field(0)))
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key and/or/in prod_key and non-key
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc = '%s' \
+                or prod_key=%d" % (ps[idx].desc, ps[idx].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if ps[idx].desc != row.field(1) and \
+               ps[idx].key  != row.field(0):
+                 raise db.TestFailed("wrong field: %d: %d" % (ps[idx].key, \
+                                                              row.field(0)))
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # prod_key and/or/in prod_key and/or/in non-key and/or/in non-key
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc = '%s' \
+                or prod_desc = '%s' \
+                or prod_key  = %d \
+                or prod_key  = %d" % (ps[idx].desc, ps[id2].desc, \
+                                      ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if ps[idx].desc != row.field(1) and \
+               ps[id2].desc != row.field(1) and \
+               ps[idx].key  != row.field(0) and \
+               ps[id2].key  != row.field(0):
+                 raise db.TestFailed("wrong field: %d/%d: %d" % (ps[idx].key, \
+                                                                 ps[id2].key, \
+                                                                 row.field(0)))
+        if n<1:
+          raise db.TestFailed("cannot find %d: %s" % (k, ps[idx].desc))
+
+    # and in (vid)
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc = '%s' \
+                or prod_key in (%d, %d)" % (ps[idx].desc, ps[idx].key, ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if ps[idx].desc != row.field(1) and \
+               ps[id2].desc != row.field(1) and \
+               ps[idx].key  != row.field(0) and \
+               ps[id2].key  != row.field(0):
+                 raise db.TestFailed("wrong field: %d/%d: %d" % (ps[idx].key, \
+                                                                 ps[id2].key, \
+                                                                 row.field(0)))
+        if n < 2:
+            raise db.TestFailed("wrong number of rows %d" % n)
+
+    # not in (vid)
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc != '%s' \
+               and not (prod_key in (%d, %d))" % (ps[idx].desc, \
+                                                  ps[idx].key, \
+                                                  ps[id2].key)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) == ps[idx].key or \
+               row.field(0) == ps[id2].key  or \
+               row.field(1) == ps[idx].desc:
+                   raise db.TestFailed("wrong product %d or %d: %d" % (ps[idx].key, \
+                                                                       ps[id2].key, \
+                                                                       row.field(0)))
+        if n == len(ps):
+            raise db.TestFailed("wrong number of rows %d" % n)
         
 # select atts where one att
 def attswhere1att(c):
@@ -834,6 +1140,7 @@ if __name__ == "__main__":
 
         vidwherevid(c)
         attswherevid(c)
+        vidwherevids(c)
         vidwhere1att(c)
         attswhere1att(c)
         vidwhereatts(c)

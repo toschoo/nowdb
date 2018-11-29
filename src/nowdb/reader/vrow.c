@@ -21,10 +21,13 @@ static char *OBJECT = "vrow";
 
 /* ------------------------------------------------------------------------
  * Represent all properties as a row
+ * TODO:
+ * pattern shall be list of patterns
  * ------------------------------------------------------------------------
  */
 typedef struct {
 	nowdb_key_t vertex; /* the vertex              */
+	uint64_t      pmap; /* bitmap: seen props      */
 	char          *row; /* the row                 */
 	int             np; /* current number of props */
 	char       hasvrtx; /* needs and has pk        */
@@ -37,6 +40,7 @@ typedef struct {
 typedef struct {
 	nowdb_key_t propid; /* the propid */
 	uint32_t       off; /* the offset */
+	uint32_t       pos; /* position   */
 } propmap_t;
 
 /* ------------------------------------------------------------------------
@@ -161,6 +165,7 @@ static inline nowdb_err_t getVRow(nowdb_vrow_t   *vrow,
 		(*v)->vertex = vrtx->vertex;
 		(*v)->np = 0;
 		(*v)->hasvrtx = 0;
+		(*v)->pmap = 0;
 
 		(*v)->row = calloc(1,vrow->size);
 		if ((*v)->row == NULL) {
@@ -186,7 +191,8 @@ static inline nowdb_err_t getVRow(nowdb_vrow_t   *vrow,
  */
 static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
                                          void         *val,
-                                         int          *cnt) {
+                                         int          *cnt,
+                                         int          *off) {
 	nowdb_err_t err;
 	propmap_t pattern, *res;
 
@@ -201,6 +207,7 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
 			return err;
 		}
 		memcpy(&res->propid, val, KEYSZ);
+		res->pos = *cnt;
  		res->off = ROLESZ+KEYSZ*(*cnt);(*cnt)++;
 
 		if (ts_algo_tree_insert(vrow->pspec, res) != TS_ALGO_OK) {
@@ -208,6 +215,7 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
 			return err;
 		}
 	}
+	*off = (int)res->off;
 	return NOWDB_OK;
 }
 
@@ -215,8 +223,9 @@ static inline nowdb_err_t insertProperty(nowdb_vrow_t *vrow,
  * Insert vertex into propmap
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
-                                       int            *cnt) {
+static inline nowdb_err_t insertVertex(nowdb_vrow_t *vrow,
+                                       int          *cnt,
+                                       int          *off) {
 	nowdb_err_t err;
 	propmap_t pattern, *res;
 
@@ -231,6 +240,7 @@ static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
 			return err;
 		}
 		res->propid=NOWDB_OFF_VERTEX;
+		res->pos = *cnt;
  		res->off = ROLESZ+KEYSZ*(*cnt);(*cnt)++;
 
 		if (ts_algo_tree_insert(vrow->pspec, res) != TS_ALGO_OK) {
@@ -238,6 +248,7 @@ static inline nowdb_err_t insertVertex(nowdb_vrow_t  *vrow,
 			return err;
 		}
 	}
+	*off = (int)res->off;
 	return NOWDB_OK;
 }
 
@@ -273,13 +284,12 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
 		err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
 		if (err != NOWDB_OK) return err;
 
-		err = insertProperty(vrow, src->val, cnt);
+		err = insertProperty(vrow, src->val, cnt, off);
 		if (err != NOWDB_OK) {
 			nowdb_filter_destroy(*trg);
 			free(*trg); *trg = NULL;
 			return err;
 		}
-		*off=ROLESZ+KEYSZ*(*cnt-1);
 		return NOWDB_OK;
 
 	} else {
@@ -297,11 +307,9 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
 		// use the prop offset from the propmap (for vertex)
 		} else if (src->off == NOWDB_OFF_VERTEX) {
 			// fprintf(stderr, "VERTEX\n");
-			err = insertVertex(vrow, cnt);
+			err = insertVertex(vrow, cnt, off);
 			if (err != NOWDB_OK) return err;
 			vrow->wantvrtx = 1;
-			
-			*off=ROLESZ+KEYSZ*(*cnt-1);
 	
 		// ignore anything else	
 		} else {
@@ -392,10 +400,9 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 	case NOWDB_EXPR_FIELD: 
 	
 		err = insertProperty(vrow,&NOWDB_EXPR_TOFIELD(
-			                    expr)->propid,cnt);
+			                expr)->propid,cnt,off);
 		if (err != NOWDB_OK) return err;
 
-		*off=ROLESZ+KEYSZ*(*cnt-1);
 		NOWDB_EXPR_TOFIELD(expr)->off = *off;
 		return NOWDB_OK;
 	}
@@ -543,11 +550,18 @@ void nowdb_vrow_destroy(nowdb_vrow_t *vrow) {
 	if (vrow->filter != NULL) {
 		nowdb_filter_destroy(vrow->filter);
 		free(vrow->filter); vrow->filter = NULL;
-	} 
-	if (vrow->expr != NULL) {
-		nowdb_expr_destroy(vrow->expr);
-		free(vrow->expr); vrow->expr = NULL;
-	} 
+	}
+	if (vrow->prev != NULL) {
+		free(vrow->prev); vrow->prev = NULL;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Set force completion
+ * ------------------------------------------------------------------------
+ */
+void nowdb_vrow_autoComplete(nowdb_vrow_t *vrow) {
+	vrow->forcecomp = 1;
 }
 
 /* ------------------------------------------------------------------------
@@ -580,11 +594,13 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	// add according to offset
 	
 	/*
-	fprintf(stderr, "putting %lu/%lu/%lu into %u\n",
+	fprintf(stderr, "property %lu/%lu/%lu into %u\n",
 	  vertex->vertex, vertex->property, vertex->value, pm->off);
 	*/
 	
 	memcpy(v->row+pm->off, &vertex->value, KEYSZ);
+	// fprintf(stderr, "setting %d (%u/%u)\n", 1 << pm->pos, pm->pos, vrow->np);
+	v->pmap |= (1 << pm->pos);
 	v->np++;
 
 	// filter requests vid
@@ -593,8 +609,42 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 		err = getProperty(vrow, &pattern, &pm);
 		if (err != NOWDB_OK) return err;
 		if (pm == NULL) return NOWDB_OK; // error
+		/*
+		fprintf(stderr, "vertex %lu/%lu/%lu into %u\n",
+		        vertex->vertex, vertex->property,
+		        vertex->value, pm->off);
+		*/
 		memcpy(v->row+pm->off, &vertex->vertex, KEYSZ);
 		v->np++; v->hasvrtx = 1;
+		v->pmap |= (1 << pm->pos);
+	}
+
+	// force completion of prev
+	if (vrow->forcecomp) {
+		if (vrow->prev == NULL) {
+			vrow->prev = malloc(KEYSZ);
+			if (vrow->prev == NULL) {
+				NOMEM("allocating vid");
+				return err;
+			}
+			memcpy(vrow->prev, &vertex->vertex, KEYSZ);
+
+		} else if (*vrow->prev != vertex->vertex) {
+			vrow_t *v2, vpattern;
+			// fprintf(stderr, "FORCING MATTERS\n");
+			vpattern.vertex = *vrow->prev;
+			memcpy(vrow->prev, &vertex->vertex, KEYSZ);
+			v2 = ts_algo_tree_find(vrow->vrtx, &vpattern);
+			if (v2 != NULL) {
+				// fprintf(stderr, "have old one\n");
+				ts_algo_tree_delete(vrow->vrtx, v2);
+				if (ts_algo_list_append(
+				    vrow->ready, v2) != TS_ALGO_OK) {
+					NOMEM("ready.append");
+					return err;
+				}
+			}
+		}
 	}
 
 	// if complete, delete and add to ready
@@ -604,6 +654,11 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 			NOMEM("ready.append");
 			return err;
 		}
+		/*
+		fprintf(stderr, "complete, have: %d / %d\n",
+		                          vrow->vrtx->count,
+		                          vrow->ready->len);
+		*/
 	}
 	*added=1;
 	return NOWDB_OK;
@@ -616,6 +671,8 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 static ts_algo_bool_t oneProp(void *ignore, const void *one,
                                             const void *two) 
 {
+	// this is redundant: if there is an entitiy,
+	// its property counter is at least 1...
 	return (VROW(two)->np > 0);
 }
 
@@ -626,6 +683,8 @@ static ts_algo_bool_t oneProp(void *ignore, const void *one,
 nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	nowdb_err_t err;
 	ts_algo_list_node_t *run;
+
+	if (vrow == NULL) return NOWDB_OK;
 
 	// filter all with np > 0
 	for(run=vrow->ready->head; run!=NULL;) {
@@ -641,7 +700,6 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	for(;run!=NULL;run=run->nxt) {
 		ts_algo_tree_delete(vrow->vrtx, run->cont);
 	}
-	fprintf(stderr, "ready: %d\n", vrow->ready->len);
 	return NOWDB_OK;
 }
 
@@ -651,7 +709,8 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
  */
 nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
                                  uint32_t     *size,
-                                 char        **row) {
+                                 uint64_t     *pmap,
+                                 char         **row) {
 	ts_algo_list_node_t *node;
 	vrow_t *v;
 
@@ -662,6 +721,7 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
 	v = node->cont;
 	*row = v->row;
 	v->row = NULL;
+	*pmap = v->pmap;
 	ts_algo_list_remove(vrow->ready, node);
 	free(node); destroyVRow(v);
 		

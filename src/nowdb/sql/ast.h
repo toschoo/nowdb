@@ -212,6 +212,7 @@
 #define NOWDB_AST_DATE     10315
 #define NOWDB_AST_TIME     10316
 #define NOWDB_AST_BOOL     10317
+#define NOWDB_AST_NULL     10318
 
 /* -----------------------------------------------------------------------
  * Path and Location ('remote', 'local')

@@ -1,4 +1,5 @@
 make clientsmoke
+make server
 if [ $? -ne 0 ]
 then
 	echo "FAILED: cannot make tests"

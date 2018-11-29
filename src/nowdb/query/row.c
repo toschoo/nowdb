@@ -110,20 +110,36 @@ static inline uint32_t getSize(nowdb_type_t t, void *val) {
 	switch(t) {
 	case NOWDB_TYP_TEXT: return (uint32_t)strlen(val)+1;
 	case NOWDB_TYP_BOOL: return 1;
-	case NOWDB_TYP_NOTHING: return 0;
+	case NOWDB_TYP_NOTHING: return 1;
 	default: return 8;
 	}
 }
 
 /* ------------------------------------------------------------------------
+ * raw project
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copybuf(char *src, uint32_t recsz,
+                                  char *buf, uint32_t sz,
+                                             uint32_t *osz,
+                                  char *cnt,
+                                  char *full, char *ok)
+{
+	if (*osz+recsz >= sz) {
+		*full=1; return NOWDB_OK;
+	}
+	memcpy(buf+(*osz), src, recsz);
+	(*osz)+=recsz; (*cnt)++; *ok=1;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * project
- * TODO:
- * we may have more than one src buffer!
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
-                              nowdb_group_t *group,
                               char *src, uint32_t recsz,
+                              uint64_t pmap,
                               char *buf, uint32_t sz,
                               uint32_t *osz, char *full,
                               char *cnt, char *ok) {
@@ -133,11 +149,16 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	char t;
 	uint32_t s=0;
 
-	ROWNULL();
-
 	*full=0;
 	*ok  =0;
 	*cnt =0;
+
+	// fprintf(stderr, "my pmap: %lu\n", pmap);
+
+	if (row == NULL) return copybuf(src, recsz,
+	                                buf,    sz,
+	                                osz,   cnt,
+	                                full,  ok);
 
 	// we still need to write the linebreak
 	// of the previous row
@@ -153,20 +174,27 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 
 	// project the fields
 	for(int i=row->cur; i<row->sz; i++) {
-		err = nowdb_expr_eval(row->fields[i], &row->eval,
-		                                 src, &typ, &val);
+		err = nowdb_expr_eval(row->fields[i],
+	                             &row->eval, pmap,
+		                      src, &typ, &val);
 		if (err != NOWDB_OK) return err;
-
 		t = (char)typ;
 		s = getSize(t, val);
 		if (*osz + s + 1 >= sz) {
 			row->cur = i; *full=1;
 			return NOWDB_OK;
 		}
+		// fprintf(stderr, "i: %d, typ: %d, sz: %d\n", i, t, s);
 		memcpy(buf+(*osz), &t, 1); (*osz)++;
 		if (s > 0) {
-			memcpy(buf+(*osz), val, s); *osz+=s;
+			if (t == 0) {
+				buf[*osz] = 0;
+			} else {
+				memcpy(buf+(*osz), val, s);
+			}
+			*osz+=s;
 		}
+		row->dirty = 1;
 
 		// fprintf(stderr, "%d: %u\n", i, *osz);
 	}

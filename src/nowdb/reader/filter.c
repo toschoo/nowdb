@@ -266,8 +266,18 @@ static inline nowdb_bool_t cval(nowdb_filter_t *filter, char *data) {
 	case NOWDB_TYP_LONGTEXT:
 	case NOWDB_TYP_UINT:
 		if (filter->size == 4) {
+			/*
+			fprintf(stderr, "comparing %u and %u\n",
+			               *(uint32_t*)(data+filter->off),
+			               *(uint32_t*)filter->val);
+			*/
 			COMPARE((data+filter->off), filter->val, uint32_t);
 		} else {
+			/*
+			fprintf(stderr, "comparing long %lu and %lu\n",
+			               *(uint64_t*)(data+filter->off),
+			               *(uint64_t*)filter->val);
+			*/
 			COMPARE((data+filter->off), filter->val, uint64_t);
 		}
 

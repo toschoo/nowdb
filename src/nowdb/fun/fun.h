@@ -100,6 +100,7 @@ void nowdb_fun_reset(nowdb_fun_t *fun);
  */
 nowdb_err_t nowdb_fun_map(nowdb_fun_t  *fun,
                           nowdb_eval_t *hlp,
+                          uint64_t     rmap,
                           void      *record);
 
 /* -----------------------------------------------------------------------

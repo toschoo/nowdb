@@ -301,6 +301,7 @@ char nowdb_expr_has(nowdb_expr_t   expr,
  */
 nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_eval_t *hlp,
+                            uint64_t     rmap,
                             char         *row,
                             nowdb_type_t *typ,
                             void        **res);
