@@ -937,6 +937,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	}
 
 	int i = LDR(ldr)->csv->cur;
+
 	/*
 	memcpy(LDR(ldr)->csv->txt, data, len);
 	LDR(ldr)->csv->txt[len] = 0;
@@ -946,6 +947,11 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 
 	/* get PK (= vid) */
 	if (LDR(ldr)->csv->props[i].pk) {
+		if (len == 0) {
+			REJECT(LDR(ldr)->csv->props[i].name,
+				      "primary key is NULL");
+			return;
+		}
 		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
 			if (getKeyFromText(LDR(ldr), data, len,
 			             &LDR(ldr)->csv->vid) != 0) {
@@ -961,6 +967,13 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 				return;
 			}
 		}
+	}
+
+	// no data: NULL
+	// we should also test for 'NULL'
+	if (len == 0) {
+		LDR(ldr)->csv->cur++;
+		return;
 	}
 
 	/* get propid (from props) */
