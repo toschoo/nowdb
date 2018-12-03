@@ -21,6 +21,15 @@ then
 	exit 1
 fi
 
+echo "RUNNING curedge.py" >> log/pysmoke.log
+test/pysmoke/curedge.py >> log/pysmoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: curedge.py failed"
+	kill -2 $p
+	exit 1
+fi
+
 echo "RUNNING curvertex.py" >> log/pysmoke.log
 test/pysmoke/curvertex.py >> log/pysmoke.log 2>&1
 if [ $? -ne 0 ]

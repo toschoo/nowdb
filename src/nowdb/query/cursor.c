@@ -1003,7 +1003,15 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			INVALIDPLAN("grouping without projection");
 		}
 		stp = runner->cont;
-
+		(*cur)->grouping = 1;
+		if ((*cur)->tmp == NULL) {
+			(*cur)->tmp = calloc(1, (*cur)->recsz);
+		}
+		if ((*cur)->tmp == NULL) {
+			NOMEM("allocating temporary buffer");
+			nowdb_cursor_destroy(*cur); free(*cur);
+			return err;
+		}
 	}
 
 	/* projection */
@@ -1482,7 +1490,7 @@ grouping:
 				cur->off += recsz;
 				continue;
 			}
-			if (cur->group != NULL || cur->rdr->ko) {
+			if (cur->grouping) {
 				// review for vertex !
 				err = groupswitch(cur, ctype, realsz,
 				                  pmap, realsrc, &x);
@@ -1706,7 +1714,6 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                                        uint32_t *cnt)
 {
 	*osz = 0; *cnt = 0;
-	// return simplefetch(cur, buf, sz, osz, cnt);
 	return fetch(cur, buf, sz, osz, cnt);
 }
 

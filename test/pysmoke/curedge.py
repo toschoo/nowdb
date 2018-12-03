@@ -16,9 +16,10 @@ def simplequeries(c):
     print "RUNNING TEST 'simplequeries'"
 
     idx = random.randint(1,len(es)-1)
+    l = len(es)
     n = 0
 
-    # fullscan
+    # fullscan with constant
     stmt = "select true from sales where edge = 'buys'"
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -29,9 +30,63 @@ def simplequeries(c):
                raise db.TestFailed("wrong constant: %s" % (row.field(0)))
 
     print "counted: %d" % n
+    print "length : %d" % l
+
+    if n != l:
+       raise db.TestFailed("count is wrong: %d / %d" % (l, n))
+
+    # fullscan with fields
+    n = 0
+    stmt = "select edge, origin from sales where edge = 'buys'"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+            raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
+        for row in cur:
+            n+=1
+            if row.field(0) != 'buys':
+               raise db.TestFailed("wrong edge: %s" % (row.field(0)))
+
+    if n != l:
+       raise db.TestFailed("count is wrong: %d / %d" % (l, n))
 
     # count
     stmt = "select count(*) from sales where edge = 'buys'"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != n:
+               raise db.TestFailed("wrong count: %d %% %d" % (n, row.field(0)))
+
+    l = 0
+    for e in es:
+        if e.weight == es[idx].weight:
+           l+=1
+
+    print "expected: %d" % l
+
+    # fullscan with condition
+    stmt = "select edge, origin, weight from sales \
+             where edge = 'buys' \
+             and weight = %d" % es[idx].weight
+    n = 0
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+            raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
+        for row in cur:
+            n+=1
+            if row.field(0) != 'buys':
+               raise db.TestFailed("wrong edge: %s" % (row.field(0)))
+            if row.field(2) != es[idx].weight:
+               raise db.TestFailed("wrong weight: %d / %d" % (es[idx].weight, row.field(2)))
+
+    if n != l:
+       raise db.TestFailed("count is wrong: %d / %d" % (l, n))
+
+    # count with condition
+    stmt = "select count(*) from sales \
+             where edge = 'buys' \
+             and weight = %d" % es[idx].weight
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
@@ -131,9 +186,8 @@ def groupqueries(c):
     for e in es:
       keys[e.origin] = False
 
-    # keys only group with where (not in keys)
-    # REMOVE COUNT!
-    stmt = "select edge, origin, count(*) from sales \
+    # keys-only group with where (not in keys)
+    stmt = "select edge, origin from sales \
              where stamp > '1970-01-01' \
              group by edge, origin"
     with c.execute(stmt) as cur:
