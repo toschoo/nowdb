@@ -52,6 +52,7 @@ typedef struct {
 	char            *fromkey; /* range: fromkey                */
 	char              *tokey; /* range:   tokey                */
 	char               hasid; /* has id to identify model      */
+	char            grouping; /* has id to identify model      */
 	char                 eof; /* end of file was reached       */
 } nowdb_cursor_t;
 

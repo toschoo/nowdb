@@ -1558,7 +1558,7 @@ nowdb_err_t nowdb_scope_dropContext(nowdb_scope_t *scope,
 	err = findContext(scope, name, &ctx);
 	if (err != NOWDB_OK) goto unlock;
 
-	NOWDB_IGNORE(nowdb_store_close(&ctx->store));
+	err = nowdb_store_close(&ctx->store);
 
 	err = dropAllIndices(scope, ctx);
 	if (err != NOWDB_OK) goto unlock;

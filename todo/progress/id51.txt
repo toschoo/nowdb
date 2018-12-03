@@ -1,3 +1,9 @@
 NULL
 ----
 we need a null type
+- it must be applied in
+  + select (if vertex prop not there -> NULL)
+  + insert (case where prop is explicitly NULL)
+  + update (remove if = NULL)
+  + load (empty columns (;;) and NULL)
+  + where (is / is not null)
