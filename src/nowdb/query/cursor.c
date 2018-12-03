@@ -1003,7 +1003,15 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			INVALIDPLAN("grouping without projection");
 		}
 		stp = runner->cont;
-
+		(*cur)->grouping = 1;
+		if ((*cur)->tmp == NULL) {
+			(*cur)->tmp = calloc(1, (*cur)->recsz);
+		}
+		if ((*cur)->tmp == NULL) {
+			NOMEM("allocating temporary buffer");
+			nowdb_cursor_destroy(*cur); free(*cur);
+			return err;
+		}
 	}
 
 	/* projection */
@@ -1356,11 +1364,11 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
                                     uint32_t *count) 
 {
 	nowdb_err_t err;
-	uint32_t recsz = cur->rdr->recsize;
+	uint32_t recsz;
 	uint32_t realsz;
 	uint64_t pmap=fullmap;
 	char *realsrc=NULL;
-	nowdb_filter_t *filter = cur->rdr->filter;
+	nowdb_filter_t *filter;
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
@@ -1482,7 +1490,7 @@ grouping:
 				cur->off += recsz;
 				continue;
 			}
-			if (cur->group != NULL || cur->rdr->ko) {
+			if (cur->grouping) {
 				// review for vertex !
 				err = groupswitch(cur, ctype, realsz,
 				                  pmap, realsrc, &x);
@@ -1532,171 +1540,6 @@ projection:
 }
 
 /* ------------------------------------------------------------------------
- * Single reader fetch (no iterator!)
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t simplefetch(nowdb_cursor_t *cur,
-                                   char *buf, uint32_t sz,
-                                            uint32_t *osz,
-                                          uint32_t *count) 
-{
-	nowdb_err_t err;
-	uint32_t recsz = cur->rdr->recsize;
-	uint32_t realsz;
-	uint64_t pmap=fullmap;
-	char *realsrc=NULL;
-	nowdb_filter_t *filter = cur->rdr->filter;
-	char *src = nowdb_reader_page(cur->rdr);
-	char complete=0, cc=0, x=1, full=0;
-	uint32_t mx;
-
-	/* the reader should store the content type */
-	nowdb_content_t ctype = recsz == NOWDB_EDGE_SIZE?
-	                                 NOWDB_CONT_EDGE:
-	                                 NOWDB_CONT_VERTEX;
-
-	if (src == NULL) return nowdb_err_get(nowdb_err_eof,
-		                        FALSE, OBJECT, NULL);
-
-	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE;
-
-	while(*osz < sz) {
-		/* we have reached the end of the current page */
-		if (cur->off >= mx) {
-			/*
-			fprintf(stderr, "move %u %u (%u)\n",
-			                 cur->off, *osz, mx);
-			*/
-			err = nowdb_reader_move(cur->rdr);
-			if (err != NOWDB_OK) {
-				return handleEOF(cur, err,
-				             ctype, recsz,
-				                  buf, sz,
-				               osz, count);
-			}
-			src = nowdb_reader_page(cur->rdr);
-			cur->off = 0;
-		}
-
-		/* we hit the nullrecord and pass on to the next page */
-		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
-			cur->off = mx; continue;
-		}
-
-		/* check content
-		 * -------------
-		 * here's potential for improvement:
-		 * 1) we can immediately advance to the next marked record
-		 * 2) if we have read all records, we can leave */
-		if (!checkpos(cur->rdr, cur->off/recsz)) {
-			cur->off += recsz; continue;
-		}
-
-		/* apply filter to vertex row */
-		if (cur->wrow != NULL) {
-			nowdb_key_t vid;
-			char x=0;
-
-			// we add one more property
-			err = nowdb_vrow_add(cur->wrow,
-			    (nowdb_vertex_t*)(src+cur->off), &x);
-			if (err != NOWDB_OK) return err;
-			if (!x) {
-				cur->off += recsz; continue;
-			}
-			// the only record that could have been completed
-			// by that is the one to which the current belongs
-			if (!nowdb_vrow_eval(cur->wrow, &vid)) {
-				cur->off += recsz; continue;
-			}
-
-		/* apply filter directly */
-		} else if (filter != NULL &&
-		    !nowdb_filter_eval(filter, src+cur->off)) {
-			cur->off += recsz; continue;
-		}
-
-		// add vertex property to prow
-		if (cur->prow != NULL) {
-			err = nowdb_vrow_add(cur->prow,
-			              (nowdb_vertex_t*)(src+cur->off), &x);
-			if (err != NOWDB_OK) return err;
-
-			if (!nowdb_vrow_complete(cur->prow,
-			         &realsz, &pmap, &realsrc)) 
-			{
-				cur->off += recsz; continue;
-			}
-		} else {
-			realsz = recsz;
-			realsrc = src+cur->off;
-		}
-
-		// review!!!
-		/* if keys-only, group or no-group aggregates */
-		if (cur->tmp != NULL) {
-			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, realsz, 0, realsrc);
-				if (realsrc != src+cur->off) free(realsrc);
-				if (err != NOWDB_OK) return err;
-				cur->off += recsz;
-				continue;
-			}
-			if (cur->group != NULL || cur->rdr->ko) {
-				// review for vertex !
-				err = groupswitch(cur, ctype, recsz, 0, src, &x);
-				if (err != NOWDB_OK) return err;
-				if (!x) continue;
-			}
-		}
-
-		/* copy the record to the output buffer */
-		if (cur->row == NULL || !cur->hasid) {
-			memcpy(buf+(*osz), src+cur->off, recsz);
-			*osz += recsz; cur->off += recsz;
-			(*count)++;
-
-		/* project ... */
-		} else {
-			if (cur->group == NULL) {
-				err = nowdb_row_project(cur->row,
-				                 realsrc, realsz,
-				                            pmap,
-				             buf, sz, osz, &full,
- 				                 &cc, &complete);
-			} else {
-				err = nowdb_row_project(cur->row,
-				                cur->tmp2, recsz,
-				                            pmap,
-				             buf, sz, osz, &full,
-				                 &cc, &complete);
-			}
-			if (realsrc != (src+cur->off)) {
-				free(realsrc); realsrc = NULL;
-			}
-			if (err != NOWDB_OK) return err;
-			if (complete) {
-				cur->off+=recsz;
-				(*count)+=cc;
-
-				// finalise the group (if there is one)
-				// CAUTION: this uses src, which has 
-				//          another meaning with vertices!
-				finalizeGroup(cur, src);
-
-			/* this is an awful hack to force
-			 * a krange reader to present us
-			 * the same record once again */
-			} else if (cur->tmp != 0) {
-				memcpy(cur->tmp, nowdb_nullrec, cur->recsz);
-			}
-			if (full) break;
-		}
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
  * Fetch
  * ------------------------------------------------------------------------
  */
@@ -1706,7 +1549,6 @@ nowdb_err_t nowdb_cursor_fetch(nowdb_cursor_t   *cur,
                                        uint32_t *cnt)
 {
 	*osz = 0; *cnt = 0;
-	// return simplefetch(cur, buf, sz, osz, cnt);
 	return fetch(cur, buf, sz, osz, cnt);
 }
 
