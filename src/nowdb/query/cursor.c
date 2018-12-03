@@ -1364,11 +1364,11 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
                                     uint32_t *count) 
 {
 	nowdb_err_t err;
-	uint32_t recsz = cur->rdr->recsize;
+	uint32_t recsz;
 	uint32_t realsz;
 	uint64_t pmap=fullmap;
 	char *realsrc=NULL;
-	nowdb_filter_t *filter = cur->rdr->filter;
+	nowdb_filter_t *filter;
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;

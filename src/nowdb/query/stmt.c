@@ -218,7 +218,7 @@ nowdb_index_keys_t *mkKeys(int sz) {
 	nowdb_index_keys_t *k;
 	k = calloc(1,sizeof(nowdb_index_keys_t));
 	if (k == NULL) return NULL;
-	k->off = calloc(sz,sizeof(nowdb_index_keys_t));
+	k->off = calloc(sz,sizeof(uint16_t));
 	if (k->off == NULL) {
 		free(k); return NULL;
 	}

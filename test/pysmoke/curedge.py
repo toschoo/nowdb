@@ -205,6 +205,41 @@ def groupqueries(c):
         if not keys[k]:
            raise db.TestFailed("value %d not found" % k)
 
+# order queries
+def orderqueries(c):
+
+    print "RUNNING TEST 'orderqueries'"
+    
+    ses = sorted(es, key=lambda e: (e.edge, e.destin))
+
+    x=True
+    i=0
+    stmt = "select edge, destin from sales"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(1) != ses[i].destin:
+               x=False
+               break
+            i+=1
+    if x:
+       print "CAUTION data already sorted according to destination!"
+
+    x=True
+    i=0
+    stmt = "select edge, destin from sales order by edge, destin"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(1) != ses[i].destin:
+               x=False
+               break
+            i+=1
+    if not x:
+       raise db.TestFailed("data not sorted!")
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
@@ -212,5 +247,6 @@ if __name__ == "__main__":
         simplequeries(c)
         nwherequeries(c)
         groupqueries(c)
+        orderqueries(c)
 
         print "PASSED"
