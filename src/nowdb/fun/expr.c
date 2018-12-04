@@ -939,7 +939,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
 	}
 	if (*typ == 0) {
-		// treat is null here
+		// treat as null here
 		
 	}
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
@@ -1011,6 +1011,161 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 }
 
 /* -----------------------------------------------------------------------
+ * Show value
+ * -----------------------------------------------------------------------
+ */
+static void showValue(void *value, nowdb_type_t t, FILE *stream) {
+	switch(t) {
+	case NOWDB_TYP_TEXT:
+		fprintf(stream, "%s", (char*)value); break;
+	case NOWDB_TYP_UINT:
+		fprintf(stream, "%lu", *(uint64_t*)value); break;
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_INT:
+		fprintf(stream, "%ld", *(int64_t*)value); break;
+	case NOWDB_TYP_FLOAT:
+		fprintf(stream, "%f", *(double*)value); break;
+	case NOWDB_TYP_BOOL:
+		if (*(int64_t*)value) {
+			fprintf(stream, "true");
+		} else {
+			fprintf(stream, "false");
+		}
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Show field
+ * -----------------------------------------------------------------------
+ */
+static void showField(nowdb_field_t *f, FILE *stream) {
+	if (f->target == NOWDB_TARGET_EDGE) {
+		fprintf(stream, "%d", f->off); // off to name
+
+	} else if (f->name != NULL) {
+		fprintf(stream, "%s", f->name);
+	} else {
+		fprintf(stream, "%lu", f->propid);
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Show const
+ * -----------------------------------------------------------------------
+ */
+static void showConst(nowdb_const_t *cst, FILE *stream) {
+	showValue(cst->value, cst->type, stream);
+}
+
+/* -----------------------------------------------------------------------
+ * Show args as function
+ * -----------------------------------------------------------------------
+ */
+static void showargs(nowdb_op_t *op, char *fun, FILE *stream) {
+	fprintf(stream, "%s(", fun);
+	for(int i=0; i<op->args; i++) {
+		nowdb_expr_show(op->argv[i], stream);
+		if (i<op->args-1) fprintf(stream, ", ");
+	}
+	fprintf(stream, ") ");
+}
+
+/* -----------------------------------------------------------------------
+ * Show op
+ * -----------------------------------------------------------------------
+ */
+static void showOp(nowdb_op_t *op, FILE *stream) {
+	switch(op->fun) {
+	case NOWDB_EXPR_OP_FLOAT: return showargs(op, "tofloat", stream);
+	case NOWDB_EXPR_OP_INT: return showargs(op, "toint", stream);
+	case NOWDB_EXPR_OP_UINT: return showargs(op, "touint", stream);
+	case NOWDB_EXPR_OP_TIME:return showargs(op, "totime", stream);
+	case NOWDB_EXPR_OP_TEXT:return showargs(op, "totext", stream);
+
+	case NOWDB_EXPR_OP_ADD: return showargs(op, "+", stream);
+	case NOWDB_EXPR_OP_SUB:  return showargs(op, "-", stream);
+	case NOWDB_EXPR_OP_MUL:  return showargs(op, "*", stream);
+	case NOWDB_EXPR_OP_DIV:  return showargs(op, "/", stream);
+
+	case NOWDB_EXPR_OP_POW:  return showargs(op, "^", stream);
+
+	case NOWDB_EXPR_OP_REM: return showargs(op, "rem", stream);
+
+	case NOWDB_EXPR_OP_ABS: return showargs(op, "abs", stream);
+
+	case NOWDB_EXPR_OP_LOG: return showargs(op, "log", stream);
+	case NOWDB_EXPR_OP_CEIL: return showargs(op, "ceil", stream);
+	case NOWDB_EXPR_OP_FLOOR: return showargs(op, "floor", stream);
+	case NOWDB_EXPR_OP_ROUND: return showargs(op, "round", stream);
+
+	case NOWDB_EXPR_OP_YEAR: return showargs(op, "year", stream);
+	case NOWDB_EXPR_OP_MONTH: return showargs(op, "month", stream);
+	case NOWDB_EXPR_OP_MDAY: return showargs(op, "mday", stream);
+	case NOWDB_EXPR_OP_WDAY: return showargs(op, "wday", stream);
+	case NOWDB_EXPR_OP_YDAY: return showargs(op, "yday", stream);
+	case NOWDB_EXPR_OP_HOUR: return showargs(op, "hour", stream);
+	case NOWDB_EXPR_OP_MIN: return showargs(op, "minute", stream);
+	case NOWDB_EXPR_OP_SEC: return showargs(op, "scond", stream);
+
+	case NOWDB_EXPR_OP_MILLI: return showargs(op, "milli", stream);
+	case NOWDB_EXPR_OP_MICRO: return showargs(op, "micro", stream);
+	case NOWDB_EXPR_OP_NANO: return showargs(op, "nano", stream);
+
+	case NOWDB_EXPR_OP_DAWN: return showargs(op, "dawn", stream);
+	case NOWDB_EXPR_OP_DUSK: return showargs(op, "dusk", stream);
+	case NOWDB_EXPR_OP_EPOCH: return showargs(op, "epoch", stream);
+	case NOWDB_EXPR_OP_NOW: return showargs(op, "now", stream);
+
+	case NOWDB_EXPR_OP_EQ: return showargs(op, "=", stream);
+	case NOWDB_EXPR_OP_NE: return showargs(op, "!=", stream);
+	case NOWDB_EXPR_OP_LT: return showargs(op, "<", stream);
+	case NOWDB_EXPR_OP_GT: return showargs(op, ">", stream);
+	case NOWDB_EXPR_OP_LE: return showargs(op, "<=", stream);
+	case NOWDB_EXPR_OP_GE: return showargs(op, ">=", stream);
+	case NOWDB_EXPR_OP_IN: return showargs(op, "in", stream);
+	case NOWDB_EXPR_OP_IS: return showargs(op, "is", stream);
+	case NOWDB_EXPR_OP_ISN: return showargs(op, "isNot", stream);
+	case NOWDB_EXPR_OP_TRUE: return showargs(op, "true", stream);
+	case NOWDB_EXPR_OP_FALSE: return showargs(op, "false", stream);
+	case NOWDB_EXPR_OP_NOT: return showargs(op, "not", stream);
+	case NOWDB_EXPR_OP_JUST: return showargs(op, "just", stream);
+	case NOWDB_EXPR_OP_AND: return showargs(op, "and", stream);
+	case NOWDB_EXPR_OP_OR: return showargs(op, "or", stream);
+	default: showargs(op, "unknown", stream);
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Show agg
+ * -----------------------------------------------------------------------
+ */
+static void showAgg(nowdb_agg_t *agg, FILE *stream) {
+	return;
+}
+
+/* -----------------------------------------------------------------------
+ * Show expression
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
+	switch(EXPR(expr)->etype) {
+	case NOWDB_EXPR_FIELD:
+		return showField(FIELD(expr),stream);
+	case NOWDB_EXPR_CONST:
+		return showConst(CONST(expr),stream);
+	case NOWDB_EXPR_OP:
+		return showOp(OP(expr),stream);
+	case NOWDB_EXPR_REF:
+		return nowdb_expr_show(REF(expr)->ref,stream);
+	case NOWDB_EXPR_AGG:
+		return showAgg(AGG(expr),stream);
+	default:
+		fprintf(stream, "unknown expression type");
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Built-in functions and operators
  * -----------------------------------------------------------------------
  */
@@ -1053,11 +1208,95 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define MOV(r1,r2) \
 	memcpy(r1, r2, 8);
 
+#define EQ(v0,v1,v2) \
+	v0 = (v1==v2)
+
+#define NE(v0,v1,v2) \
+	v0 = (v1!=v2)
+
+#define GT(v0,v1,v2) \
+	v0 = (v1>v2)
+
+#define LT(v0,v1,v2) \
+	v0 = (v1<v2)
+
+#define GE(v0,v1,v2) \
+	v0 = (v1>=v2)
+
+#define LE(v0,v1,v2) \
+	v0 = (v1<=v2)
+
+#define LE(v0,v1,v2) \
+	v0 = (v1<=v2)
+
+#define NOT(v0,v1) \
+	v0=!v1
+
+#define JUST(v0,v1) \
+	v0=v1
+
+#define AND(v0,v1,v2) \
+	v0=(v1&&v2)
+
+#define OR(v0,v1,v2) \
+	v0=(v1||v2)
+
+#define SEQ(v0,v1,v2) \
+	v0 = (strcmp(v1,v2)==0)
+
+#define SNE(v0,v1,v2) \
+	v0 = (strcmp(v1,v2)!=0)
+
 /* -----------------------------------------------------------------------
- * Perform 2-place operation
+ * Perform any 2-placed operation (text missing!)
  * -----------------------------------------------------------------------
  */
-#define PERFM(o) \
+#define PERFANY(o) \
+	switch(*t) { \
+	case NOWDB_TYP_UINT: \
+		o(*(uint64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_DATE: \
+	case NOWDB_TYP_TIME: \
+	case NOWDB_TYP_INT: \
+	case NOWDB_TYP_BOOL: \
+		o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+		return NOWDB_OK; \
+	case NOWDB_TYP_FLOAT: \
+		o(*(double*)res, *(double*)argv[0], *(double*)argv[1]); \
+		return NOWDB_OK; \
+	default: return NOWDB_OK; \
+	}
+
+/* -----------------------------------------------------------------------
+ * Perform any 2-placed text->boolean operation
+ * -----------------------------------------------------------------------
+ */
+#define PERFSTR(o) \
+	o(*(uint64_t*)res, (char*)argv[0], (char*)argv[1]); \
+	return NOWDB_OK;
+
+/* -----------------------------------------------------------------------
+ * Perform 2-place boolean operation
+ * -----------------------------------------------------------------------
+ */
+#define PERFBOOL(o) \
+	o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+	return NOWDB_OK;
+
+/* -----------------------------------------------------------------------
+ * Perform 1-place boolean operation
+ * -----------------------------------------------------------------------
+ */
+#define PER1BOOL(o) \
+	o(*(int64_t*)res, *(int64_t*)argv[0]); \
+	return NOWDB_OK;
+
+/* -----------------------------------------------------------------------
+ * Perform 2-place numeric operation
+ * -----------------------------------------------------------------------
+ */
+#define PERFMN(o) \
 	switch(*t) { \
 	case NOWDB_TYP_UINT: \
 		o(*(uint64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
@@ -1248,14 +1487,14 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 * Arithmetic
 	 * -----------------------------------------------------------------------
 	 */
-	case NOWDB_EXPR_OP_ADD: PERFM(ADD);
-	case NOWDB_EXPR_OP_SUB: PERFM(SUB);
-	case NOWDB_EXPR_OP_MUL: PERFM(MUL);
+	case NOWDB_EXPR_OP_ADD: PERFMN(ADD);
+	case NOWDB_EXPR_OP_SUB: PERFMN(SUB);
+	case NOWDB_EXPR_OP_MUL: PERFMN(MUL);
 	case NOWDB_EXPR_OP_DIV:
 		if (*t == NOWDB_TYP_FLOAT) {
-			PERFM(DIV);
+			PERFMN(DIV);
 		} else {
-			PERFM(QUOT);
+			PERFMN(QUOT);
 		}
 
 	case NOWDB_EXPR_OP_REM:
@@ -1265,7 +1504,7 @@ static nowdb_err_t evalFun(uint32_t      fun,
 			PERFMNF(REM);
 		}
 
-	case NOWDB_EXPR_OP_POW: PERFM(POW);
+	case NOWDB_EXPR_OP_POW: PERFMN(POW);
 
 	case NOWDB_EXPR_OP_ROOT:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
@@ -1276,23 +1515,43 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_FLOOR: PERFM1(FLOOR);
 	case NOWDB_EXPR_OP_ROUND: PERFM1(ROUND);
 	case NOWDB_EXPR_OP_ABS: PERFM1(ABS);
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
 	/* -----------------------------------------------------------------------
 	 * Logic
 	 * -----------------------------------------------------------------------
 	 */
 	case NOWDB_EXPR_OP_EQ:
+		if (types[0] == NOWDB_TYP_TEXT) {
+			PERFSTR(SEQ);
+		} else {
+			PERFANY(EQ);
+		}
 	case NOWDB_EXPR_OP_NE:
-	case NOWDB_EXPR_OP_LT:
-	case NOWDB_EXPR_OP_GT:
-	case NOWDB_EXPR_OP_LE:
-	case NOWDB_EXPR_OP_GE:
-	case NOWDB_EXPR_OP_NOT:
-	case NOWDB_EXPR_OP_AND:
-	case NOWDB_EXPR_OP_OR:
-	case NOWDB_EXPR_OP_XOR:
+		if (types[0] == NOWDB_TYP_TEXT) {
+			PERFSTR(SNE);
+		} else {
+			PERFANY(NE);
+		}
+	case NOWDB_EXPR_OP_LT: PERFANY(LT);
+	case NOWDB_EXPR_OP_GT: PERFANY(GT);
+	case NOWDB_EXPR_OP_LE: PERFANY(LE);
+	case NOWDB_EXPR_OP_GE: PERFANY(GE);
+
+	case NOWDB_EXPR_OP_IN:
+	case NOWDB_EXPR_OP_IS:
+	case NOWDB_EXPR_OP_ISN:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
+ 
+	case NOWDB_EXPR_OP_TRUE:
+		(*(nowdb_bool_t*)res) = TRUE; return NOWDB_OK;
+	case NOWDB_EXPR_OP_FALSE:
+		(*(nowdb_bool_t*)res) = FALSE; return NOWDB_OK;
+
+	case NOWDB_EXPR_OP_NOT: PER1BOOL(NOT);
+	case NOWDB_EXPR_OP_JUST: PER1BOOL(JUST);
+
+	case NOWDB_EXPR_OP_AND: PERFBOOL(AND);
+	case NOWDB_EXPR_OP_OR: PERFBOOL(OR);
 
 	/* -----------------------------------------------------------------------
 	 * TIME
@@ -1410,6 +1669,25 @@ static inline int getArgs(int o) {
 	case NOWDB_EXPR_OP_DUSK:
 	case NOWDB_EXPR_OP_EPOCH:
 	case NOWDB_EXPR_OP_NOW: return 0;
+
+	case NOWDB_EXPR_OP_EQ:
+	case NOWDB_EXPR_OP_NE:
+	case NOWDB_EXPR_OP_LT:
+	case NOWDB_EXPR_OP_GT:
+	case NOWDB_EXPR_OP_LE:
+	case NOWDB_EXPR_OP_GE:
+	case NOWDB_EXPR_OP_IN:
+	case NOWDB_EXPR_OP_IS:
+	case NOWDB_EXPR_OP_ISN: return 2;
+
+	case NOWDB_EXPR_OP_NOT:
+	case NOWDB_EXPR_OP_JUST: return 1;
+
+	case NOWDB_EXPR_OP_TRUE:
+	case NOWDB_EXPR_OP_FALSE: return 0;
+
+	case NOWDB_EXPR_OP_AND:
+	case NOWDB_EXPR_OP_OR: return 2;
 
 	default: return -1;
 	}
@@ -1561,6 +1839,22 @@ static inline int evalType(nowdb_op_t *op) {
 	case NOWDB_EXPR_OP_EPOCH:
 	case NOWDB_EXPR_OP_NOW: return NOWDB_TYP_TIME;
 
+	case NOWDB_EXPR_OP_EQ:
+	case NOWDB_EXPR_OP_NE:
+	case NOWDB_EXPR_OP_LT:
+	case NOWDB_EXPR_OP_GT:
+	case NOWDB_EXPR_OP_LE:
+	case NOWDB_EXPR_OP_GE:
+	case NOWDB_EXPR_OP_IN:
+	case NOWDB_EXPR_OP_IS:
+	case NOWDB_EXPR_OP_ISN:
+	case NOWDB_EXPR_OP_TRUE:
+	case NOWDB_EXPR_OP_FALSE:
+	case NOWDB_EXPR_OP_NOT:
+	case NOWDB_EXPR_OP_JUST:
+	case NOWDB_EXPR_OP_AND:
+	case NOWDB_EXPR_OP_OR: return NOWDB_TYP_BOOL;
+
 	default: return -1;
 	}
 }
@@ -1577,6 +1871,16 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcmp(op, "/") == 0) return NOWDB_EXPR_OP_DIV;
 	if (strcmp(op, "%") == 0) return NOWDB_EXPR_OP_REM;
 	if (strcmp(op, "^") == 0) return NOWDB_EXPR_OP_POW;
+
+	if (strcasecmp(op, "=") == 0) return NOWDB_EXPR_OP_EQ;
+	if (strcasecmp(op, "!=") == 0) return NOWDB_EXPR_OP_NE;
+	if (strcasecmp(op, "<>") == 0) return NOWDB_EXPR_OP_NE;
+	if (strcasecmp(op, "<") == 0) return NOWDB_EXPR_OP_LT;
+	if (strcasecmp(op, ">") == 0) return NOWDB_EXPR_OP_GT;
+	if (strcasecmp(op, "<=") == 0) return NOWDB_EXPR_OP_LE;
+	if (strcasecmp(op, ">=") == 0) return NOWDB_EXPR_OP_GE;
+	if (strcasecmp(op, "in") == 0) return NOWDB_EXPR_OP_IN;
+	if (strcasecmp(op, "is") == 0) return NOWDB_EXPR_OP_IS;
 
 	if (strcasecmp(op, "log") == 0) return NOWDB_EXPR_OP_LOG;
 	if (strcasecmp(op, "abs") == 0) return NOWDB_EXPR_OP_ABS;
@@ -1604,6 +1908,16 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "dusk") == 0) return NOWDB_EXPR_OP_DUSK;
 	if (strcasecmp(op, "now") == 0) return NOWDB_EXPR_OP_NOW;
 	if (strcasecmp(op, "epoch") == 0) return NOWDB_EXPR_OP_EPOCH;
+
+	if (strcasecmp(op, "true") == 0) return NOWDB_EXPR_OP_TRUE;
+	if (strcasecmp(op, "false") == 0) return NOWDB_EXPR_OP_FALSE;
+	if (strcasecmp(op, "not") == 0) return NOWDB_EXPR_OP_NOT;
+	if (strcasecmp(op, "just") == 0) return NOWDB_EXPR_OP_JUST;
+	if (strcasecmp(op, "and") == 0) return NOWDB_EXPR_OP_AND;
+	if (strcasecmp(op, "or") == 0) return NOWDB_EXPR_OP_OR;
+	if (strcasecmp(op, "isnt") == 0) return NOWDB_EXPR_OP_ISN;
+	if (strcasecmp(op, "isnot") == 0) return NOWDB_EXPR_OP_ISN;
+	if (strcasecmp(op, "is not") == 0) return NOWDB_EXPR_OP_ISN;
 
 	*agg = 1;
 

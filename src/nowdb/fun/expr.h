@@ -17,6 +17,8 @@
 
 #include <tsalgo/list.h>
 
+#include <stdio.h>
+
 /* -----------------------------------------------------------------------
  * Expression types:
  * -----------------
@@ -307,6 +309,12 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             void        **res);
 
 /* -----------------------------------------------------------------------
+ * Show expression
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
+
+/* -----------------------------------------------------------------------
  * Conversions
  * -----------------------------------------------------------------------
  */
@@ -343,10 +351,15 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define NOWDB_EXPR_OP_GT  104
 #define NOWDB_EXPR_OP_LE  105
 #define NOWDB_EXPR_OP_GE  106
-#define NOWDB_EXPR_OP_NOT 107
-#define NOWDB_EXPR_OP_AND 108
-#define NOWDB_EXPR_OP_OR  109
-#define NOWDB_EXPR_OP_XOR 110
+#define NOWDB_EXPR_OP_IN  107
+#define NOWDB_EXPR_OP_IS  108
+#define NOWDB_EXPR_OP_ISN 109
+#define NOWDB_EXPR_OP_TRUE 150
+#define NOWDB_EXPR_OP_FALSE 151
+#define NOWDB_EXPR_OP_NOT 152
+#define NOWDB_EXPR_OP_JUST 153
+#define NOWDB_EXPR_OP_AND 154
+#define NOWDB_EXPR_OP_OR  155
 
 /* -----------------------------------------------------------------------
  * TIME

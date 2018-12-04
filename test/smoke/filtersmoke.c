@@ -5,11 +5,37 @@
  * ========================================================================
  */
 #include <nowdb/reader/filter.h>
+#include <nowdb/fun/expr.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <math.h>
+
+int mkConst(nowdb_expr_t *c, void *v, nowdb_type_t t) {
+	nowdb_err_t err;
+	err = nowdb_expr_newConstant(c, v, t);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot create new constant\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
+nowdb_expr_t mkBool2(uint32_t b) {
+	nowdb_err_t   err;
+	nowdb_expr_t    f;
+
+	err = nowdb_expr_newConstant(&f, &b, NOWDB_TYP_BOOL);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot make new bool\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return NULL;
+	}
+	return f;
+}
 
 nowdb_filter_t *mkBool(int op) {
 	nowdb_err_t   err;
@@ -25,159 +51,195 @@ nowdb_filter_t *mkBool(int op) {
 	return f;
 }
 
-int testTrue() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
+int binaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_type_t *t, void *r) {
+	nowdb_err_t err;
+	nowdb_expr_t  o;
+	void *x=NULL;
 
-	f = mkBool(NOWDB_FILTER_TRUE);
+	err = nowdb_expr_newOp(&o, op, o1, o2);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot create new operator\n");
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_expr_destroy(o2); free(o2);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	nowdb_expr_show(o, stderr); fprintf(stderr, "\n");
+	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot evaluate\n");
+		nowdb_expr_destroy(o); free(o);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	memcpy(r, x, 8);
+	nowdb_expr_destroy(o); free(o);
+	return 0;
+}
+
+int unaryOp(int op, nowdb_expr_t o1, nowdb_type_t *t, void *r) {
+	nowdb_err_t err;
+	nowdb_expr_t  o;
+	void *x=NULL;
+
+	err = nowdb_expr_newOp(&o, op, o1);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot create new operator\n");
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot evaluate\n");
+		nowdb_expr_destroy(o); free(o);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	memcpy(r, x, 8);
+	nowdb_expr_destroy(o); free(o);
+	return 0;
+}
+
+int testBool0(int op) {
+	int x = 0;
+	nowdb_err_t err;
+	nowdb_value_t *r;
+	nowdb_expr_t  f;
+	nowdb_type_t  t;
+
+	f = mkBool2(op);
 	if (f == NULL) return 0;
 
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
+	err = nowdb_expr_eval(f,NULL,1,NULL,&t,(void**)&r);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot evaluate true\n");
+		nowdb_expr_destroy(f); free(f);
+		nowdb_err_print(err); 
+		nowdb_err_release(err); 
+		return 0;
+	}
+	if (t != NOWDB_TYP_BOOL) {
+		fprintf(stderr, "type is %u\n", t);
+		nowdb_expr_destroy(f); free(f);
+		return 0;
+	}
+	x = (*r != 0);
+	nowdb_expr_destroy(f); free(f);
 	return x;
+}
+
+int testTrue() {
+	return testBool0(NOWDB_EXPR_OP_TRUE);
 }
 
 int testFalse() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
-
-	f = mkBool(NOWDB_FILTER_FALSE);
-	if (f == NULL) return 0;
-
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
-	return x;
+	return !testBool0(NOWDB_EXPR_OP_FALSE);
 }
 
 int testNot() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
+	nowdb_expr_t   c;
+	nowdb_type_t   t;
+	nowdb_value_t  x;
+	nowdb_value_t  r;
 
-	f = mkBool(NOWDB_FILTER_NOT);
-	if (f == NULL) return 0;
-
-	f->left = mkBool(NOWDB_FILTER_FALSE);
-	if (f->left == NULL) return 0;
-
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
-	f = mkBool(NOWDB_FILTER_NOT);
-	if (f == NULL) return 0;
-
-	f->left = mkBool(NOWDB_FILTER_TRUE);
-	if (f->left == NULL) return 0;
-
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
+	for(int i=0;i<2;i++) {
+		x = i==0?TRUE:FALSE;
+		if (mkConst(&c, &x, NOWDB_TYP_BOOL) != 0) return 0;
+		if (unaryOp(NOWDB_EXPR_OP_NOT, c, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		if ((x&&r) || !(x||r)) {
+			fprintf(stderr, "ERROR: wrong result: %lu\n", r);
+			return 0;
+		}
+	}
 	return 1;
 }
 
 int testJust() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
+	nowdb_expr_t   c;
+	nowdb_type_t   t;
+	nowdb_value_t  x;
+	nowdb_value_t  r;
 
-	f = mkBool(NOWDB_FILTER_JUST);
-	if (f == NULL) return 0;
-
-	f->left = mkBool(NOWDB_FILTER_FALSE);
-	if (f->left == NULL) return 0;
-
-	nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
-	if (x) return 0;
-
-	f = mkBool(NOWDB_FILTER_JUST);
-	if (f == NULL) return 0;
-
-	f->left = mkBool(NOWDB_FILTER_TRUE);
-	if (f->left == NULL) return 0;
-
-	nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
-	x = nowdb_filter_eval(f,NULL);
-	nowdb_filter_destroy(f); free(f);
-
-	if (!x) return 0;
-
+	for(int i=0;i<2;i++) {
+		x = i==0?TRUE:FALSE;
+		if (mkConst(&c, &x, NOWDB_TYP_BOOL) != 0) return 0;
+		if (unaryOp(NOWDB_EXPR_OP_JUST, c, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		if (!(x&&r) && (x||r)) {
+			fprintf(stderr, "ERROR: wrong result: %lu/%lu\n", x, r);
+			return 0;
+		}
+	}
 	return 1;
 }
 
 int testOr() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	nowdb_value_t  a,b;
+	nowdb_value_t    r;
 
 	for(int i=0;i<4;i++) {
-		f = mkBool(NOWDB_FILTER_OR);
-		if (f == NULL) return 0;
+		a = i==0||i==1?TRUE:FALSE;
+		if (mkConst(&c1, &a, NOWDB_TYP_BOOL) != 0) return 0;
 
-		if (i==0 || i == 1) {
-			f->left = mkBool(NOWDB_FILTER_FALSE);
-		} else {
-			f->left = mkBool(NOWDB_FILTER_TRUE);
+		b = i==0||i==2?TRUE:FALSE;
+		if (mkConst(&c2, &b, NOWDB_TYP_BOOL) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
-		if (f->left == NULL) return 0;
 
-		if (i == 0 || i == 2) {
-			f->right = mkBool(NOWDB_FILTER_FALSE);
-		} else {
-			f->right = mkBool(NOWDB_FILTER_TRUE);
+		if (binaryOp(NOWDB_EXPR_OP_OR, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
 		}
-		if (f->right == NULL) return 0;
-
-		nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
-		x = nowdb_filter_eval(f,NULL);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[OR] case %d: %d\n", i, x);
+		
+		fprintf(stderr, "[OR] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		default: if (!x) return 0;
+		case 3: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testAnd() {
-	nowdb_bool_t x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	nowdb_value_t  a,b;
+	nowdb_value_t    r;
 
 	for(int i=0;i<4;i++) {
-		f = mkBool(NOWDB_FILTER_AND);
-		if (f == NULL) return 0;
+		a = i==0||i==1?TRUE:FALSE;
+		if (mkConst(&c1, &a, NOWDB_TYP_BOOL) != 0) return 0;
 
-		if (i==0 || i == 1) {
-			f->left = mkBool(NOWDB_FILTER_FALSE);
-		} else {
-			f->left = mkBool(NOWDB_FILTER_TRUE);
+		b = i==0||i==2?TRUE:FALSE;
+		if (mkConst(&c2, &b, NOWDB_TYP_BOOL) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
-		if (f->left == NULL) return 0;
 
-		if (i == 0 || i == 2) {
-			f->right = mkBool(NOWDB_FILTER_FALSE);
-		} else {
-			f->right = mkBool(NOWDB_FILTER_TRUE);
+		if (binaryOp(NOWDB_EXPR_OP_AND, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
 		}
-		if (f->right == NULL) return 0;
-
-		nowdb_filter_show(f,stderr); fprintf(stderr, "\n");
-		x = nowdb_filter_eval(f,NULL);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[AND] case %d: %d\n", i, x);
+		
+		fprintf(stderr, "[AND] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 3: if (!x) return 0; break;
-		default: if (x) return 0;
+		case 0: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
@@ -246,611 +308,714 @@ nowdb_filter_t *mkIn(int typ, int off, int size, int sz, ...) {
 }
 
 int testEQUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[EQUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_EQ, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[EQ(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (x) return 0; break;
+		case 0: if (!r) return 0; break;
+		case 2: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testNEUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[NEUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_NE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[NE(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 0: if (r) return 0; break;
+		case 2: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLEUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LEUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_LE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LE(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 0: if (!r) return 0; break;
+		case 1: if (!r) return 0; break;
+		case 2: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGEUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GEUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_GE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GE(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (x) return 0; break;
+		case 0: if (!r) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLTUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LTUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_LT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LT(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 1: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGTUInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	uint64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
-		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: v++; break;
-		case 3: v++; break;
+		if (mkConst(&c1, &a, NOWDB_TYP_UINT) != 0) return 0;
+
+		b = i==0||i==2?a:i==1?a+a:a-a;
+		if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
 		}
 
-		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
-		              NOWDB_TYP_UINT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GTUInt] case %d: %d\n", i, x);
+		if (binaryOp(NOWDB_EXPR_OP_GT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GT(UINT)] case %d: %lu, %lu = %lu\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (x) return 0; break;
+		case 3: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testEQInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; v--; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[EQInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_EQ, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[EQ(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 0: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLEInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LEInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_LE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LE(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 0: if (!r) return 0; break;
+		case 1: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLTInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LTInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_LT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LT(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 1: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGEInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; v--; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GEInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_GE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GE(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
+		case 0: if (!r) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGTInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; v--; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GTInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_GT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GT(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (x) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testNEInt() {
-	nowdb_edge_t e;
-	int64_t v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	int64_t        a,b;
+	nowdb_value_t    r;
 
+	a=5;
 	for(int i=0;i<4;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_INT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; e.weight = 5; break;
-		case 1: e.weight++; break;
-		case 2: e.weight *= -1; break;
-		case 3: v *= -1; v--; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-		              NOWDB_TYP_INT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[NEInt] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_INT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_NE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[NE(INT)] case %d: %ld, %ld = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (x) return 0; break;
+		case 0: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testEQFloat() {
-	nowdb_edge_t e;
-	double  v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 0.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_EQ, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[EQFloat] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_EQ, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[EQ(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (x) return 0; break;
-		case 4: if (!x) return 0; break;
+		case 0: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testNEFloat() {
-	nowdb_edge_t e;
-	double  v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 0.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_NE, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[NEFloat] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_NE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[NE(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
-		case 4: if (x) return 0; break;
+		case 0: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLEFloat() {
-	nowdb_edge_t e;
-	double  v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 1.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_LE, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LEFloat] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_LE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LE(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (!x) return 0; break;
-		case 4: if (!x) return 0; break;
+		case 0:
+		case 1: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGEFloat() {
-	nowdb_edge_t e;
-	double v;
-	// double t;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 1.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_GE, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GEFloat] case %d: %d\n", i, x);
-		/*
-		memcpy(&t, &e.weight, 8);
-		fprintf(stderr, "%.6f >= %.6f\n", t, v);
-		*/
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_GE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GE(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (!x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (!x) return 0; break;
-		case 3: if (x) return 0; break;
-		case 4: if (!x) return 0; break;
+		case 1: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testLTFloat() {
-	nowdb_edge_t e;
-	double  v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 1.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_LT, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[LTFloat] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_LT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[LT(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (!x) return 0; break;
-		case 4: if (x) return 0; break;
+		case 1: if (!r) return 0; break;
+		default: if (r) return 0;
 		}
 	}
 	return 1;
 }
 
 int testGTFloat() {
-	nowdb_edge_t e;
-	double  v;
-	nowdb_bool_t    x;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	double         a,b;
+	nowdb_value_t    r;
 
+	a=5.0;
 	for(int i=0;i<5;i++) {
+		if (mkConst(&c1, &a, NOWDB_TYP_FLOAT) != 0) return 0;
+
 		switch(i) {
-		case 0: v = 5; memcpy(&e.weight, &v, 8); break;
-		case 1: v /= 3; break;
-		case 2: 
-		case 4: memcpy(&e.weight, &v, 8); break;
-		case 3: v *= 1.11111; break;
+		case 0: b=a; break;
+		case 1: b=a+a; break;
+		case 2: b=a-a; break;
+		case 3: b=a-2*a; break;
+		case 4: b=0.5*a; break;
 		}
-
-		f = mkCompare(NOWDB_FILTER_GT, 40, 8,
-		              NOWDB_TYP_FLOAT, &v);
-		if (f == NULL)  return 0;
-
-		x = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[GTFloat] case %d: %d\n", i, x);
+		if (mkConst(&c2, &b, NOWDB_TYP_FLOAT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_GT, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[GT(FLOAT)] case %d: %f, %f = %ld\n", i, a, b, r);
 
 		switch(i) {
-		case 0: if (x) return 0; break;
-		case 1: if (!x) return 0; break;
-		case 2: if (x) return 0; break;
-		case 3: if (x) return 0; break;
-		case 4: if (x) return 0; break;
+		case 0:
+		case 1: if (r) return 0; break;
+		default: if (!r) return 0;
+		}
+	}
+	return 1;
+}
+
+int testEQText() {
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	char         *a,*b;
+	nowdb_value_t    r;
+	char *str1 = "foo";
+	char *str2 = "bar";
+
+	a=str1;
+	for(int i=0;i<2;i++) {
+		if (mkConst(&c1, a, NOWDB_TYP_TEXT) != 0) return 0;
+
+		switch(i) {
+		case 0: b=a; break;
+		case 1: b=str2; break;
+		}
+		if (mkConst(&c2, b, NOWDB_TYP_TEXT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_EQ, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[EQ(TEXT)] case %d: %s, %s = %ld\n", i, a, b, r);
+
+		switch(i) {
+		case 0: if (!r) return 0; break;
+		default: if (r) return 0;
+		}
+	}
+	return 1;
+}
+
+int testNEText() {
+	nowdb_expr_t c1,c2;
+	nowdb_type_t     t;
+	char         *a,*b;
+	nowdb_value_t    r;
+	char *str1 = "foo";
+	char *str2 = "bar";
+
+	a=str1;
+	for(int i=0;i<2;i++) {
+		if (mkConst(&c1, a, NOWDB_TYP_TEXT) != 0) return 0;
+
+		switch(i) {
+		case 0: b=a; break;
+		case 1: b=str2; break;
+		}
+		if (mkConst(&c2, b, NOWDB_TYP_TEXT) != 0) {
+			nowdb_expr_destroy(c1); free(c1);
+			return 0;
+		}
+		if (binaryOp(NOWDB_EXPR_OP_NE, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "ERROR: wrong type: %u\n", t);
+			return 0;
+		}
+		
+		fprintf(stderr, "[NE(TEXT)] case %d: %s, %s = %ld\n", i, a, b, r);
+
+		switch(i) {
+		case 0: if (r) return 0; break;
+		default: if (!r) return 0;
 		}
 	}
 	return 1;
@@ -1220,6 +1385,7 @@ int main() {
 		fprintf(stderr, "testGTFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	/*
 	if (!testInUInt()) {
 		fprintf(stderr, "testInUint() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -1234,6 +1400,15 @@ int main() {
 	}
 	if (!testRange()) {
 		fprintf(stderr, "testRange() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	*/
+	if (!testEQText()) {
+		fprintf(stderr, "testEQText() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testNEText()) {
+		fprintf(stderr, "testNEText() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
