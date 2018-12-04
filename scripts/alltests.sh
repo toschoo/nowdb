@@ -1,4 +1,5 @@
 echo "RUNNING TEST BATTERY"
+make all
 
 echo "RUNNING SMOKE TESTS IN C"
 scripts/smoke.sh
