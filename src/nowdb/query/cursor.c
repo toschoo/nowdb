@@ -1384,8 +1384,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		// handle leftovers
 		if (cur->leftover != NULL) {
 
-			fprintf(stderr, "LEFTOVER\n");
-
 			realsz = cur->recsz;
 			pmap = cur->pmap;
 			realsrc = cur->leftover;
