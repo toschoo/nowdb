@@ -16,6 +16,7 @@
 #include <nowdb/mem/ptlru.h>
 
 #include <tsalgo/list.h>
+#include <tsalgo/tree.h>
 
 #include <stdio.h>
 
@@ -82,10 +83,11 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t    etype; /* expression type  */
-	void       *value; /* the value        */
-	void       *valbk; /* backup           */
-	nowdb_type_t type; /* and its type     */
+	uint32_t       etype; /* expression type  */
+	void          *value; /* the value        */
+	void          *valbk; /* backup           */
+	ts_algo_tree_t *tree; /* tree for 'in'    */
+	nowdb_type_t    type; /* and its type     */
 } nowdb_const_t;
 
 /* ------------------------------------------------------------------------
@@ -100,14 +102,14 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t      etype;  /* expression type             */
-	uint32_t        fun;  /* Operator type (+,-,*,/,...) */
-	uint32_t       args;  /* Number of operands          */
-	nowdb_expr_t  *argv;  /* Operands                    */
-	nowdb_type_t  *types; /* types of the arg results    */
-	void      **results;  /* arg results                 */
-	nowdb_value_t   res;  /* result                      */
-	                      /* text????                    */
+	uint32_t       etype;  /* expression type             */
+	uint32_t         fun;  /* Operator type (+,-,*,/,...) */
+	uint32_t        args;  /* Number of operands          */
+	nowdb_expr_t   *argv;  /* Operands                    */
+	nowdb_type_t  *types;  /* types of the arg results    */
+	void       **results;  /* arg results                 */
+	nowdb_value_t    res;  /* result                      */
+	                       /* text????                    */
 } nowdb_op_t;
 
 /* ------------------------------------------------------------------------
@@ -220,6 +222,29 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
                                    void         *value,
                                    nowdb_type_t  type);
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a list
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromList(nowdb_expr_t   *expr,
+                                     ts_algo_list_t *list,
+                                     nowdb_type_t    type);
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a tree
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromTree(nowdb_expr_t   *expr,
+                                     ts_algo_tree_t *tree,
+                                     nowdb_type_t    type);
+
+/* -----------------------------------------------------------------------
+ * Create such a tree for constant expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newTree(ts_algo_tree_t **tree,
+                               nowdb_type_t    type);
 
 /* -----------------------------------------------------------------------
  * Create Operator expression (with arguments passed in as list)

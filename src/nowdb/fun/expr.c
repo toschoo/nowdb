@@ -56,6 +56,69 @@ int nowdb_expr_type(nowdb_expr_t expr) {
 	return EXPR(expr)->etype;
 }
 
+/* ------------------------------------------------------------------------
+ * Callbacks for 'IN' tree
+ * ------------------------------------------------------------------------
+ */
+#define TREETYPE(t) \
+	(nowdb_type_t)(uint64_t)(((ts_algo_tree_t*)t)->rsc)
+
+static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
+	switch(TREETYPE(tree)) {
+	case NOWDB_TYP_TEXT:      // handle text as text
+	case NOWDB_TYP_LONGTEXT:
+	case NOWDB_TYP_UINT:
+		/*
+		fprintf(stderr, "comparing %lu and %lu\n", *(uint64_t*)one,
+		                                           *(uint64_t*)two);
+		*/
+		if (*(uint64_t*)one <
+		    *(uint64_t*)two) return ts_algo_cmp_less;
+		if (*(uint64_t*)one >
+		    *(uint64_t*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_INT:
+		/*
+		fprintf(stderr, "comparing %ld and %ld\n", *(int64_t*)one,
+		                                           *(int64_t*)two);
+		*/
+		if (*(int64_t*)one <
+		    *(int64_t*)two) return ts_algo_cmp_less;
+		if (*(int64_t*)one >
+		    *(int64_t*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	case NOWDB_TYP_FLOAT:
+		/*
+		fprintf(stderr, "comparing %f and %f\n", *(double*)one,
+		                                         *(double*)two);
+		*/
+		if (*(double*)one <
+		    *(double*)two) return ts_algo_cmp_less;
+		if (*(double*)one >
+		    *(double*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	default: return ts_algo_cmp_greater;
+
+	// BOOL
+	}
+}
+
+static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
+	free(n);
+	return TS_ALGO_OK;
+}
+
+static void valdestroy(void *ignore, void **n) {
+	if (n == NULL) return;
+	if (*n == NULL) return;
+	free(*n); *n=NULL;
+}
+
 /* -----------------------------------------------------------------------
  * Create edge field expression
  * -----------------------------------------------------------------------
@@ -114,12 +177,11 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 }
 
 /* -----------------------------------------------------------------------
- * Create constant value expression
+ * Helper: Create and init constant value expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
-                                   void        *value,
-                                   nowdb_type_t  type) {
+static inline nowdb_err_t initConst(nowdb_expr_t *expr,
+                                    nowdb_type_t  type) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_const_t));
@@ -129,7 +191,25 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 	}
 
 	CONST(*expr)->etype = NOWDB_EXPR_CONST;
-	CONST(*expr)->type = type;
+	CONST(*expr)->type  = type;
+	CONST(*expr)->value = NULL;
+	CONST(*expr)->valbk = NULL;
+	CONST(*expr)->tree  = NULL;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Create constant value expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
+                                   void        *value,
+                                   nowdb_type_t  type) {
+	nowdb_err_t err;
+
+	err = initConst(expr, type);
+	if (err != NOWDB_OK) return err;
 
 	if (type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 	if (type == NOWDB_TYP_TEXT) {
@@ -155,6 +235,92 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 		memcpy(CONST(*expr)->value, value, 8);
 		memcpy(CONST(*expr)->valbk, value, 8);
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Create the 'IN' tree
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t fillInTree(ts_algo_tree_t *tree,
+                              ts_algo_list_t *list) {
+	nowdb_err_t          err;
+	ts_algo_list_node_t *run,*tmp;
+
+	run=list->head;
+	while(run!=NULL) {
+		if (ts_algo_tree_insert(tree, run->cont) != TS_ALGO_OK)
+		{
+			NOMEM("tree.insert");
+			return err;
+		}
+		tmp = run->nxt;
+		ts_algo_list_remove(list, run); free(run);
+		run=tmp;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a list
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromList(nowdb_expr_t   *expr,
+                                     ts_algo_list_t *list,
+                                     nowdb_type_t    type) {
+	nowdb_err_t err;
+	ts_algo_tree_t *tree;
+
+	err = nowdb_expr_newTree(&tree, type);
+	if (err != NOWDB_OK) return err;
+
+	err = fillInTree(tree, list);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_destroy(tree); free(tree);
+		return err;
+	}
+
+	err = nowdb_expr_constFromTree(expr, tree, type);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_destroy(tree); free(tree);
+		return err;
+	}
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a tree
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromTree(nowdb_expr_t   *expr,
+                                     ts_algo_tree_t *tree,
+                                     nowdb_type_t    type) {
+	nowdb_err_t err;
+
+	err = initConst(expr, type);
+	if (err != NOWDB_OK) return err;
+
+	CONST(*expr)->tree = tree;
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Create such a tree for constant expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newTree(ts_algo_tree_t **tree,
+                               nowdb_type_t    type) {
+	nowdb_err_t err;
+
+	*tree = ts_algo_tree_new(&eqcompare, NULL, &noupdate,
+	                         &valdestroy, &valdestroy);
+	if (*tree == NULL) {
+		NOMEM("tree.new");
+		return err;
+	}
+	(*tree)->rsc = (void*)(uint64_t)type;
 	return NOWDB_OK;
 }
 
@@ -340,6 +506,10 @@ static void destroyConst(nowdb_const_t *cst) {
 	if (cst->valbk != NULL) {
 		free(cst->valbk); cst->valbk = NULL;
 	}
+	if (cst->tree != NULL) {
+		ts_algo_tree_destroy(cst->tree);
+		free(cst->tree); cst->tree = NULL;
+	}
 }
 
 /* -----------------------------------------------------------------------
@@ -447,8 +617,21 @@ static nowdb_err_t copyField(nowdb_field_t *src,
  */
 static nowdb_err_t copyConst(nowdb_const_t *src,
                              nowdb_expr_t  *trg) {
-	return nowdb_expr_newConstant(trg, src->value,
-	                                   src->type);
+	if (src->tree == NULL) {
+		return nowdb_expr_newConstant(trg, src->value,
+		                                   src->type);
+	} else {
+		nowdb_err_t     err;
+		ts_algo_list_t *tmp;
+		tmp = ts_algo_tree_toList(src->tree);
+		if (tmp == NULL) {
+			NOMEM("tree.toList");
+			return err;
+		}
+		err = nowdb_expr_constFromList(trg, tmp, src->type);
+		ts_algo_list_destroy(tmp); free(tmp);
+		return err;
+	}
 }
 
 /* -----------------------------------------------------------------------
@@ -549,6 +732,48 @@ static inline char fieldEqual(nowdb_field_t *one,
 }
 
 /* -----------------------------------------------------------------------
+ * Two trees are equivalent
+ * -----------------------------------------------------------------------
+ */
+static inline char treeEqual(nowdb_const_t *one,
+                             nowdb_const_t *two) {
+	ts_algo_list_t *fst, *snd;
+	ts_algo_list_node_t *r1, *r2;
+
+	if (one->tree->count == 0 &&
+	    two->tree->count == 0) return 1;
+	if (one->tree->count == 0) return 0;
+	if (two->tree->count == 0) return 0;
+
+	fst = ts_algo_tree_toList(one->tree);
+	if (fst == NULL) return 0;
+
+	snd = ts_algo_tree_toList(two->tree);
+	if (snd == NULL) {
+		ts_algo_list_destroy(fst); free(fst);
+		return 0;
+	}
+	r1 = fst->head; r2 = snd->head;
+	while(r1 != NULL && r2 != NULL) {
+		if (eqcompare(one->tree,
+		              r1->cont,
+		              r2->cont) != ts_algo_cmp_equal) 
+		{
+			ts_algo_list_destroy(fst); free(fst);
+			ts_algo_list_destroy(snd); free(snd);
+			return 0;
+		}
+		r1=r1->nxt; r2=r2->nxt;
+	}
+	ts_algo_list_destroy(fst); free(fst);
+	ts_algo_list_destroy(snd); free(snd);
+
+	if (r1 == NULL && r2 == NULL) return 1;
+
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
  * Two const expressions are equivalent
  * -----------------------------------------------------------------------
  */
@@ -556,9 +781,12 @@ static inline char constEqual(nowdb_const_t *one,
                               nowdb_const_t *two) 
 {
 	if (one->type != two->type) return 0;
-	if (one->value == NULL && two->value == NULL) return 1;
-	if (one->value == NULL) return 0;
-	if (two->value == NULL) return 0;
+	if (one->value == NULL && two->value == NULL &&
+	    one->tree  == NULL && two->tree  == NULL) return 1;
+	if (one->value == NULL && one->tree == NULL) return 0;
+	if (two->value == NULL && two->tree == NULL) return 0;
+	if (one->tree  != NULL &&
+	    two->tree  != NULL) return treeEqual(one, two);
 	switch(one->type) {
 	case NOWDB_TYP_TEXT:
 		return (strcmp((char*)one->value, (char*)two->value) == 0);
@@ -970,10 +1198,14 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
                                     void         **res) {
 	*typ = cst->type;
 	if (cst->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
-	if (cst->type != NOWDB_TYP_TEXT) {
-		memcpy(cst->value, cst->valbk, 8);
+	if (cst->value != NULL) {
+		if (cst->type != NOWDB_TYP_TEXT) {
+			memcpy(cst->value, cst->valbk, 8);
+		}
+		*res = cst->value;
+		return NOWDB_OK;
 	}
-	*res = cst->value;
+	if (cst->tree != NULL) *res = cst->tree;
 	return NOWDB_OK;
 }
 
@@ -1055,7 +1287,11 @@ static void showField(nowdb_field_t *f, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 static void showConst(nowdb_const_t *cst, FILE *stream) {
-	showValue(cst->value, cst->type, stream);
+	if (cst->tree != NULL) {
+		fprintf(stream, "[...]");
+	} else {
+		showValue(cst->value, cst->type, stream);
+	}
 }
 
 /* -----------------------------------------------------------------------
@@ -1401,6 +1637,15 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 	}
 
 /* -----------------------------------------------------------------------
+ * Find in tree
+ * -----------------------------------------------------------------------
+ */
+#define FINDIN() \
+	*(nowdb_bool_t*)res = (ts_algo_tree_find(argv[1], \
+	                               argv[0]) != NULL); \
+	return NOWDB_OK;
+
+/* -----------------------------------------------------------------------
  * Get time component
  * -----------------------------------------------------------------------
  */
@@ -1537,7 +1782,8 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_LE: PERFANY(LE);
 	case NOWDB_EXPR_OP_GE: PERFANY(GE);
 
-	case NOWDB_EXPR_OP_IN:
+	case NOWDB_EXPR_OP_IN: FINDIN();
+
 	case NOWDB_EXPR_OP_IS:
 	case NOWDB_EXPR_OP_ISN:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
@@ -1821,6 +2067,7 @@ static inline int evalType(nowdb_op_t *op) {
 		}
 		return NOWDB_TYP_FLOAT;
 
+	// test that all types are time or int
 	case NOWDB_EXPR_OP_YEAR:
 	case NOWDB_EXPR_OP_MONTH:
 	case NOWDB_EXPR_OP_MDAY:
@@ -1839,6 +2086,7 @@ static inline int evalType(nowdb_op_t *op) {
 	case NOWDB_EXPR_OP_EPOCH:
 	case NOWDB_EXPR_OP_NOW: return NOWDB_TYP_TIME;
 
+	// test that all types are equal 
 	case NOWDB_EXPR_OP_EQ:
 	case NOWDB_EXPR_OP_NE:
 	case NOWDB_EXPR_OP_LT:

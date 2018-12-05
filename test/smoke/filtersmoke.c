@@ -259,6 +259,54 @@ nowdb_filter_t *mkCompare(int op, int off, int size, int typ, void *val) {
 	return f;
 }
 
+nowdb_expr_t mkIn2(int type, int size, int sz, ...) {
+	va_list args;
+	nowdb_err_t   err;
+	nowdb_expr_t    c;
+	ts_algo_tree_t *t;
+	void     *v, *tmp;
+	char x=0;
+
+	err = nowdb_expr_newTree(&t, type);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create in-tree\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return NULL;
+	}
+
+	va_start(args, sz);
+	for(int i=0; i<sz;i++) {
+		tmp = va_arg(args, void*);
+		if (tmp == NULL) continue;
+		v = malloc(size);
+		if (v == NULL) {
+			fprintf(stderr, "out-of-mem\n");
+			return NULL;
+		}
+		memcpy(v, tmp, size);
+		if (ts_algo_tree_insert(t, v) != TS_ALGO_OK) {
+			x = 1; break;
+		}
+	}
+	va_end(args);
+
+	if (x) {
+		fprintf(stderr, "cannot fill in-tree\n");
+		ts_algo_tree_destroy(t); free(t);
+		return NULL;
+	}
+	err = nowdb_expr_constFromTree(&c, t, type);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create in-constant\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		ts_algo_tree_destroy(t); free(t);
+		return NULL;
+	}
+	return c;
+}
+
 nowdb_filter_t *mkIn(int typ, int off, int size, int sz, ...) {
 	va_list      args;
 	nowdb_err_t   err;
@@ -1022,11 +1070,11 @@ int testNEText() {
 }
 
 int testInUInt() {
-	nowdb_edge_t e;
+	nowdb_expr_t c1, c2;
 	uint64_t v=5;
 	uint64_t w,x,y,z;
-	nowdb_bool_t    r;
-	nowdb_filter_t *f;
+	nowdb_type_t  t;
+	nowdb_value_t r;
 
 	w=1; x=2; y=w+x; z=x+y;
 
@@ -1042,16 +1090,17 @@ int testInUInt() {
 		case 4: v = 9; break;
 		}
 
-		f = mkIn(NOWDB_TYP_INT, 40, 8, 4,
-		         &w, &x, &y, &z);
-		if (f == NULL)  return 0;
+		if (mkConst(&c1, &v, NOWDB_TYP_UINT) != 0) return 0;
+		c2 = mkIn2(NOWDB_TYP_UINT, 8, 4, &w, &x, &y, &z);
+		if (c2 == NULL)  return 0;
 
-		memcpy(&e.weight, &v, 8); 
+		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "wrong type: %u\n", t);
+			return 0;
+		}
 
-		r = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[InUInt] case %d: %d (%lu)\n", i, r, v);
+		fprintf(stderr, "[InUInt] case %d: %lu (%lu)\n", i, r, v);
 
 		switch(i) {
 		case 0: if (!r) return 0; break;
@@ -1065,42 +1114,42 @@ int testInUInt() {
 }
 
 int testInInt() {
-	nowdb_edge_t e;
+	nowdb_expr_t c1, c2;
 	int64_t v=5;
 	int64_t w,x,y,z;
-	nowdb_bool_t    r;
-	nowdb_filter_t *f;
+	nowdb_type_t  t;
+	nowdb_value_t r;
 
-	w=3; x=-1*w; y=5; z=7;
+	w=1; x=2; y=w+x; z=x+y;
 
 	fprintf(stderr, "[InInt] search in (%ld, %ld, %ld, %ld)\n",
-	                                                w, x, y, z);
-
+	                                               w, x, y, z);
 	for(int i=0;i<5;i++) {
 		switch(i) {
-		case 0: v = 5; break;
-		case 1: v *= -1; break;
-		case 2: v=3; break; 
-		case 3: v *= -1; break;
+		case 0: v = 3; break;
+		case 1: v = 4; break;
+		case 2: v = 5; break; 
+		case 3: v = 6; break;
 		case 4: v = 9; break;
 		}
 
-		f = mkIn(NOWDB_TYP_INT, 40, 8, 4,
-		         &w, &x, &y, &z);
-		if (f == NULL)  return 0;
+		if (mkConst(&c1, &v, NOWDB_TYP_INT) != 0) return 0;
+		c2 = mkIn2(NOWDB_TYP_INT, 8, 4, &w, &x, &y, &z);
+		if (c2 == NULL)  return 0;
 
-		memcpy(&e.weight, &v, 8); 
+		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "wrong type: %u\n", t);
+			return 0;
+		}
 
-		r = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[InInt] case %d: %d (%ld)\n", i, r, v);
+		fprintf(stderr, "[InInt] case %d: %lu (%ld)\n", i, r, v);
 
 		switch(i) {
 		case 0: if (!r) return 0; break;
 		case 1: if (r) return 0; break;
 		case 2: if (!r) return 0; break;
-		case 3: if (!r) return 0; break;
+		case 3: if (r) return 0; break;
 		case 4: if (r) return 0; break;
 		}
 	}
@@ -1108,17 +1157,16 @@ int testInInt() {
 }
 
 int testInFloat() {
-	nowdb_edge_t e;
-	double v=5;
-	double w,x,y,z;
-	nowdb_bool_t    r;
-	nowdb_filter_t *f;
+	nowdb_expr_t c1, c2;
+	double  v=5;
+	double  w,x,y,z;
+	nowdb_type_t  t;
+	nowdb_value_t r;
 
 	w=5; x=w/2; y=3.14159; z=sqrt(2);
 
 	fprintf(stderr, "[InFloat] search in (%f, %f, %f, %f)\n",
-	                                              w, x, y, z);
-
+	                                             w, x, y, z);
 	for(int i=0;i<5;i++) {
 		switch(i) {
 		case 0: v = 5; break;
@@ -1128,16 +1176,17 @@ int testInFloat() {
 		case 4: v = sqrt(2); break;
 		}
 
-		f = mkIn(NOWDB_TYP_FLOAT, 40, 8, 4,
-		         &w, &x, &y, &z);
-		if (f == NULL)  return 0;
+		if (mkConst(&c1, &v, NOWDB_TYP_FLOAT) != 0) return 0;
+		c2 = mkIn2(NOWDB_TYP_FLOAT, 8, 4, &w, &x, &y, &z);
+		if (c2 == NULL)  return 0;
 
-		memcpy(&e.weight, &v, 8); 
+		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;
+		if (t != NOWDB_TYP_BOOL) {
+			fprintf(stderr, "wrong type: %u\n", t);
+			return 0;
+		}
 
-		r = nowdb_filter_eval(f,&e);
-		nowdb_filter_destroy(f); free(f);
-
-		fprintf(stderr, "[InFloat] case %d: %d (%f)\n", i, r, v);
+		fprintf(stderr, "[InFloat] case %d: %lu (%f)\n", i, r, v);
 
 		switch(i) {
 		case 0: if (!r) return 0; break;
@@ -1385,7 +1434,6 @@ int main() {
 		fprintf(stderr, "testGTFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	/*
 	if (!testInUInt()) {
 		fprintf(stderr, "testInUint() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -1398,6 +1446,7 @@ int main() {
 		fprintf(stderr, "testInFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	/*
 	if (!testRange()) {
 		fprintf(stderr, "testRange() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
