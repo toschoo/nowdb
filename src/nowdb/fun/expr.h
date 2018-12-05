@@ -333,6 +333,14 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_type_t *typ,
                             void        **res);
 
+/* ------------------------------------------------------------------------
+ * Extract key range from expression
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_range(nowdb_expr_t expr,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart, char *rend);
+
 /* -----------------------------------------------------------------------
  * Show expression
  * -----------------------------------------------------------------------

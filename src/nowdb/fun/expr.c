@@ -1242,6 +1242,121 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: find filter offset in key offsets
+ * ------------------------------------------------------------------------
+ */
+static inline void getOff(nowdb_expr_t *expr,
+                          uint32_t mx,
+                          uint16_t sz,
+                          uint16_t *off,
+                          int      *o,
+                          int      *idx) {
+	
+	*o=-1; *idx=-1;
+	for (int z=0; z<mx; z++) {
+		if (EXPR(expr[z])->etype == NOWDB_EXPR_FIELD) {
+			for(int i=0; i<sz; i++) {
+				if (off[i] == FIELD(expr[z])->off) {
+					*o = i; if (*idx >= 0) return;
+				}
+			}
+		}
+		if (EXPR(expr[z])->etype == NOWDB_EXPR_CONST) {
+			*idx = z; if (*o >= 0) return;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Predeclaration
+ * ------------------------------------------------------------------------
+ */
+static void findRange(nowdb_expr_t expr,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart,   char *rend,
+                      nowdb_bitmap32_t      *map);
+
+/* ------------------------------------------------------------------------
+ * Helper: recursively extract key range from op
+ * ------------------------------------------------------------------------
+ */
+static void rangeOp(nowdb_op_t *op,
+                    uint16_t sz, uint16_t *off,
+                    char *rstart,   char *rend,
+                    nowdb_bitmap32_t      *map) {
+	int o, i;
+
+	switch(op->fun) {
+	case NOWDB_EXPR_OP_AND:
+		findRange(op->argv[0], sz, off,
+		            rstart, rend, map);
+		findRange(op->argv[1], sz, off,
+		            rstart, rend, map);
+		return;
+
+	case NOWDB_EXPR_OP_JUST:
+		findRange(op->argv[0], sz, off,
+		            rstart, rend, map);
+		return;
+
+	case NOWDB_EXPR_OP_EQ:
+		getOff(op->argv, op->args, sz, off, &o, &i);
+		if (o < 0 || i < 0) return;
+		memcpy(rstart+o*8, CONST(op->argv[i])->value, 8);
+		memcpy(rend+o*8, CONST(op->argv[i])->value, 8);
+		*map |= (1<<o);
+		*map |= (65536<<o);
+		return; 
+
+	case NOWDB_EXPR_OP_GE:
+	case NOWDB_EXPR_OP_GT:
+		getOff(op->argv, op->args, sz, off, &o, &i);
+		if (o < 0 || i < 0) return;
+		memcpy(rstart+o*8, CONST(op->argv[i])->value, 8);
+		*map |= (1<<o);
+		return;
+
+	case NOWDB_EXPR_OP_LE:
+	case NOWDB_EXPR_OP_LT:
+		getOff(op->argv, op->args, sz, off, &o, &i);
+		if (o < 0 || i < 0) return;
+		memcpy(rend+o*8, CONST(op->argv[i])->value, 8);
+		*map |= (65536<<o);
+		return;
+
+	default: return;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: recursively extract key range from filter
+ * ------------------------------------------------------------------------
+ */
+static void findRange(nowdb_expr_t expr,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart,   char *rend,
+                      nowdb_bitmap32_t      *map) {
+
+	if (expr == NULL) return;
+	if (EXPR(expr)->etype == NOWDB_EXPR_OP) {
+		rangeOp(OP(expr), sz, off, rstart, rend, map);
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Extract key range from expression
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_range(nowdb_expr_t expr,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart, char *rend) {
+	nowdb_bitmap32_t map = 0;
+
+	findRange(expr, sz, off, rstart, rend, &map);
+	return (popcount32(map) == 2*sz);
+}
+
 /* -----------------------------------------------------------------------
  * Show value
  * -----------------------------------------------------------------------
@@ -1304,7 +1419,7 @@ static void showargs(nowdb_op_t *op, char *fun, FILE *stream) {
 		nowdb_expr_show(op->argv[i], stream);
 		if (i<op->args-1) fprintf(stream, ", ");
 	}
-	fprintf(stream, ") ");
+	fprintf(stream, ")");
 }
 
 /* -----------------------------------------------------------------------

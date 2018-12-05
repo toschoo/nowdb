@@ -64,7 +64,7 @@ int binaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_type_t *t, void *r)
 		nowdb_err_print(err); nowdb_err_release(err);
 		return -1;
 	}
-	nowdb_expr_show(o, stderr); fprintf(stderr, "\n");
+	// nowdb_expr_show(o, stderr); fprintf(stderr, "\n");
 	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: cannot evaluate\n");
@@ -1199,24 +1199,41 @@ int testInFloat() {
 	return 1;
 }
 
-#define BOOL(f,x) \
-	f = mkBool(x); \
-	if (f == NULL) { \
-		fprintf(stderr, "out-of-mem\n"); \
-		return 0; \
+#define BOOL(f,o,o1,o2) \
+	err = nowdb_expr_newOp(f, o, o1, o2); \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "ERROR: cannot create new operator\n"); \
+		nowdb_expr_destroy(o1); free(o1); \
+		nowdb_expr_destroy(o2); free(o2); \
+		nowdb_err_print(err); nowdb_err_release(err); \
+		return -1; \
 	}
 
-#define COMPARE(f,o,x,t,v) \
-	f = mkCompare(o, x, 8, t, &v); \
-	if (f == NULL) { \
-		fprintf(stderr, "out-of-mem\n"); \
-		return 0; \
+#define COMPARE(f,o,o1,o2) \
+	err = nowdb_expr_newOp(f, o, o1, o2); \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "ERROR: cannot create new operator\n"); \
+		nowdb_expr_destroy(o1); free(o1); \
+		nowdb_expr_destroy(o2); free(o2); \
+		nowdb_err_print(err); nowdb_err_release(err); \
+		return -1; \
 	}
+
+#define FIELD(f,x) \
+	err = nowdb_expr_newEdgeField(f,x); \
+	if (err != NOWDB_OK) { \
+		fprintf(stderr, "ERROR: cannot create edge field\n"); \
+		nowdb_err_print(err); nowdb_err_release(err); \
+		return -1; \
+	}
+
+#define CONST(f,x,t) \
+	if (mkConst(f,x,t) != 0) return -1;
 
 #define TESTRANGE(fl,o,s,e,a,b,x) \
-	r = nowdb_filter_range(fl, 2, o, \
-	            (char*)s, (char*)e); \
-	nowdb_filter_destroy(fl); free(fl); \
+	r = nowdb_expr_range(fl, 2, o, \
+	          (char*)s, (char*)e); \
+	nowdb_expr_destroy(fl); free(fl); \
 	if ((x && !r) || (!x && r)) { \
 		fprintf(stderr, "result not expected\n"); \
 		return 0; \
@@ -1227,15 +1244,20 @@ int testInFloat() {
 			fprintf(stderr, \
 			"start/end not v: %lu.%lu & %lu.%lu\n", \
 			                s[0], s[1], e[0], e[1]); \
+			fprintf(stderr, \
+			"expected: %lu.%lu & %lu.%lu\n", a, a, b, b); \
 			return 0; \
 		} \
 	}
-	
 
 int testRange() {
+	nowdb_err_t err;
 	uint16_t off[2];
+	nowdb_expr_t f1, f2, f3, f4;
+	nowdb_expr_t c1, c2, c3, c4;
+	nowdb_expr_t e1, e2, e3, e4;
+	nowdb_expr_t b1, b2, b3;
 	uint64_t start[2], end[2];
-	nowdb_filter_t *f, *f2;
 	uint64_t v1=1, v2=2;
 	uint64_t va, vb;
 	char x, r;
@@ -1248,18 +1270,24 @@ int testRange() {
 		memset(end, 0, 16);
 		switch(i) {
 		case 0:
+
 			fprintf(stderr, "RANGE with EQ (success)\n");
+
 			x = 1;
+
 			va = v1;
 			vb = v1;
 
-			BOOL(f, NOWDB_FILTER_AND);
-			COMPARE(f->left, NOWDB_FILTER_EQ,
-			                 NOWDB_OFF_EDGE,
-			                 NOWDB_TYP_UINT, v1);
-			COMPARE(f->right, NOWDB_FILTER_EQ,
-			                  NOWDB_OFF_ORIGIN,
-			                  NOWDB_TYP_UINT, v1);
+			FIELD(&f1, NOWDB_OFF_EDGE);
+			CONST(&c1, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e1, NOWDB_EXPR_OP_EQ, f1, c1);
+
+			FIELD(&f2, NOWDB_OFF_ORIGIN);
+			CONST(&c2, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e2, NOWDB_EXPR_OP_EQ, f2, c2);
+
+			BOOL(&b1, NOWDB_EXPR_OP_AND, e1, e2);
+
 			break;
 		case 1:
 			fprintf(stderr, "RANGE with EQ (fails)\n");
@@ -1267,66 +1295,85 @@ int testRange() {
 			va = v1;
 			vb = v1;
 
-			BOOL(f, NOWDB_FILTER_AND);
-			COMPARE(f->left, NOWDB_FILTER_NE,
-			                 NOWDB_OFF_EDGE,
-			                 NOWDB_TYP_UINT, v1);
-			COMPARE(f->right, NOWDB_FILTER_EQ,
-			                  NOWDB_OFF_ORIGIN,
-			                  NOWDB_TYP_UINT, v1);
+			FIELD(&f1, NOWDB_OFF_EDGE);
+			CONST(&c1, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e1, NOWDB_EXPR_OP_NE, f1, c1);
+
+			FIELD(&f2, NOWDB_OFF_ORIGIN);
+			CONST(&c2, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e2, NOWDB_EXPR_OP_EQ, f2, c2);
+
+			BOOL(&b1, NOWDB_EXPR_OP_AND, e1, e2);
+
 			break;
 		case 2:
 			fprintf(stderr, "RANGE with GE/LE (success)\n");
+
 			x = 1;
+
 			va = v1;
 			vb = v2;
 
-			BOOL(f, NOWDB_FILTER_AND);
-			BOOL(f2, NOWDB_FILTER_AND);
-			COMPARE(f2->left, NOWDB_FILTER_LE,
-			                  NOWDB_OFF_EDGE,
-			                  NOWDB_TYP_UINT, v2);
-			COMPARE(f2->right, NOWDB_FILTER_LE,
-			                   NOWDB_OFF_ORIGIN,
-			                   NOWDB_TYP_UINT, v2);
-			f->left = f2;
+			FIELD(&f1, NOWDB_OFF_EDGE);
+			CONST(&c1, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e1, NOWDB_EXPR_OP_GE, f1, c1);
 
-			BOOL(f2, NOWDB_FILTER_AND);
-			COMPARE(f2->left, NOWDB_FILTER_GE,
-			                  NOWDB_OFF_EDGE,
-			                  NOWDB_TYP_UINT, v1);
-			COMPARE(f2->right, NOWDB_FILTER_GE,
-			                   NOWDB_OFF_ORIGIN,
-			                   NOWDB_TYP_UINT, v1);
-			f->right = f2;
+			FIELD(&f2, NOWDB_OFF_ORIGIN);
+			CONST(&c2, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e2, NOWDB_EXPR_OP_GE, f2, c2);
+
+			BOOL(&b2, NOWDB_EXPR_OP_AND, e1, e2);
+
+			FIELD(&f3, NOWDB_OFF_EDGE);
+			CONST(&c3, &v2, NOWDB_TYP_UINT);
+			COMPARE(&e3, NOWDB_EXPR_OP_LE, f3, c3);
+
+			FIELD(&f4, NOWDB_OFF_ORIGIN);
+			CONST(&c4, &v2, NOWDB_TYP_UINT);
+			COMPARE(&e4, NOWDB_EXPR_OP_LE, f4, c4);
+
+			BOOL(&b3, NOWDB_EXPR_OP_AND, e3, e4);
+
+			BOOL(&b1, NOWDB_EXPR_OP_AND, b2, b3);
+
+			nowdb_expr_show(b1, stderr); fprintf(stderr, "\n");
+
 			break;
 		case 3:
 			fprintf(stderr, "RANGE with GE/LE (fails)\n");
+
 			x = 0;
+
 			va = v1;
 			vb = v2;
 
-			BOOL(f, NOWDB_FILTER_AND);
-			BOOL(f2, NOWDB_FILTER_AND);
-			COMPARE(f2->left, NOWDB_FILTER_LE,
-			                  NOWDB_OFF_EDGE,
-			                  NOWDB_TYP_UINT, v2);
-			COMPARE(f2->right, NOWDB_FILTER_LE,
-			                   NOWDB_OFF_ORIGIN,
-			                   NOWDB_TYP_UINT, v2);
-			f->left = f2;
+			FIELD(&f1, NOWDB_OFF_EDGE);
+			CONST(&c1, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e1, NOWDB_EXPR_OP_LE, f1, c1);
 
-			BOOL(f2, NOWDB_FILTER_AND);
-			COMPARE(f2->left, NOWDB_FILTER_LE,
-			                  NOWDB_OFF_EDGE,
-			                  NOWDB_TYP_UINT, v1);
-			COMPARE(f2->right, NOWDB_FILTER_LE,
-			                   NOWDB_OFF_ORIGIN,
-			                   NOWDB_TYP_UINT, v1);
-			f->right = f2;
+			FIELD(&f2, NOWDB_OFF_ORIGIN);
+			CONST(&c2, &v1, NOWDB_TYP_UINT);
+			COMPARE(&e2, NOWDB_EXPR_OP_LE, f2, c2);
+
+			BOOL(&b2, NOWDB_EXPR_OP_AND, e1, e2);
+
+			FIELD(&f3, NOWDB_OFF_EDGE);
+			CONST(&c3, &v2, NOWDB_TYP_UINT);
+			COMPARE(&e3, NOWDB_EXPR_OP_LE, f3, c3);
+
+			FIELD(&f4, NOWDB_OFF_ORIGIN);
+			CONST(&c4, &v2, NOWDB_TYP_UINT);
+			COMPARE(&e4, NOWDB_EXPR_OP_LE, f4, c4);
+
+			BOOL(&b3, NOWDB_EXPR_OP_AND, e3, e4);
+
+			BOOL(&b1, NOWDB_EXPR_OP_AND, b2, b3);
+
+			nowdb_expr_show(b1, stderr); fprintf(stderr, "\n");
+
 			break;
 		}
-		TESTRANGE(f, off, start, end, va, vb, x);
+		TESTRANGE(b1, off, start, end, va, vb, x);
 	}
 	return 1;
 }
@@ -1446,18 +1493,16 @@ int main() {
 		fprintf(stderr, "testInFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	/*
-	if (!testRange()) {
-		fprintf(stderr, "testRange() failed\n");
-		rc = EXIT_FAILURE; goto cleanup;
-	}
-	*/
 	if (!testEQText()) {
 		fprintf(stderr, "testEQText() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!testNEText()) {
 		fprintf(stderr, "testNEText() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testRange()) {
+		fprintf(stderr, "testRange() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
