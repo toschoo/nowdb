@@ -180,6 +180,8 @@ tools:	bin/randomfile    \
 	bin/waitstore     \
 	bin/waitscope     \
 	bin/writecsv      \
+	bin/sqltool       \
+	bin/plantool      \
 	bin/scopetool
 
 bench: bin/readplainbench    \
@@ -214,8 +216,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
 	$(SMK)/mergesmoke              \
-	$(SMK)/sortsmoke               \
-	$(SMK)/sqlsmoke
+	$(SMK)/sortsmoke
 
 clientsmoke:	$(CMK)/clientsmoke
 
@@ -473,15 +474,6 @@ $(SMK)/mergesmoke:	$(LIB) $(DEP) $(SMK)/mergesmoke.o \
 			                 $(COM)/db.o     \
 			                 $(COM)/bench.o  \
 			                 $(libs) -lnowdb
-
-$(SMK)/sqlsmoke.o:	$(SMK)/sqlsmoke.c
-			$(CMPMSG)
-			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
-
-$(SMK)/sqlsmoke:	$(LIB) $(DEP) $(SMK)/sqlsmoke.o
-			$(LNKMSG)
-			$(CC) $(LDFLAGS) -o $(SMK)/sqlsmoke \
-			         $(SMK)/sqlsmoke.o $(libs) -lnowdb
 # STRESSTESTS
 $(STRESS)/deepscope:	$(LIB) $(DEP) $(STRESS)/deepscope.o \
 			              $(COM)/bench.o      \
@@ -601,6 +593,24 @@ $(BIN)/writecsv:	$(LIB) $(DEP) $(TOOLS)/writecsv.o \
 			              	       $(COM)/cmd.o        \
 			                       $(libs) -lnowdb
 
+$(BIN)/sqltool:		$(LIB) $(DEP) $(TOOLS)/sqltool.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/sqltool.o \
+			              	       $(COM)/bench.o     \
+			              	       $(COM)/cmd.o       \
+			                 $(libs) -lnowdb
+
+$(BIN)/plantool:	$(LIB) $(DEP) $(TOOLS)/plantool.o \
+			              $(COM)/bench.o      \
+			              $(COM)/cmd.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $(TOOLS)/plantool.o \
+			              	       $(COM)/bench.o     \
+			              	       $(COM)/cmd.o       \
+			                 $(libs) -lnowdb
+
 $(BIN)/scopetool:	$(LIB) $(DEP) $(TOOLS)/scopetool.o \
 			              $(COM)/bench.o      \
 			              $(COM)/cmd.o
@@ -719,7 +729,6 @@ clean:
 	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sortsmoke
-	rm -f $(SMK)/sqlsmoke
 	rm -f $(CMK)/clientsmoke
 	rm -f $(CMK)/clientsmoke2
 	rm -f $(STRESS)/deepscope
@@ -735,6 +744,8 @@ clean:
 	rm -f $(BIN)/waitstore
 	rm -f $(BIN)/waitscope
 	rm -f $(BIN)/writecsv
+	rm -f $(BIN)/sqltool
+	rm -f $(BIN)/plantool
 	rm -f $(BIN)/scopetool
 	rm -f $(BIN)/scopetool2
 	rm -f $(BIN)/qstress

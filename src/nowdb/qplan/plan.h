@@ -89,4 +89,10 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
  */
 void nowdb_plan_destroy(ts_algo_list_t *plan, char content);
 
+/* ------------------------------------------------------------------------
+ * show plan
+ * ------------------------------------------------------------------------
+ */
+void nowdb_plan_show(ts_algo_list_t *plan, FILE *stream);
+
 #endif

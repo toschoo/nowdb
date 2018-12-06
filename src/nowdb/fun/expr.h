@@ -207,6 +207,12 @@ void nowdb_eval_destroy(nowdb_eval_t *eval);
 nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
 
 /* -----------------------------------------------------------------------
+ * Create EdgeField expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off);
+
+/* -----------------------------------------------------------------------
  * Create VertexField expression
  * -----------------------------------------------------------------------
  */

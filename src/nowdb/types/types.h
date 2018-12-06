@@ -102,6 +102,7 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 #define NOWDB_TYP_BOOL     9
+#define NOWDB_TYP_SHORT   99
 
 int nowdb_strtoval(char *str, nowdb_type_t typ, void *value);
 int nowdb_strtotype(char *str);

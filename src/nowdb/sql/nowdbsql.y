@@ -706,7 +706,8 @@ order_clause(O) ::= ORDER BY field_list(F). {
 %left AND.
 %right NOT.
 /* %left IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
-%left GT LE LT GE.
+%left EQ NE GT LE LT GE.
+%left IN.
 /* %right ESCAPE. */
 /* %left BITAND BITOR LSHIFT RSHIFT. */
 %left PLUS MINUS.
@@ -760,6 +761,36 @@ expr(P) ::= expr(O1) POW(OP) expr(O2). {
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
 	NOWDB_SQL_ADDPARAM(P,O1);
 	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(E) ::= expr(A) AND|OR(OP) expr(B). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+	NOWDB_SQL_ADDPARAM(E,B);
+}
+
+expr(E) ::= NOT(OP) expr(A). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 1);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+}
+
+expr(E) ::= expr(A) EQ|NE|GT|LT|LE|GE(OP) expr(B). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+	NOWDB_SQL_ADDPARAM(E,B);
+}
+
+expr(E) ::= expr(N) IN(OP) LPAR val_list(V) RPAR. {
+	NOWDB_SQL_CHECKSTATE()
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,N);
+	NOWDB_SQL_ADDPARAM(E,V);
 }
 
 expr(P) ::= fun(F). {
@@ -828,97 +859,10 @@ table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
  * where clause and wexpr
  * ------------------------------------------------------------------------
  */
-where_clause(W) ::= WHERE wexpr(E). {
+where_clause(W) ::= WHERE expr(E). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&W, NOWDB_AST_WHERE, 0);
 	NOWDB_SQL_ADDKID(W, E);
-}
-
-wexpr(E) ::= condition(C). {
-	E=C;
-}
-
-wexpr(E) ::= wexpr(A) AND wexpr(B). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_AND, 0);
-	NOWDB_SQL_ADDKID(E,A);
-	NOWDB_SQL_ADDKID(E,B);
-}
-
-wexpr(E) ::= wexpr(A) OR wexpr(B). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OR, 0);
-	NOWDB_SQL_ADDKID(E,A);
-	NOWDB_SQL_ADDKID(E,B);
-}
-
-wexpr(E) ::= LPAR wexpr(A) RPAR. {
-	NOWDB_SQL_CHECKSTATE();
-	E=A;
-} 
-
-wexpr(E) ::= NOT wexpr(A). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 0);
-	NOWDB_SQL_ADDKID(E,A);
-}
-
-condition(C) ::= operand(O1) comparison(O) operand(O2) . {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(O,O1);
-	NOWDB_SQL_ADDKID(O,O2);
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
-	NOWDB_SQL_ADDKID(C,O);
-}
-
-condition(C) ::= field(N) IN LPAR val_list(V) RPAR. {
-	NOWDB_SQL_CHECKSTATE()
-	nowdb_ast_t *F;
-	nowdb_ast_t *O;
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
-	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_COMPARE, NOWDB_AST_IN);
-	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, N);
-	NOWDB_SQL_ADDKID(O,F);
-	NOWDB_SQL_ADDKID(O,V);
-	NOWDB_SQL_ADDKID(C,O);
-}
-
-comparison(C) ::= EQ. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_EQ);
-}
-
-comparison(C) ::= LE. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LE);
-}
-comparison(C) ::= GE. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GE);
-}
-comparison(C) ::= LT. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_LT);
-}
-comparison(C) ::= GT. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_GT);
-}
-comparison(C) ::= NE. {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_COMPARE, NOWDB_AST_NE);
-}
-
-operand(O) ::= field(F). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, F);
-}
-
-operand(O) ::= value(V). {
-	NOWDB_SQL_CHECKSTATE();
-	O=V;
 }
 
 field_list(L) ::= field(F). {

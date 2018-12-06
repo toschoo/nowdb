@@ -143,6 +143,32 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off) {
 }
 
 /* -----------------------------------------------------------------------
+ * Create vertex field with offset 
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off) {
+	nowdb_err_t err;
+
+	*expr = calloc(1,sizeof(nowdb_field_t));
+	if (*expr == NULL)  {
+		NOMEM("allocating expression");
+		return err;
+	}
+
+	FIELD(*expr)->etype = NOWDB_EXPR_FIELD;
+
+	FIELD(*expr)->name = NULL;
+	FIELD(*expr)->text = NULL;
+	FIELD(*expr)->target = NOWDB_TARGET_VERTEX;
+	FIELD(*expr)->off = (int)off;
+	FIELD(*expr)->type = off==NOWDB_OFF_ROLE?
+	                          NOWDB_TYP_SHORT:
+	                          NOWDB_TYP_UINT;
+	
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Create vertex field expression
  * -----------------------------------------------------------------------
  */
@@ -220,20 +246,21 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 			return err;
 		}
 	} else {
-		CONST(*expr)->value = malloc(8);
+		int sz = type == NOWDB_TYP_SHORT?4:8;
+		CONST(*expr)->value = malloc(sz);
 		if (CONST(*expr)->value == NULL) {
 			NOMEM("allocating value");
 			free(*expr); *expr = NULL;
 			return err;
 		}
-		CONST(*expr)->valbk = malloc(8);
+		CONST(*expr)->valbk = malloc(sz);
 		if (CONST(*expr)->valbk == NULL) {
 			NOMEM("allocating value");
 			free(*expr); *expr = NULL;
 			return err;
 		}
-		memcpy(CONST(*expr)->value, value, 8);
-		memcpy(CONST(*expr)->valbk, value, 8);
+		memcpy(CONST(*expr)->value, value, sz);
+		memcpy(CONST(*expr)->valbk, value, sz);
 	}
 	return NOWDB_OK;
 }
@@ -1062,6 +1089,25 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get raw VertexValue
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
+                                            nowdb_eval_t  *hlp,
+                                            char          *src,
+                                            nowdb_type_t  *t,
+                                            void         **res) {
+
+	// in case of roleid:
+	// we need to communicate
+	// that *res points to 4 byte, not to 8!!!
+	*t = field->type;
+	*res = src+field->off;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: get VertexValue
  * ------------------------------------------------------------------------
  */
@@ -1072,6 +1118,10 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          nowdb_type_t  *t,
                                          void         **res) {
 	nowdb_err_t err;
+
+	if (field->name == NULL) {
+		return getRawVertexValue(field, hlp, src, t, res);
+	}
 
 	/*
 	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
@@ -1367,6 +1417,8 @@ static void showValue(void *value, nowdb_type_t t, FILE *stream) {
 		fprintf(stream, "%s", (char*)value); break;
 	case NOWDB_TYP_UINT:
 		fprintf(stream, "%lu", *(uint64_t*)value); break;
+	case NOWDB_TYP_SHORT:
+		fprintf(stream, "%u", *(uint32_t*)value); break;
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_INT:
@@ -1393,7 +1445,7 @@ static void showField(nowdb_field_t *f, FILE *stream) {
 	} else if (f->name != NULL) {
 		fprintf(stream, "%s", f->name);
 	} else {
-		fprintf(stream, "%lu", f->propid);
+		fprintf(stream, "%d", f->off);
 	}
 }
 
@@ -1599,7 +1651,7 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 	v0 = (strcmp(v1,v2)!=0)
 
 /* -----------------------------------------------------------------------
- * Perform any 2-placed operation (text missing!)
+ * Perform any 2-placed operation (not text)
  * -----------------------------------------------------------------------
  */
 #define PERFANY(o) \
@@ -1618,6 +1670,13 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 		return NOWDB_OK; \
 	default: return NOWDB_OK; \
 	}
+
+/* -----------------------------------------------------------------------
+ * Perform any 2-placed operation (on short)
+ * -----------------------------------------------------------------------
+ */
+#define PERFSHORT(o) \
+	o(*(uint64_t*)res, *(uint32_t*)argv[0], *(uint32_t*)argv[1])
 
 /* -----------------------------------------------------------------------
  * Perform any 2-placed text->boolean operation
@@ -1883,12 +1942,16 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			PERFSTR(SEQ);
+		} else if (types[0] == NOWDB_TYP_SHORT) {
+			PERFSHORT(EQ);
 		} else {
 			PERFANY(EQ);
 		}
 	case NOWDB_EXPR_OP_NE:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			PERFSTR(SNE);
+		} else if (types[0] == NOWDB_TYP_SHORT) {
+			PERFSHORT(EQ);
 		} else {
 			PERFANY(NE);
 		}
