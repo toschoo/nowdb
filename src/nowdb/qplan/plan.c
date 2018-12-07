@@ -121,10 +121,13 @@ static inline nowdb_err_t cover(ts_algo_list_t     *cands,
 	for(int i=0;i<keys->sz;i++) {
 		for(runner=cands->head;runner!=NULL;runner=runner->nxt) {
 			node = runner->cont;
+			// we should check both sides explicitly
 			int k = nowdb_expr_type(
 			            ARG(node,0))==NOWDB_EXPR_FIELD?0:1;
+			/*
 			fprintf(stderr, "comparing %hu : %d\n",
 			        keys->off[i], FIELD(ARG(node,k))->off);
+			*/
 			if (keys->off[i] == FIELD(ARG(node,k))->off) {
 				if (ts_algo_list_append(res,node)
 				                   != TS_ALGO_OK) {
@@ -432,7 +435,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	op = nowdb_ast_field(ast);
 	if (op != NULL) {
 
-		fprintf(stderr, "FIELD: %s\n", (char*)op->value);
+		// fprintf(stderr, "FIELD: %s\n", (char*)op->value);
 
 		err = getExpr(scope, v, trg, op, &w, &x);
 		if (err != NOWDB_OK) {
@@ -612,7 +615,7 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	nowdb_model_prop_t *p;
 
 	if (v == NULL) {
-		INVALIDAST("vertex not allowed here");
+		INVALIDAST("vertex type is NULL");
 	}
 	err = nowdb_model_getPropByName(scope->model,
 	                                   v->roleid,
@@ -745,8 +748,10 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 	o = nowdb_ast_param(field);
 	while (o != NULL) {
 		
+		/*
 		fprintf(stderr, "%s param %s\n", (char*)field->value,
 		                                 (char*)o->value);
+		*/
 		
 		err = getExpr(scope, v, trg, o, &exp, agg);
 		if (err != NOWDB_OK) {

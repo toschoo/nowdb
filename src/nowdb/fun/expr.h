@@ -50,6 +50,13 @@ typedef struct nowdb_expr_t* nowdb_expr_t;
 int nowdb_expr_type(nowdb_expr_t expr);
 
 /* ------------------------------------------------------------------------
+ * Expession is boolean / expression is comparison
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_bool(nowdb_expr_t expr);
+char nowdb_expr_compare(nowdb_expr_t expr);
+
+/* ------------------------------------------------------------------------
  * Field Expression
  * ------------------------------------------------------------------------
  */

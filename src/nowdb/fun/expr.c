@@ -62,6 +62,40 @@ int nowdb_expr_type(nowdb_expr_t expr) {
 	return EXPR(expr)->etype;
 }
 
+/* -----------------------------------------------------------------------
+ * Expression is boolean operation
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_bool(nowdb_expr_t expr) {
+	if (expr == NULL) return -1;
+	if (EXPR(expr)->etype == NOWDB_EXPR_OP) {
+		return (OP(expr)->fun == NOWDB_EXPR_OP_TRUE  ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_FALSE ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_AND   ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_OR    ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_NOT);
+	}
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Expression is comparison operation
+ * -----------------------------------------------------------------------
+ */
+char nowdb_expr_compare(nowdb_expr_t expr) {
+	if (expr == NULL) return -1;
+	if (EXPR(expr)->etype == NOWDB_EXPR_OP) {
+		return (OP(expr)->fun == NOWDB_EXPR_OP_EQ ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_NE ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_GT ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_LT ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_GE ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_LE ||
+		        OP(expr)->fun == NOWDB_EXPR_OP_IN);
+	}
+	return 0;
+}
+
 /* ------------------------------------------------------------------------
  * Callbacks for 'IN' tree
  * ------------------------------------------------------------------------
@@ -198,12 +232,15 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 	FIELD(*expr)->role = role;
 	FIELD(*expr)->propid = propid;
 	FIELD(*expr)->pk = 0;
+	FIELD(*expr)->name = NULL;
 
-	FIELD(*expr)->name = strdup(propname);
-	if (FIELD(*expr)->name == NULL) {
-		NOMEM("allocating field name");
-		free(*expr); *expr = NULL;
-		return err;
+	if (propname != NULL) {
+		FIELD(*expr)->name = strdup(propname);
+		if (FIELD(*expr)->name == NULL) {
+			NOMEM("allocating field name");
+			free(*expr); *expr = NULL;
+			return err;
+		}
 	}
 	return NOWDB_OK;
 }
@@ -635,7 +672,9 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	if (src->target == NOWDB_TARGET_EDGE) {
 		return nowdb_expr_newEdgeField(trg, src->off); 	
 	} else {
-		err = nowdb_expr_newVertexField(trg, src->name,
+		err = src->name == NULL?
+		      nowdb_expr_newVertexOffField(trg, src->off):
+		      nowdb_expr_newVertexField(trg, src->name,
 		                                     src->role,
 		                                     src->propid);
 		if (err != NOWDB_OK) return err;
@@ -1513,9 +1552,9 @@ static void showField(nowdb_field_t *f, FILE *stream) {
 		fprintf(stream, "%d", f->off); // off to name
 
 	} else if (f->name != NULL) {
-		fprintf(stream, "%s", f->name);
+		fprintf(stream, "%s (%u)", f->name, f->off);
 	} else {
-		fprintf(stream, "%d", f->off);
+		fprintf(stream, "offset %d", f->off);
 	}
 }
 
