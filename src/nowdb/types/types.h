@@ -181,6 +181,7 @@ int nowdb_vertex_offByName(char *field);
 #define NOWDB_OFF_DESTIN  16
 #define NOWDB_OFF_LABEL   24
 #define NOWDB_OFF_TMSTMP  32
+#define NOWDB_OFF_STAMP   32
 #define NOWDB_OFF_WEIGHT  40
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56

@@ -19,7 +19,7 @@
 
 static char *OBJECT = "cursor";
 
-static uint64_t fullmap = 0xffffffffffffffff;
+static uint64_t fullmap = NOWDB_BITMAP64_ALL;
 
 #define VINDEX "_vindex"
 
@@ -63,7 +63,7 @@ static inline nowdb_err_t getPending(ts_algo_list_t *files,
  * Helper: get range for range reader
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getRange(nowdb_filter_t *filter,
+static inline nowdb_err_t getRange(nowdb_expr_t    filter,
                                    nowdb_plan_idx_t *pidx,
                                    char         **fromkey,
                                    char           **tokey) {
@@ -85,8 +85,8 @@ static inline nowdb_err_t getRange(nowdb_filter_t *filter,
 		NOMEM("allocating keys");
 		return err;
 	}
-	x = nowdb_filter_range(filter, keys->sz, keys->off,
-	                                 *fromkey, *tokey);
+	x = nowdb_expr_range(filter, keys->sz, keys->off,
+	                               *fromkey, *tokey);
 	if (!x) {
 		free(*fromkey); *fromkey = NULL;
 		free(*tokey); *tokey = NULL;
@@ -239,14 +239,14 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
-		                           pidx->idx, cur->filter,
+		                pidx->idx, cur->filter, cur->eval,
 		                                    NOWDB_ORD_ASC,
-		                         cur->fromkey, cur->tokey);
+		                        cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
 		err = nowdb_reader_bkrange(&buf, &cur->stf.pending,
-		                            pidx->idx, cur->filter,
+		                 pidx->idx, cur->filter, cur->eval,
 		                                     NOWDB_ORD_ASC,
 		                         cur->fromkey, cur->tokey);
 		break;
@@ -390,7 +390,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
  */
 static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
 	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
-	return nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow, cur->filter);
+	return nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
+	                             cur->filter, cur->eval);
 }
 
 /* ------------------------------------------------------------------------
@@ -405,7 +406,7 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
 	if (cur->row == NULL) return NOWDB_OK;
 
-	err = nowdb_vrow_new(cur->v->roleid, &cur->prow);
+	err = nowdb_vrow_new(cur->v->roleid, &cur->prow, cur->eval);
 	if (err != NOWDB_OK) return err;
 
 	nowdb_vrow_autoComplete(cur->prow);
@@ -430,87 +431,52 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	return NOWDB_OK;
 }
 
-static nowdb_err_t hasOnlyVidR(nowdb_row_t       *row,
-                               nowdb_filter_t *filter,
-                               char              *yes) {
+#define FIELD(x) \
+	NOWDB_EXPR_TOFIELD(x)
+
+/* ------------------------------------------------------------------------
+ * Helper: check whether filter contains nothing but vid
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t hasOnlyVidR(nowdb_row_t    *row,
+                               nowdb_expr_t filter,
+                               char           *yes) {
 	nowdb_err_t err;
+	ts_algo_list_t fields;
+	ts_algo_list_node_t *run;
+	nowdb_expr_t node;
 
 	if (filter == NULL) return NOWDB_OK;
 
-	if (filter->ntype == NOWDB_FILTER_BOOL) {
-		err = hasOnlyVidR(row, filter->left, yes);
-		if (err != NOWDB_OK) return err;
-		if (*yes == 0) return NOWDB_OK;
-
-		if (filter->op != NOWDB_FILTER_NOT) {
-			err = hasOnlyVidR(row, filter->right, yes);
-			if (err != NOWDB_OK) return err;
-			if (*yes == 0) return NOWDB_OK;
-		}
-		return NOWDB_OK;
-
-	} else if (filter->ntype == NOWDB_FILTER_COMPARE) {
-		if (filter->off != NOWDB_OFF_ROLE &&
-		    filter->off != NOWDB_OFF_VERTEX) {
-			*yes = 0; return NOWDB_OK;
-		}
-		return NOWDB_OK;
+	ts_algo_list_init(&fields);
+	err = nowdb_expr_filter(filter, NOWDB_EXPR_FIELD, &fields);
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&fields);
+		return err;
 	}
-	INVALIDPLAN("incomplete filter");
-	
+	for(run=fields.head;run!=NULL;run=run->nxt) {
+		node=run->cont;
+		// should we check for PK?
+		if (FIELD(node)->off != NOWDB_OFF_ROLE &&
+		    FIELD(node)->off != NOWDB_OFF_VERTEX) {
+			*yes=0; break;
+		}
+	}
+	ts_algo_list_destroy(&fields);
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
  * Helper: check whether filter contains nothing but vid
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
-                              nowdb_filter_t *filter,
-                              char              *yes)
+static nowdb_err_t hasOnlyVid(nowdb_row_t  *row,
+                              nowdb_expr_t  filter,
+                              char         *yes)
 {
 	*yes = 1;
-
 	if (filter == NULL) return NOWDB_OK;
-
-	// nowdb_filter_show(filter, stderr); fprintf(stderr, "\n");
-
-	// we search all of a kind
-	if (filter->ntype == NOWDB_FILTER_COMPARE &&
-	    filter->op == NOWDB_FILTER_EQ         &&
-	    filter->off == NOWDB_OFF_ROLE) return NOWDB_OK;
-
 	return hasOnlyVidR(row, filter, yes);
-
-	/*
-
-	// we search for a specific vid, i.e.
-	// (role = mytype) and (vid = myvid)
-	if (!(filter->ntype == NOWDB_FILTER_BOOL &&
-	      filter->op    == NOWDB_FILTER_AND)) {
-		*yes = 0;
-	} else {
-		if (filter->left == NULL) {
-			INVALIDPLAN("incomplete filter");
-		}
-		if (filter->right == NULL) {
-			INVALIDPLAN("incomplete filter");
-		}
-		if (!(filter->left->ntype == NOWDB_FILTER_COMPARE &&
-		      (filter->left->op == NOWDB_FILTER_EQ ||
-		       filter->left->op == NOWDB_FILTER_IN))) *yes = 0;
-		if (!(filter->right->ntype == NOWDB_FILTER_COMPARE &&
-		      (filter->right->op == NOWDB_FILTER_EQ ||
-		       filter->right->op == NOWDB_FILTER_IN))) *yes = 0;
-		if (filter->left->off != NOWDB_OFF_ROLE &&
-		    filter->right->off != NOWDB_OFF_ROLE) *yes = 0;
-		if (filter->left->off != NOWDB_OFF_VERTEX &&
-		    filter->right->off != NOWDB_OFF_VERTEX) *yes = 0;
-	}
-
-	if (*yes == 1) return NOWDB_OK;	
-
-	return NOWDB_OK;
-	*/
 }
 
 /* ------------------------------------------------------------------------
@@ -532,13 +498,14 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t       *row,
 static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
                                  ts_algo_list_t *vlst) {
 	nowdb_err_t err;
-	nowdb_filter_t *f;
+	nowdb_expr_t f, o1, o2;
+	nowdb_expr_t r, rc, v, vc;
 	ts_algo_list_t vids;
 	ts_algo_list_node_t *run;
 	uint64_t *role;
 
 	// we allocate the role, so the filter can own it
-	role = malloc(8);
+	role = malloc(4); // why 8?
 	if (role == NULL) {
 		NOMEM("allocating role");
 		return err;
@@ -564,35 +531,64 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		}
 	}
 
-	// create a boolean filter:
-	// (role = mytype) and (vid in (...))
-	err = nowdb_filter_newBool(&f, NOWDB_FILTER_AND);
+	// role field
+	err = nowdb_expr_newVertexOffField(&r, NOWDB_OFF_ROLE);
 	if (err != NOWDB_OK) {
+		DESTROYVIDS(vids);
 		free(role); return err;
 	}
 
-	// role = mytype
-	err = nowdb_filter_newCompare(&f->left,
-	                      NOWDB_FILTER_EQ,
-	                      NOWDB_OFF_ROLE, 4,
-	                      NOWDB_TYP_UINT, role, NULL);
+	// role constant
+	err = nowdb_expr_newConstant(&rc, role, NOWDB_TYP_SHORT);
 	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(f); free(f);
-		DESTROYVIDS(vids); free(role);
-		return err;
-	}
-	nowdb_filter_own(f->left);
-
-	// vid in (...)
-	err = nowdb_filter_newCompare(&f->right,
-	                      NOWDB_FILTER_IN,
-	                      NOWDB_OFF_VERTEX, 8,
-	                      NOWDB_TYP_UINT, NULL, &vids);
-	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(f->left); free(f->left);
-		nowdb_filter_destroy(f); free(f);
+		nowdb_expr_destroy(r); free(r);
 		DESTROYVIDS(vids);
-		return err;
+		free(role); return err;
+	}
+
+	// roleid = role
+	err = nowdb_expr_newOp(&o1, NOWDB_EXPR_OP_EQ, r, rc);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(r); free(r);
+		nowdb_expr_destroy(rc); free(rc);
+		DESTROYVIDS(vids);
+		free(role); return err;
+	}
+
+	// vid field
+	err = nowdb_expr_newVertexOffField(&v, NOWDB_OFF_VERTEX);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(o1); free(o1);
+		DESTROYVIDS(vids);
+		free(role); return err;
+	}
+
+	// vertex constant
+	err = nowdb_expr_constFromList(&vc, &vids, NOWDB_TYP_UINT);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_expr_destroy(v); free(v);
+		DESTROYVIDS(vids);
+		free(role); return err;
+	}
+
+	// vid in vids
+	err = nowdb_expr_newOp(&o2, NOWDB_EXPR_OP_IN, v, vc);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_expr_destroy(v); free(v);
+		nowdb_expr_destroy(vc); free(vc);
+		ts_algo_list_destroy(&vids);
+		free(role); return err;
+	}
+
+	// and
+	err = nowdb_expr_newOp(&f, NOWDB_EXPR_OP_AND, o1, o2);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_expr_destroy(o2); free(o2);
+		ts_algo_list_destroy(&vids);
+		free(role); return err;
 	}
 
 	// destroy the list but *only* the list
@@ -603,7 +599,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 
 	// destroy the old filter
 	if (cur->filter != NULL) {
-		nowdb_filter_destroy(cur->filter);
+		nowdb_expr_destroy(cur->filter);
 		free(cur->filter); cur->filter = NULL;
 	}
 
@@ -795,6 +791,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	cur->model = mom->model;
 	cur->recsz = mom->recsz;
 	cur->filter = mom->filter;
+	cur->eval = mom->eval;
 	cur->v = mom->v;
 	cur->fromkey = mom->fromkey;
 	cur->tokey = mom->tokey;
@@ -814,7 +811,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 
 	/*
 	if (cur->wrow != NULL) {
-		nowdb_filter_show(cur->wrow->filter,stderr);
+		nowdb_expr_show(cur->wrow->filter,stderr);
 		fprintf(stderr, "\n");
 	}
 	*/
@@ -953,6 +950,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	(*cur)->row   = NULL;
 	(*cur)->group = NULL;
 	(*cur)->nogrp = NULL;
+	(*cur)->eval = NULL;
 	(*cur)->stf.store = NULL;
 	ts_algo_list_init(&(*cur)->stf.files);
 	ts_algo_list_init(&(*cur)->stf.pending);
@@ -964,24 +962,61 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		stp = runner->cont;
 		if (stp->ntype == NOWDB_PLAN_FILTER) {
 			(*cur)->filter = stp->load;
-			nowdb_filter_period(stp->load, &start, &end);
+			nowdb_expr_period(stp->load, &start, &end);
 			runner = runner->nxt;
 			stp->load = NULL;
 		}
 	}
 
+	// initialise eval helper
+	(*cur)->eval = calloc(1, sizeof(nowdb_eval_t));
+	if ((*cur)->eval == NULL) {
+		NOMEM("allocating evaluation helper");
+		nowdb_cursor_destroy(*cur);
+		free(*cur); *cur = NULL;
+		return err;
+	}
+
 	err = initReader(scope, *cur, start, end, rstp);
 	if (err != NOWDB_OK) {
 		free((*cur)->rdr); (*cur)->rdr = NULL;
+		free((*cur)->eval); (*cur)->eval= NULL;
 		free(*cur); *cur = NULL;
 		return err;
 	}
 	if ((*cur)->filter != NULL) {
 		/*
-		nowdb_filter_show((*cur)->filter, stderr);
+		nowdb_expr_show((*cur)->filter, stderr);
 		fprintf(stderr, "\n");
 		*/
 		(*cur)->rdr->filter = (*cur)->filter;
+	}
+
+	(*cur)->eval->model = scope->model;
+	(*cur)->eval->text = scope->text;
+	(*cur)->eval->tlru = NULL;
+	(*cur)->eval->ce = NULL;
+	(*cur)->eval->cv = NULL;
+
+	(*cur)->eval->needtxt = 1; // check!
+
+	ts_algo_list_init(&(*cur)->eval->em);
+	ts_algo_list_init(&(*cur)->eval->vm);
+
+	(*cur)->eval->tlru = calloc(1, sizeof(nowdb_ptlru_t));
+	if ((*cur)->eval->tlru == NULL) {
+		NOMEM("allocating text lru");
+		nowdb_cursor_destroy(*cur);
+		free(*cur); *cur = NULL;
+		return err;
+	}
+	err = nowdb_ptlru_init((*cur)->eval->tlru, 100000);
+	if (err != NOWDB_OK) {
+		free((*cur)->eval->tlru);
+		(*cur)->eval->tlru=NULL;
+		nowdb_cursor_destroy(*cur);
+		free(*cur); *cur = NULL;
+		return err;
 	}
 
 	/* pass on to projection or order by or group by */
@@ -1120,9 +1155,13 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 		free(cur->rdr); cur->rdr = NULL;
 	}
 	if (cur->filter != NULL) {
-		nowdb_filter_destroy(cur->filter);
+		nowdb_expr_destroy(cur->filter);
 		free(cur->filter);
 		cur->filter = NULL;
+	}
+	if (cur->eval != NULL) {
+		nowdb_eval_destroy(cur->eval);
+		free(cur->eval); cur->eval = NULL;
 	}
 	if (cur->stf.store != NULL) {
 		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
@@ -1368,7 +1407,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	uint32_t realsz;
 	uint64_t pmap=fullmap;
 	char *realsrc=NULL;
-	nowdb_filter_t *filter;
+	nowdb_expr_t filter;
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
@@ -1454,13 +1493,21 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 			// the only record that could have been completed
 			// by that is the one to which the current belongs
-			if (!nowdb_vrow_eval(cur->wrow, &vid)) {
+			err = nowdb_vrow_eval(cur->wrow, &vid, &x);
+			if (err != NOWDB_OK) return err;
+			if (!x) {
 				cur->off += recsz; continue;
 			}
 
-		} else if (filter != NULL &&
-		  !nowdb_filter_eval(filter, src+cur->off)) {
-			cur->off += recsz; continue;
+		} else if (filter != NULL) {
+			void *v;
+			nowdb_type_t  t;
+			err = nowdb_expr_eval(filter, cur->eval, fullmap,
+			                           src+cur->off, &t, &v);
+			if (err != NOWDB_OK) return err;
+			if (!(*(nowdb_value_t*)v)) {
+				cur->off += recsz; continue;
+			}
 		}
 		// PROW
 		if (cur->prow != NULL) {

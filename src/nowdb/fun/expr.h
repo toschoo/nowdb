@@ -340,6 +340,14 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             void        **res);
 
 /* ------------------------------------------------------------------------
+ * Extract time period from expression
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_period(nowdb_expr_t expr,
+                       nowdb_time_t *start,
+                       nowdb_time_t *end);
+
+/* ------------------------------------------------------------------------
  * Extract key range from expression
  * ------------------------------------------------------------------------
  */

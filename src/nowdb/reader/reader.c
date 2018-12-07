@@ -1017,7 +1017,7 @@ void nowdb_reader_setPeriod(nowdb_reader_t *reader,
  */
 nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
                                   ts_algo_list_t  *files,
-                                  nowdb_filter_t  *filter) {
+                                  nowdb_expr_t    filter) {
 	nowdb_err_t err;
 	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
 	        FALSE, OBJECT, "pointer to reader object is NULL");
@@ -1050,7 +1050,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
                                 char            *key,
-                                nowdb_filter_t  *filter) {
+                                nowdb_expr_t    filter) {
 	nowdb_err_t err;
 	beet_err_t  ber;
 
@@ -1109,7 +1109,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
                                   uint32_t         rtype,
                                   ts_algo_list_t  *files,
                                   nowdb_index_t   *index,
-                                  nowdb_filter_t  *filter,
+                                  nowdb_expr_t     filter,
                                   void *start, void *end) {
 	nowdb_err_t err;
 	beet_err_t  ber;
@@ -1209,7 +1209,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t     filter,
                                 void *start, void *end) {
 	return mkRange(reader, NOWDB_READER_FRANGE,
 	                      files, index, filter,
@@ -1223,7 +1223,7 @@ nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t     filter,
                                 void *start, void *end) {
 	return mkRange(reader, NOWDB_READER_KRANGE,
 	                      files, index, filter,
@@ -1237,7 +1237,7 @@ nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t     filter,
                                 void *start, void *end) {
 	return mkRange(reader, NOWDB_READER_CRANGE,
 	                      files, index, filter,
@@ -1294,10 +1294,16 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 				break;
 
 			/* apply filter */
-			if (reader->filter != NULL &&
-			    !nowdb_filter_eval(reader->filter, src+i))
-				continue;
-
+			if (reader->filter != NULL) {
+				nowdb_type_t t;
+				void        *v;
+				err = nowdb_expr_eval(reader->filter,
+				                      reader->eval,
+                                                      NOWDB_BITMAP64_ALL,
+                                                      src+i, &t, &v);
+				if (err != NOWDB_OK) break;
+				if (*(nowdb_value_t*)v == 0) continue;
+			}
 			memcpy(reader->buf+x, src+i, reader->recsize);
 			x+=reader->recsize;
 		}
@@ -1313,7 +1319,8 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
  */
 nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
-                                nowdb_filter_t   *filter) {
+                                nowdb_expr_t      filter,
+                                nowdb_eval_t     *eval) {
 	nowdb_err_t err;
 	uint64_t sz;
 
@@ -1345,6 +1352,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 
 	(*reader)->type = NOWDB_READER_BUF;
 	(*reader)->filter = filter;
+	(*reader)->eval = eval;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
 	(*reader)->files = files;
 
@@ -1372,7 +1380,8 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
                                 nowdb_index_t    *index,
-                                nowdb_filter_t   *filter,
+                                nowdb_expr_t      filter,
+                                nowdb_eval_t     *eval,
                                 nowdb_ord_t        ord,
                                 void *start,void  *end) {
 	nowdb_err_t err;
@@ -1380,7 +1389,7 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 	if (index == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "index is NULL");
 
-	err = nowdb_reader_buffer(reader, files, filter);
+	err = nowdb_reader_buffer(reader, files, filter, eval);
 	if (err != NOWDB_OK) return err;
 
 	(*reader)->type = NOWDB_READER_BUFIDX;
@@ -1427,13 +1436,14 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
                                  ts_algo_list_t   *files,
                                  nowdb_index_t    *index,
-                                 nowdb_filter_t   *filter,
+                                 nowdb_expr_t     filter,
+                                 nowdb_eval_t     *eval,
                                  nowdb_ord_t        ord,
                                  void *start,void  *end) {
 	nowdb_err_t err;
 
 	err = nowdb_reader_bufidx(reader, files, index,
-	                       filter, ord, start, end);
+	                 filter, eval, ord, start, end);
 	if (err != NOWDB_OK) return err;
 
 	(*reader)->type = NOWDB_READER_BKRANGE;

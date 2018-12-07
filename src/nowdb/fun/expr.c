@@ -40,6 +40,12 @@ static char *OBJECT = "EXPR";
 #define FUN(x) \
 	((nowdb_fun_t*)x)
 
+#define CONSTOP(x,i) \
+	CONST(OP(x)->argv[i])
+
+#define FIELDOP(x,i) \
+	FIELD(OP(x)->argv[i])
+
 typedef struct {
 	uint32_t etype;
 } dummy_t;
@@ -1407,6 +1413,70 @@ char nowdb_expr_range(nowdb_expr_t expr,
 	return (popcount32(map) == 2*sz);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: get field and const index from op
+ * ------------------------------------------------------------------------
+ */
+static inline char getFieldAndConst(nowdb_expr_t op, int *f, int *c) {
+	*f=-1; *c=-1;
+	if (OP(op)->args < 2) return 0;
+	for(int i=0;i<2;i++) {
+		if (EXPR(OP(op)->argv[i])->etype == NOWDB_EXPR_FIELD) *f = i;
+		if (EXPR(OP(op)->argv[i])->etype == NOWDB_EXPR_CONST) *c = i;
+	}
+	if (*f == -1 || *c == -1) return 0;
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Extract period from expression
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_period(nowdb_expr_t expr,
+                       nowdb_time_t *start,
+                       nowdb_time_t *end) {
+	int f,c;
+	if (expr == NULL) return;
+
+	if (nowdb_expr_type(expr) != NOWDB_EXPR_OP) return;
+
+	switch(OP(expr)->fun) {
+	case NOWDB_EXPR_OP_AND:
+		nowdb_expr_period(OP(expr)->argv[0], start, end);
+		nowdb_expr_period(OP(expr)->argv[1], start, end);
+		return;
+
+	case NOWDB_EXPR_OP_JUST:
+		nowdb_expr_period(OP(expr)->argv[0], start, end);
+		return;
+
+	case NOWDB_EXPR_OP_EQ:
+		if (!getFieldAndConst(expr, &f, &c)) return;
+		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		memcpy(start, CONSTOP(expr, c)->value, 8);
+		memcpy(end, CONSTOP(expr,c)->value, 8);
+		return; 
+
+	case NOWDB_EXPR_OP_GE:
+	case NOWDB_EXPR_OP_GT:
+		if (!getFieldAndConst(expr, &f, &c)) return;
+		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		memcpy(start, CONSTOP(expr,c)->value, 8);
+		if (OP(expr)->fun == NOWDB_EXPR_OP_GT) (*start)++;
+		return; 
+
+	case NOWDB_EXPR_OP_LE:
+	case NOWDB_EXPR_OP_LT:
+		if (!getFieldAndConst(expr, &f, &c)) return;
+		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		memcpy(end, CONSTOP(expr,c)->value, 8);
+		if (OP(expr)->fun == NOWDB_EXPR_OP_LT) (*end)--;
+		return;
+
+	default: return;
+	}
+}
+
 /* -----------------------------------------------------------------------
  * Show value
  * -----------------------------------------------------------------------
@@ -1544,6 +1614,7 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 static void showAgg(nowdb_agg_t *agg, FILE *stream) {
+	fprintf(stderr, "agg");
 	return;
 }
 

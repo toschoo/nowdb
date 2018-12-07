@@ -10,7 +10,6 @@
 
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
-#include <nowdb/reader/filter.h>
 #include <nowdb/fun/expr.h>
 
 #include <tsalgo/list.h>
@@ -30,7 +29,8 @@ typedef struct {
 	uint32_t          np;   /* number of props                    */
 	char        wantvrtx;   /* want vertex                        */
 	char       forcecomp;   /* force completion on vertex switch  */
-	nowdb_filter_t *filter; /* the relevant filter                */
+	nowdb_expr_t  filter;   /* the relevant filter                */
+	nowdb_eval_t   *eval;   /* evaluation helper                  */
 	ts_algo_tree_t *pspec;  /* all properties for the vertex type */
 	ts_algo_tree_t *vrtx;   /* map of current vertices            */
 	ts_algo_list_t *ready;  /* completed vertices                 */
@@ -40,16 +40,18 @@ typedef struct {
  * Create a vertex row for a given filter
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
-                                  nowdb_vrow_t **vrow,
-                                  nowdb_filter_t *fil);
+nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t  role,
+                                  nowdb_vrow_t  **vrow,
+                                  nowdb_expr_t  filter,
+                                  nowdb_eval_t  *eval);
 
 /* ------------------------------------------------------------------------
  * Create a vertex row for a given expression
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
-                           nowdb_vrow_t **vrow);
+                           nowdb_vrow_t **vrow,
+                           nowdb_eval_t *eval);
 
 /* ------------------------------------------------------------------------
  * Set force completion
@@ -99,8 +101,9 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow);
  * its vid is passed back through *vid and true is returned.
  * ------------------------------------------------------------------------
  */
-nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t  *vrow,
-                             nowdb_key_t    *vid);
+nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
+                            nowdb_key_t  *vid,
+                            nowdb_bool_t *found);
 
 /* ------------------------------------------------------------------------
  * Check for complete vertex

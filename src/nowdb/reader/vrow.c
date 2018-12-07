@@ -268,6 +268,7 @@ static inline nowdb_err_t getProperty(nowdb_vrow_t  *vrow,
  * Copy filter recursively
  * ------------------------------------------------------------------------
  */
+/*
 static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
                              int             *cnt,
                              int             *off,
@@ -367,6 +368,7 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
 	}
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Update expression recursively
@@ -413,8 +415,8 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
  * Copy/Change filter
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
-                              nowdb_filter_t *fil) {
+static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
+                              nowdb_expr_t   fil) {
 	nowdb_err_t err;
 	int off=-1;
 	int cnt=0;
@@ -424,8 +426,10 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
 	nowdb_filter_show(fil, stderr); fprintf(stderr, "\n");
 	*/
 
+	/*
 	err = copyFNode(vrow, &cnt, &off, fil, &vrow->filter);
 	if (err != NOWDB_OK) return err;
+	*/
 
 	vrow->np = (uint32_t)cnt;
 	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
@@ -441,20 +445,32 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
  */
 nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
                                   nowdb_vrow_t **vrow,
-                                  nowdb_filter_t *fil) {
+                                  nowdb_expr_t    fil,
+                                  nowdb_eval_t  *eval) {
 	nowdb_err_t err;
 
 	if (fil  == NULL) INVALID("filter is NULL");
 
-	err = nowdb_vrow_new(role, vrow);
+	err = nowdb_vrow_new(role, vrow, eval);
 	if (err != NOWDB_OK) return err;
 
+	// 1) copy filter
+	err = nowdb_expr_copy(fil, &(*vrow)->filter);
+	if (err != NOWDB_OK) {
+		nowdb_vrow_destroy(*vrow);
+		free(*vrow); *vrow = NULL;
+		return err;
+	}
+
+	// 2) apply changes
+	/*
 	err = copyFilter(*vrow, fil);
 	if (err != NOWDB_OK) {
 		nowdb_vrow_destroy(*vrow);
 		free(*vrow); *vrow = NULL;
 		return err;
 	}
+	*/
 	return NOWDB_OK;
 }
 
@@ -463,7 +479,8 @@ nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
-                           nowdb_vrow_t **vrow) {
+                           nowdb_vrow_t **vrow,
+                           nowdb_eval_t  *eval) {
 	nowdb_err_t err;
 
 	if (vrow == NULL) INVALID("vrow pointer is NULL");
@@ -475,6 +492,7 @@ nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
 	}
 
 	(*vrow)->role = role;
+	(*vrow)->eval = eval;
 
 	(*vrow)->ready = calloc(1, sizeof(ts_algo_list_t));
 	if ((*vrow)->ready == NULL) {
@@ -548,7 +566,7 @@ void nowdb_vrow_destroy(nowdb_vrow_t *vrow) {
 		DESTROYREADY(vrow);
 	}
 	if (vrow->filter != NULL) {
-		nowdb_filter_destroy(vrow->filter);
+		nowdb_expr_destroy(vrow->filter);
 		free(vrow->filter); vrow->filter = NULL;
 	}
 	if (vrow->prev != NULL) {
@@ -732,24 +750,35 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
  * Try to evaluate
  * ------------------------------------------------------------------------
  */
-nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
-                            nowdb_key_t   *vid) {
-	ts_algo_list_node_t *node;
-	char found = 0;
-	vrow_t *v;
+nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
+                            nowdb_key_t   *vid,
+                            nowdb_bool_t *found) {
 
-	if (vrow->ready->len == 0) return 0;
+	nowdb_err_t err;
+	ts_algo_list_node_t *node;
+	vrow_t *v;
+	void *x;
+	nowdb_type_t t;
+
+	*found = 0;
+
+	if (vrow->ready->len == 0) return NOWDB_OK;
 
 	node = vrow->ready->head;
 	v = node->cont;
 	
-	if (nowdb_filter_eval(vrow->filter, v->row)) {
-		found = 1;
+	err = nowdb_expr_eval(vrow->filter,
+	                        vrow->eval,
+	                NOWDB_BITMAP64_ALL,
+	                   v->row, &t, &x);
+	if (err != NOWDB_OK) return err;
+	if (*(nowdb_value_t*)x) {
+		*found = 1;
 		*vid = v->vertex;
 	}
 	ts_algo_list_remove(vrow->ready, node);
 	free(node); destroyVRow(v);
-	return found;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
