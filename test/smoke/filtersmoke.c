@@ -4,7 +4,6 @@
  * Simple tests for filters
  * ========================================================================
  */
-#include <nowdb/reader/filter.h>
 #include <nowdb/fun/expr.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,25 +22,11 @@ int mkConst(nowdb_expr_t *c, void *v, nowdb_type_t t) {
 	return 0;
 }
 
-nowdb_expr_t mkBool2(uint32_t b) {
+nowdb_expr_t mkBool(uint32_t b) {
 	nowdb_err_t   err;
 	nowdb_expr_t    f;
 
 	err = nowdb_expr_newConstant(&f, &b, NOWDB_TYP_BOOL);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot make new bool\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return NULL;
-	}
-	return f;
-}
-
-nowdb_filter_t *mkBool(int op) {
-	nowdb_err_t   err;
-	nowdb_filter_t *f;
-
-	err = nowdb_filter_newBool(&f, op);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot make new bool\n");
 		nowdb_err_print(err);
@@ -108,7 +93,7 @@ int testBool0(int op) {
 	nowdb_expr_t  f;
 	nowdb_type_t  t;
 
-	f = mkBool2(op);
+	f = mkBool(op);
 	if (f == NULL) return 0;
 
 	err = nowdb_expr_eval(f,NULL,1,NULL,&t,(void**)&r);
@@ -245,21 +230,7 @@ int testAnd() {
 	return 1;
 }
 
-nowdb_filter_t *mkCompare(int op, int off, int size, int typ, void *val) {
-	nowdb_err_t   err;
-	nowdb_filter_t *f;
-
-	err = nowdb_filter_newCompare(&f, op, off, size, typ, val, NULL);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot make new compare\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return NULL;
-	}
-	return f;
-}
-
-nowdb_expr_t mkIn2(int type, int size, int sz, ...) {
+nowdb_expr_t mkIn(int type, int size, int sz, ...) {
 	va_list args;
 	nowdb_err_t   err;
 	nowdb_expr_t    c;
@@ -305,54 +276,6 @@ nowdb_expr_t mkIn2(int type, int size, int sz, ...) {
 		return NULL;
 	}
 	return c;
-}
-
-nowdb_filter_t *mkIn(int typ, int off, int size, int sz, ...) {
-	va_list      args;
-	nowdb_err_t   err;
-	nowdb_filter_t *f;
-	ts_algo_list_t vals;
-	void *v, *tmp;
-	char x=0;
-
-	ts_algo_list_init(&vals);
-
-	va_start(args, sz);
-	for(int i=0; i<sz; i++) {
-		tmp = va_arg(args, void*);
-		if (tmp == NULL) continue;
-		v = malloc(size);
-		if (v == NULL) {
-			fprintf(stderr, "out-of-mem\n");
-			return NULL;
-		}
-		memcpy(v, tmp, size);
-		if (ts_algo_list_append(&vals, v) != TS_ALGO_OK) {
-			fprintf(stderr, "out-of-mem\n");
-			x = 1; break;
-		}
-	}
-	va_end(args);
-
-	if (x) {
-		ts_algo_list_node_t *run;
-		for(run=vals.head; run!=NULL; run=run->nxt) {
-			free(run->cont);
-		}
-		ts_algo_list_destroy(&vals);
-		return NULL;
-	}
-	
-	err = nowdb_filter_newCompare(&f, NOWDB_FILTER_IN,
-	                      off, size, typ, NULL, &vals);
-	ts_algo_list_destroy(&vals);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot make new compare\n");
-		nowdb_err_print(err);
-		nowdb_err_release(err);
-		return NULL;
-	}
-	return f;
 }
 
 int testEQUInt() {
@@ -1091,7 +1014,7 @@ int testInUInt() {
 		}
 
 		if (mkConst(&c1, &v, NOWDB_TYP_UINT) != 0) return 0;
-		c2 = mkIn2(NOWDB_TYP_UINT, 8, 4, &w, &x, &y, &z);
+		c2 = mkIn(NOWDB_TYP_UINT, 8, 4, &w, &x, &y, &z);
 		if (c2 == NULL)  return 0;
 
 		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;
@@ -1134,7 +1057,7 @@ int testInInt() {
 		}
 
 		if (mkConst(&c1, &v, NOWDB_TYP_INT) != 0) return 0;
-		c2 = mkIn2(NOWDB_TYP_INT, 8, 4, &w, &x, &y, &z);
+		c2 = mkIn(NOWDB_TYP_INT, 8, 4, &w, &x, &y, &z);
 		if (c2 == NULL)  return 0;
 
 		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;
@@ -1177,7 +1100,7 @@ int testInFloat() {
 		}
 
 		if (mkConst(&c1, &v, NOWDB_TYP_FLOAT) != 0) return 0;
-		c2 = mkIn2(NOWDB_TYP_FLOAT, 8, 4, &w, &x, &y, &z);
+		c2 = mkIn(NOWDB_TYP_FLOAT, 8, 4, &w, &x, &y, &z);
 		if (c2 == NULL)  return 0;
 
 		if (binaryOp(NOWDB_EXPR_OP_IN, c1, c2, &t, &r) != 0) return 0;

@@ -158,13 +158,17 @@ static ts_algo_cmp_t comparekeysz(void *one, void *two) {
  * make idx+keys
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t makeIndexAndKeys(nowdb_index_t  *idx,
+static inline nowdb_err_t makeIndexAndKeys(nowdb_scope_t  *scope,
+                                           nowdb_index_t  *idx,
                                            ts_algo_list_t *nodes,
                                            ts_algo_list_t *res) {
 	nowdb_plan_idx_t *pidx;
+	nowdb_err_t err;
 	ts_algo_list_node_t *runner;
 	nowdb_expr_t      node;
 	int i=0;
+	nowdb_key_t value;
+	void *ptr;
 
 	if (nodes == NULL || nodes->len == 0) {
 		INVALIDAST("no nodes");
@@ -181,9 +185,31 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_index_t  *idx,
 	}
 	for(runner=nodes->head;runner!=NULL;runner=runner->nxt) {
 		node = runner->cont;
+
+		// this is chaos
+		// 1) we need to make sure that we have
+		//    a field and a const; however,
+		//    in the future indices may be able
+		//    to handle on functions!
+		// 2) the text/key confusion strikes again
+		//    a text constant should additionally
+		//    store the key!
+		//    
 		int k=nowdb_expr_type(ARG(node,0)) == NOWDB_EXPR_CONST?0:1;
+		if (CONST(ARG(node,k))->type == NOWDB_TYP_TEXT) {
+			err = nowdb_text_getKey(scope->text,
+			  CONST(ARG(node,k))->value, &value);
+			if (err != NOWDB_OK && err->errcode ==
+			            nowdb_err_key_not_found) 
+			{
+				value = NOWDB_TEXT_UNKNOWN;
+				nowdb_err_release(err); err = NOWDB_OK;
+			} else if (err != NOWDB_OK) return err;
+			ptr = &value;
+
+		} else ptr = CONST(ARG(node,k))->value;
 		int sz = CONST(ARG(node,k))->type==NOWDB_TYP_SHORT?4:8;
-		memcpy(pidx->keys+i, CONST(ARG(node,k))->value, sz);
+		memcpy(pidx->keys+i, ptr, sz);
 		i+=sz;
 	}
 	if (ts_algo_list_append(res, pidx) != TS_ALGO_OK) {
@@ -198,7 +224,8 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_index_t  *idx,
  * Intersect candidates and indices
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t intersect(ts_algo_list_t *cands,
+static inline nowdb_err_t intersect(nowdb_scope_t  *scope,
+                                    ts_algo_list_t *cands,
                                     ts_algo_list_t *idxes,
                                     ts_algo_list_t *res) {
 	nowdb_err_t err = NOWDB_OK;
@@ -221,7 +248,7 @@ static inline nowdb_err_t intersect(ts_algo_list_t *cands,
 		err = cover(cands, idx, keys, &nodes, &x);
 		if (err != NOWDB_OK) break;
 		if (x) {
-			err = makeIndexAndKeys(idx, &nodes, res);
+			err = makeIndexAndKeys(scope, idx, &nodes, res);
 			break;
 		}
 		ts_algo_list_destroy(&nodes);
@@ -359,7 +386,7 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 		return err;
 	}
 
-	err = intersect(&cands, &idxes, res);
+	err = intersect(scope, &cands, &idxes, res);
 
 	ts_algo_list_destroy(&cands);
 	ts_algo_list_destroy(&idxes);
@@ -435,7 +462,9 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	op = nowdb_ast_field(ast);
 	if (op != NULL) {
 
-		// fprintf(stderr, "FIELD: %s\n", (char*)op->value);
+		/*
+		fprintf(stderr, "FIELD: %s\n", (char*)op->value);
+		*/
 
 		err = getExpr(scope, v, trg, op, &w, &x);
 		if (err != NOWDB_OK) {
@@ -461,7 +490,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 
 	} else if (t != NULL) *filter = t; else *filter = w;
 
-	// nowdb_expr_show(*filter, stderr); fprintf(stderr, "\n");
+	nowdb_expr_show(*filter, stderr); fprintf(stderr, "\n");
 
 	return NOWDB_OK;
 }
@@ -546,7 +575,7 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 	if (*typ != NOWDB_TYP_TEXT) {
 		*value = malloc(sizeof(nowdb_key_t));
 		if (value == NULL) {
-			NOMEM("allocatin value");
+			NOMEM("allocating value");
 			return err;
 		}
 	}
@@ -799,6 +828,7 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
 	int op;
 	char x;
 
+	// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 	op = nowdb_op_fromName(field->value, &x);
 	if (op < 0) {
 		INVALIDAST("unknown operator");

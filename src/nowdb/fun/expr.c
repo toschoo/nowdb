@@ -104,14 +104,26 @@ char nowdb_expr_compare(nowdb_expr_t expr) {
 	(nowdb_type_t)(uint64_t)(((ts_algo_tree_t*)t)->rsc)
 
 static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
+	int x;
 	switch(TREETYPE(tree)) {
 	case NOWDB_TYP_TEXT:      // handle text as text
 	case NOWDB_TYP_LONGTEXT:
+		/*
+		fprintf(stderr, "comparing %s and %s\n", (char*)one,
+		                                         (char*)two);
+		*/
+		x = strcmp(one, two);
+		if (x < 0) return ts_algo_cmp_less;
+		if (x > 0) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
 	case NOWDB_TYP_UINT:
+		
 		/*
 		fprintf(stderr, "comparing %lu and %lu\n", *(uint64_t*)one,
 		                                           *(uint64_t*)two);
 		*/
+		
 		if (*(uint64_t*)one <
 		    *(uint64_t*)two) return ts_algo_cmp_less;
 		if (*(uint64_t*)one >
@@ -683,6 +695,48 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	}
 }
 
+#define DESTROYLIST(l) \
+	for(run=l->head;run!=NULL;run=run->nxt) { \
+		free(run->cont); \
+	} \
+	ts_algo_list_destroy(l);
+
+static inline nowdb_err_t copyInList(nowdb_type_t      t,
+                                     ts_algo_list_t *src,
+                                     ts_algo_list_t *trg) {
+	nowdb_err_t err;
+	ts_algo_list_node_t *run;
+	void *value;
+
+	for(run=src->head;run!=NULL;run=run->nxt) {
+		if (t == NOWDB_TYP_TEXT     ||
+		    t == NOWDB_TYP_LONGTEXT) {
+			value = strdup(run->cont);
+		} else if (t == NOWDB_TYP_SHORT) {
+			value = malloc(4);
+			if (value != NULL) {
+				memcpy(value, run->cont, 4);
+			}
+		} else {
+			value = malloc(8);
+			if (value != NULL) {
+				memcpy(value, run->cont, 8);
+			}
+		}
+		if (value == NULL) {
+			NOMEM("copying 'IN' tree");
+			return err;
+		}
+		if (ts_algo_list_append(trg, value) != TS_ALGO_OK) {
+			NOMEM("list.append");
+			free(value);
+			DESTROYLIST(trg);
+			return err;
+		}
+	}
+	return NOWDB_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Helper: copy constant value
  * -----------------------------------------------------------------------
@@ -695,13 +749,19 @@ static nowdb_err_t copyConst(nowdb_const_t *src,
 	} else {
 		nowdb_err_t     err;
 		ts_algo_list_t *tmp;
+		ts_algo_list_t  tmp2;
 		tmp = ts_algo_tree_toList(src->tree);
 		if (tmp == NULL) {
 			NOMEM("tree.toList");
 			return err;
 		}
-		err = nowdb_expr_constFromList(trg, tmp, src->type);
+		ts_algo_list_init(&tmp2);
+		err = copyInList(src->type, tmp, &tmp2);
 		ts_algo_list_destroy(tmp); free(tmp);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_expr_constFromList(trg, &tmp2, src->type);
+		ts_algo_list_destroy(&tmp2);
 		return err;
 	}
 }
@@ -1294,7 +1354,9 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
 	*typ = cst->type;
 	if (cst->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 	if (cst->value != NULL) {
-		if (cst->type != NOWDB_TYP_TEXT) {
+		if (cst->type == NOWDB_TYP_SHORT) {
+			memcpy(cst->value, cst->valbk, 4);
+		} else if (cst->type != NOWDB_TYP_TEXT) {
 			memcpy(cst->value, cst->valbk, 8);
 		}
 		*res = cst->value;
@@ -1662,6 +1724,7 @@ static void showAgg(nowdb_agg_t *agg, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
+	if (expr == NULL) return;
 	switch(EXPR(expr)->etype) {
 	case NOWDB_EXPR_FIELD:
 		return showField(FIELD(expr),stream);
@@ -1786,7 +1849,8 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFSHORT(o) \
-	o(*(uint64_t*)res, *(uint32_t*)argv[0], *(uint32_t*)argv[1])
+	o(*(uint64_t*)res, *(uint32_t*)argv[0], *(uint32_t*)argv[1]); \
+	return NOWDB_OK;
 
 /* -----------------------------------------------------------------------
  * Perform any 2-placed text->boolean operation

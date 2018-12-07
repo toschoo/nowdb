@@ -502,15 +502,6 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	nowdb_expr_t r, rc, v, vc;
 	ts_algo_list_t vids;
 	ts_algo_list_node_t *run;
-	uint64_t *role;
-
-	// we allocate the role, so the filter can own it
-	role = malloc(4); // why 8?
-	if (role == NULL) {
-		NOMEM("allocating role");
-		return err;
-	}
-	*role = cur->v->roleid;
 
 	// copy the list of vids (which is owned by the filter)
 	ts_algo_list_init(&vids);
@@ -518,14 +509,12 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		uint64_t *vid = malloc(8);
 		if (vid == NULL) {
 			NOMEM("allocating vid");
-			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
 		memcpy(vid, run->cont, 8);
 		if (ts_algo_list_append(&vids, vid) != TS_ALGO_OK) {
 			NOMEM("list.append");
-			free(role);
 			DESTROYVIDS(vids);
 			return err;
 		}
@@ -535,15 +524,16 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	err = nowdb_expr_newVertexOffField(&r, NOWDB_OFF_ROLE);
 	if (err != NOWDB_OK) {
 		DESTROYVIDS(vids);
-		free(role); return err;
+		return err;
 	}
 
 	// role constant
-	err = nowdb_expr_newConstant(&rc, role, NOWDB_TYP_SHORT);
+	err = nowdb_expr_newConstant(&rc, &cur->v->roleid,
+	                                 NOWDB_TYP_SHORT);
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(r); free(r);
 		DESTROYVIDS(vids);
-		free(role); return err;
+		return err;
 	}
 
 	// roleid = role
@@ -552,7 +542,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(r); free(r);
 		nowdb_expr_destroy(rc); free(rc);
 		DESTROYVIDS(vids);
-		free(role); return err;
+		return err;
 	}
 
 	// vid field
@@ -560,7 +550,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(o1); free(o1);
 		DESTROYVIDS(vids);
-		free(role); return err;
+		return err;
 	}
 
 	// vertex constant
@@ -569,7 +559,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(v); free(v);
 		DESTROYVIDS(vids);
-		free(role); return err;
+		return err;
 	}
 
 	// vid in vids
@@ -579,7 +569,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(v); free(v);
 		nowdb_expr_destroy(vc); free(vc);
 		ts_algo_list_destroy(&vids);
-		free(role); return err;
+		return err;
 	}
 
 	// and
@@ -588,7 +578,7 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(o2); free(o2);
 		ts_algo_list_destroy(&vids);
-		free(role); return err;
+		return err;
 	}
 
 	// destroy the list but *only* the list
@@ -977,21 +967,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	}
 
-	err = initReader(scope, *cur, start, end, rstp);
-	if (err != NOWDB_OK) {
-		free((*cur)->rdr); (*cur)->rdr = NULL;
-		free((*cur)->eval); (*cur)->eval= NULL;
-		free(*cur); *cur = NULL;
-		return err;
-	}
-	if ((*cur)->filter != NULL) {
-		/*
-		nowdb_expr_show((*cur)->filter, stderr);
-		fprintf(stderr, "\n");
-		*/
-		(*cur)->rdr->filter = (*cur)->filter;
-	}
-
 	(*cur)->eval->model = scope->model;
 	(*cur)->eval->text = scope->text;
 	(*cur)->eval->tlru = NULL;
@@ -1017,6 +992,21 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		nowdb_cursor_destroy(*cur);
 		free(*cur); *cur = NULL;
 		return err;
+	}
+
+	err = initReader(scope, *cur, start, end, rstp);
+	if (err != NOWDB_OK) {
+		free((*cur)->rdr); (*cur)->rdr = NULL;
+		nowdb_cursor_destroy(*cur);
+		free(*cur); *cur = NULL;
+		return err;
+	}
+	if ((*cur)->filter != NULL) {
+		/*
+		nowdb_expr_show((*cur)->filter, stderr);
+		fprintf(stderr, "\n");
+		*/
+		(*cur)->rdr->filter = (*cur)->filter;
 	}
 
 	/* pass on to projection or order by or group by */
@@ -1119,6 +1109,11 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	// we are not yet done.
 	if ((*cur)->target == NOWDB_TARGET_VERTEX) {
 		char ok;
+
+		/*
+		nowdb_expr_show((*cur)->filter, stderr);
+		fprintf(stderr, "\n");
+		*/
 
 		// make mom->prow from field list
 		err = initPRow(*cur);

@@ -773,7 +773,7 @@ expr(E) ::= expr(A) AND|OR(OP) expr(B). {
 
 expr(E) ::= NOT(OP) expr(A). {
 	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 1);
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 1);
 	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
 	NOWDB_SQL_ADDPARAM(E,A);
 }
