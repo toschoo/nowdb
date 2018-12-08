@@ -455,7 +455,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	if (op != NULL) {
 
 		/*
-		fprintf(stderr, "FIELD: %s\n", (char*)op->value);
+		fprintf(stderr, "EXPR: %s\n", (char*)op->value);
 		*/
 
 		err = getExpr(scope, v, 0, trg, op, &w, &x);
@@ -463,10 +463,22 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 			if (t != NULL) {
 				nowdb_expr_destroy(t); free(t);
 			}
-			fprintf(stderr, "NO EXPRESSION\n");
 			return err;
 		}
-		// if x: no aggregates!
+		if (nowdb_expr_guessType(w) != NOWDB_TYP_BOOL) {
+			if (t != NULL) {
+				nowdb_expr_destroy(t); free(t);
+			}
+			nowdb_expr_destroy(w); free(w);
+			INVALIDAST("where is not boolean");
+		}
+		if (x) {
+			if (t != NULL) {
+				nowdb_expr_destroy(t); free(t);
+			}
+			nowdb_expr_destroy(w); free(w);
+			INVALIDAST("aggregates not allowed in where");
+		}
 
 	}
 	if (t != NULL && w != NULL) {
@@ -664,7 +676,7 @@ static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t        *fun,
                            int                  op,
-                           nowdb_expr_t    *expr) {
+                           nowdb_expr_t      *expr) {
 	nowdb_ast_t *param;
 	nowdb_err_t err;
 	nowdb_content_t cont;

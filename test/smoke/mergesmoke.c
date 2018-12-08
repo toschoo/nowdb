@@ -19,6 +19,8 @@
 #define NPRODS   2
 #define NCLIENTS 1
 
+nowdb_eval_t _eval;
+
 int testBuffer(nowdb_scope_t *scope, int h) {
 	int rc = 0;
 	int c = 0;
@@ -65,7 +67,7 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	
 	// create buffer
 	err = nowdb_reader_bufidx(&reader, &files, idx, NULL,
-	                           NOWDB_ORD_ASC, NULL, NULL);
+	                  &_eval, NOWDB_ORD_ASC, NULL, NULL);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create buffer\n");
 		nowdb_store_destroyFiles(&ctx->store, &files);
@@ -186,7 +188,7 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	
 	// create buffer
 	err = nowdb_reader_bkrange(&reader, &files, idx, NULL,
-	                            NOWDB_ORD_ASC, NULL, NULL);
+	                    &_eval, NOWDB_ORD_ASC, NULL, NULL);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create kbuffer\n");
 		nowdb_store_destroyFiles(&ctx->store, &files);
@@ -541,11 +543,11 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	switch(type) {
 	case 'k':
 		err = nowdb_reader_bkrange(&buffer, &pfiles, idx, NULL,
-		                             NOWDB_ORD_ASC, NULL, NULL);
+		                    &_eval, NOWDB_ORD_ASC, NULL, NULL);
 		break;
 	default:
 		err = nowdb_reader_bufidx(&buffer, &pfiles, idx, NULL,
-		                            NOWDB_ORD_ASC, NULL, NULL);
+		                    &_eval, NOWDB_ORD_ASC, NULL, NULL);
 	}
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create buffer\n");
@@ -685,6 +687,26 @@ cleanup:
 	return rc;
 }
 
+void initEval(nowdb_scope_t *scope) {
+	_eval.model = scope->model;
+	_eval.text = scope->text;
+
+	_eval.tlru = NULL;
+
+	ts_algo_list_init(&_eval.em);
+	ts_algo_list_init(&_eval.vm);
+
+	_eval.ce = NULL;
+	_eval.cv = NULL;
+
+	_eval.needtxt = 0;
+}
+
+void destroyEval() {
+	ts_algo_list_destroy(&_eval.em);
+	ts_algo_list_destroy(&_eval.vm);
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_scope_t *scope = NULL;
@@ -714,6 +736,8 @@ int main() {
 		fprintf(stderr, "cannot open db\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+
+	initEval(scope);
 
 	// test bufreader
 	fprintf(stderr, "BUFFER\n");
@@ -757,6 +781,7 @@ int main() {
 	}
 
 cleanup:
+	destroyEval();
 	if (scope != NULL) {
 		closeDB(scope);
 	}

@@ -583,6 +583,9 @@ static inline int addwhere(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_OP: ADDKID(0);
+	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_VALUE: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
 	default: return -1;
 	}
 }

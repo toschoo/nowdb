@@ -1221,9 +1221,6 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
                                             nowdb_type_t  *t,
                                             void         **res) {
 
-	// in case of roleid:
-	// we need to communicate
-	// that *res points to 4 byte, not to 8!!!
 	*t = field->type;
 	*res = src+field->off;
 
@@ -1310,7 +1307,7 @@ static nowdb_err_t evalFun(uint32_t     fun,
  * Evaluate Fun (predeclaration, implementation below)
  * -----------------------------------------------------------------------
  */
-static inline int evalType(nowdb_op_t *op);
+static inline int evalType(nowdb_op_t *op, char guess);
 
 /* -----------------------------------------------------------------------
  * Evaluate operation
@@ -1336,7 +1333,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 
 	// determine type
 	if (op->types != NULL) { 
-		*typ = evalType(op);
+		*typ = evalType(op,0);
 		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
 	}
 	if (*typ == 0) {
@@ -1641,6 +1638,21 @@ void nowdb_expr_period(nowdb_expr_t expr,
 		return;
 
 	default: return;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Guess type before evaluation
+ * -----------------------------------------------------------------------
+ */
+int nowdb_expr_guessType(nowdb_expr_t expr) {
+	switch(EXPR(expr)->etype) {
+	case NOWDB_EXPR_FIELD: return (int)FIELD(expr)->type;
+	case NOWDB_EXPR_CONST: return (int)CONST(expr)->type;
+	case NOWDB_EXPR_OP: return evalType(OP(expr), 1);
+	case NOWDB_EXPR_REF: return nowdb_expr_guessType(REF(expr)->ref);
+	case NOWDB_EXPR_AGG: return (int)FUN(AGG(expr)->agg)->otype;
+	default: return -1;
 	}
 }
 
@@ -2190,6 +2202,7 @@ static nowdb_err_t evalFun(uint32_t      fun,
 			// fprintf(stderr, "comparing any\n");
 			PERFANY(EQ);
 		}
+
 	case NOWDB_EXPR_OP_NE:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			PERFSTR(SNE);
@@ -2217,7 +2230,8 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_NOT: PER1BOOL(NOT);
 	case NOWDB_EXPR_OP_JUST: PER1BOOL(JUST);
 
-	case NOWDB_EXPR_OP_AND: PERFBOOL(AND);
+	case NOWDB_EXPR_OP_AND:
+			PERFBOOL(AND);
 	case NOWDB_EXPR_OP_OR: PERFBOOL(OR);
 
 	/* -----------------------------------------------------------------------
@@ -2440,15 +2454,16 @@ static inline int correctNumTypes(nowdb_op_t *op) {
  * Evaluate Type
  * -----------------------------------------------------------------------
  */
-static inline int evalType(nowdb_op_t *op) {
+static inline int evalType(nowdb_op_t *op, char guess) {
 
-	for (int i=0; i<op->args; i++) {
-		if (op->types[i] == NOWDB_TYP_NOTHING) {
-			// exception IS: then its bool
-			return NOWDB_TYP_NOTHING;
+	if (!guess) {
+		for (int i=0; i<op->args; i++) {
+			if (op->types[i] == NOWDB_TYP_NOTHING) {
+				// exception IS: then its bool
+				return NOWDB_TYP_NOTHING;
+			}
 		}
 	}
-
 	switch(op->fun) {
 
 	case NOWDB_EXPR_OP_FLOAT: return NOWDB_TYP_FLOAT;
@@ -2460,15 +2475,18 @@ static inline int evalType(nowdb_op_t *op) {
 	case NOWDB_EXPR_OP_ADD:
 	case NOWDB_EXPR_OP_SUB: 
 	case NOWDB_EXPR_OP_MUL: 
-	case NOWDB_EXPR_OP_DIV: return correctNumTypes(op);
+	case NOWDB_EXPR_OP_DIV:	if (guess) return NOWDB_TYP_INT;
+				return correctNumTypes(op);
 
-	case NOWDB_EXPR_OP_POW: 
+	case NOWDB_EXPR_OP_POW:
+		if (guess) return NOWDB_TYP_FLOAT; 
 		if (!isNumeric(op->types[0]) ||
 		    !isNumeric(op->types[1])) return -1;
                 enforceType(op,NOWDB_TYP_FLOAT);
 		return NOWDB_TYP_FLOAT;
 
 	case NOWDB_EXPR_OP_REM:
+		if (guess) return NOWDB_TYP_INT; 
 		if (!isNumeric(op->types[0]) ||
 		    !isNumeric(op->types[1])) return -1;
 		if (op->types[0] == NOWDB_TYP_FLOAT ||
@@ -2476,6 +2494,7 @@ static inline int evalType(nowdb_op_t *op) {
 		return correctNumTypes(op);
 
 	case NOWDB_EXPR_OP_ABS:
+		if (guess) return NOWDB_TYP_INT; 
 		if (!isNumeric(op->types[0])) return -1;
 		return op->types[0];
 
@@ -2483,6 +2502,7 @@ static inline int evalType(nowdb_op_t *op) {
 	case NOWDB_EXPR_OP_CEIL:
 	case NOWDB_EXPR_OP_FLOOR:
 	case NOWDB_EXPR_OP_ROUND:
+		if (guess) return NOWDB_TYP_FLOAT; 
 		if (op->types[0] != NOWDB_TYP_FLOAT) {
 			enforceType(op, NOWDB_TYP_FLOAT);
 		}
