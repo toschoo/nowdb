@@ -258,6 +258,17 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 }
 
 /* -----------------------------------------------------------------------
+ * Tell field not to use text
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_usekey(nowdb_expr_t expr) {
+	if (expr == NULL) return;
+	if (EXPR(expr)->etype != NOWDB_EXPR_FIELD) return;
+	if (FIELD(expr)->type != NOWDB_TYP_TEXT) return;
+	FIELD(expr)->type = NOWDB_TYP_UINT;
+}
+
+/* -----------------------------------------------------------------------
  * Helper: Create and init constant value expression
  * -----------------------------------------------------------------------
  */
@@ -1096,15 +1107,20 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 
 /* ------------------------------------------------------------------------
  * save a lot of code
+ * THIS IS STILL TOO SIMPLE:
+ * WE USE TEXT:
+ * if needtxt or !usekey
+ *  
  * ------------------------------------------------------------------------
  */
 #define HANDLETEXT(what) \
-	*t = (char)NOWDB_TYP_TEXT; \
-	if (hlp->needtxt && what != NULL) { \
+	if ((hlp->needtxt || !field->usekey) && what != NULL) { \
+		*t = (char)NOWDB_TYP_TEXT; \
 		err = getText(hlp, *what, &field->text); \
 		if (err != NOWDB_OK) return err; \
 		*res = field->text; \
 	} else { \
+		*t = (char)NOWDB_TYP_UINT; \
 		*res=what; \
 	}
 
@@ -1123,7 +1139,9 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 	switch(field->off) {
 	case NOWDB_OFF_EDGE:
 
-		*t = (char)NOWDB_TYP_TEXT;
+		*t = !hlp->needtxt && field->usekey?
+		     (char)NOWDB_TYP_UINT:
+		     (char)NOWDB_TYP_TEXT;
 		if (hlp->needtxt) {
 			*res = hlp->ce->e->name;
 		} else {
@@ -1527,6 +1545,54 @@ static inline char getFieldAndConst(nowdb_expr_t op, int *f, int *c) {
 	}
 	if (*f == -1 || *c == -1) return 0;
 	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * We have a family triangle
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_family3(nowdb_expr_t op) {
+	int c,f;
+
+	if (op == NULL) return 0;
+	if (EXPR(op)->etype != NOWDB_EXPR_OP) return 0;
+	if (OP(op)->fun != NOWDB_EXPR_OP_EQ &&
+	    OP(op)->fun != NOWDB_EXPR_OP_NE &&
+	    OP(op)->fun != NOWDB_EXPR_OP_IN) return 0;
+	if (getFieldAndConst(op, &f, &c)) return 1;
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Get field and constant from a family triangle
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_getFieldAndConst(nowdb_expr_t op,
+                                 nowdb_expr_t *f,
+                                 nowdb_expr_t *c) {
+	int i,j;
+	if (!getFieldAndConst(op, &i, &j)) {
+		*f = NULL; *c = NULL; return 0;
+	}
+	*f = (nowdb_expr_t)FIELDOP(op, i);
+	*c = (nowdb_expr_t)CONSTOP(op, j);
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Replace an operand in a family triangle
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_replace(nowdb_expr_t op,
+                        nowdb_expr_t x) {
+	int f, c;
+	if (EXPR(op)->etype != NOWDB_EXPR_OP) return;
+	if (!getFieldAndConst(op, &f, &c)) return;
+	if (EXPR(x)->etype == NOWDB_EXPR_FIELD) {
+		OP(op)->argv[f] = x;
+	} else if (EXPR(x)->etype == NOWDB_EXPR_CONST) {
+		OP(op)->argv[c] = x;
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -2115,10 +2181,13 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 */
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
+			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
 		} else if (types[0] == NOWDB_TYP_SHORT) {
+			// fprintf(stderr, "comparing short\n");
 			PERFSHORT(EQ);
 		} else {
+			// fprintf(stderr, "comparing any\n");
 			PERFANY(EQ);
 		}
 	case NOWDB_EXPR_OP_NE:

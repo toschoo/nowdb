@@ -26,12 +26,36 @@ static char *OBJECT = "plan";
 #define NOMEM(s) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, s)
 
+/* ------------------------------------------------------------------------
+ * Macro to wrap the frequent error "panic"
+ * ------------------------------------------------------------------------
+ */
+#define PANIC(s) \
+	return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT, s)
+
+/* ------------------------------------------------------------------------
+ * Some helper macros
+ * ------------------------------------------------------------------------
+ */
+#define OP(x) \
+	NOWDB_EXPR_TOOP(x)
+
+#define FIELD(x) \
+	NOWDB_EXPR_TOFIELD(x)
+
+#define CONST(x) \
+	NOWDB_EXPR_TOCONST(x)
+
+#define ARG(x,i) \
+	OP(x)->argv[i]
+
 /* -----------------------------------------------------------------------
  * Predeclaration for recursive call
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
                            nowdb_expr_t      *expr,
@@ -48,6 +72,7 @@ static nowdb_err_t idxFromFilter(nowdb_expr_t   filter,
 	if (filter == NULL) return NOWDB_OK;
 
 	if (nowdb_expr_type(filter) == NOWDB_EXPR_OP) {
+		/*
 		if (NOWDB_EXPR_TOOP(filter)->fun == NOWDB_EXPR_OP_EQ) {
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
@@ -56,8 +81,10 @@ static nowdb_err_t idxFromFilter(nowdb_expr_t   filter,
 			}
 			return NOWDB_OK;
 		}
-		switch(NOWDB_EXPR_TOOP(filter)->fun) {
+		*/
+		switch(OP(filter)->fun) {
 		case NOWDB_EXPR_OP_EQ:
+			if (!nowdb_expr_family3(filter)) return NOWDB_OK;
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
 				return nowdb_err_get(nowdb_err_no_mem,
@@ -91,18 +118,6 @@ static nowdb_err_t idxFromFilter(nowdb_expr_t   filter,
  * Check whether candidates cover keys
  * ------------------------------------------------------------------------
  */
-#define OP(x) \
-	NOWDB_EXPR_TOOP(x)
-
-#define FIELD(x) \
-	NOWDB_EXPR_TOFIELD(x)
-
-#define CONST(x) \
-	NOWDB_EXPR_TOCONST(x)
-
-#define ARG(x,i) \
-	OP(x)->argv[i]
-
 static inline nowdb_err_t cover(ts_algo_list_t     *cands,
                                 nowdb_index_t      *idx,
                                 nowdb_index_keys_t *keys,
@@ -167,8 +182,6 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_scope_t  *scope,
 	ts_algo_list_node_t *runner;
 	nowdb_expr_t      node;
 	int i=0;
-	nowdb_key_t value;
-	void *ptr;
 
 	if (nodes == NULL || nodes->len == 0) {
 		INVALIDAST("no nodes");
@@ -180,36 +193,15 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_scope_t  *scope,
 	pidx->keys = malloc(nodes->len*8);
 	if (pidx->keys == NULL) {
 		free(pidx);
-		return nowdb_err_get(nowdb_err_no_mem,
-	            FALSE, OBJECT, "allocating keys");
+		NOMEM("allocating keys");
+		return err;
 	}
 	for(runner=nodes->head;runner!=NULL;runner=runner->nxt) {
 		node = runner->cont;
-
-		// this is chaos
-		// 1) we need to make sure that we have
-		//    a field and a const; however,
-		//    in the future indices may be able
-		//    to handle on functions!
-		// 2) the text/key confusion strikes again
-		//    a text constant should additionally
-		//    store the key!
-		//    
-		int k=nowdb_expr_type(ARG(node,0)) == NOWDB_EXPR_CONST?0:1;
-		if (CONST(ARG(node,k))->type == NOWDB_TYP_TEXT) {
-			err = nowdb_text_getKey(scope->text,
-			  CONST(ARG(node,k))->value, &value);
-			if (err != NOWDB_OK && err->errcode ==
-			            nowdb_err_key_not_found) 
-			{
-				value = NOWDB_TEXT_UNKNOWN;
-				nowdb_err_release(err); err = NOWDB_OK;
-			} else if (err != NOWDB_OK) return err;
-			ptr = &value;
-
-		} else ptr = CONST(ARG(node,k))->value;
-		int sz = CONST(ARG(node,k))->type==NOWDB_TYP_SHORT?4:8;
-		memcpy(pidx->keys+i, ptr, sz);
+		nowdb_expr_t f, c;
+		if (!nowdb_expr_getFieldAndConst(node, &f, &c)) continue;
+		int sz = CONST(c)->type==NOWDB_TYP_SHORT?4:8;
+		memcpy(pidx->keys+i, CONST(c)->value, sz);
 		i+=sz;
 	}
 	if (ts_algo_list_append(res, pidx) != TS_ALGO_OK) {
@@ -466,7 +458,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 		fprintf(stderr, "FIELD: %s\n", (char*)op->value);
 		*/
 
-		err = getExpr(scope, v, trg, op, &w, &x);
+		err = getExpr(scope, v, 0, trg, op, &w, &x);
 		if (err != NOWDB_OK) {
 			if (t != NULL) {
 				nowdb_expr_destroy(t); free(t);
@@ -666,12 +658,13 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
  * shall be recursive (for future use with expressions)
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t makeAgg(nowdb_scope_t *scope,
+static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
-                           nowdb_ast_t   *trg,
-                           nowdb_ast_t   *fun,
-                           int            op,
-                           nowdb_expr_t  *expr) {
+                           char            needtxt,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t        *fun,
+                           int                  op,
+                           nowdb_expr_t    *expr) {
 	nowdb_ast_t *param;
 	nowdb_err_t err;
 	nowdb_content_t cont;
@@ -683,7 +676,7 @@ static nowdb_err_t makeAgg(nowdb_scope_t *scope,
 	                                       NOWDB_CONT_VERTEX;
 	param = nowdb_ast_param(fun);
 	if (param != NULL) {
-		err = getExpr(scope, v, trg, param, &myx, &dummy);
+		err = getExpr(scope, v, needtxt, trg, param, &myx, &dummy);
 		if (err != NOWDB_OK) return err;
 	}
 	err = nowdb_fun_new(&f, op, cont, myx, NULL);
@@ -742,6 +735,144 @@ static nowdb_err_t getInList(nowdb_ast_t    *ast,
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: get key from text
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getKey(nowdb_scope_t *scope,
+                                 char          *txt,
+                                 nowdb_key_t   *key) {
+	nowdb_err_t err;
+
+	err = nowdb_text_getKey(scope->text, txt, key);
+	if (err != NOWDB_OK) {
+		if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+			*key = NOWDB_TEXT_UNKNOWN;
+			nowdb_err_release(err); 
+			return NOWDB_OK;
+		}
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: rebuild tree as uint
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t rebuildTree(nowdb_scope_t *scope,
+                                      nowdb_const_t *src,
+                                      nowdb_expr_t  *trg) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_t *tmp=NULL;
+	ts_algo_list_node_t *run;
+	ts_algo_tree_t     *tree;
+
+	*trg = NULL;
+
+	err = nowdb_expr_newTree(&tree, NOWDB_TYP_UINT);
+	if (err != NOWDB_OK) return err;
+
+	if (src->tree->count == 0) {
+		err = nowdb_expr_constFromTree(trg, tree, NOWDB_TYP_UINT);
+		if (err != NOWDB_OK) {
+			ts_algo_tree_destroy(tree); free(tree);
+			return err;
+		}
+		return NOWDB_OK;
+	}
+	tmp = ts_algo_tree_toList(src->tree);
+	if (tmp == NULL) {
+		NOMEM("tree.toList");
+		goto cleanup;
+	}
+	for(run=tmp->head; run!=NULL; run=run->nxt) {
+		nowdb_key_t *k;
+
+		k = malloc(sizeof(nowdb_key_t));
+		if (k == NULL) {
+			NOMEM("allocating key");
+			break;
+			
+		}
+		err = getKey(scope, run->cont, k);
+		if (err != NOWDB_OK) {
+			free(k); break;
+		}
+		if (ts_algo_tree_insert(tree, k) != TS_ALGO_OK) {
+			NOMEM("tree.insert");
+			free(k); break;
+		}
+	}
+	if (err == NOWDB_OK) {
+		err = nowdb_expr_constFromTree(trg, tree, NOWDB_TYP_UINT);
+	}
+	
+cleanup:
+	if (tmp != NULL) {
+		ts_algo_list_destroy(tmp); free(tmp);
+	}
+	if (err != NOWDB_OK && tree != NULL) {
+		ts_algo_tree_destroy(tree); free(tree);
+		return err;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: rebuild constant as uint
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t rebuildConst(nowdb_scope_t *scope,
+                                       nowdb_const_t *src,
+                                       nowdb_expr_t  *trg) {
+	nowdb_key_t key;
+	nowdb_err_t err;
+
+	if (src->tree != NULL) {
+		err = rebuildTree(scope, src, trg);
+		if (err != NOWDB_OK) return err;
+	} else {
+		err = getKey(scope, src->value, &key);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_expr_newConstant(trg, &key, NOWDB_TYP_UINT);
+		if (err != NOWDB_OK) return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: optimise familiy triangle
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t textoptimise(nowdb_scope_t *scope,
+                                       nowdb_expr_t  *o) {
+	nowdb_err_t err;
+	nowdb_expr_t f, c, c2;
+
+	if (!nowdb_expr_family3(*o)) return NOWDB_OK;
+	if (!nowdb_expr_getFieldAndConst(*o, &f, &c)) {
+		PANIC("cannot get field and const from family triangle");
+	}
+	if (FIELD(f)->type != NOWDB_TYP_NOTHING &&
+	    FIELD(f)->type != NOWDB_TYP_TEXT) return NOWDB_OK;
+	if (CONST(c)->type != NOWDB_TYP_TEXT) return NOWDB_OK;
+
+	// set f usekey 
+	nowdb_expr_usekey(f);
+
+	// correct c with uint
+	err = rebuildConst(scope, CONST(c), &c2);
+	if (err != NOWDB_OK) return err;
+
+	// replace constant
+	nowdb_expr_replace(*o, c2);
+	nowdb_expr_destroy(c); free(c);
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Helper for makeOp
  * -----------------------------------------------------------------------
  */
@@ -760,13 +891,14 @@ static nowdb_err_t getInList(nowdb_ast_t    *ast,
  * Recursively get operator
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t makeOp(nowdb_scope_t *scope,
+static nowdb_err_t makeOp(nowdb_scope_t    *scope,
                           nowdb_model_vertex_t *v,
-                          nowdb_ast_t   *trg,
-                          nowdb_ast_t   *field,
-                          int            op,
-                          nowdb_expr_t  *expr,
-                          char          *agg) {
+                          char            needtxt,
+                          nowdb_ast_t        *trg,
+                          nowdb_ast_t      *field,
+                          int                  op,
+                          nowdb_expr_t      *expr,
+                          char               *agg) {
 	ts_algo_list_t ops;
 	nowdb_expr_t exp;
 	nowdb_err_t err;
@@ -782,7 +914,7 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 		                                 (char*)o->value);
 		*/
 		
-		err = getExpr(scope, v, trg, o, &exp, agg);
+		err = getExpr(scope, v, needtxt, trg, o, &exp, agg);
 		if (err != NOWDB_OK) {
 			// destroy list and values, etc.
 			DESTROYLIST(ops);
@@ -811,6 +943,19 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
 		return err;
 	}
 	ts_algo_list_destroy(&ops);
+
+	// this is a bit frustating,
+	// we rework this expression
+	// because we can evaluate it more efficiently
+	// by replacing text with keys
+	if (!needtxt) {
+		err = textoptimise(scope, expr);
+		if (err != NOWDB_OK) {
+			nowdb_expr_destroy(*expr);
+			free(*expr);
+			return err;
+		}
+	}
 	return NOWDB_OK;
 }
 #undef DESTROYLIST
@@ -819,12 +964,13 @@ static nowdb_err_t makeOp(nowdb_scope_t *scope,
  * Make function
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t makeFun(nowdb_scope_t *scope,
+static nowdb_err_t makeFun(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
-                           nowdb_ast_t   *trg,
-                           nowdb_ast_t   *field,
-                           nowdb_expr_t  *expr,
-                           char          *agg) {
+                           char            needtxt,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t      *field,
+                           nowdb_expr_t      *expr,
+                           char               *agg) {
 	int op;
 	char x;
 
@@ -835,9 +981,9 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
 	}
 	if (x) {
 		*agg=1;
-		return makeAgg(scope, v, trg, field, op, expr);
+		return makeAgg(scope, v, needtxt, trg, field, op, expr);
 	}
-	return makeOp(scope, v, trg, field, op, expr, agg);
+	return makeOp(scope, v, needtxt, trg, field, op, expr, agg);
 }
 
 /* -----------------------------------------------------------------------
@@ -846,6 +992,7 @@ static nowdb_err_t makeFun(nowdb_scope_t *scope,
  */
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
                            nowdb_expr_t      *expr,
@@ -861,7 +1008,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 
 		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
-		err = makeFun(scope, v, trg, field, expr, agg);
+		err = makeFun(scope, v, needtxt, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
 
 
@@ -893,6 +1040,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 			// get roleid and propid 
 			err = getVertexField(scope, expr, v, field);
 			if (err != NOWDB_OK) return err;
+
 		} else {
 			/*
 			fprintf(stderr, "STYPE: %d\n",
@@ -934,14 +1082,15 @@ static inline nowdb_err_t filterAgg(nowdb_expr_t expr,
 
 /* -----------------------------------------------------------------------
  * Get fields for projection, grouping and ordering 
+ * The name is misleading, it should be more like 'getExprs'
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
-                                    nowdb_ast_t     *trg,
-                                    nowdb_ast_t     *ast,
+static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
+                                    nowdb_ast_t        *trg,
+                                    nowdb_ast_t        *ast,
+                                    char            needtxt,
                                     ts_algo_list_t **fields, 
                                     ts_algo_list_t **aggs) {
-	// nowdb_bitmap8_t flags;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_expr_t exp;
@@ -969,7 +1118,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 		// fprintf(stderr, "%s\n", (char*)field->value);
 
 		agg = 0;
-		err = getExpr(scope, v, trg, field, &exp, &agg);
+		err = getExpr(scope, v, needtxt, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
 		if (agg) {
@@ -1150,7 +1299,8 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	/* get group by */
 	group = nowdb_ast_group(ast);
 	if (group != NULL) {
-		err = getFields(scope, trg, group, &grp, NULL);
+		// do we need text in group by?
+		err = getFields(scope, trg, group, 1, &grp, NULL);
 		if (err != NOWDB_OK) {
 			if (filter != NULL) {
 				nowdb_expr_destroy(filter); free(filter);
@@ -1174,7 +1324,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	/* get order by */
 	order = nowdb_ast_order(ast);
 	if (order != NULL && idxes.len == 0) {
-		err = getFields(scope, trg, order, &ord, NULL);
+		err = getFields(scope, trg, order, 1, &ord, NULL);
 		if (err != NOWDB_OK) {
 			if (filter != NULL) {
 				nowdb_expr_destroy(filter); free(filter);
@@ -1395,7 +1545,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	if (sel == NULL) return NOWDB_OK;
 	if (sel->stype == NOWDB_AST_STAR) return NOWDB_OK;
 
-	err = getFields(scope, trg, sel, &pj, &agg);
+	err = getFields(scope, trg, sel, 1, &pj, &agg);
 	if (err != NOWDB_OK) {
 		if (agg != NULL) {
 			destroyFunList(agg); free(agg);

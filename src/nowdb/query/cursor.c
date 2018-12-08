@@ -973,7 +973,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	(*cur)->eval->ce = NULL;
 	(*cur)->eval->cv = NULL;
 
-	(*cur)->eval->needtxt = 1; // check!
+	(*cur)->eval->needtxt = 0; // check!
 
 	ts_algo_list_init(&(*cur)->eval->em);
 	ts_algo_list_init(&(*cur)->eval->vm);

@@ -70,6 +70,7 @@ typedef struct {
 	nowdb_roleid_t   role; /* vertex type if vertex   */
 	nowdb_key_t    propid; /* propid if vertex        */
 	char               pk; /* primary key if vertex   */
+	char           usekey; /* use key instead of text */
 } nowdb_field_t;
 
 /* ------------------------------------------------------------------------
@@ -78,6 +79,12 @@ typedef struct {
  */
 #define NOWDB_EXPR_TOFIELD(x) \
 	((nowdb_field_t*)x)
+
+/* -----------------------------------------------------------------------
+ * Tell field not to use text
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_usekey(nowdb_expr_t expr);
 
 /* ------------------------------------------------------------------------
  * Constant Expression
@@ -90,11 +97,11 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t       etype; /* expression type  */
-	void          *value; /* the value        */
-	void          *valbk; /* backup           */
-	ts_algo_tree_t *tree; /* tree for 'in'    */
-	nowdb_type_t    type; /* and its type     */
+	uint32_t       etype; /* expression type         */
+	void          *value; /* the value               */
+	void          *valbk; /* backup                  */
+	ts_algo_tree_t *tree; /* tree for 'in'           */
+	nowdb_type_t    type; /* and its type            */
 } nowdb_const_t;
 
 /* ------------------------------------------------------------------------
@@ -305,6 +312,39 @@ int nowdb_op_fromName(char *op, char *agg);
  * -----------------------------------------------------------------------
  */
 void nowdb_expr_destroy(nowdb_expr_t expr);
+
+/* ------------------------------------------------------------------------
+ * We have a family triangle:
+ *
+ *                O
+ *               / \
+ *              F   C
+ *
+ * where O is either EQ, NE or IN
+ * F is either Field or Const
+ * and C is Const if F is Field or Field if F is Const
+ * in this case, we can use reduced code, i.e.
+ * we can use keys instead of elaborate text.
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_family3(nowdb_expr_t op);
+
+/* ------------------------------------------------------------------------
+ * Get field and constant from a family triangle 
+ * where, on success, f will point to the field
+ * and c to the constant.
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_getFieldAndConst(nowdb_expr_t op,
+                                 nowdb_expr_t *f,
+                                 nowdb_expr_t *c);
+
+/* ------------------------------------------------------------------------
+ * Replace an operand in a family triangle
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_replace(nowdb_expr_t op,
+                        nowdb_expr_t x);
 
 /* -----------------------------------------------------------------------
  * Copy expression
