@@ -195,12 +195,10 @@ class Result:
        raise WrongType("result is not a cursor")
 
     if _rOpen(self._r) != 0:
-       print "cannot open: %d: %s" % (self.code(), self.details())
-       raise StopIteration
+       pass
 
     if _rFetch(self._r) != 0:
-       print "cannot fetch: %d: %s" % (self.code(), self.details())
-       raise StopIteration
+       pass
 
     self._rw = self.row()
     self._needNext = False
