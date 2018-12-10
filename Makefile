@@ -49,7 +49,7 @@ DOC=doc
 MAN=doc/manual
 LIBPY = python2.7
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
-clibs = -lm -lpthread -ltsalgo
+clibs = -lm -lpthread -ltsalgo -lbeet
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -269,7 +269,7 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/types/error.o \
                         	 $(SRC)/types/time.o \
                         	 $(SRC)/query/rowutl.o \
-			         $(SRL)/nowdbclient.o $(libs)
+			         $(SRL)/nowdbclient.o $(clibs)
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
