@@ -1327,7 +1327,9 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 			                      hlp, rmap, row,
 			                      op->types+i,
 			                      op->results+i);
-			if (err != NOWDB_OK) return err; 
+			if (err != NOWDB_OK) return err;
+			// if AND / OR:
+			// short circuit! 
 		}
 	}
 

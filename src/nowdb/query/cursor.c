@@ -1331,10 +1331,10 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	cur->eof = 1;
 
 	if (cur->group == NULL && cur->nogrp == NULL) return old;
-
 	if (cur->nogrp != NULL) {
 		err = nowdb_group_reduce(cur->nogrp, ctype);
 	} else if (cur->group != NULL) {
+		if (*osz == 0) return old; // is this correct???
 		cur->off = 0;
 		err = nowdb_group_map(cur->group, ctype,
 			              fullmap,cur->tmp2);
