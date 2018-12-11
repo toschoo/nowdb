@@ -706,7 +706,8 @@ order_clause(O) ::= ORDER BY field_list(F). {
 %left AND.
 %right NOT.
 /* %left IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
-%left EQ NE GT LE LT GE.
+%left EQ NE.
+%left GT LE LT GE.
 %left IN.
 /* %right ESCAPE. */
 /* %left BITAND BITOR LSHIFT RSHIFT. */
@@ -763,7 +764,15 @@ expr(P) ::= expr(O1) POW(OP) expr(O2). {
 	NOWDB_SQL_ADDPARAM(P,O2);
 }
 
-expr(E) ::= expr(A) AND|OR(OP) expr(B). {
+expr(E) ::= expr(A) AND(OP) expr(B). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+	NOWDB_SQL_ADDPARAM(E,B);
+}
+
+expr(E) ::= expr(A) OR(OP) expr(B). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
 	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
@@ -778,7 +787,14 @@ expr(E) ::= NOT(OP) expr(A). {
 	NOWDB_SQL_ADDPARAM(E,A);
 }
 
-expr(E) ::= expr(A) EQ|NE|GT|LT|LE|GE(OP) expr(B). {
+expr(E) ::= expr(A) EQ|NE(OP) expr(B). {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+	NOWDB_SQL_ADDPARAM(E,B);
+}
+
+expr(E) ::= expr(A) GT|LT|LE|GE(OP) expr(B). {
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 2);
 	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
 	NOWDB_SQL_ADDPARAM(E,A);
