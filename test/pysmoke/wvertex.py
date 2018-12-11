@@ -190,3 +190,5 @@ if __name__ == "__main__":
             roundfloats(c)
             weekdays(c)
 
+        print "PASSED" 
+
