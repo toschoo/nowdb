@@ -466,6 +466,11 @@ int main(int argc, char **argv) {
 	if (x < 0) return EXIT_FAILURE;
 	if (global_query == NULL) ifile = stdin;
 
+	if (!nowdb_client_init()) {
+		fprintf(stderr, "cannot init library\n");
+		return EXIT_FAILURE;
+	}
+
 	err = nowdb_connect(&con, global_node, global_serv, NULL, NULL, flags);
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
@@ -493,7 +498,9 @@ cleanup:
 	if (err != 0) {
 		fprintf(stderr, "cannot get connection: %d\n", err);
 		nowdb_connection_destroy(con);
+		nowdb_client_close();
 		return EXIT_FAILURE;
 	}
+	nowdb_client_close();
 	return rc;
 }

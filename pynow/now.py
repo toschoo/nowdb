@@ -60,6 +60,14 @@ _explainError = now.nowdb_err_explain
 _explainError.restype = c_char_p
 _explainError.argtypes = [c_long]
 
+_clientinit = now.nowdb_client_init
+_clientinit.restype = c_char
+_clientinit.argtypes = []
+
+if _clientinit() == 0:
+   print "cannot init library"
+   exit(1)
+
 _connect = now.nowdb_connect
 _connect.restype = c_long
 _connect.argtypes = [c_void_p, c_char_p, c_char_p, c_char_p, c_char_p, c_long]

@@ -128,6 +128,13 @@ nowdb_time_t nowdb_time_fromUnix(const struct timespec *tp);
 int nowdb_time_toUnix(nowdb_time_t t, struct timespec *tp); 
 
 /* ------------------------------------------------------------------------
+ * Init and close library
+ * ------------------------------------------------------------------------
+ */
+char nowdb_client_init();
+char nowdb_client_close();
+
+/* ------------------------------------------------------------------------
  * Flags
  * ------------------------------------------------------------------------
  */
