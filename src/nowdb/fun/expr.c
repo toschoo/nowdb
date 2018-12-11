@@ -1309,6 +1309,9 @@ static nowdb_err_t evalFun(uint32_t     fun,
  */
 static inline int evalType(nowdb_op_t *op, char guess);
 
+#define SETRESULT(t,x) \
+	*typ = t; op->res = x; *res = &op->res;
+
 /* -----------------------------------------------------------------------
  * Evaluate operation
  * -----------------------------------------------------------------------
@@ -1321,15 +1324,30 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
                           void        **res) {
 	nowdb_err_t err;
 
+	// evaluate operands
 	if (op->argv != NULL) {
 		for(int i=0; i<op->args; i++) {
+
+			// the "main" thing
 			err = nowdb_expr_eval(op->argv[i],
 			                      hlp, rmap, row,
 			                      op->types+i,
 			                      op->results+i);
 			if (err != NOWDB_OK) return err;
-			// if AND / OR:
-			// short circuit! 
+
+			// "short" circuit is longer than the main thing :-(
+			if (i == 0) {
+				if (op->fun == NOWDB_EXPR_OP_AND &&
+			            *(nowdb_value_t*)op->results[0] == 0) {
+					SETRESULT(NOWDB_TYP_BOOL, 0);
+					return NOWDB_OK;
+				}
+				if (op->fun == NOWDB_EXPR_OP_OR &&
+				    *((nowdb_value_t*)op->results[0]) != 0) {
+					SETRESULT(NOWDB_TYP_BOOL, 1);
+					return NOWDB_OK;
+				}
+			}
 		}
 	}
 
@@ -1342,8 +1360,11 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 		// treat as null here
 		
 	}
+
+	// evaluate function
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
 	if (err != NOWDB_OK) return err;
+
 	*res=&op->res;
 	return NOWDB_OK;
 }
