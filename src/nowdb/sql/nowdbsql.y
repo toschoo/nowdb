@@ -9,14 +9,13 @@
  * which is used to execute sql statements and to create a cursor.
  * urgent TODO:
  * ------------
- * - expression in select and where
+ * - expression in where
  * - qualified names
  * - aliases
  * - joins
  * - NULL
- * - TRUE and FALSE
  * - alter
- * - insert and update
+ * - update and delete
  * - make load more versatile (csv, json, binary, avron)
  * - multi-line comments
  * ========================================================================
@@ -67,6 +66,12 @@
 %type context_options {nowdb_ast_t*}
 %destructor context_options {nowdb_ast_destroyAndFree($$);}
 
+%type load_options {nowdb_ast_t*}
+%destructor load_options {nowdb_ast_destroyAndFree($$);}
+
+%type load_option {nowdb_ast_t*}
+%destructor load_option {nowdb_ast_destroyAndFree($$);}
+
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
 
@@ -75,6 +80,9 @@
 
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
+
+%type wexpr {nowdb_ast_t*}
+%destructor wexpr {nowdb_ast_destroyAndFree($$);}
 
 %type sizing {nowdb_ast_t*}
 %destructor sizing {nowdb_ast_destroyAndFree($$);}
@@ -112,11 +120,8 @@
 %type field_list {nowdb_ast_t*}
 %destructor field_list {nowdb_ast_destroyAndFree($$);}
 
-%type pj_list {nowdb_ast_t*}
-%destructor pj_list {nowdb_ast_destroyAndFree($$);}
-
-%type pj {nowdb_ast_t*}
-%destructor pj {nowdb_ast_destroyAndFree($$);}
+%type expr_list {nowdb_ast_t*}
+%destructor expr_list {nowdb_ast_destroyAndFree($$);}
 
 %type val_list {nowdb_ast_t*}
 %destructor val_list {nowdb_ast_destroyAndFree($$);}
@@ -212,10 +217,16 @@ ddl ::= drop_clause(C) IF EXISTS. {
 dll ::= LOAD STRING(S) INTO dml_target(T). {
 	NOWDB_SQL_MAKE_LOAD(S,T,NULL,NULL)
 }
+dll ::= LOAD STRING(S) INTO dml_target(T) SET load_options(O). {
+	NOWDB_SQL_MAKE_LOAD(S,T,O,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
 }
-
+dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) SET load_options(O). {
+	NOWDB_SQL_ADDKID(H,O)
+	NOWDB_SQL_MAKE_LOAD(S,T,H,NULL)
+}
 dll ::= LOAD STRING(S) INTO dml_target(T) header_clause(H) AS IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_LOAD(S,T,H,I)
 }
@@ -619,6 +630,24 @@ header_clause(O) ::= USE HEADER. {
 }
 
 /* ------------------------------------------------------------------------
+ * Error Clause
+ * ------------------------------------------------------------------------
+ */
+load_options(L) ::= load_option(O). {
+	L=O;
+}
+load_options(L) ::= load_option(O) COMMA load_options(L2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,L2);
+	L=O;
+}
+load_option(O) ::= ERRORS EQ STRING(S). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ERRORS);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, S);
+}
+
+/* ------------------------------------------------------------------------
  * DML target
  * ------------------------------------------------------------------------
  */
@@ -634,10 +663,10 @@ dml_target(T) ::= VERTEX. {
  * ------------------------------------------------------------------------
  */
 projection_clause(P) ::= SELECT STAR. {
-	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_ALL);
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_STAR);
 }
 
-projection_clause(P) ::= SELECT pj_list(F). {
+projection_clause(P) ::= SELECT expr_list(F). {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
 	NOWDB_SQL_ADDKID(P,F);
 }
@@ -670,31 +699,70 @@ order_clause(O) ::= ORDER BY field_list(F). {
 }
 
 /* ------------------------------------------------------------------------
- * projectable
+ * expression
  * ------------------------------------------------------------------------
  */
-pj_list(L) ::= pj(F). {
+%left OR.
+%left AND.
+%right NOT.
+/* %left IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
+%left GT LE LT GE.
+/* %right ESCAPE. */
+/* %left BITAND BITOR LSHIFT RSHIFT. */
+%left PLUS MINUS.
+%left STAR DIV PER.
+%left POW.
+/* %left CONCAT. */
+/* %left COLLATE. */
+/* %right BITNOT. */
+
+expr_list(L) ::= expr(F). {
 	NOWDB_SQL_CHECKSTATE();
 	L = F;
 }
  
-pj_list(L) ::= pj(F) COMMA pj_list(PL). {
+expr_list(L) ::= expr(F) COMMA expr_list(PL). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADDKID(F,PL);
 	L = F;
 }
 
-pj(P) ::= field(F). {
+expr(P) ::= value(V). {
+        P=V;
+}
+
+expr(P) ::= field(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
 }
 
-pj(P) ::= value(V). {
-        P=V;
+expr(P) ::= LPAR expr(E) RPAR. {
+	P=E;
 }
 
-pj(P) ::= fun(F). {
+expr(P) ::= expr(O1) PLUS|MINUS(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= expr(O1) STAR|DIV|PER(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= expr(O1) POW(OP) expr(O2). {
+	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(P,O1);
+	NOWDB_SQL_ADDPARAM(P,O2);
+}
+
+expr(P) ::= fun(F). {
 	P=F;
 }
 
@@ -704,13 +772,10 @@ fun(F) ::= IDENTIFIER(I) LPAR STAR RPAR. {
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
-fun(F) ::= IDENTIFIER(I) LPAR field(L) RPAR. {
+fun(F) ::= IDENTIFIER(I) LPAR expr_list(L) RPAR. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FUN, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-	nowdb_ast_t *a;
-	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_FIELD, NOWDB_AST_PARAM);
-	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, L);
-	NOWDB_SQL_ADDKID(F,a);
+	NOWDB_SQL_ADDPARAM(F,L);
 }
 
 fun(F) ::= IDENTIFIER(I) LPAR RPAR. {
@@ -760,43 +825,39 @@ table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * where clause and expr
+ * where clause and wexpr
  * ------------------------------------------------------------------------
  */
-%left OR.
-%left AND.
-%right NOT.
-
-where_clause(W) ::= WHERE expr(E). {
+where_clause(W) ::= WHERE wexpr(E). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&W, NOWDB_AST_WHERE, 0);
 	NOWDB_SQL_ADDKID(W, E);
 }
 
-expr(E) ::= condition(C). {
+wexpr(E) ::= condition(C). {
 	E=C;
 }
 
-expr(E) ::= expr(A) AND expr(B). {
+wexpr(E) ::= wexpr(A) AND wexpr(B). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_AND, 0);
 	NOWDB_SQL_ADDKID(E,A);
 	NOWDB_SQL_ADDKID(E,B);
 }
 
-expr(E) ::= expr(A) OR expr(B). {
+wexpr(E) ::= wexpr(A) OR wexpr(B). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OR, 0);
 	NOWDB_SQL_ADDKID(E,A);
 	NOWDB_SQL_ADDKID(E,B);
 }
 
-expr(E) ::= LPAR expr(A) RPAR. {
+wexpr(E) ::= LPAR wexpr(A) RPAR. {
 	NOWDB_SQL_CHECKSTATE();
 	E=A;
 } 
 
-expr(E) ::= NOT expr(A). {
+wexpr(E) ::= NOT wexpr(A). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_NOT, 0);
 	NOWDB_SQL_ADDKID(E,A);
@@ -807,6 +868,19 @@ condition(C) ::= operand(O1) comparison(O) operand(O2) . {
 	NOWDB_SQL_ADDKID(O,O1);
 	NOWDB_SQL_ADDKID(O,O2);
 	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+condition(C) ::= field(N) IN LPAR val_list(V) RPAR. {
+	NOWDB_SQL_CHECKSTATE()
+	nowdb_ast_t *F;
+	nowdb_ast_t *O;
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_JUST, 0);
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_COMPARE, NOWDB_AST_IN);
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, N);
+	NOWDB_SQL_ADDKID(O,F);
+	NOWDB_SQL_ADDKID(O,V);
 	NOWDB_SQL_ADDKID(C,O);
 }
 
@@ -913,4 +987,8 @@ value(V) ::= FALSE(F). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_BOOL);
 	nowdb_ast_setValue(V, NOWDB_AST_V_STRING, F);
+}
+value(V) ::= NULL. {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_NULL);
 }

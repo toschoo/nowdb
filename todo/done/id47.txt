@@ -1,0 +1,7 @@
+expressions
+-----------
+
+expressions in projection and where, e.g.
+select sum(a)/count(*)
+  from alpha
+ where int(a*100) > 1

@@ -10,6 +10,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/index/index.h>
+#include <nowdb/mem/plru12.h>
 
 #include <tsalgo/tree.h>
 #include <beet/index.h>
@@ -52,6 +53,7 @@ void nowdb_indexer_destroy(nowdb_indexer_t *xer);
 nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
                                 uint32_t         n,
                                 nowdb_pageid_t   pge,
+                                void            *store,
                                 uint32_t         isz,
                                 uint32_t         bsz ,
                                 char            *buf);

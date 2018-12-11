@@ -28,7 +28,6 @@ typedef struct {
 
 /* ------------------------------------------------------------------------
  * Create Index Keys
- * Note: probably not too useful
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_index_keys_create(nowdb_index_keys_t **keys,

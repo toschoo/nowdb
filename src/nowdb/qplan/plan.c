@@ -4,7 +4,7 @@
  * Execution Plan
  * ========================================================================
  */
-#include <nowdb/query/plan.h>
+#include <nowdb/qplan/plan.h>
 #include <nowdb/reader/filter.h>
 #include <nowdb/query/row.h>
 #include <nowdb/fun/fun.h>
@@ -33,6 +33,8 @@ static char *OBJECT = "plan";
  * - sets the offset into the structure
  * - the size of the field
  * - the type of the field (if known!)
+ * TODO:
+ * => use offByName instead and unify!!!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getField(char            *name,
@@ -76,7 +78,10 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") == 0) {
+	if (strcasecmp(name, "DESTIN")      == 0 ||
+	    strcasecmp(name, "DEST")        == 0 ||
+	    strcasecmp(name, "DST")         == 0 ||
+	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
@@ -86,7 +91,8 @@ static inline nowdb_err_t getField(char            *name,
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_UINT;
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "TIMESTAMP") == 0) {
+	if (strcasecmp(name, "STAMP")     == 0 ||
+	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = isstr?NOWDB_TYP_TEXT:NOWDB_TYP_TIME;
 		return NOWDB_OK;
@@ -97,7 +103,7 @@ static inline nowdb_err_t getField(char            *name,
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "WEIGHT2") == 0) {
-		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*off = NOWDB_OFF_WEIGHT2; *sz = 8; 
 		*type = isstr?NOWDB_TYP_TEXT:0;
 		return NOWDB_OK;
 	}
@@ -132,6 +138,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
                                        uint32_t           *off,
                                        uint32_t            *sz,
                                        nowdb_type_t      *type) {
+
 	if (strcasecmp(name, "EDGE") == 0) {
 		*off = NOWDB_OFF_EDGE; *sz = 8;
 		*type = NOWDB_TYP_TEXT;
@@ -146,7 +153,10 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "DESTIN") == 0) {
+	if (strcasecmp(name, "DESTIN")      == 0 ||
+	    strcasecmp(name, "DEST")        == 0 ||
+	    strcasecmp(name, "DST")         == 0 ||
+	    strcasecmp(name, "DESTINATION") == 0) {
 		*off = NOWDB_OFF_DESTIN; *sz = 8;
 		if (d != NULL && d->vid == NOWDB_MODEL_TEXT) {
 			*type = NOWDB_TYP_TEXT;
@@ -164,7 +174,8 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		}
 		return NOWDB_OK;
 	}
-	if (strcasecmp(name, "TIMESTAMP") == 0) {
+	if (strcasecmp(name, "STAMP")     == 0 ||
+	    strcasecmp(name, "TIMESTAMP") == 0) {
 		*off = NOWDB_OFF_TMSTMP; *sz = 8; 
 		*type = NOWDB_TYP_TIME;
 		return NOWDB_OK;
@@ -175,7 +186,7 @@ static inline nowdb_err_t getEdgeField(char              *name,
 		return NOWDB_OK;
 	}
 	if (strcasecmp(name, "WEIGHT2") == 0) {
-		*off = NOWDB_OFF_WEIGHT; *sz = 8; 
+		*off = NOWDB_OFF_WEIGHT2; *sz = 8; 
 		*type = e!=NULL?e->weight2:0;
 		return NOWDB_OK;
 	}
@@ -190,10 +201,6 @@ static inline nowdb_err_t getEdgeField(char              *name,
  * The type of the value is inferred either from
  * - the type of the field (then *typ is set) or
  * - from the explicit type coming from the ast
- * TODO:
- * - check types
- * - use the model to determine types
- * - handle strings!!!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getValue(nowdb_scope_t *scope,
@@ -203,23 +210,30 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
                                    nowdb_type_t    *typ,
                                    int            stype,
                                    void         **value) {
-	char *tmp;
+	char *tmp=NULL;
 	nowdb_err_t err=NOWDB_OK;
 	int rc;
 
-	*value = malloc(sz);
-	if (value == NULL) return nowdb_err_get(nowdb_err_no_mem,
-		             FALSE, OBJECT, "allocating buffer");
-	
+	// check this branch! value is never allocated or set!
 	if (*typ == 0) {
+		fprintf(stderr, "IN THAT BRANCH\n");
 		switch(stype) {
 		case NOWDB_AST_FLOAT: *typ = NOWDB_TYP_FLOAT; break;
 		case NOWDB_AST_UINT: *typ = NOWDB_TYP_UINT; break;
 		case NOWDB_AST_INT: *typ = NOWDB_TYP_INT; break;
+		case NOWDB_AST_DATE:
+		case NOWDB_AST_TIME: *typ = NOWDB_TYP_INT; break;
 		case NOWDB_AST_TEXT: *typ = NOWDB_TYP_TEXT; break;
-		default: *value = NULL; return NOWDB_OK;
+		case NOWDB_AST_BOOL: *typ = NOWDB_TYP_BOOL; break;
+		default: 
+			*value = NULL;
+			INVALIDAST("unknown type in AST");
 		}
 	}
+
+	*value = malloc(sz);
+	if (*value == NULL) return nowdb_err_get(nowdb_err_no_mem,
+		              FALSE, OBJECT, "allocating buffer");
 
 	switch(*typ) {
 	case NOWDB_TYP_FLOAT:
@@ -233,7 +247,21 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 			**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
 		break;
 
+	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
+		if (stype == NOWDB_AST_TEXT) {
+			if (strnlen(str, 4096) == 10) {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_DATE_FORMAT, *value);
+			} else {
+				rc = nowdb_time_fromString(str,
+				    NOWDB_TIME_FORMAT, *value);
+			}
+			if (rc != 0) err = nowdb_err_get(rc, FALSE,
+		                   OBJECT, "timestamp from string");
+			break;
+		}
+		
 	case NOWDB_TYP_INT:
 		if (sz == 4) 
 			**(int32_t**)value = (int32_t)strtol(str, &tmp, 10);
@@ -255,18 +283,67 @@ static inline nowdb_err_t getValue(nowdb_scope_t *scope,
 		                   OBJECT, "timestamp from string");
 		} else {
 			err = nowdb_text_getKey(scope->text, str, *value);
+			if (err != NOWDB_OK && err->errcode ==
+			            nowdb_err_key_not_found) 
+			{
+				**(uint64_t**)value = NOWDB_TEXT_UNKNOWN;
+				nowdb_err_release(err); err = NOWDB_OK;
+			}
 		}
-		if (err != NOWDB_OK) {
+		break;
+
+	default:
+		if (*value != NULL) {
 			free(*value); *value = NULL;
 		}
-		return err;
-
-	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
-	if (*tmp != 0) return nowdb_err_get(nowdb_err_invalid,
-	                  FALSE, OBJECT, "conversion failed");
+	if (err != NOWDB_OK) {
+		if (*value != NULL) {
+			free(*value); *value=NULL;
+		}
+		return err;
+	}
 	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get Values:
+ * -----------
+ * get all values in list of options
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getValues(nowdb_scope_t *scope,
+                                    nowdb_ast_t     *ast,
+				    uint32_t         off,
+                                    uint32_t          sz,
+                                    nowdb_type_t    *typ,
+                                    int            stype,
+                                    ts_algo_list_t *vals) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_ast_t  *v;
+	void     *value;
+
+	v = ast;
+	while (v!=NULL) {
+		// fprintf(stderr, "value: %s\n", (char*)v->value);
+		err = getValue(scope, v->value, off, sz, typ, stype, &value);
+		if (err != NOWDB_OK) break;
+		if (ts_algo_list_append(vals, value) != TS_ALGO_OK) {
+			if (value != NULL) free(value);
+			NOMEM("list.append"); break;
+		}
+		v = nowdb_ast_value(v);
+	}
+	if (err != NOWDB_OK) {
+		ts_algo_list_node_t *run;
+		for(run=vals->head; run!=NULL; run=run->nxt) {
+			free(run->cont);
+		}
+		ts_algo_list_destroy(vals);
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -292,6 +369,7 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 		**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
 		break;
 
+	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_INT:
 		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
@@ -309,8 +387,8 @@ static inline nowdb_err_t getTypedValue(nowdb_scope_t     *scope,
 	}
 	if (*tmp != 0) {
 		free(*value); *value = NULL;
-		return nowdb_err_get(nowdb_err_invalid,
-	           FALSE, OBJECT, "conversion failed");
+		return nowdb_err_get(nowdb_err_invalid,FALSE,OBJECT,
+	                                 "typed conversion failed");
 	}
 	return NOWDB_OK;
 }
@@ -347,14 +425,36 @@ static inline nowdb_err_t getEdgeCompare(nowdb_scope_t   *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, off, sz, &typ, 0, &value);
-	if (err != NOWDB_OK) return err;
+	if (operator == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
+		ts_algo_list_init(&vals);
 
-	err = nowdb_filter_newCompare(comp, operator, off, sz, typ, value);
-	if (err != NOWDB_OK) {
-		free(value); return err;
+		err = getValues(scope, op, off, sizeof(nowdb_key_t),
+	                                            &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, operator,
+		                                off, sz, typ,
+			                         NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+	} else {
+		err = getValue(scope, op->value, off, sz, &typ, 0, &value);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, operator,
+		                   off, sz, typ, value, NULL);
+		if (err != NOWDB_OK) {
+			free(value); return err;
+		}
+		nowdb_filter_own(*comp);
 	}
-	nowdb_filter_own(*comp);
 	return NOWDB_OK;
 }
 
@@ -375,7 +475,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 	nowdb_filter_t *and;
 	nowdb_model_prop_t *p;
 	nowdb_ast_t *op;
-	void *value;
+	void *value=NULL;
 	uint32_t off=0;
 
 	op = op1->ntype == NOWDB_AST_FIELD?op1:op2;
@@ -391,7 +491,7 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 		                                     NOWDB_OFF_PROP,
 		                                sizeof(nowdb_key_t),
 		                                     NOWDB_TYP_UINT,
-	                                     	        &p->propid);
+	                                     	  &p->propid, NULL);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -400,20 +500,48 @@ static inline nowdb_err_t getTypedCompare(nowdb_scope_t    *scope,
 
 	op = op1->ntype == NOWDB_AST_FIELD?op2:op1;
 
-	err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
-	                                    &p->value, 0, &value);
-	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(pid);
-		free(pid); return err;
-	}
+	// we have 'in' instead of a single value
+	if (operator == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
 
-	err = nowdb_filter_newCompare(&val, operator, off,
-		                      sizeof(nowdb_key_t),
-		                                 p->value,
-		                                    value);
-	if (err != NOWDB_OK) {
-		nowdb_filter_destroy(pid); free(pid); 
-		free(value); return err;
+		ts_algo_list_init(&vals);
+		err = getValues(scope, op, off, sizeof(nowdb_key_t),
+	                                       &p->value, 0, &vals);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid);
+			free(pid); return err;
+		}
+		err = nowdb_filter_newCompare(&val, operator, off,
+			                      sizeof(nowdb_key_t),
+			                                 p->value,
+			                             NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			nowdb_filter_destroy(pid); free(pid); 
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+		ts_algo_list_destroy(&vals);
+
+	} else {
+		err = getValue(scope, op->value, off, sizeof(nowdb_key_t),
+	                                    &p->value, op->stype, &value);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid);
+			free(pid); return err;
+		}
+		err = nowdb_filter_newCompare(&val, operator, off,
+			                      sizeof(nowdb_key_t),
+			                                 p->value,
+			                               value,NULL);
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(pid); free(pid); 
+			if (value != NULL) free(value);
+			return err;
+		}
 	}
 	nowdb_filter_own(val);
 
@@ -467,27 +595,57 @@ static inline nowdb_err_t getCompare(nowdb_scope_t    *scope,
 		         ast->stype, op1, op2, comp);
 	}
 
-	/* check whether op1 is field or value */
-	if (op1->ntype == NOWDB_AST_FIELD) {
-		err = getField(op1->value, trg, &off,
-		               &sz, op2->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op2->value, off, sz,
-		                 &typ, op2->stype, &conv);
-	} else {
-		err = getField(op2->value, trg, &off,
-		               &sz, op1->isstr, &typ);
-		if (err != NOWDB_OK) return err;
-		err = getValue(scope, op1->value, off, sz,
-		                 &typ, op1->stype, &conv);
-	}
-	if (err != NOWDB_OK) return err;
+	// fprintf(stderr, "beyond type and edge\n");
 
-	err = nowdb_filter_newCompare(comp, ast->stype,
-	                           off, sz, typ, conv);
-	if (err != NOWDB_OK) return err;
-	nowdb_filter_own(*comp);
-	
+	// we have 'in' instead of a single value
+	if (ast->stype == NOWDB_FILTER_IN) {
+		ts_algo_list_t vals;
+
+		ts_algo_list_init(&vals);
+
+		err = getField(op1->value, trg, &off,
+			       &sz, op2->isstr, &typ);
+		if (err != NOWDB_OK) return err;
+
+		err = getValues(scope, op2, off, sizeof(nowdb_key_t),
+	                                             &typ, 0, &vals);
+		if (err != NOWDB_OK) return err;
+		
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                                  off, sz, typ,
+			                           NULL, &vals);
+		if (err != NOWDB_OK) {
+			ts_algo_list_node_t *run;
+			for(run=vals.head; run!=NULL; run=run->nxt) {
+				free(run->cont);
+			}
+			ts_algo_list_destroy(&vals);
+			return err;
+		}
+		ts_algo_list_destroy(&vals);
+
+	/* check whether op1 is field or value */
+	} else {
+		if (op1->ntype == NOWDB_AST_FIELD) {
+			err = getField(op1->value, trg, &off,
+			               &sz, op2->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op2->value, off, sz,
+			                 &typ, op2->stype, &conv);
+		} else {
+			err = getField(op2->value, trg, &off,
+			               &sz, op1->isstr, &typ);
+			if (err != NOWDB_OK) return err;
+			err = getValue(scope, op1->value, off, sz,
+			                 &typ, op1->stype, &conv);
+		}
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_filter_newCompare(comp, ast->stype,
+		                      off, sz, typ, conv, NULL);
+		if (err != NOWDB_OK) return err;
+		nowdb_filter_own(*comp);
+	}
 	return NOWDB_OK;
 }
 
@@ -512,8 +670,13 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 	case NOWDB_AST_NOT:
 		err = nowdb_filter_newBool(b, NOWDB_FILTER_NOT);
 		if (err != NOWDB_OK) return err;
-		return getCondition(scope, trg, e, v, &(*b)->left,
-		                       nowdb_ast_operand(ast, 1));
+		err = getCondition(scope, trg, e, v, &(*b)->left,
+		                      nowdb_ast_operand(ast, 1));
+		if (err != NOWDB_OK) {
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
+			return err;
+		}
+		return NOWDB_OK;
 
 	case NOWDB_AST_AND:
 	case NOWDB_AST_OR:
@@ -524,13 +687,13 @@ static inline nowdb_err_t getCondition(nowdb_scope_t    *scope,
 		err = getCondition(scope, trg, e, v, &(*b)->left,
 		                       nowdb_ast_operand(ast,1));
 		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*b); free(*b);
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
 			return err;
 		}
 		err = getCondition(scope, trg, e, v, &(*b)->right,
 		                         nowdb_ast_operand(ast,2));
 		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*b); free(*b);
+			nowdb_filter_destroy(*b); free(*b); *b=NULL;
 			return err;
 		}
 		return NOWDB_OK;
@@ -551,7 +714,7 @@ static nowdb_err_t idxFromFilter(nowdb_filter_t *filter,
 	if (filter == NULL) return NOWDB_OK;
 
 	if (filter->ntype == NOWDB_FILTER_COMPARE) {
-		if (filter->op == NOWDB_FILTER_EQ) {
+		if (filter->op == NOWDB_FILTER_EQ) { // IN as well
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
 				return nowdb_err_get(nowdb_err_no_mem,
@@ -639,6 +802,9 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_index_t  *idx,
 	nowdb_filter_t    *node;
 	int i=0;
 
+	if (nodes == NULL || nodes->len == 0) {
+		INVALIDAST("no nodes");
+	}
 	pidx = calloc(1, sizeof(nowdb_plan_idx_t));
 	if (pidx == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                  FALSE, OBJECT, "allocating plan idx");
@@ -747,9 +913,9 @@ static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
                                              ts_algo_list_t *fields, 
                                              ts_algo_list_t *res) {
 	nowdb_index_keys_t *keys=NULL;
-	nowdb_index_desc_t *desc;
-	nowdb_context_t    *ctx;
-	nowdb_plan_idx_t   *idx;
+	nowdb_index_desc_t *desc=NULL;
+	nowdb_context_t    *ctx=NULL;
+	nowdb_plan_idx_t   *idx=NULL;
 	nowdb_err_t err;
 
 	err = fields2keys(fields, &keys);
@@ -850,7 +1016,7 @@ static inline nowdb_err_t getType(nowdb_scope_t    *scope,
 
 	err = nowdb_filter_newCompare(filter, NOWDB_FILTER_EQ,
 	               NOWDB_OFF_ROLE, sizeof(nowdb_roleid_t),
-	                       NOWDB_TYP_UINT, &(*v)->roleid);
+	                 NOWDB_TYP_UINT, &(*v)->roleid, NULL);
 	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
@@ -900,6 +1066,9 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
 		/* get condition creates a filter */
 		err = getCondition(scope, trg, e, v, &w, cond);
 		if (err != NOWDB_OK) {
+			if (t!=NULL) {
+				nowdb_filter_destroy(t);free(t);
+			}
 			if (*filter != NULL) {
 				nowdb_filter_destroy(*filter); 
 				free(*filter); *filter = NULL;
@@ -934,14 +1103,13 @@ static inline nowdb_err_t getFilter(nowdb_scope_t   *scope,
  */
 static inline void destroyFieldList(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner, *tmp;
-	nowdb_field_t *f;
+	nowdb_expr_t exp;
 
 	if (list == NULL) return;
 	runner=list->head;
 	while(runner!=NULL) {
-		f = runner->cont;
-		if (f->name != NULL) free(f->name);
-		free(f);
+		exp = runner->cont;
+		nowdb_expr_destroy(exp); free(exp);
 		tmp = runner->nxt;
 		ts_algo_list_remove(list, runner);
 		free(runner); runner=tmp;
@@ -968,84 +1136,57 @@ static inline void destroyFunList(ts_algo_list_t *list) {
 	}
 }
 
-/* -----------------------------------------------------------------------
- * Make agg function
- * -----------------------------------------------------------------------
+/* ------------------------------------------------------------------------
+ * Try to interpret string as time
+ * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t makeFun(nowdb_ast_t     *trg,
-                                  nowdb_ast_t     *fun,
-                                  ts_algo_list_t **aggs) {
-	nowdb_ast_t *param;
-	nowdb_err_t err;
-	uint16_t off;
-	nowdb_content_t cont;
-	nowdb_fun_t *f;
-	uint32_t ftype;
+static inline int tryTime(char *str, void **value) {
+	size_t s;
+	nowdb_time_t t;
 
-	if (*aggs == NULL) {
-		*aggs = calloc(1, sizeof(ts_algo_list_t));
-		if (*aggs == NULL) {
-			NOMEM("allocating list");
-			return err;
+	s = strlen(str);
+	if (s > 30) return -1;
+	if (s == 10) {
+		if (nowdb_time_fromString(str,
+		    NOWDB_DATE_FORMAT, &t)!=0) {
+			return -1;
 		}
-		ts_algo_list_init(*aggs);
-	}
-
-	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
-	                                       NOWDB_CONT_VERTEX;
-	param = nowdb_ast_param(fun);
-	if (param == NULL) {
-		off = -1;
-	} else if (cont == NOWDB_CONT_EDGE) {
-		off = nowdb_edge_offByName(param->value);
 	} else {
-		off = -1; /* get off by vertex */
+		if (nowdb_time_fromString(str,
+		    NOWDB_TIME_FORMAT, &t)!=0) {
+			return -1;
+		}
 	}
-
-	ftype = nowdb_fun_fromName(fun->value);
-	if (ftype < 0) {
-		return nowdb_err_get(nowdb_err_fun,
-		        FALSE, OBJECT, fun->value);                                 
-	}
-
-	f = calloc(1, sizeof(nowdb_fun_t));
-	if (f == NULL) {
-		NOMEM("allocating function");
-		return err;
-	}
-	err = nowdb_fun_init(f, ftype, cont, off,
-	                   sizeof(nowdb_value_t),
-	                NOWDB_TYP_NOTHING, NULL);
-	if (err != NOWDB_OK) {
-		free(f); return err;
-	}
-	if (ts_algo_list_append(*aggs, f) != TS_ALGO_OK) {
-		NOMEM("list.append");
-		free(f); return err;
-	}
-	return NOWDB_OK;
+	*value = malloc(8);
+	if (*value == NULL) return -1;
+	memcpy(*value, &t, 8);
+	return 0;
 }
 
 /* ------------------------------------------------------------------------
  * Get const value
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getConstValue(uint16_t typ,
-                                        char    *str,
-                                        void **value) {
+static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
+                                        char         *str,
+                                        void      **value) {
 	nowdb_err_t err;
 	char x;
 	char *tmp;
 
-	if (typ != NOWDB_TYP_TEXT) {
+	if (*typ != NOWDB_TYP_TEXT) {
 		*value = malloc(sizeof(nowdb_key_t));
 		if (value == NULL) {
 			NOMEM("allocatin value");
 			return err;
 		}
 	}
-	switch(typ) {
+	switch(*typ) {
 	case NOWDB_TYP_TEXT:
+		if (tryTime(str, value) == 0) {
+			*typ = NOWDB_TYP_TIME;
+			return NOWDB_OK;
+		}
 		*value = strdup(str);
 		if (*value == NULL) {
 			NOMEM("allocating value");
@@ -1078,14 +1219,271 @@ static inline nowdb_err_t getConstValue(uint16_t typ,
 		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
 		break;
 
-	default: return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
+	default:
+		if (*value != NULL) {
+			free(*value); *value = NULL;
+		}
+		return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT,
 	                                          "unexpected type");
 	}
 	if (*tmp != 0) {
 		free(*value); *value = NULL;
-		return nowdb_err_get(nowdb_err_invalid,
-	           FALSE, OBJECT, "conversion failed");
+		return nowdb_err_get(nowdb_err_invalid,FALSE,OBJECT,
+	                            "conversion of constant failed");
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get vertex field
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
+                                         nowdb_expr_t       *exp,
+                                         nowdb_model_vertex_t *v,
+                                         nowdb_ast_t      *field) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	if (v == NULL) {
+		INVALIDAST("vertex not allowed here");
+	}
+	err = nowdb_model_getPropByName(scope->model,
+	                                   v->roleid,
+	                            field->value, &p);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_expr_newVertexField(exp, field->value,
+	                             v->roleid, p->propid);
+	if (err != NOWDB_OK) return err;
+	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Predeclaration for recursive call
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t getExpr(nowdb_scope_t    *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t      *field,
+                           nowdb_expr_t      *expr,
+                           char               *agg);
+
+/* -----------------------------------------------------------------------
+ * Make agg function
+ * shall be recursive (for future use with expressions)
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t makeAgg(nowdb_scope_t *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t   *trg,
+                           nowdb_ast_t   *fun,
+                           int            op,
+                           nowdb_expr_t  *expr) {
+	nowdb_ast_t *param;
+	nowdb_err_t err;
+	nowdb_content_t cont;
+	nowdb_fun_t *f;
+	nowdb_expr_t myx=NULL;
+	char dummy;
+
+	cont = trg->stype == NOWDB_AST_CONTEXT?NOWDB_CONT_EDGE:
+	                                       NOWDB_CONT_VERTEX;
+	param = nowdb_ast_param(fun);
+	if (param != NULL) {
+		err = getExpr(scope, v, trg, param, &myx, &dummy);
+		if (err != NOWDB_OK) return err;
+	}
+	err = nowdb_fun_new(&f, op, cont, myx, NULL);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_expr_newAgg(expr, NOWDB_FUN_AS_AGG(f));
+	if (err != NOWDB_OK) {
+		nowdb_fun_destroy(f); free(f);
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper for makeOp
+ * -----------------------------------------------------------------------
+ */
+#define DESTROYLIST(l) \
+	ts_algo_list_node_t *run, *tmp; \
+	run = l.head; \
+	while(run!=NULL) { \
+		nowdb_expr_destroy(run->cont); \
+		free(run->cont); \
+		tmp = run->nxt; \
+		free(run); \
+		run=tmp; \
+	}
+
+/* -----------------------------------------------------------------------
+ * Recursively get operator
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t makeOp(nowdb_scope_t *scope,
+                          nowdb_model_vertex_t *v,
+                          nowdb_ast_t   *trg,
+                          nowdb_ast_t   *field,
+                          int            op,
+                          nowdb_expr_t  *expr,
+                          char          *agg) {
+	ts_algo_list_t ops;
+	nowdb_expr_t exp;
+	nowdb_err_t err;
+	nowdb_ast_t *o;
+
+	// get operators
+	ts_algo_list_init(&ops);
+	o = nowdb_ast_param(field);
+	while (o != NULL) {
+		/*
+		fprintf(stderr, "%s param %s\n", (char*)field->value,
+		                                 (char*)o->value);
+		*/
+		err = getExpr(scope, v, trg, o, &exp, agg);
+		if (err != NOWDB_OK) {
+			// destroy list and values, etc.
+			DESTROYLIST(ops);
+			return err;
+		}
+		if (ts_algo_list_append(&ops, exp) != TS_ALGO_OK) {
+			DESTROYLIST(ops);
+			nowdb_expr_destroy(exp); free(exp);
+			NOMEM("list.append");
+			return err;
+		}
+		o = nowdb_ast_nextParam(o);
+	}
+
+	err = nowdb_expr_newOpL(expr, op, &ops);
+	if (err != NOWDB_OK) {
+		DESTROYLIST(ops);
+		return err;
+	}
+	ts_algo_list_destroy(&ops);
+	return NOWDB_OK;
+}
+#undef DESTROYLIST
+
+/* -----------------------------------------------------------------------
+ * Make function
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t makeFun(nowdb_scope_t *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t   *trg,
+                           nowdb_ast_t   *field,
+                           nowdb_expr_t  *expr,
+                           char          *agg) {
+	int op;
+	char x;
+
+	op = nowdb_op_fromName(field->value, &x);
+	if (op < 0) {
+		INVALIDAST("unknown operator");
+	}
+	if (x) {
+		*agg=1;
+		return makeAgg(scope, v, trg, field, op, expr);
+	}
+	return makeOp(scope, v, trg, field, op, expr, agg);
+}
+
+/* -----------------------------------------------------------------------
+ * Recursively get expression
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t getExpr(nowdb_scope_t    *scope,
+                           nowdb_model_vertex_t *v,
+                           nowdb_ast_t        *trg,
+                           nowdb_ast_t      *field,
+                           nowdb_expr_t      *expr,
+                           char               *agg) {
+	nowdb_err_t err;
+	nowdb_type_t typ;
+	int off=-1;
+	void *value;
+
+	/* expression */
+	if (field->ntype == NOWDB_AST_FUN ||
+	    field->ntype == NOWDB_AST_OP) {
+
+		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
+
+		err = makeFun(scope, v, trg, field, expr, agg);
+		if (err != NOWDB_OK) return err;
+
+
+	} else if (field->ntype == NOWDB_AST_VALUE) {
+		typ = nowdb_ast_type(field->stype);
+		err = getConstValue(&typ, field->value, &value);
+		if (err != NOWDB_OK) return err;
+
+		err = nowdb_expr_newConstant(expr, value, typ);
+		if (err != NOWDB_OK) return err;
+
+		// fprintf(stderr, "type: %d / %d\n",
+		//        field->vtype, field->stype);
+
+		free(value);
+
+	} else {
+		/* we need to distinguish the target! */
+		if (trg->stype == NOWDB_AST_CONTEXT) {
+
+			off = nowdb_edge_offByName(field->value);
+			if (off < 0) {
+				INVALIDAST("unknown field name");
+			}
+			err = nowdb_expr_newEdgeField(expr, off);
+			if (err != NOWDB_OK) return err;
+
+		} else if (trg->stype == NOWDB_AST_TYPE) {
+			// get roleid and propid 
+			err = getVertexField(scope, expr, v, field);
+			if (err != NOWDB_OK) return err;
+		} else {
+			/*
+			fprintf(stderr, "STYPE: %d\n",
+			trg->stype);
+			*/
+			INVALIDAST("unknown target");
+		}
+	}
+
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Get fields for projection, grouping and ordering 
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t filterAgg(nowdb_expr_t expr,
+                                    ts_algo_list_t *l) {
+	nowdb_err_t          err;
+	ts_algo_list_t       tmp;
+	ts_algo_list_node_t *run;
+	nowdb_agg_t         *agg;
+
+	ts_algo_list_init(&tmp);
+	err = nowdb_expr_filter(expr, NOWDB_EXPR_AGG, &tmp);
+	if (err != NOWDB_OK) return err;
+
+	for(run=tmp.head; run!=NULL; run=run->nxt) {
+		agg = run->cont;
+		if (ts_algo_list_append(l, agg->agg) != TS_ALGO_OK) {
+			ts_algo_list_destroy(&tmp);
+			NOMEM("list.append");
+			return err;
+		}
+	}
+	ts_algo_list_destroy(&tmp);
 	return NOWDB_OK;
 }
 
@@ -1098,18 +1496,26 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
                                     nowdb_ast_t     *ast,
                                     ts_algo_list_t **fields, 
                                     ts_algo_list_t **aggs) {
-	nowdb_bitmap8_t flags;
+	// nowdb_bitmap8_t flags;
 	nowdb_err_t err = NOWDB_OK;
+	nowdb_model_vertex_t *v=NULL;
+	nowdb_expr_t exp;
 	nowdb_ast_t *field;
-	nowdb_field_t *f;
-	int off=-1;
+	char agg;
+	char dagg=0;
+
+	// get vertex type
+	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
+		err = nowdb_model_getVertexByName(scope->model,
+		                               trg->value, &v);
+		if (err != NOWDB_OK) return err;
+	}
 
 	*fields = calloc(1, sizeof(ts_algo_list_t));
 	if (*fields == NULL) {
 		NOMEM("allocating list");
 		return err;
 	}
-
 	ts_algo_list_init(*fields);
 
 	field = nowdb_ast_field(ast);
@@ -1117,81 +1523,48 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 
 		// fprintf(stderr, "%s\n", (char*)field->value);
 
-		flags = 0;
-
-		/* expression */
-		if (field->ntype == NOWDB_AST_FUN) {
-			// fprintf(stderr, "FUN: %s\n", (char*)field->value);
-
-			flags = NOWDB_FIELD_AGG;
-
-			err = makeFun(trg, field, aggs);
-			if (err != NOWDB_OK) break;
-		}
-
-		f = calloc(1, sizeof(nowdb_field_t));
-		if (f == NULL) {
-			NOMEM("allocating field");
-			break;
-		}
-		if (field->ntype == NOWDB_AST_VALUE) {
-			f->target = NOWDB_TARGET_NULL;
-			f->name = NULL;
-			f->off = -1;
-			f->typ = nowdb_ast_type(field->stype);
-
-			// fprintf(stderr, "type: %d\n", field->vtype);
-			err = getConstValue(f->typ, field->value,
-			                               &f->value);
-			if (err != NOWDB_OK) break;
-
-		} else {
-			/* we need to distinguish the target! */
-			if (trg->stype == NOWDB_AST_CONTEXT) {
-				f->target = NOWDB_TARGET_EDGE;
-				if (flags == 0) {
-					off = nowdb_edge_offByName(
-					              field->value);
+		agg = 0;
+		err = getExpr(scope, v, trg, field, &exp, &agg);
+		if (err != NOWDB_OK) break;
+		
+		if (agg) {
+			if (aggs == NULL) {
+				INVALIDAST("aggregates not allowed here");
+			}
+			if (*aggs == NULL) {
+				*aggs = calloc(1, sizeof(ts_algo_list_t));
+				if (*aggs == NULL) {
+					NOMEM("allocating list");
+					break;
 				}
-			} else if (trg->stype == NOWDB_AST_TYPE) {
-				f->target = NOWDB_TARGET_VERTEX;
-				if (flags == 0) off = -1;
-			} else {
-				/*
-				fprintf(stderr, "STYPE: %d\n",
-				                   trg->stype);
-				*/
+				ts_algo_list_init(*aggs);
+				dagg=1;
+			}
+			err = filterAgg(exp, *aggs);
+			if (err != NOWDB_OK) {
+				nowdb_expr_destroy(exp); free(exp);
 				break;
 			}
-
-			/* name or offset */
-			if (flags == 0 && off < 0) {
-				f->name = strdup(field->value);
-				if (f->name == NULL) {
-					NOMEM("allocating field name");
-					free(f); break;
-				}
-			} else {
-				f->off = (uint32_t)off;
-				f->name = NULL;
-			}
 		}
-
-		f->flags = flags | NOWDB_FIELD_SELECT;
-		f->agg    = 0;
-
-		if (ts_algo_list_append(*fields, f) != TS_ALGO_OK) {
-			if (f->name != NULL) free(f->name);
-			free(f);
+		
+		/* testing only! */
+		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
+			nowdb_expr_destroy(exp); free(exp);
 			NOMEM("list.append");
 			break;
 		}
-
 		field = nowdb_ast_field(field);
 	}
 	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: "); nowdb_err_print(err);
+
 		destroyFieldList(*fields);
-		free(*fields);
+		free(*fields); *fields=NULL;
+
+		if (dagg) {
+			destroyFunList(*aggs);
+			free(*aggs); *aggs=NULL;
+		}
 	}
 	return err;
 }
@@ -1203,33 +1576,46 @@ static inline nowdb_err_t getFields(nowdb_scope_t   *scope,
 static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
                                              ts_algo_list_t *sel) {
 	ts_algo_list_node_t *grun, *srun;
-	nowdb_field_t *gf, *sf;
+	nowdb_expr_t gf, sf;
 
 	srun = sel->head;
 	for(grun=grp->head; grun != NULL; grun=grun->nxt) {
 		if (srun == NULL) INVALIDAST("projection incomplete");
 		gf = grun->cont;
 		sf = srun->cont;
-		if (gf->name != NULL) {
-			if (sf->name == NULL) {
-				INVALIDAST("projection and grouping differ");
-			}
-			if (strcmp(gf->name, sf->name) != 0) {
-				INVALIDAST("projection and grouping differ");
-			}
-		} else if (sf->name != NULL) {
-			INVALIDAST("projection and grouping differ");
-
-		} else if (gf->off != sf->off) {
+		if (!nowdb_expr_equal(gf, sf)) {
 			INVALIDAST("projection and grouping differ");
 		}
 		srun = srun->nxt;
 	}
 	for (;srun != NULL; srun=srun->nxt) {
-		sf = srun->cont;
-		if (sf->flags & NOWDB_FIELD_AGG) continue;
+		if (nowdb_expr_has(srun->cont, NOWDB_EXPR_AGG)) continue;
 		INVALIDAST("projection and grouping differ");
 	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Adjust target to what it s according to model
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
+                                       nowdb_ast_t   *trg) {
+	nowdb_err_t  err;
+	nowdb_target_t t;
+
+	err = nowdb_model_whatIs(scope->model, trg->value, &t);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_key_not_found) {
+			nowdb_err_release(err);
+			trg->stype = NOWDB_AST_CONTEXT;
+			return NOWDB_OK;
+		}
+		return err;
+	}
+
+	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
+	                                 NOWDB_AST_CONTEXT;
 	return NOWDB_OK;
 }
 
@@ -1258,6 +1644,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
+
+	err = adjustTarget(scope, trg);
+	if (err != NOWDB_OK) return err;
 
 	/* create summary node */
 	stp = malloc(sizeof(nowdb_plan_t));
@@ -1402,6 +1791,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	stp->ntype = NOWDB_PLAN_READER;
 	if (idxes.len == 1 && grp == NULL && ord == NULL) {
+		// fprintf(stderr, "CHOOSING SEARCH\n");
 		stp->stype = NOWDB_PLAN_SEARCH_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1412,6 +1802,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	           order  == NULL &&
 	           filter == NULL &&
 	           hasAgg == 0) {
+		// fprintf(stderr, "CHOOSING KRANGE\n");
 		stp->stype = NOWDB_PLAN_KRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1419,12 +1810,14 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
  	/* this is for order and group with aggregates */
 	} else if (idxes.len == 1) {
+		// fprintf(stderr, "CHOOSING FRANGE\n");
 		stp->stype = NOWDB_PLAN_FRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 	
 	} else {
+		// fprintf(stderr, "CHOOSING FULLSCAN\n");
 		stp->stype = NOWDB_PLAN_FS_; /* default is fullscan+ */
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1555,7 +1948,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	/* add projection */
 	if (sel == NULL) return NOWDB_OK;
-	if (sel->stype == NOWDB_AST_ALL) return NOWDB_OK;
+	if (sel->stype == NOWDB_AST_STAR) return NOWDB_OK;
 
 	err = getFields(scope, trg, sel, &pj, &agg);
 	if (err != NOWDB_OK) {
@@ -1642,6 +2035,7 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 	runner = plan->head;
 	while(runner!=NULL) {
 		node = runner->cont;
+		// fprintf(stderr, "destroying node [%d]\n", node->ntype);
 		if (node->load != NULL) {
 			if (cont && node->ntype == NOWDB_PLAN_FILTER) {
 				nowdb_filter_destroy(node->load);

@@ -190,6 +190,26 @@ int nowdb_time_fromString(const char *buf,
 }
 
 /* ------------------------------------------------------------------------
+ * nowdb time to broken down time
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_break(nowdb_time_t t,
+                     struct tm  *tm) {
+	int err;
+	struct timespec tv;
+
+	memset(&tv, 0, sizeof(struct timespec));
+
+	err = toSystem(t, &tv);
+	if (err != 0) return err;
+
+	if (gmtime_r(&tv.tv_sec, tm) == NULL) {
+		return (int)nowdb_err_time;
+	}
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
  * Write time to string
  * ------------------------------------------------------------------------
  */

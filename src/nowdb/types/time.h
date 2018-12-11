@@ -113,6 +113,13 @@ int nowdb_time_toSystem(nowdb_time_t       time,
                         nowdb_system_time_t *tm);
 
 /* ------------------------------------------------------------------------
+ * Convert nowdb time to broken down time
+ * ------------------------------------------------------------------------
+ */
+int nowdb_time_break(nowdb_time_t time,
+                     struct tm    *tm);
+
+/* ------------------------------------------------------------------------
  * Standard periods according to unit
  * ------------------------------------------------------------------------
  */

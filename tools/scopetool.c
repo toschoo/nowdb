@@ -30,7 +30,6 @@ void helptxt(char *progname) {
 
 /* -----------------------------------------------------------------------
  * options
- * -------
  * -----------------------------------------------------------------------
  */
 int global_count = 0;
@@ -263,6 +262,7 @@ int processCursor(nowdb_cursor_t *cur) {
 
 	for(;;) {
 		nowdb_timestamp(&t1);
+		osz=0; cnt=0;
 		err = nowdb_cursor_fetch(cur, buf, BUFSIZE, &osz, &cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
@@ -279,13 +279,13 @@ int processCursor(nowdb_cursor_t *cur) {
 		*/
 		total += cnt;
 		// fprintf(stderr, "%lu\n", total);
-		if (cur->recsize == 32) {
+		if (cur->recsz == 32) {
 			if (cur->row != NULL && cur->hasid) {
 				printRow(buf, osz);
 			} else {
 				printVertex((nowdb_vertex_t*)buf, osz/32);
 			}
-		} else if (cur->recsize == 64) {
+		} else if (cur->recsz == 64) {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);
 			} else if (cur->row != NULL && cur->hasid) {
@@ -318,6 +318,11 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 
 	err = nowdb_stmt_handle(ast, global_scope, NULL, path, &res);
 	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			fprintf(stderr, "Read: 0\n");
+			return 0;
+		}
 		fprintf(stderr, "cannot handle ast: \n");
 		nowdb_ast_show(ast);
 		nowdb_err_print(err);

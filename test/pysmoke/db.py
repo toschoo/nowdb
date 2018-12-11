@@ -2,6 +2,9 @@ import now
 import random
 import datetime
 
+PRODUCTRANGE = 1000
+CLIENTRANGE = 9000000
+
 class FailedCreation(Exception):
     def __init__(self, m):
          self.msg = m
@@ -51,17 +54,15 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create index idx_sales_eo")
 
-    with c.execute("create index vidx_rovi on vertex (role, vid)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index vidx_rovi")
-
     with c.execute("create index vidx_ropo on vertex (role, property)") as r:
         if not r.ok():
             raise FailedCreation("cannot create index vidx_ropo")
    
     with c.execute("create type product ( \
                       prod_key uint primary key, \
-                      prod_desc text, \
+                      prod_desc    text, \
+                      prod_cat     uint, \
+                      prod_packing uint, \
                       prod_price float)") as r:
         if not r.ok():
             raise FailedCreation("cannot create type product")
@@ -105,9 +106,11 @@ def loadDB(c, db):
 
 def loadProducts(c):
     ps = []
-    with c.execute("select prod_key, prod_desc, prod_price from vertex as product") as cur:
+    with c.execute("select prod_key, prod_desc, prod_cat, \
+                           prod_packing, prod_price \
+                      from vertex as product") as cur:
         for row in cur:
-            ps.append(Product(row.field(0), row.field(1), row.field(2)))
+            ps.append(Product(row.field(0), row.field(1), row.field(2), row.field(3), row.field(4)))
     return ps
 
 def loadClients(c):
@@ -171,16 +174,21 @@ def edges2csv(csv, es):
             e.tocsv(f)
 
 class Product:
-    def __init__(self, key, desc, price):
+    def __init__(self, key, desc, cat, pack, price):
         self.key = key
         self.desc = desc
+        self.cat  = cat
+        self.packing = pack
         self.price = price 
 
     def store(self, c):
         stmt = "insert into product ("
-        stmt += "prod_key, prod_desc, prod_price) ("
+        stmt += "prod_key, prod_desc, prod_cat, \
+                 prod_packing, prod_price) ("
         stmt += str(self.key) + ", "
         stmt += "'" + self.desc + "', "
+        stmt += str(self.cat) + ", "
+        stmt += str(self.packing)  + ", "
         stmt += str(self.price) + ")"
         with c.execute(stmt) as r:
             if not r.ok():
@@ -191,6 +199,8 @@ class Product:
         line = ""
         line += str(self.key) + ";"
         line += self.desc + ";"
+        line += str(self.cat)  + ";"
+        line += str(self.packing) + ";"
         line += str(self.price) + "\n"
         csv.write(line)
 
@@ -252,8 +262,11 @@ class BuyEdge:
 def createProducts(no):
     p = []
     for i in range(no):
-        p.append(Product(1000 + i, randomString(random.randint(1,16)), \
-              float(random.randint(1,25))/float(random.randint(1,10))))
+        p.append(Product(1000 + i, \
+                 randomString(random.randint(1,16)), \
+                 random.randint(1,5), \
+                 random.randint(1,3), \
+                 float(random.randint(1,25))/float(random.randint(1,10))))
     return p
 
 def createClients(no):

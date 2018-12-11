@@ -9,14 +9,119 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static char *OBJECT="filter";
+
+#define NOMEM(m) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, m);
+
+/* ------------------------------------------------------------------------
+ * Callbacks for 'IN' tree
+ * ------------------------------------------------------------------------
+ */
+#define TREETYPE(t) \
+	(nowdb_type_t)(uint64_t)(((ts_algo_tree_t*)t)->rsc)
+
+static ts_algo_cmp_t eqcompare(void *tree, void *one, void *two) {
+	switch(TREETYPE(tree)) {
+	case NOWDB_TYP_TEXT:
+	case NOWDB_TYP_LONGTEXT:
+	case NOWDB_TYP_UINT:
+		/*
+		fprintf(stderr, "comparing %lu and %lu\n", *(uint64_t*)one,
+		                                           *(uint64_t*)two);
+		*/
+		if (*(uint64_t*)one <
+		    *(uint64_t*)two) return ts_algo_cmp_less;
+		if (*(uint64_t*)one >
+		    *(uint64_t*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	case NOWDB_TYP_DATE:
+	case NOWDB_TYP_TIME:
+	case NOWDB_TYP_INT:
+		/*
+		fprintf(stderr, "comparing %ld and %ld\n", *(int64_t*)one,
+		                                           *(int64_t*)two);
+		*/
+		if (*(int64_t*)one <
+		    *(int64_t*)two) return ts_algo_cmp_less;
+		if (*(int64_t*)one >
+		    *(int64_t*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	case NOWDB_TYP_FLOAT:
+		/*
+		fprintf(stderr, "comparing %f and %f\n", *(double*)one,
+		                                         *(double*)two);
+		*/
+		if (*(double*)one <
+		    *(double*)two) return ts_algo_cmp_less;
+		if (*(double*)one >
+		    *(double*)two) return ts_algo_cmp_greater;
+		return ts_algo_cmp_equal;
+
+	default: return ts_algo_cmp_greater;
+
+	// BOOL
+	}
+}
+
+static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
+	free(n);
+	return TS_ALGO_OK;
+}
+
+static void valdestroy(void *ignore, void **n) {
+	if (n == NULL) return;
+	if (*n == NULL) return;
+	free(*n); *n=NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * Create the 'IN' tree
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t createInTree(nowdb_filter_t *filter,
+                                ts_algo_list_t *in) {
+	nowdb_err_t          err;
+	ts_algo_list_node_t *run,*tmp;
+
+	filter->in = ts_algo_tree_new(&eqcompare, NULL,
+	                              &noupdate,
+	                              &valdestroy,
+	                              &valdestroy);
+	if (filter->in == NULL) {
+		NOMEM("tree.new");
+		return err;
+	}
+	filter->in->rsc = (void*)(uint64_t)filter->typ;
+
+	run=in->head;
+	while(run!=NULL) {
+		if (ts_algo_tree_insert(filter->in,
+		                         run->cont) != TS_ALGO_OK)
+		{
+			NOMEM("tree.insert");
+			return err;
+		}
+		tmp = run->nxt;
+		ts_algo_list_remove(in, run); free(run);
+		run=tmp;
+	}
+	return NOWDB_OK;
+}
+
 /* ------------------------------------------------------------------------
  * Create a compare node
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
                                         uint32_t off, uint32_t size,
-                                        nowdb_type_t typ, void *val) 
+                                        nowdb_type_t typ, void *val,
+                                                 ts_algo_list_t *in) 
 {
+	nowdb_err_t err;
+
 	*filter = calloc(1, sizeof(nowdb_filter_t));
 	if (*filter == NULL) return nowdb_err_get(nowdb_err_no_mem, FALSE,
 	                               "filter", "allocating filter node");
@@ -24,6 +129,7 @@ nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
 	(*filter)->ntype = NOWDB_FILTER_COMPARE;
 	(*filter)->op = op;
 	(*filter)->val = val;
+	(*filter)->in = NULL;
 	(*filter)->own = 0;
 	(*filter)->left = NULL;
 	(*filter)->right = NULL;
@@ -32,6 +138,13 @@ nowdb_err_t nowdb_filter_newCompare(nowdb_filter_t **filter, int op,
 	(*filter)->size = size;
 	(*filter)->typ = typ;
 
+	if (in != NULL) {
+		err = createInTree(*filter, in);
+		if (err != NOWDB_OK) {
+			free(*filter); *filter = NULL;
+			return err;
+		}
+	}
 	return NOWDB_OK;
 }
 
@@ -80,6 +193,11 @@ void nowdb_filter_destroy(nowdb_filter_t *filter) {
 	if (filter->val != NULL) {
 		if (filter->own) free(filter->val);
 		filter->val = NULL;
+	}
+	if (filter->in != NULL) {
+		ts_algo_tree_destroy(filter->in);
+		free(filter->in);
+		filter->in = NULL;
 	}
 }
 
@@ -148,8 +266,18 @@ static inline nowdb_bool_t cval(nowdb_filter_t *filter, char *data) {
 	case NOWDB_TYP_LONGTEXT:
 	case NOWDB_TYP_UINT:
 		if (filter->size == 4) {
+			/*
+			fprintf(stderr, "comparing %u and %u\n",
+			               *(uint32_t*)(data+filter->off),
+			               *(uint32_t*)filter->val);
+			*/
 			COMPARE((data+filter->off), filter->val, uint32_t);
 		} else {
+			/*
+			fprintf(stderr, "comparing long %lu and %lu\n",
+			               *(uint64_t*)(data+filter->off),
+			               *(uint64_t*)filter->val);
+			*/
 			COMPARE((data+filter->off), filter->val, uint64_t);
 		}
 
@@ -165,8 +293,18 @@ static inline nowdb_bool_t cval(nowdb_filter_t *filter, char *data) {
 	case NOWDB_TYP_FLOAT:
 		COMPARE((data+filter->off), filter->val, double);
 
+	// BOOL
+
 	default: return FALSE;
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Apply compare operator
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_bool_t inval(nowdb_filter_t *filter, char *data) {
+	return (ts_algo_tree_find(filter->in, (data+filter->off)) != NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -175,6 +313,7 @@ static inline nowdb_bool_t cval(nowdb_filter_t *filter, char *data) {
  */
 nowdb_bool_t nowdb_filter_eval(nowdb_filter_t *filter, void *data) {
 	if (filter->ntype == NOWDB_FILTER_BOOL) return bval(filter, data);
+	if (filter->op == NOWDB_FILTER_IN) return inval(filter, data);
 	return cval(filter, data);
 }
 
@@ -308,6 +447,13 @@ char nowdb_filter_range(nowdb_filter_t *filter,
 }
 
 /* ------------------------------------------------------------------------
+ * Copy filter
+ * TODO
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_filter_copy(nowdb_filter_t *src, nowdb_filter_t *trg);
+
+/* ------------------------------------------------------------------------
  * Print filter to 'stream'
  * ------------------------------------------------------------------------
  */
@@ -335,7 +481,7 @@ void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 			fprintf(stream, ")");
 			break;
 
-		case NOWDB_FILTER_OR: fprintf(stream, "|");
+		case NOWDB_FILTER_OR: // fprintf(stream, "|");
 			fprintf(stream, "(");
 			nowdb_filter_show(filter->left, stream);
 			fprintf(stream, " v ");
@@ -359,25 +505,36 @@ void nowdb_filter_show(nowdb_filter_t *filter, FILE *stream) {
 			fprintf(stream, " > "); break;
 		case NOWDB_FILTER_NE:
 			fprintf(stream, " != "); break;
+		case NOWDB_FILTER_IN:
+			fprintf(stream, " IN "); break;
 		}
-		switch(filter->typ) {
-		case NOWDB_TYP_TEXT:
-		case NOWDB_TYP_UINT:
-			fprintf(stream, "%lu", *(uint64_t*)filter->val);
-			break;
 
-		case NOWDB_TYP_TIME:
-		case NOWDB_TYP_DATE:
-		case NOWDB_TYP_INT:
-			fprintf(stream, "%ld", *(int64_t*)filter->val);
-			break;
-
-		case NOWDB_TYP_FLOAT:
-			fprintf(stream, "%f", *(double*)filter->val);
-			break;
-
-		default:
-			fprintf(stream, "?%lu", *(int64_t*)filter->val);
+		if (filter->op != NOWDB_FILTER_IN) {
+			switch(filter->typ) {
+			case NOWDB_TYP_TEXT:
+			case NOWDB_TYP_UINT:
+				fprintf(stream, "%lu",
+				*(uint64_t*)filter->val);
+				break;
+	
+			case NOWDB_TYP_TIME:
+			case NOWDB_TYP_DATE:
+			case NOWDB_TYP_INT:
+				fprintf(stream, "%ld",
+				 *(int64_t*)filter->val);
+				break;
+	
+			case NOWDB_TYP_FLOAT:
+				fprintf(stream, "%f",
+				 *(double*)filter->val);
+				break;
+	
+			default:
+				fprintf(stream, "?%lu",
+				 *(int64_t*)filter->val);
+			}
+		} else {
+			fprintf(stream, "(...)[%d]", filter->in->count);
 		}
 	}
 }

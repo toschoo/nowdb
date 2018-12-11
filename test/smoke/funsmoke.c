@@ -7,6 +7,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/time.h>
 #include <nowdb/fun/fun.h>
+#include <nowdb/scope/scope.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -19,12 +20,25 @@
 
 #define ITER 1000
 
+uint64_t fullmap = 0xffffffffffffffff;
+
 nowdb_edge_t *edges;
 
 uint64_t uzero = 0;
 uint64_t uone = 1;
 double  fzero = 0;
 double  fone = 1;
+
+// fake a model
+uint64_t MYEDGE = 101;
+nowdb_roleid_t MYORI = 111;
+nowdb_roleid_t MYDST = 110;
+
+nowdb_model_edge_t _edge;
+nowdb_model_vertex_t _ori;
+nowdb_model_vertex_t _dst;
+nowdb_edge_helper_t  _ce;
+nowdb_eval_t        _hlp;
 
 void getValue(void *v, nowdb_type_t type) {
 	double f;
@@ -65,6 +79,9 @@ int prepare(nowdb_type_t type, char calm) {
 		return -1;
 	}
 	for(int i=0; i<x; i++) {
+		edges[i].edge = MYEDGE;
+		edges[i].origin = MYORI;
+		edges[i].destin = MYDST;
 		getValue(&edges[i].weight, type);
 		/*
 		double d;
@@ -308,20 +325,27 @@ int testFun(uint32_t ftype,
 	int rc = 0;
 	nowdb_fun_t *fun;
 	nowdb_err_t  err;
+	nowdb_expr_t expr;
 	int mx;
 
-	fun = calloc(1, sizeof(nowdb_fun_t));
-	if (fun == NULL) {
-		fprintf(stderr, "out-of-mem\n");
+	_edge.weight = dtype;
+
+	err = nowdb_expr_newEdgeField(&expr, off);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create edge field\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
 		return -1;
 	}
-	err = nowdb_fun_init(fun, ftype,
+
+	err = nowdb_fun_new(&fun, ftype,
 	                NOWDB_CONT_EDGE,
-	            off, 8, dtype, init);
+	                    expr, init);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init fun\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_expr_destroy(expr); free(expr);
 		return -1;
 	}
 	mx = prepare(dtype, ftype == NOWDB_FUN_PROD);
@@ -332,7 +356,7 @@ int testFun(uint32_t ftype,
 	}
 	fprintf(stderr, "testing on %d edges\n", mx);
 	for(int i=0; i<mx; i++) {
-		err = nowdb_fun_map(fun, edges+i);
+		err = nowdb_fun_map(fun, &_hlp, fullmap, edges+i);
 		if (err != NOWDB_OK) break;
 	}
 	if (err != NOWDB_OK) {
@@ -362,10 +386,39 @@ cleanup:
 	
 }
 
+int initEval() {
+	_edge.edgeid = MYEDGE;
+	_edge.origin = MYORI;
+	_edge.destin = MYDST;
+	_edge.name = "MYEDGE";
+
+	_ori.name = "MYORIGIN";
+	_ori.roleid = MYORI;
+	_ori.vid = NOWDB_MODEL_NUM;
+
+	_dst.name = "MYDESTIN";
+	_dst.roleid = MYDST;
+	_dst.vid = NOWDB_MODEL_NUM;
+
+	_ce.e = &_edge;
+	_ce.o = &_ori;
+	_ce.d = &_dst;
+
+	_hlp.ce = &_ce;
+	_hlp.needtxt = 0;
+
+	return 0;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
+
+	if (initEval() != 0) {
+		fprintf(stderr, "cannot init eval helper\n");
+		return EXIT_FAILURE;
+	}
 
 	fprintf(stderr, "TESTING COUNT, UINT, WEIGHT\n");
 	for(int i=0; i<ITER; i++) {

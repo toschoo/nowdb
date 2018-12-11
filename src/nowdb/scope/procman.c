@@ -361,10 +361,11 @@ static nowdb_err_t readProc(nowdb_procman_t *pm, char *buf,
 	strcpy(desc->name, buf+*idx);
 	(*idx) += s+1;
 
-	fprintf(stderr, "loading %s\n", desc->name);
+	// fprintf(stderr, "loading %s\n", desc->name);
 
 	// type, language and return type
 	if (*idx+2 >= sz) {
+		free(desc->name); free(desc);
 		INVALID("proc config incomplete");
 		return err;
 	}
@@ -396,6 +397,7 @@ static nowdb_err_t readProc(nowdb_procman_t *pm, char *buf,
 
 	if (*idx+2 >= sz) {
 		INVALID("proc config incomplete");
+		free(desc->module); free(desc->name); free(desc);
 		return err;
 	}
 	memcpy(&desc->argn, buf+*idx, 2); (*idx)+=2;

@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <math.h>
 
 nowdb_filter_t *mkBool(int op) {
 	nowdb_err_t   err;
@@ -185,7 +187,55 @@ nowdb_filter_t *mkCompare(int op, int off, int size, int typ, void *val) {
 	nowdb_err_t   err;
 	nowdb_filter_t *f;
 
-	err = nowdb_filter_newCompare(&f, op, off, size, typ, val);
+	err = nowdb_filter_newCompare(&f, op, off, size, typ, val, NULL);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot make new compare\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return NULL;
+	}
+	return f;
+}
+
+nowdb_filter_t *mkIn(int typ, int off, int size, int sz, ...) {
+	va_list      args;
+	nowdb_err_t   err;
+	nowdb_filter_t *f;
+	ts_algo_list_t vals;
+	void *v, *tmp;
+	char x=0;
+
+	ts_algo_list_init(&vals);
+
+	va_start(args, sz);
+	for(int i=0; i<sz; i++) {
+		tmp = va_arg(args, void*);
+		if (tmp == NULL) continue;
+		v = malloc(size);
+		if (v == NULL) {
+			fprintf(stderr, "out-of-mem\n");
+			return NULL;
+		}
+		memcpy(v, tmp, size);
+		if (ts_algo_list_append(&vals, v) != TS_ALGO_OK) {
+			fprintf(stderr, "out-of-mem\n");
+			x = 1; break;
+		}
+	}
+	va_end(args);
+
+	if (x) {
+		ts_algo_list_node_t *run;
+		for(run=vals.head; run!=NULL; run=run->nxt) {
+			free(run->cont);
+		}
+		ts_algo_list_destroy(&vals);
+		return NULL;
+	}
+	
+	err = nowdb_filter_newCompare(&f, NOWDB_FILTER_IN,
+	                      off, size, typ, NULL, &vals);
+	ts_algo_list_destroy(&vals);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot make new compare\n");
 		nowdb_err_print(err);
@@ -806,6 +856,135 @@ int testGTFloat() {
 	return 1;
 }
 
+int testInUInt() {
+	nowdb_edge_t e;
+	uint64_t v=5;
+	uint64_t w,x,y,z;
+	nowdb_bool_t    r;
+	nowdb_filter_t *f;
+
+	w=1; x=2; y=w+x; z=x+y;
+
+	fprintf(stderr, "[InUInt] search in (%lu, %lu, %lu, %lu)\n",
+	                                                w, x, y, z);
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 3; break;
+		case 1: v = 4; break;
+		case 2: v = 5; break; 
+		case 3: v = 6; break;
+		case 4: v = 9; break;
+		}
+
+		f = mkIn(NOWDB_TYP_INT, 40, 8, 4,
+		         &w, &x, &y, &z);
+		if (f == NULL)  return 0;
+
+		memcpy(&e.weight, &v, 8); 
+
+		r = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[InUInt] case %d: %d (%lu)\n", i, r, v);
+
+		switch(i) {
+		case 0: if (!r) return 0; break;
+		case 1: if (r) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (r) return 0; break;
+		case 4: if (r) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testInInt() {
+	nowdb_edge_t e;
+	int64_t v=5;
+	int64_t w,x,y,z;
+	nowdb_bool_t    r;
+	nowdb_filter_t *f;
+
+	w=3; x=-1*w; y=5; z=7;
+
+	fprintf(stderr, "[InInt] search in (%ld, %ld, %ld, %ld)\n",
+	                                                w, x, y, z);
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; break;
+		case 1: v *= -1; break;
+		case 2: v=3; break; 
+		case 3: v *= -1; break;
+		case 4: v = 9; break;
+		}
+
+		f = mkIn(NOWDB_TYP_INT, 40, 8, 4,
+		         &w, &x, &y, &z);
+		if (f == NULL)  return 0;
+
+		memcpy(&e.weight, &v, 8); 
+
+		r = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[InInt] case %d: %d (%ld)\n", i, r, v);
+
+		switch(i) {
+		case 0: if (!r) return 0; break;
+		case 1: if (r) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (!r) return 0; break;
+		case 4: if (r) return 0; break;
+		}
+	}
+	return 1;
+}
+
+int testInFloat() {
+	nowdb_edge_t e;
+	double v=5;
+	double w,x,y,z;
+	nowdb_bool_t    r;
+	nowdb_filter_t *f;
+
+	w=5; x=w/2; y=3.14159; z=sqrt(2);
+
+	fprintf(stderr, "[InFloat] search in (%f, %f, %f, %f)\n",
+	                                              w, x, y, z);
+
+	for(int i=0;i<5;i++) {
+		switch(i) {
+		case 0: v = 5; break;
+		case 1: v /= 3; break;
+		case 2: v=3.14159; break; 
+		case 3: v *= 1.11111; break;
+		case 4: v = sqrt(2); break;
+		}
+
+		f = mkIn(NOWDB_TYP_FLOAT, 40, 8, 4,
+		         &w, &x, &y, &z);
+		if (f == NULL)  return 0;
+
+		memcpy(&e.weight, &v, 8); 
+
+		r = nowdb_filter_eval(f,&e);
+		nowdb_filter_destroy(f); free(f);
+
+		fprintf(stderr, "[InFloat] case %d: %d (%f)\n", i, r, v);
+
+		switch(i) {
+		case 0: if (!r) return 0; break;
+		case 1: if (r) return 0; break;
+		case 2: if (!r) return 0; break;
+		case 3: if (r) return 0; break;
+		case 4: if (!r) return 0; break;
+		}
+	}
+	return 1;
+}
+
 #define BOOL(f,x) \
 	f = mkBool(x); \
 	if (f == NULL) { \
@@ -1039,6 +1218,18 @@ int main() {
 	}
 	if (!testGTFloat()) {
 		fprintf(stderr, "testGTFloat() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testInUInt()) {
+		fprintf(stderr, "testInUint() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testInInt()) {
+		fprintf(stderr, "testInInt() failed\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!testInFloat()) {
+		fprintf(stderr, "testInFloat() failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!testRange()) {

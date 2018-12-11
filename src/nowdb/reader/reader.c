@@ -11,16 +11,9 @@
 static char *OBJECT = "reader";
 
 /* ------------------------------------------------------------------------
- * Reader Types
+ * Some helpers
  * ------------------------------------------------------------------------
  */
-#define NOWDB_READER_FULLSCAN 1
-#define NOWDB_READER_SEARCH   10
-#define NOWDB_READER_FRANGE   100
-#define NOWDB_READER_KRANGE   101
-#define NOWDB_READER_CRANGE   102
-#define NOWDB_READER_BUF      1000
-
 #define BEETERR(x,f) \
 	if (x == BEET_ERR_EOF) { \
 		if (f) reader->eof = 1; \
@@ -31,6 +24,15 @@ static char *OBJECT = "reader";
 
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
+#define ENDOF(x) \
+	err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, x);
+
+/* ------------------------------------------------------------------------
+ * ALL MOVED
+ * ------------------------------------------------------------------------
+ */
+#define ALLMOVED 0xffffffffffffffff
 
 /* ------------------------------------------------------------------------
  * Helper: initialise an already allocated reader
@@ -44,6 +46,8 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->nodata = 0;
 	reader->eof = 0;
 	reader->ko  = 0;
+	reader->ownfiles = 0;
+	reader->files = NULL;
 	reader->buf = NULL;
 	reader->tmp = NULL;
 	reader->tmp2 = NULL;
@@ -111,7 +115,7 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 
 	reader->current = reader->files->head;
 	if (reader->current == NULL) return nowdb_err_get(nowdb_err_eof,
-	                                           FALSE, OBJECT, NULL);
+	                                     FALSE, OBJECT, "no files");
 	reader->closeit = FALSE;
 	reader->page = NULL; 
 	reader->cont = NULL; 
@@ -123,6 +127,9 @@ nowdb_err_t rewindFullscan(nowdb_reader_t *reader) {
 		err = nowdb_file_open(reader->current->cont);
 		if (err != NOWDB_OK) return err;
 		reader->closeit = TRUE;
+	} else {
+		err = nowdb_file_rewind(reader->current->cont);
+		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
 }
@@ -186,6 +193,7 @@ static inline nowdb_err_t rewindBuffer(nowdb_reader_t *reader) {
  */
 static inline nowdb_err_t rewindSeq(nowdb_reader_t *reader) {
 	nowdb_err_t    err;
+	char one = 0;
 
 	reader->cur = 0;
 	reader->cont = NULL;
@@ -194,7 +202,17 @@ static inline nowdb_err_t rewindSeq(nowdb_reader_t *reader) {
 
 	for(int i=0; i<reader->nr; i++) {
 		err = nowdb_reader_rewind(reader->sub[i]);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) {
+			if (err->errcode == nowdb_err_eof) {
+				nowdb_err_release(err); continue;
+			}
+			return err;
+		}
+		if (!one) one=1;
+	}
+	if (!one) {
+		ENDOF("all readers EOF");
+		return err;
 	}
 	return NOWDB_OK;
 }
@@ -209,7 +227,7 @@ static inline nowdb_err_t rewindMerge(nowdb_reader_t *reader) {
 	reader->key = NULL;
 	reader->cont = NULL;
 	reader->eof = 0; 
-	reader->moved = 0xffffffff;
+	reader->moved = ALLMOVED;
 
 	for(int i=0; i<reader->nr; i++) {
 		err = nowdb_reader_rewind(reader->sub[i]);
@@ -238,6 +256,21 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		free(reader->bplru);
 		reader->bplru = NULL;
 	}
+	if (reader->file != NULL) {
+		NOWDB_IGNORE(nowdb_file_close(reader->file));
+		reader->file = NULL;
+	}
+	if (reader->files != NULL && reader->ownfiles) {
+		for(ts_algo_list_node_t *run=
+		          reader->files->head;
+		      run!=NULL; run=run->nxt)
+		{
+			nowdb_file_destroy(run->cont);
+			free(run->cont);
+		}
+		ts_algo_list_destroy(reader->files);
+		free(reader->files);
+	}
 
 	switch(reader->type) {
 
@@ -256,10 +289,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			beet_state_destroy(reader->state);
 			reader->state = NULL;
 		}
-		if (reader->file != NULL) {
-			NOWDB_IGNORE(nowdb_file_close(reader->file));
-			reader->file = NULL;
-		}
 		return;
 
 	case NOWDB_READER_FRANGE:
@@ -269,10 +298,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		if (reader->iter != NULL) {
 			beet_iter_destroy(reader->iter);
 			reader->iter = NULL;
-		}
-		if (reader->file != NULL) {
-			NOWDB_IGNORE(nowdb_file_close(reader->file));
-			reader->file = NULL;
 		}
 		if (reader->plru != NULL) {
 			nowdb_pplru_destroy(reader->plru);
@@ -773,6 +798,7 @@ static inline nowdb_err_t moveSeq(nowdb_reader_t *reader) {
 			reader->cur++;
 			continue;
 		}
+		fprintf(stderr, "ERR %u:", reader->cur); nowdb_err_print(err);
 		return err;
 	}
 	reader->cont = reader->sub[reader->cur]->cont;
@@ -1253,11 +1279,13 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
-				more = 0; err = NOWDB_OK;
+				err = NOWDB_OK;
 			}
 			break;
 		}
 		src = nowdb_reader_page(full);
+		if (src == NULL) return nowdb_err_get(nowdb_err_panic,
+		                 FALSE, OBJECT, "reader has no page");
 		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
 
 			/* we hit the nullrecord */
@@ -1309,6 +1337,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		uint32_t tmp = sz / NOWDB_IDX_PAGE;
 		tmp *= NOWDB_IDX_PAGE;
 		if (tmp < sz) tmp += NOWDB_IDX_PAGE;
+		sz = tmp;
 	}
 
 	err = newReader(reader);
@@ -1362,6 +1391,7 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 
 	(*reader)->page2 = calloc(1, NOWDB_IDX_PAGE);
 	if ((*reader)->page2 == NULL) {
+		nowdb_reader_destroy(*reader); free(*reader);
 		NOMEM("allocating secondary page");
 		return err;
 	}
@@ -1418,9 +1448,9 @@ nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
  */
 static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
                                   int type, uint32_t nr,
-                                  va_list args) {
+                                  nowdb_reader_t **sub) {
 
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 
 	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
 	        FALSE, OBJECT, "pointer to reader object is NULL");
@@ -1429,30 +1459,28 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 	if (err != NOWDB_OK) return err;
 
 	(*reader)->type = type;
+	(*reader)->sub = sub;
 	(*reader)->nr = nr;
 	(*reader)->cur = 0;
 	(*reader)->key = NULL;
 	(*reader)->eof = 0;
 
-	(*reader)->sub = calloc(nr, sizeof(nowdb_reader_t*));
-	if ((*reader)->sub == NULL) {
-		NOMEM("allocating subreaders");
-		nowdb_reader_destroy(*reader); free(*reader);
-		return err;
-	}
-	
 	for(int i=0; i<nr; i++) {
-		(*reader)->sub[i] = (nowdb_reader_t*)va_arg(args,
-		                                 nowdb_reader_t*);
 		if ((*reader)->sub[i] == NULL) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                 OBJECT, "subreader is NULL");
+			break;
 		}
 		if ((*reader)->sub[i]->ikeys == NULL &&
 		    type == NOWDB_READER_MERGE) {
 			err = nowdb_err_get(nowdb_err_invalid, FALSE,
 			                OBJECT, "not a range reader");
+			break;
 		}
+	}
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(*reader); *reader = NULL;
+		return err;
 	}
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
@@ -1461,18 +1489,41 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 
 	return nowdb_reader_rewind(*reader);
 }
-                   
+
 /* ------------------------------------------------------------------------
  * Sequence Reader
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...) {
 	va_list args;
+	nowdb_reader_t **sub;
 	nowdb_err_t err;
+	int i=0;
+
+	sub = calloc(nr, sizeof(nowdb_reader_t*));
+	if (sub == NULL) {
+		NOMEM("allocating readers");
+		return err;
+	}
+	
 	va_start(args,nr);
-	err = mkMulti(reader, NOWDB_READER_SEQ, nr, args);
+	for(i=0;i<nr;i++) {
+		sub[i] = va_arg(args, nowdb_reader_t*);
+	}
 	va_end(args);
+	err = mkMulti(reader, NOWDB_READER_SEQ, nr, sub);
+	if (err != NOWDB_OK) free(sub);
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Sequence Reader (sub readers in array of pointers)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_vseq(nowdb_reader_t **reader,
+                              uint32_t             nr,
+                              nowdb_reader_t    **sub) {
+	return mkMulti(reader, NOWDB_READER_SEQ, nr, sub);
 }
 
 /* ------------------------------------------------------------------------
@@ -1481,9 +1532,32 @@ nowdb_err_t nowdb_reader_seq(nowdb_reader_t **reader, uint32_t nr, ...) {
  */
 nowdb_err_t nowdb_reader_merge(nowdb_reader_t **reader, uint32_t nr, ...) {
 	va_list args;
+	nowdb_reader_t **sub;
 	nowdb_err_t err;
+	int i=0;
+
+	sub = calloc(nr, sizeof(nowdb_reader_t*));
+	if (sub == NULL) {
+		NOMEM("allocating readers");
+		return err;
+	}
+	
 	va_start(args,nr);
-	err = mkMulti(reader, NOWDB_READER_MERGE, nr, args);
+	for(i=0;i<nr;i++) {
+		sub[i] = va_arg(args, nowdb_reader_t*);
+	}
 	va_end(args);
+	err = mkMulti(reader, NOWDB_READER_MERGE, nr, sub);
+	if (err != NOWDB_OK) free(sub);
 	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Merge Reader (sub readers in array of pointers)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_vmerge(nowdb_reader_t **reader,
+                                uint32_t             nr,
+                                nowdb_reader_t    **sub) {
+	return mkMulti(reader, NOWDB_READER_MERGE, nr, sub);
 }

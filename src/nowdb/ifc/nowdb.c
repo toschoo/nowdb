@@ -32,7 +32,9 @@ static char *OBJECT = "lib";
 	((nowdb_t*)x)
 
 #define SETERR() \
-	err->cause = ses->err; \
+	if (ses->err != NULL && ses->err != err) {\
+		err->cause = ses->err; \
+	} \
 	ses->err = err;
 
 #define INTERNAL(s) \
@@ -708,8 +710,10 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 		goto unlock;
 	}
 
-	ts_algo_list_remove(lib->fthreads, n);
-	addNode(lib->uthreads, n);
+	if (n != NULL) {
+		ts_algo_list_remove(lib->fthreads, n);
+		addNode(lib->uthreads, n);
+	}
 
 unlock:
 	err2 = nowdb_unlock_write(lib->lock);
@@ -975,6 +979,12 @@ static int sendErr(nowdb_session_t *ses,
 	short errcode;
 	nowdb_err_t err;
 
+	if (cause != NOWDB_OK && cause->errcode == nowdb_err_eof) {
+		fprintf(stderr, "EOF VIA ERR\n");
+		nowdb_err_release(cause);
+		return sendEOF(ses);
+	}
+
 	// send NOK
 	status[0] = NOWDB_STATUS;
 	status[1] = NOWDB_NOK;
@@ -1066,7 +1076,7 @@ static int sendRow(nowdb_session_t    *ses,
 
 	if (write(ses->ostream, ses->buf, row->sz+6) != row->sz+6) {
 		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
-			                         "writing cursor");
+			                          "writing rows");
 		SETERR();
 		return -1;
 	}
@@ -1118,18 +1128,19 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	err = nowdb_cursor_open(cur);
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
-			nowdb_err_release(err);
-			if (sendEOF(ses) != 0) goto cleanup;
+			nowdb_err_release(err); err = NOWDB_OK;
+			sendEOF(ses);
 			goto cleanup;
 		}
 		// internal error
-		INTERNAL("open cursor");
+		// INTERNAL("open cursor");
 		sendErr(ses, err, NULL);
 		goto cleanup;
 	}
 
 	// the reason for this loop is a bug in row.project
-	// for vertices. we should fix that instead of leaving
+	// for vertices. (The bug should be solved!!!!)
+	// we should fix that instead of leaving
 	// the otherwise meaningless loop here!
 	do { 
 		err = nowdb_cursor_fetch(cur, buf, sz, &osz, &cnt);
@@ -1137,11 +1148,12 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err);
 				if (osz == 0) {
-					if (sendEOF(ses) != 0) goto cleanup;
+					sendEOF(ses);
+					goto cleanup;
 				}
 			} else {
 				// internal error
-				INTERNAL("fetching first row");
+				// INTERNAL("fetching first row");
 				sendErr(ses, err, NULL);
 				goto cleanup;
 			}
@@ -1171,14 +1183,18 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		ts_algo_tree_delete(ses->cursors, scur);
 		INTERNAL("sending results from cursor");
-		sendErr(ses, err, NULL);
+		// sendErr(ses, err, NULL);
 		return -1;
 	}
 	return 0;
 
 cleanup:
 	nowdb_cursor_destroy(cur); free(cur);
-	if (ses->err != NOWDB_OK) return -1;
+	if (ses->err != NOWDB_OK) {
+		fprintf(stderr, "SESSION ERROR: ");
+		nowdb_err_print(ses->err);
+		return -1;
+	}
 	return 0;
 }
 
@@ -1200,6 +1216,7 @@ static int fetch(nowdb_session_t    *ses,
 
 	// fetch
 	// the reason for this loop is a bug in row.project
+	// (it should be solved, though!!!)
 	// for vertices. we should fix that instead of leaving
 	// the otherwise meaningless loop here!
 	do { 
@@ -1227,7 +1244,7 @@ static int fetch(nowdb_session_t    *ses,
 	// send to client
 	if (sendCursor(ses, scur->curid, ses->buf, osz) != 0) {
 		INTERNAL("sending results from cursor");
-		sendErr(ses, err, NULL);
+		// sendErr(ses, err, NULL);
 		return -1;
 	}
 	return 0;
@@ -1290,7 +1307,13 @@ static int handleAst(nowdb_session_t *ses, nowdb_ast_t *ast) {
 	// internal errors and errors specific to this query
 	// unfortunately, we cannot; so we may leak internals
 	err = nowdb_stmt_handle(ast, ses->scope, ses->proc, path, &res);
-	if (err != NOWDB_OK) return sendErr(ses, err, ast);
+	if (err != NOWDB_OK) {
+		if (err->errcode == nowdb_err_eof) {
+			nowdb_err_release(err);
+			return sendEOF(ses);
+		}
+		return sendErr(ses, err, ast);
+	}
 
 	switch(res.resType) {
 	case NOWDB_QRY_RESULT_NOTHING: return sendOK(ses);
@@ -1432,13 +1455,13 @@ static void runSession(nowdb_session_t *ses) {
 		// broken pipe: close session
 		if (rc == NOWDB_SQL_ERR_CLOSED) {
 			LOGMSG("SOCKET CLOSED\n");
-			rc = 0; break;
+			break;
 		}
 
 		// EOF: continue, there may come more
 		if (rc == NOWDB_SQL_ERR_EOF) {
 			LOGMSG("EOF\n");
-			rc = 0; continue;
+			continue;
 		}
 
 		// parser error
@@ -1465,6 +1488,7 @@ static void runSession(nowdb_session_t *ses) {
 		// handle ast
 		rc = handleAst(ses, ast);
 		if (rc != 0) {
+			// nowdb_ast_show(ast);
 			nowdb_ast_destroy(ast); free(ast);
 			LOGMSG("cannot handle ast\n");
 			/* only severe errors are passed through.
@@ -1604,8 +1628,6 @@ void *nowdb_session_entry(void *session) {
 
 		// was stop set while we were busy?
 		stop = getStop(ses);
-
-		// fprintf(stderr, "STOP (2): %d\n", stop);
 
 		if (stop < 0) break;
 		if (stop == 2) break;

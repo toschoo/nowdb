@@ -28,6 +28,7 @@ nowdb_err_t nowdb_group_init(nowdb_group_t *group,
 	if (group == NULL) INVALID("group is NULL");
 	group->sz = sz;
 	group->lst = 0;
+	group->hlp = NULL;
 	group->mapped = 0;
 	group->reduced = 0;
 
@@ -103,6 +104,14 @@ nowdb_err_t nowdb_group_add(nowdb_group_t *group, nowdb_fun_t *fun)
 }
 
 /* -----------------------------------------------------------------------
+ * Set evaluation helper
+ * -----------------------------------------------------------------------
+ */
+void nowdb_group_setEval(nowdb_group_t *group, nowdb_eval_t *hlp) {
+	group->hlp = hlp;
+}
+
+/* -----------------------------------------------------------------------
  * Destroy
  * -----------------------------------------------------------------------
  */
@@ -124,7 +133,9 @@ void nowdb_group_destroy(nowdb_group_t *group) {
  * -----------------------------------------------------------------------
  */
 void nowdb_group_reset(nowdb_group_t *group) {
+	if (group == NULL) return;
 	for(int i=0; i<group->lst; i++) {
+		// fprintf(stderr, "GROUP: resetting %d\n", i);
 		nowdb_fun_reset(group->fun[i]);
 	}
 	group->mapped = 0;
@@ -137,12 +148,16 @@ void nowdb_group_reset(nowdb_group_t *group) {
  */
 nowdb_err_t nowdb_group_map(nowdb_group_t *group,
                             nowdb_content_t type,
+                            uint64_t        rmap,
                             char         *record) {
 	nowdb_err_t err;
 
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
-			err = nowdb_fun_map(group->fun[i], record);
+			// fprintf(stderr, "GROUP: mapping %d\n", i);
+			err = nowdb_fun_map(group->fun[i],
+			                    group->hlp,
+			                    rmap, record);
 			if (err != NOWDB_OK) return err;
 		}
 	}
@@ -161,6 +176,7 @@ nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
 	if (group->reduced) return NOWDB_OK;
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
+			// fprintf(stderr, "GROUP: reduce%d\n", i);
 			err = nowdb_fun_reduce(group->fun[i]);
 			if (err != NOWDB_OK) return err;
 		}

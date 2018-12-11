@@ -11,6 +11,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/index/index.h>
 #include <nowdb/fun/fun.h>
+#include <nowdb/fun/expr.h>
 
 #include <stdint.h>
 
@@ -20,6 +21,7 @@ typedef struct {
 	uint32_t       sz; /* size of the array       */
 	uint32_t      lst; /* used in init            */
 	nowdb_fun_t **fun; /* array of fun pointers   */
+	nowdb_eval_t *hlp; /* evaluation helper       */
 	char       mapped; /* we map before we reduce */
 	char      reduced; /* we reduce only once     */
 } nowdb_group_t;
@@ -58,6 +60,12 @@ nowdb_err_t nowdb_group_add(nowdb_group_t *group, nowdb_fun_t *fun);
 void nowdb_group_destroy(nowdb_group_t *group);
 
 /* -----------------------------------------------------------------------
+ * Set evaluation helper
+ * -----------------------------------------------------------------------
+ */
+void nowdb_group_setEval(nowdb_group_t *group, nowdb_eval_t *hlp);
+
+/* -----------------------------------------------------------------------
  * Reset
  * -----------------------------------------------------------------------
  */
@@ -69,6 +77,7 @@ void nowdb_group_reset(nowdb_group_t *group);
  */
 nowdb_err_t nowdb_group_map(nowdb_group_t *group,
                             nowdb_content_t type,
+                            uint64_t        rmap,
                             char         *record);
 
 /* -----------------------------------------------------------------------

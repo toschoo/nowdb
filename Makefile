@@ -49,7 +49,7 @@ DOC=doc
 MAN=doc/manual
 LIBPY = python2.7
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
-clibs = -lm -lpthread -ltsalgo
+clibs = -lm -lpthread -ltsalgo -lcsv -lbeet
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \
@@ -66,6 +66,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/ptlru.o      \
       $(SRC)/mem/pklru.o      \
       $(SRC)/mem/pplru.o      \
+      $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
       $(SRC)/store/comp.o     \
@@ -81,19 +82,21 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
       $(SRC)/reader/filter.o  \
+      $(SRC)/reader/vrow.o    \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
       $(SRC)/fun/group.o      \
+      $(SRC)/fun/expr.o       \
       $(SRC)/sql/ast.o        \
       $(SRC)/sql/lex.o        \
       $(SRC)/sql/nowdbsql.o   \
       $(SRC)/sql/state.o      \
       $(SRC)/sql/parser.o     \
+      $(SRC)/qplan/plan.o     \
       $(SRC)/query/stmt.o     \
       $(SRC)/query/row.o      \
       $(SRC)/query/rowutl.o   \
-      $(SRC)/query/plan.o     \
       $(SRC)/query/cursor.o   \
       $(SRC)/ifc/proc.o       \
       $(SRC)/ifc/nowproc.o    \
@@ -115,6 +118,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/mem/ptlru.h      \
       $(SRC)/mem/pklru.h      \
       $(SRC)/mem/pplru.h      \
+      $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
       $(SRC)/store/comp.h     \
@@ -129,16 +133,17 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
       $(SRC)/reader/filter.h  \
+      $(SRC)/reader/vrow.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
       $(SRC)/fun/expr.h       \
       $(SRC)/fun/fun.h        \
       $(SRC)/fun/group.h      \
+      $(SRC)/qplan/plan.h     \
       $(SRC)/query/rowutl.h   \
       $(SRC)/query/row.h      \
       $(SRC)/query/stmt.h     \
-      $(SRC)/query/plan.h     \
       $(SRC)/query/cursor.h   \
       $(SRC)/sql/ast.h        \
       $(SRC)/sql/lex.h        \
@@ -195,9 +200,11 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertstoresmoke        \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
+	$(SMK)/exprsmoke               \
 	$(SMK)/filtersmoke             \
 	$(SMK)/funsmoke                \
 	$(SMK)/rowsmoke                \
+	$(SMK)/vrowsmoke               \
 	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
 	$(SMK)/scopesmoke2             \
@@ -261,7 +268,7 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/types/error.o \
                         	 $(SRC)/types/time.o \
                         	 $(SRC)/query/rowutl.o \
-			         $(SRL)/nowdbclient.o $(libs)
+			         $(SRL)/nowdbclient.o $(clibs)
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
@@ -378,12 +385,22 @@ $(SMK)/filtersmoke:	$(LIB) $(DEP) $(SMK)/filtersmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/exprsmoke:	$(LIB) $(DEP) $(SMK)/exprsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
 $(SMK)/funsmoke:	$(LIB) $(DEP) $(SMK)/funsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
 $(SMK)/rowsmoke:	$(LIB) $(DEP) $(SMK)/rowsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+$(SMK)/vrowsmoke:	$(LIB) $(DEP) $(SMK)/vrowsmoke.o
 			$(LNKMSG)
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
@@ -643,6 +660,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.h
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
+	rm -f todo/bin/*.pyc
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
@@ -685,9 +703,11 @@ clean:
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
 	rm -f $(SMK)/readersmoke
+	rm -f $(SMK)/exprsmoke
 	rm -f $(SMK)/filtersmoke
 	rm -f $(SMK)/funsmoke
 	rm -f $(SMK)/rowsmoke
+	rm -f $(SMK)/vrowsmoke
 	rm -f $(SMK)/pmansmoke
 	rm -f $(SMK)/insertandsortstoresmoke
 	rm -f $(SMK)/scopesmoke

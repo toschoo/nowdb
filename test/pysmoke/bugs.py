@@ -13,8 +13,8 @@ def vertexSelectNoPK(c):
 
     print "RUNNING TEST 'vertexSelectNoPK'"
 
-    stmt = "select prod_desc, prod_price from vertex as product \
-             where prod_key = %s" % str(ps[0].key)
+    stmt = "select prod_desc, prod_price from product \
+             where prod_key = %d" % ps[0].key
     with c.execute(stmt) as cur:
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
@@ -22,31 +22,37 @@ def vertexSelectNoPK(c):
         for row in cur:
             print "%s: %.2f" % (row.field(0), row.field(1))
 
-    stmt = "select prod_key from vertex as product \
+    stmt = "select prod_key from product \
              where prod_desc = '%s'" % ps[0].desc
     with c.execute(stmt) as cur:
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
             raise db.TestFailed("cannot execute select on product without pk")
+        found = False
         for row in cur:
             print "%d" % row.field(0)
-            if row.field(0) != ps[0].key:
-                raise db.TestFailed("wroing key selected for product: %d != %d" %
-                                   (row.field(), ps[0].key))
+            if row.field(0) == ps[0].key:
+                found=True
+        if not found:
+            raise db.TestFailed("product not found: %d, %s" %
+                                   (ps[0].key,ps[0].desc))
 
-    stmt = "select client_key from vertex as client \
+    stmt = "select client_key from client \
              where client_name = '%s'" % cs[0].name
     with c.execute(stmt) as cur:
         if not cur.ok():
             print "%d: %s" % (cur.code(), cur.details())
             raise db.TestFailed("cannot execute select on client without pk")
+        found=False
         for row in cur:
             print "%d" % row.field(0)
-            if row.field(0) != cs[0].key:
-                raise db.TestFailed("wroing key selected for client: %d != %d" %
-                                   (row.field(), cs[0].key))
+            if row.field(0) == cs[0].key:
+                found=True
+        if not found:      
+           raise db.TestFailed("product not found. %d, %s" %
+                                   (cs[0].key, cs[0].name))
 
-    stmt = "select prod_desc from vertex as product"
+    stmt = "select prod_desc from product"
     with c.execute(stmt) as cur:
         n=0
         if not cur.ok():
@@ -58,7 +64,7 @@ def vertexSelectNoPK(c):
         if n != len(ps):
            raise db.TestFailed("expecting %d products, but have %d" % (len(ps), n))
 
-    stmt = "select client_name from vertex as client"
+    stmt = "select client_name from client"
     with c.execute(stmt) as cur:
         n=0
         if not cur.ok():
@@ -91,7 +97,7 @@ def keyzero(c):
             raise db.TestFailed("cannot insert zero")
 
     stmt = "select test_key, test_desc \
-              from vertex as testzero \
+              from testzero \
              where test_key = 0"
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -101,6 +107,8 @@ def keyzero(c):
            print "%d: %s" % (row.field(0), row.field(1))
            if row.field(0) != 0 or row.field(1) != "zero":
               raise db.TestFailed("zero values differ!")
+
+    ### DELETE ZERO!
 
     stmt = "drop type testzero"
     with c.execute(stmt) as r:
@@ -157,6 +165,88 @@ def invalidEdgeInserts(c):
          else:
             print "%d: %s" % (r.code(), r.details())
 
+# it shall not be possible to create an edge and a type of the same name
+# it shall not be possible to create a context and a type of the same name
+# it shall not be possible to create a context and an edge of the same name
+def doublenaming(c):
+
+    print "RUNNING TEST 'doublenaming'"
+
+    # type and edge
+    with c.execute("create edge fooedge (origin client, destin product, weight float)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create an edge named 'fooedge': %s" % r.details())
+
+    with c.execute("create type fooedge (foo_key uint primary key, foo_name text)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create type 'fooedge' (which is an edge) :-(")
+
+    with c.execute("create type bartype (bar_key uint primary key, bar_name text)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a type named 'bartype': %s" % r.details())
+
+    with c.execute("create edge bartype (origin client, destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge named 'bartype' which is a type :-(")
+
+    with c.execute("drop edge fooedge") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop edge fooedge: %s" % r.details())
+
+    with c.execute("drop type bartype") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop type bartype: %s" % r.details())
+
+    # type and context
+    with c.execute("create table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a table named 'fooctx': %s" % r.details())
+
+    with c.execute("create type fooctx (foo_key uint primary key, foo_name text)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create type 'fooctx' (which is a table) :-(")
+
+    with c.execute("create type bartype (bar_key uint primary key, bar_name text)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a type named 'bartype': %s" % r.details())
+
+    with c.execute("create table bartype") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an edge named 'bartype' which is a type :-(")
+
+    with c.execute("drop table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop table fooctx: %s" % r.details())
+
+    with c.execute("drop type bartype") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop type bartype: %s" % r.details())
+
+    # edge and context
+    with c.execute("create table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create a table named 'fooctx': %s" % r.details())
+
+    with c.execute("create edge fooctx (origin client, destin product, weight float)") as r:
+         if r.ok():
+            raise db.TestFailed("I can create edge 'fooctx' (which is a table) :-(")
+
+    with c.execute("create edge baredge (origin client, destin product, weight float)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot create an edge named 'baredge': %s" % r.details())
+
+    with c.execute("create table baredge") as r:
+         if r.ok():
+            raise db.TestFailed("I can create an table named 'baredge' which is an edge :-(")
+
+    with c.execute("drop table fooctx") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop table fooctx: %s" % r.details())
+
+    with c.execute("drop edge baredge") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot drop edge baredge: %s" % r.details())
+
 #### MAIN ####################################################################
 if __name__ == '__main__':
     with now.Connection("localhost", "55505", None, None) as c:
@@ -168,3 +258,6 @@ if __name__ == '__main__':
         keyzero(c)
         createInvalidEdge(c)
         invalidEdgeInserts(c)
+        doublenaming(c)
+
+        print "PASSED"

@@ -1,14 +1,15 @@
 # ========================================================================
-# Test script for sql (scopetool)
-# -------------------
+# Test script for where on vertex
+# -------------------------------
 # Prerequisits:
 # - csvkit should be installed
 #
 # The script
-# - creates rsc/kilo.csv with 1000 edges using writecsv
-# - copies this file to rsc/context.csv and adds a header to it
+# - creates the database rsc/db500
+# - creates an edge and a context
+# - creates rsc/loc.csv with 1000 vertices using writecsv -vertex 1
 # - it then generates random wheres containing
-#   edge, origin, destin and timestamp
+#   - name, lon, lat
 #   - with and & ors (randomly)
 #   - random parentheses around the expressions
 # - it executes the resulting query with 
@@ -24,8 +25,8 @@ else
 fi
 
 # sqlprefix
-csvsqlprfx="select count(*) from context "
-nowsqlprfx="use test;select *  from ctx_tiny "
+csvsqlprfx="select count(*) from loc "
+nowsqlprfx="use db500;select count(*) from loc "
 csvsqlsufx=""
 nowsqlsufx=";"
 
@@ -37,9 +38,10 @@ then
 	exit 1
 fi
 
-file=rsc/kilo.csv
-csv=rsc/context.csv
-base=/opt/dbs
+efile=rsc/kilo.csv
+file=rsc/loc.csv
+csv=$file
+base=rsc
 loader=test/sql/load2.sql
 
 # how we build our where clause
@@ -47,11 +49,10 @@ function mkwhere() {
 	l=$1
 
 	line=$(head -$l $file | tail -1)
-	vars=$(echo $line | cut -d";" -f1-5)
-	edge=$(echo $vars | cut -d";" -f1)
-	origin=$(echo $vars | cut -d";" -f2)
-	destin=$(echo $vars | cut -d";" -f3)
-	tmstmp=$(echo $vars | cut -d";" -f5)
+	id=$(echo $line | cut -d";" -f1)
+	name=$(echo $line | cut -d";" -f2)
+	lon=$(echo $line | cut -d";" -f3)
+	lat=$(echo $line | cut -d";" -f4)
 
 	for i in {0..3}
 	do
@@ -72,43 +73,40 @@ function mkwhere() {
 		fi
 	done
 
-	# we still need parentheses
 	x=$(($RANDOM%4))
 	case $x in
 		0) 
-			e="edge=$edge"; o="origin=$origin";
-			d="destin=$destin"; t="timestamp=$tmstmp"
+			e="id=$id"; n="name='$name'";
+			o="lon=$lon"; a="lat=$lat"
 			;;
 		1) 
-			e="(edge=$edge"; o="origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp" 
+			e="id=$id"; n="name='$name'"; 
+			o="(lon=$lon"; a="lat=$lat)" 
 			;;
 		2) 
-			e="edge=$edge";o="(origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp"
+			e="id=$id";n="(name='$name'"; 
+			o="lon=$lon)"; a="lat=$lat"
 			;;
 		3) 
-			e="edge=$edge";o="(origin=$origin"; 
-			d="destin=$destin)"; t="timestamp=$tmstmp"
+			e="id=$id";n="(name='$name'"; 
+			o="lon=$lon)"; a="lat=$lat"
 			;;
 	esac
 
-	w="where $e $c1 $o $c2 $d $c3 $t"
+	# w="where $e $c1 $n $c2 $o $c3 $a"
+	w="where $n $c2 $o $c3 $a"
 
 	printf "%s\n" "$w"
 }
 
 # create the data
-bin/writecsv > $file
-
-# make them csvsql-readable
-echo "edge;origin;destin;label;timestamp;weight;weight2;wtype;wtype2" > $csv
-cat $file >> $csv
+bin/writecsv -vertex 1 > $file
+bin/writecsv > $efile
 
 # load them into database
 cat $loader | bin/scopetool $base
 
-cnt=$(wc -l rsc/kilo.csv | awk -F" " '{print $1}')
+cnt=$(wc -l $file | awk -F" " '{print $1}')
 
 i=0
 IFS=$'\n'
@@ -126,8 +124,18 @@ fi
 
 while [ $i -lt $mx ]
 do
-	line=$((1 + $RANDOM%$cnt))
+	while [ true ]
+	do
+		line=$((2 + $RANDOM%$cnt))
+		z=$(head -$line $file | tail -1 | grep ";NA;")
+		if [ "$z" == "" ]
+		then
+			break
+		fi 
+	done
+
 	i=$(($i+1))
+	
 	printf "Test %06d) line %d: " $i $line
 	whereclause=$(mkwhere $line)
 	csvsql="$csvsqlprfx$whereclause$csvsqlsufx"
@@ -140,15 +148,13 @@ do
 		exit 1
 	fi
 	csvres=$(echo $csvout | awk -F" " '{print $2}')
-	nowout=$(echo $nowdbsql | bin/scopetool $base 2>&1 >/dev/null |\
-		grep Read)
+	nowres=$(echo $nowdbsql | bin/scopetool $base 2>/dev/null)
 	if [ $? -ne 0 ]
 	then
 		printf "ERROR in scopetool '%s':\n" "$nowdbsql"
 		echo "$nowout"
 		exit 1
 	fi
-	nowres=$(echo $nowout | cut -d" " -f2)
 	if [ $csvres -ne $nowres ]
 	then
 		printf "FAILED in '%s': %d != %d\n" $csvsql $csvres $nowres

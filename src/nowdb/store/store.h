@@ -17,6 +17,7 @@
 #include <nowdb/task/worker.h>
 #include <nowdb/sort/sort.h>
 #include <nowdb/store/comp.h>
+#include <nowdb/mem/plru12.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -45,6 +46,7 @@ typedef struct {
 	nowdb_comprsc_t compare; /* comparison                  */
 	void              *iman; /* index manager               */
 	void           *context; /* context for indexing        */
+	nowdb_plru12_t     *lru; /* lru for vertices            */
 	uint32_t        tasknum; /* number of sorter tasks      */
 	nowdb_worker_t  syncwrk; /* background sync             */
 	nowdb_worker_t  sortwrk; /* background sorter           */
@@ -65,6 +67,7 @@ typedef struct {
  */
 nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
+                            nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
                             uint32_t     filesize,
@@ -76,6 +79,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
  */
 nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
+                             nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
                              uint32_t     filesize,

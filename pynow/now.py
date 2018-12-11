@@ -52,7 +52,7 @@ EOF = 8
 
 utc = tzutc()
 
-TIMEFORMAT = "%Y-%m-%dT%H:%M:%S"
+TIMEFORMAT = "%Y-%m-%dT%H:%M:%S.%f"
 DATEFORMAT = "%Y-%m-%d"
 
 # ---- C functions --------------------------------------------------------

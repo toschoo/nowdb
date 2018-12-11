@@ -1,0 +1,3 @@
+bug: vid or vid
+---------------
+the above won't work

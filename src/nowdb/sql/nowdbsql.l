@@ -40,6 +40,12 @@
 "!="			return NOWDB_SQL_NE;
 "<>"			return NOWDB_SQL_NE;
 
+"+"			return NOWDB_SQL_PLUS;
+"-"			return NOWDB_SQL_MINUS;
+"/"			return NOWDB_SQL_DIV;
+"%"			return NOWDB_SQL_PER;
+"^"			return NOWDB_SQL_POW;
+
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
 	/*
@@ -64,6 +70,7 @@
 (?i:TEXT)		return NOWDB_SQL_TEXT;
 (?i:DATE)		return NOWDB_SQL_DATE;
 (?i:DATETIME)		return NOWDB_SQL_TIME;
+(?i:TIME)		return NOWDB_SQL_TIME;
 (?i:FLOAT)		return NOWDB_SQL_FLOAT;
 (?i:INT)		return NOWDB_SQL_INT;
 (?i:INTEGER)		return NOWDB_SQL_INT;
@@ -88,6 +95,7 @@
 (?i:STAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:TRUE)		return NOWDB_SQL_TRUE;
 (?i:FALSE)		return NOWDB_SQL_FALSE;
+(?i:NULL)		return NOWDB_SQL_NULL;
 
 (?i:SELECT)		return NOWDB_SQL_SELECT;
 (?i:INSERT)		return NOWDB_SQL_INSERT;
@@ -106,6 +114,7 @@
 (?i:INTO) 		return NOWDB_SQL_INTO;
 (?i:SET)		return NOWDB_SQL_SET;
 (?i:ON)			return NOWDB_SQL_ON;
+(?i:IN)			return NOWDB_SQL_IN;
 
 (?i:IF)			return NOWDB_SQL_IF;
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;
@@ -135,6 +144,8 @@
 (?i:SORTERS)		return NOWDB_SQL_SORTERS;
 (?i:COMPRESSION)	return NOWDB_SQL_COMPRESSION;
 (?i:ENCRYPTION)		return NOWDB_SQL_ENCRYPTION;
+
+(?i:ERRORS)		return NOWDB_SQL_ERRORS;
 
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;

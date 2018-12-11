@@ -454,7 +454,7 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
                                nowdb_blist_t    *flist,
                                uint32_t        recsize,
                                nowdb_comprsc_t compare)  {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	ts_algo_list_t tmp;
 	ts_algo_list_t *src=NULL, *trg=NULL;
 	int k = 1;

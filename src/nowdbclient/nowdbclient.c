@@ -664,6 +664,9 @@ void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
 		if (ROW(p)->buf[i] == NOWDB_TEXT) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
+		} else if (ROW(p)->buf[i] == NOWDB_BOOL ||
+                         ROW(p)->buf[i] == NOWDB_NOTHING) {
+			i+=2;
 		} else {
 			i+=9;
 		}
@@ -737,7 +740,8 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 			i++; break;
 
 		case NOWDB_NOTHING:
-			i+=8; break;
+			fprintf(stream, "NULL");
+			i++; break;
 
 		default:
 			return NOWDB_ERR_PROTO;

@@ -17,7 +17,10 @@ static char *OBJECT = "dml";
 #define NOMEM(m) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, m);
 
-
+/* ------------------------------------------------------------------------
+ * Initialise dml helper
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml, 
                            nowdb_scope_t *scope,
                            char       withCache) {
@@ -51,6 +54,10 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy dml helper
+ * ------------------------------------------------------------------------
+ */
 void nowdb_dml_destroy(nowdb_dml_t *dml) {
 	if (dml == NULL) return;
 
@@ -66,6 +73,10 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Are we context or vertex?
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
                                       char    *trgname) {
 	nowdb_err_t err1, err2;
@@ -93,6 +104,10 @@ static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get vertex properties from model
+ * ------------------------------------------------------------------------
+ */
 static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
                                  ts_algo_list_t *fields) {
 	nowdb_err_t err;
@@ -154,6 +169,21 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Is our vertex representation in canonical order?
+ * ------------------------------------------------------------------------
+ */
+static char propsSorted(nowdb_dml_t *dml) {
+	for(int i=0; i<dml->num; i++) {
+		if (dml->p[i]->pos != i) return 0;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Do we insert the complete vertex?
+ * ------------------------------------------------------------------------
+ */
 static char vertexComplete(nowdb_dml_t *dml,
                      ts_algo_list_t *fields, 
                      ts_algo_list_t *values) 
@@ -163,7 +193,8 @@ static char vertexComplete(nowdb_dml_t *dml,
 
 	if (dml->p == NULL) return 0;
 	if (fields == NULL) {
-		return (values->len == dml->num);
+		if (values->len != dml->num) return 0;
+		return propsSorted(dml);
 	}
 	if (dml->num != fields->len) return 0;
 	for(run=fields->head; run!=NULL; run=run->nxt) {
@@ -175,6 +206,10 @@ static char vertexComplete(nowdb_dml_t *dml,
 	return 1;
 }
 
+/* ------------------------------------------------------------------------
+ * Set target according to name
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
                                 char    *trgname,
                           ts_algo_list_t *fields,
@@ -223,13 +258,17 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Insert row in row format
+ * TODO!
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_insertRow(nowdb_dml_t *dml,
                                 char        *row,
                                 uint32_t     sz);
 
 /* ------------------------------------------------------------------------
  * Helper: get key and cache it
- * TODO!
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getKey(nowdb_dml_t *dml,
@@ -255,6 +294,10 @@ static inline nowdb_err_t getKey(nowdb_dml_t *dml,
 	return nowdb_pklru_add(dml->tlru, mystr, *key);
 }
 
+/* ------------------------------------------------------------------------
+ * Set edge model
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
                                        char       *edge) {
 	nowdb_err_t err;
@@ -281,6 +324,10 @@ static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Get edge model
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
                                  ts_algo_list_t *fields,
                                  ts_algo_list_t *values) {
@@ -300,18 +347,27 @@ static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
 			}
 			vrun = vrun->nxt;
 		}
+		if (edge == NULL) {
+			INVALID("edge field missing in insert");
+		}
+		if (!tp) {
+			INVALID("timestamp missing in insert");
+		}
+		val = edge->cont;
+	} else {
+		if (values == NULL) INVALID("no values");
+		if (values->len < 7) INVALID("incomplete value list");
+		if (values->len > 7) INVALID("too many values");
+		val = values->head->cont;
 	}
-	if (edge == NULL) {
-		INVALID("edge field missing in insert");
-	}
-	if (!tp) {
-		INVALID("timestamp missing in insert");
-	}
-	val = edge->cont;
-	fprintf(stderr, "%s\n", (char*)val->value);
+	// fprintf(stderr, "%s\n", (char*)val->value);
 	return setEdgeModel(dml, val->value);
 }
 
+/* ------------------------------------------------------------------------
+ * Check edge model
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
                                          uint32_t              off,
                                          nowdb_simple_value_t *val) {
@@ -353,15 +409,29 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		break;
 
 	case NOWDB_OFF_TMSTMP:
-		if (val->type != NOWDB_TYP_TEXT) {
+		if (val->type == NOWDB_TYP_TEXT) {
+			val->type = NOWDB_TYP_TIME; break;
+		}
+		if (val->type != NOWDB_TYP_INT  &&
+		    val->type != NOWDB_TYP_UINT) {
 			INVALID("not a valid timestamp");
 		}
-		val->type = NOWDB_TYP_TIME; break;
+		break;
 
 	case NOWDB_OFF_WEIGHT:
-		if (dml->e->weight == NOWDB_TYP_INT &&
-		    val->type == NOWDB_TYP_UINT) {
-			val->type = NOWDB_TYP_INT;
+ 		if (dml->e->weight == NOWDB_TYP_INT &&
+ 		    val->type == NOWDB_TYP_UINT) {
+ 			val->type = NOWDB_TYP_INT;
+
+ 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
+ 		        (val->type == NOWDB_TYP_UINT      ||
+                          val->type == NOWDB_TYP_INT)) {
+ 			break;
+
+ 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
+ 		           val->type == NOWDB_TYP_TEXT) {
+ 			val->type = NOWDB_TYP_TIME;
+
 		} else if (dml->e->weight != val->type) {
 			INVALID("wrong type in weight");
 		}
@@ -372,6 +442,16 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		if (dml->e->weight2 == NOWDB_TYP_INT &&
 		    val->type == NOWDB_TYP_UINT) {
 			val->type = NOWDB_TYP_INT;
+
+ 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
+ 		        (val->type == NOWDB_TYP_UINT      ||
+                          val->type == NOWDB_TYP_INT)) {
+ 			break;
+
+ 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
+ 		           val->type == NOWDB_TYP_TEXT) {
+ 			val->type = NOWDB_TYP_TIME;
+
 		} else if (dml->e->weight2 != val->type) {
 			INVALID("wrong type in weight2");
 		}
@@ -468,6 +548,10 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Copy value to edge descriptor
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
                                         nowdb_edge_t *edge,
                                         uint32_t       off,
@@ -475,6 +559,10 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	return getValueAsType(dml, val, ((char*)edge)+off);
 }
 
+/* ------------------------------------------------------------------------
+ * Insert edge in fields/values format
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
                                      ts_algo_list_t *fields,
                                      ts_algo_list_t *values) 
@@ -552,15 +640,49 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	return nowdb_store_insert(dml->store, &edge);
 }
 
-static inline nowdb_err_t insertVertexProperty(nowdb_dml_t *dml, int idx,
-                                               nowdb_simple_value_t *val) {
-	return NOWDB_OK;
+/* ------------------------------------------------------------------------
+ * Correct type:
+ * This is chaotic! We should once and for all define the correction
+ * in types and use it everywhere...
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t correctType(uint32_t typ,
+                         nowdb_simple_value_t *val) {
+	nowdb_err_t err;
+	// this is all googledemoogle
+	if (typ == NOWDB_TYP_TIME ||
+	    typ == NOWDB_TYP_DATE) {
+		if (val->type == NOWDB_TYP_TEXT) {
+			val->type = typ;
+			return NOWDB_OK;
+		}
+		if (val->type == NOWDB_TYP_UINT) {
+			val->type = NOWDB_TYP_INT;
+			return NOWDB_OK;
+		}
+		if (val->type == NOWDB_TYP_INT) {
+			return NOWDB_OK;
+		}
+	}
+	/* this is as it should be!!!
+	if (nowdb_correctType(typ, &val->type, val->value) != 0) {
+		INVALIDVAL("cannot correct value");
+		return err;
+	}
+	*/
+	INVALIDVAL("types differ");
+	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Insert vertex in fields/value format
+ * NOTE: this relies on setTarget
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
                                        ts_algo_list_t *fields,
                                        ts_algo_list_t *values) {
-	nowdb_err_t err;
+	nowdb_err_t err=NOWDB_OK;
 	ts_algo_list_node_t *vrun;
 	nowdb_simple_value_t *val;
 	nowdb_vertex_t vrtx;
@@ -571,13 +693,19 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		if (dml->p[i]->value != val->type) {
-			INVALIDVAL("types differ");
-			return err;
+			err = correctType(dml->p[i]->value, val);
+			if (err != NOWDB_OK) return err;
 		}
+		// store primary key in vertex
 		if (dml->p[i]->pk) {
 			err = getValueAsType(dml, val, &vrtx.vertex);
 			if (err != NOWDB_OK) return err;
 			pkfound = 1;
+
+		// check all other values
+		} else {
+			err = getValueAsType(dml, val, &vrtx.value);
+			if (err != NOWDB_OK) return err;
 		}
 		i++;
 	}
@@ -585,12 +713,25 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		INVALIDVAL("no pk in vertex");
 		return err;
 	}
+
+	// now we have role and vertex
 	i=0;
 	vrtx.role = dml->v->roleid;
+
+	// now register the vertex...
+	// (we should lock here and keep the lock)
+	err = nowdb_scope_registerVertex(dml->scope,
+	                                 vrtx.role,
+	                                 vrtx.vertex);
+	if (err != NOWDB_OK) return err;
+
+	// ... and store all attributes
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		vrtx.property = dml->p[i]->propid;
 		vrtx.vtype = dml->p[i]->value;
+
+		// no error shall occur, we already checked it
 		err = getValueAsType(dml, val, &vrtx.value);
 		if (err != NOWDB_OK) break;
 
@@ -604,9 +745,21 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		if (err != NOWDB_OK) break;
 		i++;
 	}
+	/*
+	 * if things fail here,
+	 * we have already registered the vertex
+	 * and we have inserted parts of it.
+	 * we need to:
+	 * - delete everything we inserted
+	 * - and unregister
+	 */
 	return err;
 }
 
+/* ------------------------------------------------------------------------
+ * Insert in fields/value format
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_dml_insertFields(nowdb_dml_t *dml,
                              ts_algo_list_t *fields,
                              ts_algo_list_t *values) 

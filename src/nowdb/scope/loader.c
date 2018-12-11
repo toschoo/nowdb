@@ -7,6 +7,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/scope/loader.h>
+#include <nowdb/scope/scope.h>
 
 #include <tsalgo/list.h>
 
@@ -74,6 +75,7 @@ static int is_term(unsigned char c) {
 nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
+                              void            *scope,
                               nowdb_store_t   *store,
                               nowdb_model_t   *model,
                               nowdb_text_t     *text,
@@ -85,6 +87,7 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->flags = flags;
 	ldr->stream = stream==NULL?stdin:stream;
 	ldr->ostream = ostream==NULL?stderr:ostream;
+	ldr->scope  = scope;
 	ldr->store  = store;
 	ldr->model  = model;
 	ldr->text   = text;
@@ -287,7 +290,7 @@ static inline void cleanBuf(nowdb_loader_t *ldr) {
  */
 nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr) {
 	nowdb_err_t err;
-	size_t r, sz, off=0;
+	size_t r, sz=0, off=0;
 	struct timespec t1, t2;
 
 	ldr->loaded = 0;
@@ -934,6 +937,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	}
 
 	int i = LDR(ldr)->csv->cur;
+
 	/*
 	memcpy(LDR(ldr)->csv->txt, data, len);
 	LDR(ldr)->csv->txt[len] = 0;
@@ -943,6 +947,11 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 
 	/* get PK (= vid) */
 	if (LDR(ldr)->csv->props[i].pk) {
+		if (len == 0) {
+			REJECT(LDR(ldr)->csv->props[i].name,
+				      "primary key is NULL");
+			return;
+		}
 		if (LDR(ldr)->csv->props[i].value == NOWDB_TYP_TEXT) {
 			if (getKeyFromText(LDR(ldr), data, len,
 			             &LDR(ldr)->csv->vid) != 0) {
@@ -958,6 +967,13 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 				return;
 			}
 		}
+	}
+
+	// no data: NULL
+	// we should also test for 'NULL'
+	if (len == 0) {
+		LDR(ldr)->csv->cur++;
+		return;
 	}
 
 	/* get propid (from props) */
@@ -997,6 +1013,22 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 			      &LDR(ldr)->csv->vid, 8);
 		}
 		LDR(ldr)->csv->cur = 0;
+
+		nowdb_err_t err =
+		nowdb_scope_registerVertex(LDR(ldr)->scope,
+		                           LDR(ldr)->csv->props[0].roleid,
+		                           LDR(ldr)->csv->vid);
+		if (err != NOWDB_OK) {
+			char freemsg=1;
+			char *msg = nowdb_err_describe(err, ';');
+			if (msg == NULL) {
+				msg = "out-of-mem"; freemsg = 0;
+			}
+			REJECT("cannot preregister vertex", msg);
+			if (freemsg) free(msg);
+			nowdb_err_release(err);
+			return;
+		}
 
 	/* otherwise increase position */
 	} else {
