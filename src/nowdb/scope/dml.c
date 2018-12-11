@@ -419,16 +419,16 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		break;
 
 	case NOWDB_OFF_WEIGHT:
-		if (dml->e->weight == NOWDB_TYP_INT &&
+ 		if (dml->e->weight == NOWDB_TYP_INT &&
 		    val->type == NOWDB_TYP_UINT) {
-			val->type = NOWDB_TYP_INT;
-		} else if (dml->e->weight == NOWDB_TYP_TIME &&
-		        (val->type == NOWDB_TYP_UINT      ||
-                         val->type == NOWDB_TYP_INT)) {
-			break;
-		} else if (dml->e->weight == NOWDB_TYP_TIME &&
+ 			val->type = NOWDB_TYP_INT;
+ 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
+ 		          (val->type == NOWDB_TYP_UINT      ||
+ 		           val->type == NOWDB_TYP_INT)) {
+ 			break;
+ 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
 		           val->type == NOWDB_TYP_TEXT) {
-			val->type = NOWDB_TYP_TIME;
+ 			val->type = NOWDB_TYP_TIME;
 		} else if (dml->e->weight != val->type) {
 			INVALID("wrong type in weight");
 		}
@@ -439,13 +439,13 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		if (dml->e->weight2 == NOWDB_TYP_INT &&
 		    val->type == NOWDB_TYP_UINT) {
 			val->type = NOWDB_TYP_INT;
-		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
-		        (val->type == NOWDB_TYP_UINT      ||
-                         val->type == NOWDB_TYP_INT)) {
-			break;
-		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
-		           val->type == NOWDB_TYP_TEXT) {
-			val->type = NOWDB_TYP_TIME;
+ 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
+		          (val->type == NOWDB_TYP_UINT       ||
+		           val->type == NOWDB_TYP_INT)) {
+ 			break;
+ 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
+ 		           val->type == NOWDB_TYP_TEXT) {
+ 			val->type = NOWDB_TYP_TIME;
 		} else if (dml->e->weight2 != val->type) {
 			INVALID("wrong type in weight");
 		}

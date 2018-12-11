@@ -49,7 +49,7 @@ DOC=doc
 MAN=doc/manual
 LIBPY = python2.7
 libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
-clibs = -lm -lpthread -ltsalgo -lbeet
+clibs = -lm -lpthread -ltsalgo -lcsv -lbeet
 
 OBJ = $(SRC)/types/types.o    \
       $(SRC)/types/errman.o   \

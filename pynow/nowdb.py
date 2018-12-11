@@ -195,10 +195,12 @@ class Result:
        raise WrongType("result is not a cursor")
 
     if _rOpen(self._r) != 0:
-       pass
+       if not self.ok():
+          return self
 
     if _rFetch(self._r) != 0:
-       pass
+       if not self.ok():
+          return self
 
     self._rw = self.row()
     self._needNext = False
