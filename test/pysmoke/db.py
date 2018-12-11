@@ -30,7 +30,7 @@ def createDB(c, db):
     stmt = "drop schema %s if exists" % db
     with c.execute(stmt) as r:
         if not r.ok():
-            raise FailedCreation("cannot drop database")
+            raise FailedCreation("cannot drop database: %d (%s)" % (r.code(), r.details()))
 
     stmt = "create schema %s" % db
     with c.execute(stmt) as r:
