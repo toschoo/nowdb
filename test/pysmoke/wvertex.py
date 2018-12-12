@@ -180,8 +180,121 @@ def weekdays(c):
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
-            raise db.TestFailed("could not find my edge")
+            raise db.TestFailed("could not find my client")
 
+def shortcircuit(c):
+
+    print "RUNNING TEST 'shortcircuit'"
+
+    idx = random.randint(1,len(cs)-1)
+    l = len(cs)
+
+    print "PIVOT: %d " % (cs[idx].key)
+
+    print "short circuit: false or key=x"
+    stmt = "select client_key from client \
+             where 1=0 or client_key = %d" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != cs[idx].key:
+                raise db.TestFailed("wrong client: %d / %d" % (row.field(0), cs[idx].key))
+         if n != 1:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+
+    print "short circuit: true or key=x"
+    stmt = "select client_key from client \
+             where 1=1 or client_key = %d" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         found=False
+         for row in cur:
+             n+=1
+             if row.field(0) == cs[idx].key:
+                found=True
+         if not found:
+             raise db.TestFailed("could not find my client")
+         if n != l:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+
+    print "short circuit: key=x or false"
+    stmt = "select client_key from client \
+             where client_key = %d or 1=0" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != cs[idx].key:
+                raise db.TestFailed("wrong client: %d / %d" % (row.field(0), cs[idx].key))
+         if n != 1:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+
+    print "short circuit: key=x or true"
+    stmt = "select client_key from client \
+             where client_key = %d or 1=1" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         found=False
+         for row in cur:
+             n+=1
+             if row.field(0) != cs[idx].key:
+                found=True
+         if not found:
+             raise db.TestFailed("could not find my client")
+         if n != l:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+
+    print "short circuit: false and key=x"
+    stmt = "select client_key from client \
+             where 1=0 and client_key = %d" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if cur.ok():
+            raise db.TestFailed("found false..." % (cur.code(), cur.details()))
+
+    print "short circuit: true and key=x"
+    stmt = "select client_key from client \
+             where 1=1 and client_key = %d" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != cs[idx].key:
+                raise db.TestFailed("wrong client: %d / %d" % (row.field(0), cs[idx].key))
+         if n != 1:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+
+    print "short circuit: key=x and false"
+    stmt = "select client_key from client \
+             where client_key = %d and 1=0" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if cur.ok():
+            raise db.TestFailed("found false..." % (cur.code(), cur.details()))
+
+    print "short circuit: key=x and true"
+    stmt = "select client_key from client \
+             where client_key = %d and 1=1" % cs[idx].key
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != cs[idx].key:
+                raise db.TestFailed("wrong client: %d / %d" % (row.field(0), cs[idx].key))
+         if n != 1:
+             raise db.TestFailed("wrong number of clients: %d" % n)
+         
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
@@ -189,6 +302,7 @@ if __name__ == "__main__":
         for i in range(0,IT):
             roundfloats(c)
             weekdays(c)
+            shortcircuit(c)
 
         print "PASSED" 
 

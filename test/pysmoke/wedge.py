@@ -108,7 +108,7 @@ def weekdays(c):
     print "WEEKDAY"
     stmt = "select origin, destin, stamp, wday(stamp) \
               from sales \
-             where wday(stamp) = %d" % (es[idx].tp.weekday()+1)
+             where wday(stamp) = %d" % w
     found = False
     cnt = 0
     with c.execute(stmt) as cur:
@@ -231,6 +231,127 @@ def weekdays(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
+def shortcircuit(c):
+
+    print "RUNNING TEST 'shortcircuit'"
+
+    idx = random.randint(1,len(es)-1)
+    l = len(es)
+
+    x = 0
+    stmt = "select count(*) from sales where edge='buys' and origin=%d" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         for row in cur:
+             x = row.field(0)
+
+    print "PIVOT: %d, %d " % (es[idx].origin, x)
+
+    print "short circuit: false or key=x"
+    stmt = "select origin from sales \
+             where 1=0 or origin = %d" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != es[idx].origin:
+                raise db.TestFailed("wrong edge: %d / %d" % (row.field(0), es[idx].origin))
+         if n != x:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
+    print "short circuit: true or key=x"
+    stmt = "select origin from sales \
+             where 1=1 or origin = %d" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         found=False
+         for row in cur:
+             n+=1
+             if row.field(0) == es[idx].origin:
+                found=True
+         if not found:
+             raise db.TestFailed("could not find my edge")
+         if n != l:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
+    print "short circuit: key=x or false"
+    stmt = "select origin from sales \
+             where origin = %d or 1=0" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != es[idx].origin:
+                raise db.TestFailed("wrong edge: %d / %d" % (row.field(0), es[idx].origin))
+         if n != x:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
+    print "short circuit: key=x or true"
+    stmt = "select origin from sales \
+             where origin = %d or 1=1" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         found=False
+         for row in cur:
+             n+=1
+             if row.field(0) != es[idx].origin:
+                found=True
+         if not found:
+             raise db.TestFailed("could not find my edge")
+         if n != l:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
+    print "short circuit: false and key=x"
+    stmt = "select origin from sales \
+             where 1=0 and origin = %d" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if cur.ok():
+            raise db.TestFailed("found false..." % (cur.code(), cur.details()))
+
+    print "short circuit: true and key=x"
+    stmt = "select origin from sales \
+             where 1=1 and origin = %d" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != es[idx].origin:
+                raise db.TestFailed("wrong edge: %d / %d" % (row.field(0), es[idx].origin))
+         if n != x:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
+    print "short circuit: key=x and false"
+    stmt = "select origin from sales \
+             where origin = %d and 1=0" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if cur.ok():
+            raise db.TestFailed("found false..." % (cur.code(), cur.details()))
+
+    print "short circuit: key=x and true"
+    stmt = "select origin from sales \
+             where origin = %d and 1=1" % es[idx].origin
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+             if row.field(0) != es[idx].origin:
+                raise db.TestFailed("wrong edge: %d / %d" % (row.field(0), es[idx].origin))
+         if n != x:
+             raise db.TestFailed("wrong number of edges: %d" % n)
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, es) = db.loadDB(c, "db100")
@@ -238,6 +359,7 @@ if __name__ == "__main__":
         for i in range(0,IT):
             roundfloats(c)
             weekdays(c)
+            shortcircuit(c)
 
         print "PASSED"
 

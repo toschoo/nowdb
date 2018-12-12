@@ -494,7 +494,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 
 	} else if (t != NULL) *filter = t; else *filter = w;
 
-	nowdb_expr_show(*filter, stderr); fprintf(stderr, "\n");
+	// nowdb_expr_show(*filter, stderr); fprintf(stderr, "\n");
 
 	return NOWDB_OK;
 }
@@ -1398,7 +1398,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	stp->ntype = NOWDB_PLAN_READER;
 	if (idxes.len == 1 && grp == NULL && ord == NULL) {
-		fprintf(stderr, "CHOOSING SEARCH\n");
+		// fprintf(stderr, "CHOOSING SEARCH\n");
 		stp->stype = NOWDB_PLAN_SEARCH_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1409,7 +1409,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	           order  == NULL &&
 	           filter == NULL &&
 	           hasAgg == 0) {
-		fprintf(stderr, "CHOOSING KRANGE\n");
+		// fprintf(stderr, "CHOOSING KRANGE\n");
 		stp->stype = NOWDB_PLAN_KRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
@@ -1417,14 +1417,14 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
  	/* this is for order and group with aggregates */
 	} else if (idxes.len == 1) {
-		fprintf(stderr, "CHOOSING FRANGE\n");
+		// fprintf(stderr, "CHOOSING FRANGE\n");
 		stp->stype = NOWDB_PLAN_FRANGE_;
 		stp->helper = trg->stype;
 		stp->name = trg->value;
 		stp->load = idxes.head->cont;
 	
 	} else {
-		fprintf(stderr, "CHOOSING FULLSCAN\n");
+		// fprintf(stderr, "CHOOSING FULLSCAN\n");
 		stp->stype = NOWDB_PLAN_FS_; /* default is fullscan+ */
 		stp->helper = trg->stype;
 		stp->name = trg->value;

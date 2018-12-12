@@ -375,8 +375,10 @@ static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
 	int off=-1;
 	int cnt=0;
 
+	/*
 	fprintf(stderr, "FILTER BEFORE:\n");
 	nowdb_expr_show(fil, stderr); fprintf(stderr, "\n");
+	*/
 
 	err = nowdb_expr_copy(fil, &vrow->filter);
 	if (err != NOWDB_OK) return err;
@@ -387,7 +389,7 @@ static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
 	vrow->np = (uint32_t)cnt;
 	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
 
-	nowdb_expr_show(vrow->filter, stderr); fprintf(stderr, "\n");
+	// nowdb_expr_show(vrow->filter, stderr); fprintf(stderr, "\n");
 
 	return NOWDB_OK;
 }
