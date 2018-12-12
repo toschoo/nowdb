@@ -54,10 +54,6 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create index idx_sales_eo")
 
-    with c.execute("create index vidx_ropo on vertex (role, property)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index vidx_ropo")
-   
     with c.execute("create type product ( \
                       prod_key uint primary key, \
                       prod_desc    text, \
@@ -74,6 +70,14 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create type client")
    
+    with c.execute("create type store ( \
+                      store_name text primary key, \
+                      city text, \
+                      address text, \
+                      size float)") as r:
+        if not r.ok():
+            raise FailedCreation("cannot create type client")
+   
     with c.execute("create edge buys ( \
                       origin client, \
                       destination product, \
@@ -81,29 +85,41 @@ def createDB(c, db):
                       weight2 float)") as r:
         if not r.ok():
             raise FailedCreation("cannot create edge buys")
+   
+    with c.execute("create edge visits ( \
+                      origin client, \
+                      destination store, \
+                      weight uint, \
+                      weight2 float)") as r:
+        if not r.ok():
+            raise FailedCreation("cannot create edge buys")
 
-def addRandomData(c, ps, cs, es):
+def addRandomData(c, ps, cs, ss, es):
     products = createProducts(ps)
     clients = createClients(cs)
-    edges = createEdges(es, clients, products)
+    stores = createStores(ss)
+    edges = createEdges(es, clients, products, stores)
 
     storeProducts(c, products)
     storeClients(c, clients)
+    storeStores(c, stores)
     storeEdges(c, edges)
 
-    return (products, clients, edges)
+    return (products, clients, stores, edges)
 
 def db2csv(p,c,e):
     products2csv("rsc/products.csv", p)
     clients2csv("rsc/clients.csv", c)
     edges2csv("rsc/edges.csv", e)
+    # missing:
+    # stores and visits
 
 def loadDB(c, db):
     stmt = "use %s" % db
     with c.execute(stmt) as r:
         if not r.ok():
             raise FailedLoading("cannot use %s" % db)
-    return (loadProducts(c), loadClients(c), loadEdges(c))
+    return (loadProducts(c), loadClients(c), loadStores(c), loadEdges(c))
 
 def loadProducts(c):
     ps = []
@@ -121,15 +137,23 @@ def loadClients(c):
             cs.append(Client(row.field(0), row.field(1), now.now2dt(row.field(2))))
     return cs
 
+def loadStores(c):
+    vs = []
+    with c.execute("select store_name, city, address, size from store") as cur:
+        for row in cur:
+            vs.append(Store(row.field(0), row.field(1), row.field(2), row.field(3)))
+    return vs
+
 def loadEdges(c):
     es = []
-    with c.execute("select origin, destin, timestamp, weight, weight2 from sales") as cur:
+    with c.execute("select edge, origin, destin, timestamp, weight, weight2 from sales") as cur:
         for row in cur:
-           es.append(BuyEdge(row.field(0),
-                             row.field(1),
-                             now.now2dt(row.field(2)),
-                             row.field(3),
-                             row.field(4)))
+           es.append(SalesEdge(row.field(0),
+                               row.field(1),
+                               row.field(2),
+                               now.now2dt(row.field(3)),
+                               row.field(4),
+                               row.field(5)))
     return es
 
 def loadFromCsv():
@@ -144,6 +168,9 @@ def loadFromCsv():
     with c.execute("load 'rsc/edges.csv' into sales as edge") as r:
         if not r.ok():
              raise FailedCreateion("cannot load edges: %s" % r.details())
+
+    # missing:
+    # stores
 
 def storeProducts(conn, ps):
     for p in ps:
@@ -164,6 +191,12 @@ def clients2csv(csv, cs):
         f.write("client_key;client_name;birthdate\n");
         for c in cs:
             c.tocsv(f)
+
+def storeStores(conn, ss):
+    for s in ss:
+        s.store(conn)
+
+    # missing: 2csv
 
 def storeEdges(conn, es):
     for e in es:
@@ -229,9 +262,36 @@ class Client:
         line += self.birthdate.strftime(now.TIMEFORMAT) + "\n"
         csv.write(line)
 
-class BuyEdge:
-    def __init__(self, o, d, t, w, w2):
-       self.edge = 'buys'
+class Store:
+    def __init__(self, name, city, address, size):
+        self.name = name 
+        self.city = city  
+        self.address = address
+        self.size = size
+
+    def store(self, c):
+        stmt = "insert into store ("
+        stmt += "store_name, city, address, size) ("
+        stmt += "'" + self.name + "', "
+        stmt += "'" + self.city + "', "
+        stmt += "'" + self.address + "', "
+        stmt += str(self.size) + ")"
+        with c.execute(stmt) as r:
+            if not r.ok():
+               raise FailedCreation("cannot insert client -- %s" 
+                                                  % r.details())
+
+    def tocsv(self, csv):
+        line = ""
+        line += str(self.name) + ";"
+        line += self.city + ";"
+        line += self.address + ";"
+        line += self.size + "\n"
+        csv.write(line)
+
+class SalesEdge:
+    def __init__(self, e, o, d, t, w, w2):
+       self.edge    = e
        self.origin  = o
        self.destin  = d
        self.tp      = t
@@ -241,9 +301,12 @@ class BuyEdge:
     def store(self, c):
        stmt = "insert into sales "
        stmt += "(edge, origin, destin, timestamp, weight, weight2) ("
-       stmt += "'buys',"
+       stmt += "'" + self.edge + "',"
        stmt += str(self.origin.key) + ", "
-       stmt += str(self.destin.key) + ", "
+       if self.edge == 'buys':
+           stmt += str(self.destin.key) + ", "
+       else:
+           stmt += "'" + self.destin.name + "', "
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
        stmt += str(self.weight) + ", "
        stmt += str(self.weight2) + ")"
@@ -282,17 +345,28 @@ def createClients(no):
                               hours=0, minutes=0, seconds=0, microseconds=0)))
     return c
 
-def createEdges(no, c, p):
+def createStores(no):
+    s = []
+    for i in range(no):
+        s.append(Store(randomString(random.randint(1,16)), \
+                       randomString(random.randint(1,5)),  \
+                       randomString(random.randint(1,12)), \
+                       float(random.randint(500,10000)/float(random.randint(1,5)))))
+    return s
+
+def createEdges(no, c, p, s):
     e = []
     t = datetime.datetime.utcnow()
     for i in range(no):
         cdx = random.randint(0,len(c)-1)
         pdx = random.randint(0,len(p)-1)
+        sdx = random.randint(0,len(s)-1)
         tp = t + datetime.timedelta(
             microseconds=random.randint(0,96*3600000000))
         w = random.randint(1,100)
         w2 = w * p[pdx].price
-        e.append(BuyEdge(c[cdx], p[pdx], tp, w, w2))
+        e.append(SalesEdge('buys', c[cdx], p[pdx], tp, w, w2))
+        e.append(SalesEdge('visits', c[cdx], s[sdx], tp, w, w2))
     return e
 
 def randomString(l):

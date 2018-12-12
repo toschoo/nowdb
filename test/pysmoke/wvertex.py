@@ -297,7 +297,7 @@ def shortcircuit(c):
          
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es) = db.loadDB(c, "db100")
 
         for i in range(0,IT):
             roundfloats(c)

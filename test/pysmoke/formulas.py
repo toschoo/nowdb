@@ -88,6 +88,9 @@ def simpleedge(c):
     print "RUNNING TEST 'simpleedge'"
 
     idx = random.randint(1,len(es)-1)
+    if es[idx].edge == 'visits':
+       idx-=1
+
     o = es[idx].origin
     d = es[idx].destin
     w1 = es[idx].weight
@@ -157,7 +160,7 @@ def simpleedge(c):
                row.field(3) > row.field(0) + 0.1:
                raise db.TestFailed("wrong rounding %f: %f" % (row.field(0), row.field(3)))
 
-# simple expressions on vertex
+# punktrechnung vor strichtrechnung
 def punktvorstrich(c):
 
     print "RUNNING TEST 'punktvorstrich'"
@@ -419,7 +422,8 @@ def grpedge(c):
     print "RUNNING TEST 'grpedge'"
 
     stmt = "select edge, origin, sum(1), count(*) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -438,7 +442,8 @@ def grpedge(c):
                        raise db.TestFailed("expected count: %d, but have %d" % (rr.field(0), row.field(2)))
 
     stmt = "select edge, origin, avg(weight), sum(tofloat(weight))/count(*) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -457,7 +462,8 @@ def grpedge(c):
                        raise db.TestFailed("expected avg: %f, but have %f" % (rr.field(0), row.field(2)))
 
     stmt = "select edge, origin, median(weight) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin" 
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -775,7 +781,7 @@ def timefun(c):
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es) = db.loadDB(c, "db100")
 
         constvalues(c)
         timefun(c)

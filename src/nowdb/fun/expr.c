@@ -264,7 +264,9 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 void nowdb_expr_usekey(nowdb_expr_t expr) {
 	if (expr == NULL) return;
 	if (EXPR(expr)->etype != NOWDB_EXPR_FIELD) return;
-	if (FIELD(expr)->type != NOWDB_TYP_TEXT) return;
+	if (FIELD(expr)->type != NOWDB_TYP_TEXT &&
+	    FIELD(expr)->type != NOWDB_TYP_NOTHING) return;
+	FIELD(expr)->usekey = 1;
 	FIELD(expr)->type = NOWDB_TYP_UINT;
 }
 
@@ -1047,7 +1049,10 @@ static inline nowdb_err_t findEdge(nowdb_eval_t *hlp,
 
 	for(run=hlp->em.head; run!=NULL; run=run->nxt) {
 		em = run->cont;
-		if (em->e->edgeid == src->edge) return NOWDB_OK;
+		if (em->e->edgeid == src->edge) {
+			hlp->ce = em;
+			return NOWDB_OK;
+		}
 	}
 	em = calloc(1,sizeof(nowdb_edge_helper_t));
 	if (em == NULL) {
