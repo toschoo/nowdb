@@ -1265,7 +1265,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	int i = (field->off-4)/8;
 	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
 	if ((rmap & 1<<i) == 0) {
-		fprintf(stderr, "%s evaluates to NULL\n", field->name);
+		// fprintf(stderr, "%s evaluates to NULL\n", field->name);
 		*t = 0; return NOWDB_OK;
 	}
 
@@ -1832,8 +1832,8 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_LE: return showargs(op, "<=", stream);
 	case NOWDB_EXPR_OP_GE: return showargs(op, ">=", stream);
 	case NOWDB_EXPR_OP_IN: return showargs(op, "in", stream);
-	case NOWDB_EXPR_OP_IS: return showargs(op, "is", stream);
-	case NOWDB_EXPR_OP_ISN: return showargs(op, "isNot", stream);
+	case NOWDB_EXPR_OP_IS: return showargs(op, "ISNULL", stream);
+	case NOWDB_EXPR_OP_ISN: return showargs(op, "ISNOTNULL", stream);
 	case NOWDB_EXPR_OP_TRUE: return showargs(op, "true", stream);
 	case NOWDB_EXPR_OP_FALSE: return showargs(op, "false", stream);
 	case NOWDB_EXPR_OP_NOT: return showargs(op, "not", stream);
@@ -2256,7 +2256,6 @@ static nowdb_err_t evalFun(uint32_t      fun,
 			// fprintf(stderr, "comparing short\n");
 			PERFSHORT(EQ);
 		} else {
-			// fprintf(stderr, "comparing any\n");
 			PERFANY(EQ);
 		}
 

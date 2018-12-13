@@ -1411,7 +1411,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
-	nowdb_vertex_t vrtx;
+	char vrtx[32];
 	uint32_t mx;
 
 	// we have already reached eof
@@ -1448,12 +1448,11 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			if (err != NOWDB_OK) return err;
 
 			err = nowdb_vrow_eval(cur->wrow,
-                                (nowdb_key_t*)&vrtx, &x);
+                                (nowdb_key_t*)vrtx, &x);
 			if (err != NOWDB_OK) return err;
 			if (x) {
-				memset(&vrtx+8, 0, 24);
-				fprintf(stderr, "having leftover\n");
-				realsrc = (char*)&vrtx;
+				memset(vrtx+8, 0, 24);
+				realsrc = vrtx;
 				realsz = 32;
 				goto projection;
 			}
