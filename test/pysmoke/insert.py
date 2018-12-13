@@ -550,11 +550,11 @@ def insertalledge(c,ps,cs):
 ###########################################################################
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es) = db.loadDB(c, "db100")
 
-        #dupkeyvertex(c)
-        #failedinsert(c)
+        dupkeyvertex(c)
+        failedinsert(c)
         insertallvertex(c)
-        #insertalledge(c,ps,cs)
+        insertalledge(c,ps,cs)
 
         print "PASSED"

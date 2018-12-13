@@ -102,6 +102,7 @@ typedef uint32_t nowdb_type_t;
 #define NOWDB_TYP_COMPLEX  7
 #define NOWDB_TYP_LONGTEXT 8
 #define NOWDB_TYP_BOOL     9
+#define NOWDB_TYP_SHORT   99
 
 int nowdb_strtoval(char *str, nowdb_type_t typ, void *value);
 int nowdb_strtotype(char *str);
@@ -180,6 +181,7 @@ int nowdb_vertex_offByName(char *field);
 #define NOWDB_OFF_DESTIN  16
 #define NOWDB_OFF_LABEL   24
 #define NOWDB_OFF_TMSTMP  32
+#define NOWDB_OFF_STAMP   32
 #define NOWDB_OFF_WEIGHT  40
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56

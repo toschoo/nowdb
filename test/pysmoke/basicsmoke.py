@@ -8,11 +8,12 @@ if __name__ == '__main__':
 
 	nump = 100
 	numc = 50
+	nums = 25
 	nume = 1000
 
         db.createDB(c, "db100")
 
-        (products, clients, edges) = db.addRandomData(c, nump, numc, nume)
+        (products, clients, stores, edges) = db.addRandomData(c, nump, numc, nums, nume)
 
         cnt = 0
         sm = 0
@@ -67,10 +68,10 @@ if __name__ == '__main__':
               exit(1)
            for r in cur:
               cnt = r.field(0)
-              print "we have %d edges" % cnt
-              if cnt != nume:
-                 print "we need to have %d" % nume
-                 exit(1)
+           print "we have %d edges" % cnt
+           if cnt != 2*nume:
+              print "we need to have %d" % nume
+              exit(1)
 	
         with c.execute("select prod_key, prod_desc from product") as cur:
            if not cur.ok():
@@ -85,7 +86,7 @@ if __name__ == '__main__':
               print "we need to have %d" % nump
               exit(1)
 
-        with c.execute("select client_key, client_name from vertex as client") as cur:
+        with c.execute("select client_key, client_name from client") as cur:
            if not cur.ok():
               print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
@@ -98,11 +99,26 @@ if __name__ == '__main__':
               print "we need to have %d" % numc
               exit(1)
 
-        (p2,c2,e2) = db.loadDB(c,"db100")
+        with c.execute("select store_name, city, address, size from store") as cur:
+           if not cur.ok():
+              print "ERROR %d: %s" % (cur.code(), cur.details())
+              exit(1)
+           cnt = 0
+           for row in cur:
+              # print "%s" % row.field(0)
+              cnt += 1
+           print "we have %d stores " % cnt
+           if cnt != nums:
+              print "we need to have %d" % nums
+              exit(1)
+
+        (p2,c2,s2,e2) = db.loadDB(c,"db100")
         if len(p2) != len(products):
             print "loaded products differ from original: %d != %d" % (len(p2), len(products))
         if len(c2) != len(clients):
             print "loaded clients differ from original: %d != %d" % (len(c2), len(clients))
+        if len(s2) != len(stores):
+            print "loaded stores differ from original: %d != %d" % (len(s2), len(stores))
         if len(e2) != len(edges):
             print "loaded edges differ from original: %d != %d" % (len(e2), len(edges))
-        print "LOADED: %d %d %d" % (len(p2), len(c2), len(e2))
+        print "LOADED: %d %d %d %d" % (len(p2), len(c2), len(s2), len(e2))

@@ -10,6 +10,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/scope/scope.h>
+#include <nowdb/fun/expr.h>
 #include <nowdb/reader/reader.h>
 #include <nowdb/reader/vrow.h>
 #include <nowdb/qplan/plan.h>
@@ -35,22 +36,23 @@ typedef struct {
 	nowdb_reader_t      *rdr; /* the reader                    */
 	nowdb_storefile_t    stf; /* should be a list of stf!      */
 	nowdb_model_t     *model; /* model                         */
-	nowdb_filter_t   *filter; /* main filter                   */
+	nowdb_expr_t      filter; /* main filter                   */
 	nowdb_row_t         *row; /* projection                    */
 	nowdb_group_t     *group; /* grouping                      */
 	nowdb_group_t     *nogrp; /* apply aggs without grouping   */
 	nowdb_model_vertex_t  *v; /* type if this is not a join!   */
 	nowdb_vrow_t       *wrow; /* vertex row for where          */
 	nowdb_vrow_t       *prow; /* vertex row for projection     */
+	nowdb_eval_t       *eval; /* evaluation helper             */
 	char           *leftover; /* leftover from previous round  */
 	uint64_t            pmap; /* property map of leftover      */
-	char             freesrc; /* free the source               */
 	uint32_t             off; /* offset in the current reader  */
 	uint32_t           recsz; /* record size                   */
 	char                *tmp; /* temporary buffer for group    */
 	char               *tmp2; /* temporary buffer for row      */
 	char            *fromkey; /* range: fromkey                */
 	char              *tokey; /* range:   tokey                */
+	char             freesrc; /* free the source               */
 	char               hasid; /* has id to identify model      */
 	char            grouping; /* has id to identify model      */
 	char                 eof; /* end of file was reached       */
