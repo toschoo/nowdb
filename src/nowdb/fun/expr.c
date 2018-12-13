@@ -267,7 +267,6 @@ void nowdb_expr_usekey(nowdb_expr_t expr) {
 	if (FIELD(expr)->type != NOWDB_TYP_TEXT &&
 	    FIELD(expr)->type != NOWDB_TYP_NOTHING) return;
 	FIELD(expr)->usekey = 1;
-	FIELD(expr)->type = NOWDB_TYP_UINT;
 }
 
 /* -----------------------------------------------------------------------
@@ -695,17 +694,19 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	nowdb_err_t err;
 
 	if (src->target == NOWDB_TARGET_EDGE) {
-		return nowdb_expr_newEdgeField(trg, src->off); 	
+		err = nowdb_expr_newEdgeField(trg, src->off);
+		
 	} else {
 		err = src->name == NULL?
 		      nowdb_expr_newVertexOffField(trg, src->off):
 		      nowdb_expr_newVertexField(trg, src->name,
 		                                     src->role,
 		                                     src->propid);
-		if (err != NOWDB_OK) return err;
-		FIELD(*trg)->type = src->type;
-		return NOWDB_OK;
 	}
+	if (err != NOWDB_OK) return err;
+	FIELD(*trg)->type = src->type;
+	FIELD(*trg)->usekey = src->usekey;
+	return NOWDB_OK;
 }
 
 #define DESTROYLIST(l) \

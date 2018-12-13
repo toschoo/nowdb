@@ -77,13 +77,28 @@ def vertexSelectNoPK(c):
            raise db.TestFailed("expecting %d clients, but have %d" % (len(cs), n))
 
 # it shall be possible to use text as primary key
-def edgeWithStringKey(c):
+def whereWithStringKey(c):
 
-    print "RUNNING TEST 'edgeWithStringKey'"
+    print "RUNNING TEST 'whereWithStringKey'"
 
     idx = random.randint(1,len(es)-1)
     if es[idx].edge != 'visits':
        idx += 1
+
+    stmt = "select store_name, size from store \
+             where store_name = '%s'" % es[idx].destin
+    with c.execute(stmt) as cur:
+       if not cur.ok():
+          raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+       n = 0
+       for row in cur:
+           if row.field(0) != es[idx].destin:
+              raise db.TestFailed("unexpected product: %s" % row.field(0))
+           n+=1
+       if n < 1:
+              raise db.TestFailed("nothing found")
+       if n != 1:
+              raise db.TestFailed("one row expected; found: %d" % n)
 
     stmt = "select edge, origin, destin from sales \
              where edge = 'visits' \
@@ -279,7 +294,7 @@ if __name__ == '__main__':
         print "%d, %s" % (ps[0].key, ps[0].desc)
 
         vertexSelectNoPK(c)
-        edgeWithStringKey(c)
+        whereWithStringKey(c)
         keyzero(c)
         createInvalidEdge(c)
         invalidEdgeInserts(c)
