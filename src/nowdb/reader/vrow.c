@@ -290,6 +290,7 @@ static nowdb_err_t updFNode(nowdb_vrow_t *vrow,
 	                             expr)->agg)->expr);
 
 	case NOWDB_EXPR_OP: 
+		// substitute "IS" by "and(=(key,key), IS(...))"
 		for(int i=0; i<NOWDB_EXPR_TOOP(expr)->args; i++) {
 			err = updFNode(vrow, cnt, off,
 			  NOWDB_EXPR_TOOP(expr)->argv[i]);
@@ -375,10 +376,8 @@ static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
 	int off=-1;
 	int cnt=0;
 
-	/*
 	fprintf(stderr, "FILTER BEFORE:\n");
 	nowdb_expr_show(fil, stderr); fprintf(stderr, "\n");
-	*/
 
 	err = nowdb_expr_copy(fil, &vrow->filter);
 	if (err != NOWDB_OK) return err;
@@ -389,7 +388,7 @@ static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
 	vrow->np = (uint32_t)cnt;
 	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
 
-	// nowdb_expr_show(vrow->filter, stderr); fprintf(stderr, "\n");
+	nowdb_expr_show(vrow->filter, stderr); fprintf(stderr, "\n");
 
 	return NOWDB_OK;
 }
@@ -547,14 +546,20 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	pattern.propid = vertex->property;
 	err = getProperty(vrow, &pattern, &pm);
 	if (err != NOWDB_OK) return err;
-	if (pm == NULL) return NOWDB_OK;
+	if (pm == NULL) {
+		/*
+		fprintf(stderr, "prop not found %lu/%lu/%lu\n",
+	                vertex->vertex, vertex->property, vertex->value);
+		*/
+		return NOWDB_OK;
+	}
 
 	// get vrow
 	err = getVRow(vrow, vertex, &v);
 	if (err != NOWDB_OK) return err;
 
 	// add according to offset
-	
+
 	/*
 	fprintf(stderr, "property %lu/%lu/%lu into %u\n",
 	  vertex->vertex, vertex->property, vertex->value, pm->off);
@@ -713,7 +718,8 @@ nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
 	
 	err = nowdb_expr_eval(vrow->filter,
 	                        vrow->eval,
-	                NOWDB_BITMAP64_ALL,
+	                           v->pmap,
+	             // NOWDB_BITMAP64_ALL,
 	                   v->row, &t, &x);
 	if (err != NOWDB_OK) return err;
 	if (*(nowdb_value_t*)x) {

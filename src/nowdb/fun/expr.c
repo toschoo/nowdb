@@ -1230,6 +1230,12 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
 	*t = field->type;
 	*res = src+field->off;
 
+	/*
+	fprintf(stderr, "RAW %d: %lu / %lu\n", field->off,
+ 	                 ((nowdb_vertex_t*)src)->property,
+	                    ((nowdb_vertex_t*)src)->value);
+	*/
+
 	return NOWDB_OK;
 }
 
@@ -1246,6 +1252,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	nowdb_err_t err;
 
 	if (field->name == NULL) {
+		// fprintf(stderr, "raw with map %lu\n", rmap);
 		return getRawVertexValue(field, hlp, src, t, res);
 	}
 
@@ -1258,6 +1265,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	int i = (field->off-4)/8;
 	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
 	if ((rmap & 1<<i) == 0) {
+		fprintf(stderr, "%s evaluates to NULL\n", field->name);
 		*t = 0; return NOWDB_OK;
 	}
 
@@ -1353,6 +1361,22 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 					SETRESULT(NOWDB_TYP_BOOL, 1);
 					return NOWDB_OK;
 				}
+				if (op->fun == NOWDB_EXPR_OP_IS) {
+					if (op->types[0] == 0) {
+						SETRESULT(NOWDB_TYP_BOOL, 1);
+					} else {
+						SETRESULT(NOWDB_TYP_BOOL, 0);
+					}
+					return NOWDB_OK;
+				}
+				if (op->fun == NOWDB_EXPR_OP_ISN) {
+					if (op->types[0] == 0) {
+						SETRESULT(NOWDB_TYP_BOOL, 0);
+					} else {
+						SETRESULT(NOWDB_TYP_BOOL, 1);
+					}
+					return NOWDB_OK;
+				}
 			}
 		}
 	}
@@ -1362,10 +1386,13 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 		*typ = evalType(op,0);
 		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
 	}
+
+	/*
 	if (*typ == 0) {
 		// treat as null here
 		
 	}
+	*/
 
 	// evaluate function
 	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
@@ -2163,13 +2190,14 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	uint64_t u;
 
 	/* -----------------------------------------------------------------------
-	 * Exceptions from this rule:
- 	 * - IS
-	 * - conditionals
+	 * If nothing: ignore function
 	 * -----------------------------------------------------------------------
 	 */
-	if (*t == NOWDB_TYP_NOTHING) return NOWDB_OK;
-
+	if (*t == NOWDB_TYP_NOTHING) {
+		if (fun == NOWDB_EXPR_OP_IS) *(nowdb_value_t*)res = 1;
+		else if (fun == NOWDB_EXPR_OP_ISN) *(nowdb_value_t*)res = 0;
+		return NOWDB_OK;
+	}
 	switch(fun) {
 
 	/* -----------------------------------------------------------------------
@@ -2247,9 +2275,10 @@ static nowdb_err_t evalFun(uint32_t      fun,
 
 	case NOWDB_EXPR_OP_IN: FINDIN();
 
-	case NOWDB_EXPR_OP_IS:
-	case NOWDB_EXPR_OP_ISN:
-		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
+	case NOWDB_EXPR_OP_IS: 
+		*(nowdb_value_t*)res = FALSE; return NOWDB_OK;
+	case NOWDB_EXPR_OP_ISN: 
+		*(nowdb_value_t*)res = TRUE; return NOWDB_OK;
  
 	case NOWDB_EXPR_OP_TRUE:
 		(*(nowdb_bool_t*)res) = TRUE; return NOWDB_OK;
@@ -2386,9 +2415,10 @@ static inline int getArgs(int o) {
 	case NOWDB_EXPR_OP_GT:
 	case NOWDB_EXPR_OP_LE:
 	case NOWDB_EXPR_OP_GE:
-	case NOWDB_EXPR_OP_IN:
+	case NOWDB_EXPR_OP_IN: return 2;
+
 	case NOWDB_EXPR_OP_IS:
-	case NOWDB_EXPR_OP_ISN: return 2;
+	case NOWDB_EXPR_OP_ISN: return 1;
 
 	case NOWDB_EXPR_OP_NOT:
 	case NOWDB_EXPR_OP_JUST: return 1;
@@ -2489,6 +2519,11 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 		for (int i=0; i<op->args; i++) {
 			if (op->types[i] == NOWDB_TYP_NOTHING) {
 				// exception IS: then its bool
+				if (op->fun == NOWDB_EXPR_OP_IS ||
+                                    op->fun == NOWDB_EXPR_OP_ISN) 
+				{
+					return NOWDB_TYP_BOOL;
+				}
 				return NOWDB_TYP_NOTHING;
 			}
 		}
@@ -2633,6 +2668,7 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "just") == 0) return NOWDB_EXPR_OP_JUST;
 	if (strcasecmp(op, "and") == 0) return NOWDB_EXPR_OP_AND;
 	if (strcasecmp(op, "or") == 0) return NOWDB_EXPR_OP_OR;
+	if (strcasecmp(op, "isn") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "isnt") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "isnot") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "is not") == 0) return NOWDB_EXPR_OP_ISN;

@@ -46,6 +46,8 @@
 "%"			return NOWDB_SQL_PER;
 "^"			return NOWDB_SQL_POW;
 
+(?i:IS)			return NOWDB_SQL_IS;
+
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
 	/*

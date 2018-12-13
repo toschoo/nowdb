@@ -705,7 +705,8 @@ order_clause(O) ::= ORDER BY field_list(F). {
 %left OR.
 %left AND.
 %right NOT.
-/* %left IS MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
+/* %left MATCH LIKE_KW BETWEEN IN ISNULL NOTNULL NE EQ. */
+%left IS.
 %left EQ NE.
 %left GT LE LT GE.
 %left IN.
@@ -784,6 +785,18 @@ expr(E) ::= NOT(OP) expr(A). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 1);
 	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+}
+
+expr(E) ::= expr(A) IS(OP) NULL. {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 1);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(E,A);
+}
+
+expr(E) ::= expr(A) IS NOT NULL. {
+	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_OP, 1);
+	nowdb_ast_setValue(E, NOWDB_AST_V_STRING, strdup("ISN"));
 	NOWDB_SQL_ADDPARAM(E,A);
 }
 
