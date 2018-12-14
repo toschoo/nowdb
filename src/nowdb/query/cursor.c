@@ -389,9 +389,13 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
+	nowdb_err_t err;
 	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
-	return nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
-	                             cur->filter, cur->eval);
+	err = nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
+	                               cur->filter, cur->eval);
+	if (err != NOWDB_OK) return err;
+	// nowdb_vrow_autoComplete(cur->wrow);
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -846,6 +850,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 			memcpy(vid, buf+i, 8);
 			// fprintf(stderr, "got vid %lu\n", *vid);
 			if (ts_algo_tree_insert(vids, vid) != TS_ALGO_OK) {
+				free(vid);
 				NOMEM("tree.insert");
 				goto cleanup;
 			}
@@ -1406,6 +1411,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
+	char vrtx[32];
 	uint32_t mx;
 
 	// we have already reached eof
@@ -1434,6 +1440,21 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
                                                 &realsrc)) {
 				cur->freesrc = 1;
 				goto grouping;
+			}
+		}
+		// handle leftover from wrows
+		if (cur->eof && cur->wrow != NULL) {
+			err = nowdb_vrow_force(cur->wrow);
+			if (err != NOWDB_OK) return err;
+
+			err = nowdb_vrow_eval(cur->wrow,
+                                (nowdb_key_t*)vrtx, &x);
+			if (err != NOWDB_OK) return err;
+			if (x) {
+				memset(vrtx+8, 0, 24);
+				realsrc = vrtx;
+				realsz = 32;
+				goto projection;
 			}
 		}
 		// END OF FILE

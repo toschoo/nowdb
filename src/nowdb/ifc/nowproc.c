@@ -217,6 +217,7 @@ static nowdb_dbresult_t mkResult(int rtype) {
 	r->rtype = rtype;
 	r->errcode = 0;
 	r->err = NOWDB_OK;
+	r->sz = 0;
 
 	r->res.resType = NOWDB_QRY_RESULT_NOTHING;
 	r->res.result = NULL;
@@ -350,6 +351,8 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 		qr = calloc(1,sizeof(nowdb_qry_row_t));
 		if (qr == NULL) return -1;
 
+		qr->sz = 0;
+
 		ROW(row)->res.resType = NOWDB_QRY_RESULT_ROW;
 	} else {
 		qr = ROW(row)->res.result;
@@ -366,6 +369,29 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 		return -1;
 	}
 	qr->row = tmp;
+	ROW(row)->res.result = qr;
+	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * ADD EOR
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbresult_closeRow(nowdb_dbrow_t row) { 
+	nowdb_qry_row_t *qr=NULL;
+
+	if (row == NULL) return -1;
+
+	if (ROW(row)->res.result == NULL) {
+		qr = calloc(1,sizeof(nowdb_qry_row_t));
+		if (qr == NULL) return -1;
+
+		ROW(row)->res.resType = NOWDB_QRY_RESULT_ROW;
+	} else {
+		qr = ROW(row)->res.result;
+	}
+
+	nowdb_row_addEOR(qr->row, &qr->sz);
 	ROW(row)->res.result = qr;
 	return 0;
 }
@@ -466,7 +492,7 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 
 	*res = nowdb_dbresult_wrap(&r);
 	if (*res == NULL) {
-		qResDestroy(&r);	
+		qResDestroy(&r);
 		return -1;
 	}
 
@@ -617,6 +643,7 @@ void nowdb_dbcur_close(nowdb_dbcur_t cur) {
 	if (CUR(cur)->err != NULL) {
 		nowdb_err_release(CUR(cur)->err);
 	}
+	fprintf(stderr, "DESTROY CUR\n");
 	nowdb_cursor_destroy(NOWDBCUR(cur));
 	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
 }
