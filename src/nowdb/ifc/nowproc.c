@@ -640,10 +640,10 @@ void nowdb_dbcur_close(nowdb_dbcur_t cur) {
 		free(CUR(cur)->buf);
 		CUR(cur)->buf = NULL;
 	}
-	if (CUR(cur)->err != NULL) {
+	if (CUR(cur)->err != NOWDB_OK) {
 		nowdb_err_release(CUR(cur)->err);
+		CUR(cur)->err = NOWDB_OK;
 	}
-	fprintf(stderr, "DESTROY CUR\n");
 	nowdb_cursor_destroy(NOWDBCUR(cur));
 	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
 }
@@ -722,7 +722,7 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
 
 	if (cur == NULL) return NULL;
 
-	cp = mkResult(CUR(cur)->rtype);
+	cp = mkResult(NOWDB_DBRESULT_ROW);
 	if (cp == NULL) return NULL;
 
 	ROW(cp)->buf = CUR(cur)->buf;

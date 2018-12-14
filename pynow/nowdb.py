@@ -200,12 +200,10 @@ class Result:
 
     if _rOpen(self._r) != 0:
        if not self.ok():
-          _rClose(self._r)
           return self
 
     if _rFetch(self._r) != 0:
        if not self.ok():
-          _rClose(self._r)
           return self
 
     self._rw = self.row()
@@ -229,6 +227,7 @@ class Result:
               d = self.details()
 
               _rClose(self._r)
+              self._r = None
 
               if x == EOF:
                  raise StopIteration
@@ -248,8 +247,16 @@ class Result:
      return self.__next__()
 
   def release(self):
-    _rDestroy(self._r, 1)
-    self._r = 0
+    if self._rw is not None:
+       self._rw.release()
+    if self._r is None:
+       return
+    x=1
+    if self.rType() == CURSOR:
+       x = _rClose(self._r)
+    if x != 0:
+       _rDestroy(self._r, 1)
+    self._r = None 
 
   def rType(self):
     return _rType(self._r)
@@ -335,7 +342,7 @@ class Result:
             return True
 
         else:
-            print "type is %d" % t.value
+            print("type is %d" % t.value)
             return None
 
 class DBError(Exception):
