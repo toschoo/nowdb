@@ -138,6 +138,10 @@ _rAdd = now.nowdb_dbresult_add2Row
 _rAdd.restype = c_long
 _rAdd.argtypes = [c_void_p, c_byte, c_void_p]
 
+_rCloseRow = now.nowdb_dbresult_closeRow
+_rCloseRow.restype = c_long
+_rCloseRow.argtypes = [c_void_p]
+
 def _setDB(db):
   global _db
   _db = db
@@ -196,10 +200,12 @@ class Result:
 
     if _rOpen(self._r) != 0:
        if not self.ok():
+          _rClose(self._r)
           return self
 
     if _rFetch(self._r) != 0:
        if not self.ok():
+          _rClose(self._r)
           return self
 
     self._rw = self.row()
@@ -280,6 +286,11 @@ class Result:
       return False
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
+
+  def closeRow(self):
+    if self._r is None:
+      return False
+    return (_rCloseRow(self._r)== 0)
 
   def row(self):
     if self.rType() != CURSOR:

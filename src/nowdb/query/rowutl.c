@@ -188,6 +188,14 @@ int nowdb_row_len(char *row) {
 }
 
 /* ------------------------------------------------------------------------
+ * Add EOR to row
+ * ------------------------------------------------------------------------
+ */
+void nowdb_row_addEOR(char *row, uint32_t *sz) {
+	if (*sz > 0) (*sz)++;
+}
+
+/* ------------------------------------------------------------------------
  * Add a value to a row
  * ------------------------------------------------------------------------
  */
@@ -198,7 +206,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 	size_t m;
 	int  l=0;
 
-	l = nowdb_row_len(row);
+	l = *sz; // nowdb_row_len(row);
 	if (l < 0) return NULL;
 
 	switch(t) {
@@ -219,7 +227,8 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		row2[l] = (char)t; row2[s+l-1] = 0; row2[s+l] = 10;
 		memcpy(row2+l+1, value, s-2);
 
-		*sz = s+l+1;
+		// *sz = s+l+1;
+		*sz = s+l;
 		return row2;
 	
 	case NOWDB_TYP_UINT:
@@ -243,7 +252,8 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		memcpy(row2+l+1, value, m);
 		row2[s+l] = 10;
 
-		*sz = s+l+1;
+		// *sz = s+l+1;
+		*sz = s+l;
 		return row2;
 
 	default:
