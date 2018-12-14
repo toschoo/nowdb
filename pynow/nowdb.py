@@ -55,6 +55,9 @@ USRERR = 73
 
 utc = tzutc()
 
+TIMEFORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+DATEFORMAT = "%Y-%m-%d"
+
 _db = None
 
 _free = libc.free
@@ -145,6 +148,23 @@ _rCloseRow.argtypes = [c_void_p]
 def _setDB(db):
   global _db
   _db = db
+
+# ---- convert datetime to nowdb time
+def dt2now(dt):
+    x = timegm(dt.utctimetuple())
+    x *= 1000000
+    x += dt.microsecond
+    x *= 1000
+    return x
+
+# ---- convert nowdb time to datetime
+def now2dt(p):
+    t = p/1000 # to microseconds
+    s = t / 1000000 # to seconds
+    m = t - s * 1000000 # isolate microseconds
+    dt = datetime.fromtimestamp(s, utc)
+    dt += timedelta(microseconds=m)
+    return dt
 
 def execute(stmt):
     global _db
