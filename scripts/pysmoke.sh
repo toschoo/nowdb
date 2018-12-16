@@ -39,6 +39,24 @@ then
 	exit 1
 fi
 
+echo "RUNNING wedge.py" >> log/pysmoke.log
+test/pysmoke/wedge.py >> log/pysmoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: wedge.py failed"
+	kill -2 $p
+	exit 1
+fi
+
+echo "RUNNING wvertex.py" >> log/pysmoke.log
+test/pysmoke/wvertex.py >> log/pysmoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: wvertex.py failed"
+	kill -2 $p
+	exit 1
+fi
+
 echo "RUNNING formulas.py" >> log/pysmoke.log
 test/pysmoke/formulas.py >> log/pysmoke.log 2>&1
 if [ $? -ne 0 ]

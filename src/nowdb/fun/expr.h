@@ -16,6 +16,9 @@
 #include <nowdb/mem/ptlru.h>
 
 #include <tsalgo/list.h>
+#include <tsalgo/tree.h>
+
+#include <stdio.h>
 
 /* -----------------------------------------------------------------------
  * Expression types:
@@ -47,6 +50,13 @@ typedef struct nowdb_expr_t* nowdb_expr_t;
 int nowdb_expr_type(nowdb_expr_t expr);
 
 /* ------------------------------------------------------------------------
+ * Expession is boolean / expression is comparison
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_bool(nowdb_expr_t expr);
+char nowdb_expr_compare(nowdb_expr_t expr);
+
+/* ------------------------------------------------------------------------
  * Field Expression
  * ------------------------------------------------------------------------
  */
@@ -60,6 +70,7 @@ typedef struct {
 	nowdb_roleid_t   role; /* vertex type if vertex   */
 	nowdb_key_t    propid; /* propid if vertex        */
 	char               pk; /* primary key if vertex   */
+	char           usekey; /* use key instead of text */
 } nowdb_field_t;
 
 /* ------------------------------------------------------------------------
@@ -68,6 +79,12 @@ typedef struct {
  */
 #define NOWDB_EXPR_TOFIELD(x) \
 	((nowdb_field_t*)x)
+
+/* -----------------------------------------------------------------------
+ * Tell field not to use text
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_usekey(nowdb_expr_t expr);
 
 /* ------------------------------------------------------------------------
  * Constant Expression
@@ -80,10 +97,11 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t    etype; /* expression type  */
-	void       *value; /* the value        */
-	void       *valbk; /* backup           */
-	nowdb_type_t type; /* and its type     */
+	uint32_t       etype; /* expression type         */
+	void          *value; /* the value               */
+	void          *valbk; /* backup                  */
+	ts_algo_tree_t *tree; /* tree for 'in'           */
+	nowdb_type_t    type; /* and its type            */
 } nowdb_const_t;
 
 /* ------------------------------------------------------------------------
@@ -98,14 +116,14 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t      etype;  /* expression type             */
-	uint32_t        fun;  /* Operator type (+,-,*,/,...) */
-	uint32_t       args;  /* Number of operands          */
-	nowdb_expr_t  *argv;  /* Operands                    */
-	nowdb_type_t  *types; /* types of the arg results    */
-	void      **results;  /* arg results                 */
-	nowdb_value_t   res;  /* result                      */
-	                      /* text????                    */
+	uint32_t       etype;  /* expression type             */
+	uint32_t         fun;  /* Operator type (+,-,*,/,...) */
+	uint32_t        args;  /* Number of operands          */
+	nowdb_expr_t   *argv;  /* Operands                    */
+	nowdb_type_t  *types;  /* types of the arg results    */
+	void       **results;  /* arg results                 */
+	nowdb_value_t    res;  /* result                      */
+	                       /* text????                    */
 } nowdb_op_t;
 
 /* ------------------------------------------------------------------------
@@ -203,6 +221,12 @@ void nowdb_eval_destroy(nowdb_eval_t *eval);
 nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
 
 /* -----------------------------------------------------------------------
+ * Create EdgeField expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off);
+
+/* -----------------------------------------------------------------------
  * Create VertexField expression
  * -----------------------------------------------------------------------
  */
@@ -218,6 +242,29 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t  *expr,
                                    void         *value,
                                    nowdb_type_t  type);
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a list
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromList(nowdb_expr_t   *expr,
+                                     ts_algo_list_t *list,
+                                     nowdb_type_t    type);
+
+/* -----------------------------------------------------------------------
+ * Create Constant expression representing an 'in' list from a tree
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_constFromTree(nowdb_expr_t   *expr,
+                                     ts_algo_tree_t *tree,
+                                     nowdb_type_t    type);
+
+/* -----------------------------------------------------------------------
+ * Create such a tree for constant expression
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_expr_newTree(ts_algo_tree_t **tree,
+                               nowdb_type_t    type);
 
 /* -----------------------------------------------------------------------
  * Create Operator expression (with arguments passed in as list)
@@ -266,6 +313,45 @@ int nowdb_op_fromName(char *op, char *agg);
  */
 void nowdb_expr_destroy(nowdb_expr_t expr);
 
+/* ------------------------------------------------------------------------
+ * We have a family triangle:
+ *
+ *                O
+ *               / \
+ *              F   C
+ *
+ * where O is either EQ, NE or IN
+ * F is either Field or Const
+ * and C is Const if F is Field or Field if F is Const
+ * in this case, we can use reduced code, i.e.
+ * we can use keys instead of elaborate text.
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_family3(nowdb_expr_t op);
+
+/* ------------------------------------------------------------------------
+ * Get field and constant from a family triangle 
+ * where, on success, f will point to the field
+ * and c to the constant.
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_getFieldAndConst(nowdb_expr_t op,
+                                 nowdb_expr_t *f,
+                                 nowdb_expr_t *c);
+
+/* ------------------------------------------------------------------------
+ * Replace an operand in a family triangle
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_replace(nowdb_expr_t op,
+                        nowdb_expr_t x);
+
+/* -----------------------------------------------------------------------
+ * Guess type before evaluation
+ * -----------------------------------------------------------------------
+ */
+int nowdb_expr_guessType(nowdb_expr_t expr);
+
 /* -----------------------------------------------------------------------
  * Copy expression
  * -----------------------------------------------------------------------
@@ -306,6 +392,28 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_type_t *typ,
                             void        **res);
 
+/* ------------------------------------------------------------------------
+ * Extract time period from expression
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_period(nowdb_expr_t expr,
+                       nowdb_time_t *start,
+                       nowdb_time_t *end);
+
+/* ------------------------------------------------------------------------
+ * Extract key range from expression
+ * ------------------------------------------------------------------------
+ */
+char nowdb_expr_range(nowdb_expr_t expr,
+                      uint16_t sz, uint16_t *off,
+                      char *rstart, char *rend);
+
+/* -----------------------------------------------------------------------
+ * Show expression
+ * -----------------------------------------------------------------------
+ */
+void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
+
 /* -----------------------------------------------------------------------
  * Conversions
  * -----------------------------------------------------------------------
@@ -343,10 +451,15 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 #define NOWDB_EXPR_OP_GT  104
 #define NOWDB_EXPR_OP_LE  105
 #define NOWDB_EXPR_OP_GE  106
-#define NOWDB_EXPR_OP_NOT 107
-#define NOWDB_EXPR_OP_AND 108
-#define NOWDB_EXPR_OP_OR  109
-#define NOWDB_EXPR_OP_XOR 110
+#define NOWDB_EXPR_OP_IN  107
+#define NOWDB_EXPR_OP_IS  108
+#define NOWDB_EXPR_OP_ISN 109
+#define NOWDB_EXPR_OP_TRUE 150
+#define NOWDB_EXPR_OP_FALSE 151
+#define NOWDB_EXPR_OP_NOT 152
+#define NOWDB_EXPR_OP_JUST 153
+#define NOWDB_EXPR_OP_AND 154
+#define NOWDB_EXPR_OP_OR  155
 
 /* -----------------------------------------------------------------------
  * TIME

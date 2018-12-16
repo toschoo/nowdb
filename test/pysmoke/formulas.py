@@ -7,6 +7,7 @@ import db
 import datetime
 import time
 import random
+import math
 
 IT = 10
 
@@ -87,6 +88,9 @@ def simpleedge(c):
     print "RUNNING TEST 'simpleedge'"
 
     idx = random.randint(1,len(es)-1)
+    if es[idx].edge == 'visits':
+       idx-=1
+
     o = es[idx].origin
     d = es[idx].destin
     w1 = es[idx].weight
@@ -156,6 +160,141 @@ def simpleedge(c):
                row.field(3) > row.field(0) + 0.1:
                raise db.TestFailed("wrong rounding %f: %f" % (row.field(0), row.field(3)))
 
+# punktrechnung vor strichtrechnung
+def punktvorstrich(c):
+
+    print "RUNNING TEST 'punktvorstrich'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+    p = ps[idx].price
+
+    x=7
+    print "expected: %d" % x
+    stmt = "select 3*2 + 1 from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %d (expected: %d)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=5
+    print "expected: %d" % x
+    stmt = "select 3*2 - 1 from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %d (expected: %d)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=9
+    print "expected: %d" % x
+    stmt = "select 3*(2 + 1) from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %d (expected: %d)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=3
+    print "expected: %d" % x
+    stmt = "select 3*(2 - 1) from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %d (expected: %d)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=12
+    print "expected: %f" % x
+    stmt = "select 3*2^2 from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %f (expected: %f)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=36
+    print "expected: %f" % x
+    stmt = "select (3*2)^2 from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %f (expected: %f)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=3
+    print "expected: %f" % x
+    stmt = "select 3*2^1/2 from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %f (expected: %f)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=3.0*2.0**(1.0/2.0)
+    print "expected: %f" % x
+    stmt = "select 3*2^(1.0/2.0) from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %f (expected: %f)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+
+    x=3.0*2.0**math.log(2) # 0.6931471805599453
+    print "expected: %f" % x
+    stmt = "select 3*2^log(2.0) from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) != x:
+               raise db.TestFailed("wrong result: %f (expected: %f)" % (row.field(0), x))
+        if n != 1:
+               raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
+            
 # agg expressions on vertex
 def aggvrtx(c):
 
@@ -283,7 +422,8 @@ def grpedge(c):
     print "RUNNING TEST 'grpedge'"
 
     stmt = "select edge, origin, sum(1), count(*) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -302,7 +442,8 @@ def grpedge(c):
                        raise db.TestFailed("expected count: %d, but have %d" % (rr.field(0), row.field(2)))
 
     stmt = "select edge, origin, avg(weight), sum(tofloat(weight))/count(*) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -321,7 +462,8 @@ def grpedge(c):
                        raise db.TestFailed("expected avg: %f, but have %f" % (rr.field(0), row.field(2)))
 
     stmt = "select edge, origin, median(weight) \
-              from sales group by edge, origin"
+              from sales where edge='buys' \
+             group by edge, origin" 
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -639,7 +781,7 @@ def timefun(c):
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es) = db.loadDB(c, "db100")
 
         constvalues(c)
         timefun(c)
@@ -647,6 +789,7 @@ if __name__ == "__main__":
         for i in range(IT):
             simplevrtx(c)
             simpleedge(c)
+            punktvorstrich(c)
 
         fibotest(c,20)
 

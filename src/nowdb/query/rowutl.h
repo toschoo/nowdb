@@ -28,11 +28,17 @@ int nowdb_row_print(char *buf, uint32_t sz, FILE *stream);
 char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz); 
 
 /* ------------------------------------------------------------------------
- * Add a value to a row buffer with containing one value
+ * Add a value to a row buffer
  * ------------------------------------------------------------------------
  */
 char *nowdb_row_addValue(char *row, nowdb_type_t t,
                          void *value, uint32_t *sz);
+
+/* ------------------------------------------------------------------------
+ * Add EOR
+ * ------------------------------------------------------------------------
+ */
+void nowdb_row_addEOR(char *row, uint32_t *sz);
 
 /* ------------------------------------------------------------------------
  * Compute the length of a row (assuming the row is correct!)

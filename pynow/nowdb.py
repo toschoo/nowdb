@@ -55,6 +55,9 @@ USRERR = 73
 
 utc = tzutc()
 
+TIMEFORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+DATEFORMAT = "%Y-%m-%d"
+
 _db = None
 
 _free = libc.free
@@ -138,9 +141,30 @@ _rAdd = now.nowdb_dbresult_add2Row
 _rAdd.restype = c_long
 _rAdd.argtypes = [c_void_p, c_byte, c_void_p]
 
+_rCloseRow = now.nowdb_dbresult_closeRow
+_rCloseRow.restype = c_long
+_rCloseRow.argtypes = [c_void_p]
+
 def _setDB(db):
   global _db
   _db = db
+
+# ---- convert datetime to nowdb time
+def dt2now(dt):
+    x = timegm(dt.utctimetuple())
+    x *= 1000000
+    x += dt.microsecond
+    x *= 1000
+    return x
+
+# ---- convert nowdb time to datetime
+def now2dt(p):
+    t = p/1000 # to microseconds
+    s = t / 1000000 # to seconds
+    m = t - s * 1000000 # isolate microseconds
+    dt = datetime.fromtimestamp(s, utc)
+    dt += timedelta(microseconds=m)
+    return dt
 
 def execute(stmt):
     global _db
@@ -223,6 +247,7 @@ class Result:
               d = self.details()
 
               _rClose(self._r)
+              self._r = None
 
               if x == EOF:
                  raise StopIteration
@@ -242,8 +267,16 @@ class Result:
      return self.__next__()
 
   def release(self):
-    _rDestroy(self._r, 1)
-    self._r = 0
+    if self._rw is not None:
+       self._rw.release()
+    if self._r is None:
+       return
+    x=1
+    if self.rType() == CURSOR:
+       x = _rClose(self._r)
+    if x != 0:
+       _rDestroy(self._r, 1)
+    self._r = None 
 
   def rType(self):
     return _rType(self._r)
@@ -280,6 +313,11 @@ class Result:
       return False
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
+
+  def closeRow(self):
+    if self._r is None:
+      return False
+    return (_rCloseRow(self._r)== 0)
 
   def row(self):
     if self.rType() != CURSOR:
@@ -324,7 +362,7 @@ class Result:
             return True
 
         else:
-            print "type is %d" % t.value
+            print("type is %d" % t.value)
             return None
 
 class DBError(Exception):

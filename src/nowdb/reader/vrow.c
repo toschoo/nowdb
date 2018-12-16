@@ -264,105 +264,176 @@ static inline nowdb_err_t getProperty(nowdb_vrow_t  *vrow,
 	return NOWDB_OK;
 }
 
+#define FIELD(x) \
+	NOWDB_EXPR_TOFIELD(x)
+
+#define OP(x) \
+	NOWDB_EXPR_TOOP(x)
+
+#define ARG(x,i) \
+	NOWDB_EXPR_TOOP(x)->argv[i]
+
+#define SETARG(x,i,n) \
+	NOWDB_EXPR_TOOP(x)->argv[i] = n
+
 /* ------------------------------------------------------------------------
- * Copy filter recursively
+ * substitute "IS" by "and(=(key,key), IS(...))"
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
-                             int             *cnt,
-                             int             *off,
-                             nowdb_filter_t  *src,
-                             nowdb_filter_t **trg) {
+static inline nowdb_err_t tauandis(nowdb_expr_t       *x,
+                                   nowdb_model_prop_t *p) {
 	nowdb_err_t err;
-	ts_algo_list_t *in, *in2=NULL;
+	nowdb_expr_t f1, f2;
+	nowdb_expr_t eq, n;
 
-	if (src->ntype == NOWDB_FILTER_BOOL) {
-		err = nowdb_filter_newBool(trg, src->op);
-		if (err != NOWDB_OK) return err;
+	err = nowdb_expr_newVertexField(&f1, p->name,
+	                                     p->roleid,
+	                                     p->propid);
+	if (err != NOWDB_OK) return err;
+	FIELD(f1)->type = p->value;
+	nowdb_expr_usekey(f1);
 
-	} else if (src->off == NOWDB_OFF_PROP) {
-		err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
-		if (err != NOWDB_OK) return err;
+	err = nowdb_expr_newVertexField(&f2, p->name,
+	                                     p->roleid,
+	                                     p->propid);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(f1); free(f1);
+		return err;
+	}
+	FIELD(f2)->type = p->value;
+	nowdb_expr_usekey(f2);
 
-		err = insertProperty(vrow, src->val, cnt, off);
-		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*trg);
-			free(*trg); *trg = NULL;
-			return err;
+        err = nowdb_expr_newOp(&eq, NOWDB_EXPR_OP_EQ, f1, f2);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(f1); free(f1);
+		nowdb_expr_destroy(f2); free(f2);
+		return err;
+	}
+
+	err = nowdb_expr_newOp(&n, NOWDB_EXPR_OP_AND, eq, *x);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(eq); free(eq);
+		return err;
+	}
+	*x = n;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * wrap tauandis for node
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t wrapISNode(nowdb_vrow_t    *vrow,
+                                     nowdb_expr_t       *x,
+                                     nowdb_model_prop_t *p) 
+{
+	if (nowdb_expr_type(*x) != NOWDB_EXPR_OP) return NOWDB_OK;
+	if (OP(*x)->fun != NOWDB_EXPR_OP_IS) return NOWDB_OK;
+
+	// vrow->wantvrtx = 1;
+	return tauandis(x, p);
+}
+
+/* ------------------------------------------------------------------------
+ * wrap tauandis for operand of a node
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t wrapISKid(nowdb_vrow_t    *vrow,
+                                    nowdb_expr_t x, int i,
+                                    nowdb_model_prop_t *p) 
+{
+	if (nowdb_expr_type(ARG(x,i)) != NOWDB_EXPR_OP) return NOWDB_OK;
+	if (OP(ARG(x,i))->fun != NOWDB_EXPR_OP_IS) return NOWDB_OK;
+
+	// vrow->wantvrtx = 1;
+	return tauandis(&ARG(x,i), p);
+}
+
+/* ------------------------------------------------------------------------
+ * recursively replace "IS" by "and(=(key,key), IS(...)"
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t updISNode(nowdb_vrow_t *vrow,
+                             nowdb_expr_t  expr,
+                             nowdb_model_prop_t *p) {
+	nowdb_err_t err;
+
+	switch(nowdb_expr_type(expr)) {
+	case NOWDB_EXPR_CONST: return NOWDB_OK;
+
+	case NOWDB_EXPR_REF: return updISNode(vrow,
+	           NOWDB_EXPR_TOREF(expr)->ref, p);
+
+	case NOWDB_EXPR_AGG:
+		return updISNode(vrow, ((nowdb_fun_t*)NOWDB_EXPR_TOAGG(
+	                                         expr)->agg)->expr, p);
+
+	case NOWDB_EXPR_OP:
+		for(int i=0; i<OP(expr)->args; i++) {
+			err = updISNode(vrow, ARG(expr,i), p);
+			if (err != NOWDB_OK) return err;
+			err = wrapISKid(vrow, expr, i, p);
+			if (err != NOWDB_OK) return err;
 		}
 		return NOWDB_OK;
 
-	} else {
-		// role is always the first
-		if (src->off == NOWDB_OFF_ROLE) {
-			*off = 0;
+	case NOWDB_EXPR_FIELD: return NOWDB_OK;
+	}
+	return NOWDB_OK;
+}
 
-		// use the prop offset from the propmap (for property)
-		} else if (src->off == NOWDB_OFF_VALUE) {
-			// fprintf(stderr, "VALUE\n");
-			if (*off < 0) {
-				INVALID("no valid offset");
-			}
+/* ------------------------------------------------------------------------
+ * update a filter expression recursively
+ * (can be merge with updXNode)
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t updFNode(nowdb_vrow_t *vrow,
+                            int           *cnt,
+                            int           *off, // we don't to pass this through
+                            nowdb_expr_t  expr) {
+	nowdb_err_t err;
 
-		// use the prop offset from the propmap (for vertex)
-		} else if (src->off == NOWDB_OFF_VERTEX) {
-			// fprintf(stderr, "VERTEX\n");
+	switch(nowdb_expr_type(expr)) {
+	case NOWDB_EXPR_CONST: return NOWDB_OK;
+
+	case NOWDB_EXPR_REF: return updFNode(vrow, cnt, off,
+	                        NOWDB_EXPR_TOREF(expr)->ref);
+
+	case NOWDB_EXPR_AGG:
+		return updFNode(vrow, cnt, off,
+	               ((nowdb_fun_t*)NOWDB_EXPR_TOAGG(
+	                             expr)->agg)->expr);
+
+	case NOWDB_EXPR_OP:
+		for(int i=0; i<OP(expr)->args; i++) {
+			err = updFNode(vrow, cnt, off,
+			           OP(expr)->argv[i]);
+			if (err != NOWDB_OK) return err;
+		}
+		return NOWDB_OK;
+
+	case NOWDB_EXPR_FIELD: 
+
+		switch(FIELD(expr)->off) {
+		case NOWDB_OFF_ROLE:
+			FIELD(expr)->off = 0;
+			return NOWDB_OK;
+
+		case NOWDB_OFF_VERTEX:
 			err = insertVertex(vrow, cnt, off);
 			if (err != NOWDB_OK) return err;
 			vrow->wantvrtx = 1;
-	
-		// ignore anything else	
-		} else {
-			// fprintf(stderr, "IGNORE %u\n", src->off);
-			err = nowdb_filter_newBool(trg, NOWDB_FILTER_TRUE);
-			if (err != NOWDB_OK) return err;
+			FIELD(expr)->off = *off;
 			return NOWDB_OK;
-		}
 
-		// we don't own the value,
-		// but we own the in-list...
-		if (src->in != NULL) {
-			in = ts_algo_tree_toList(src->in);
-			if (in == NULL) {
-				NOMEM("tree.toList");
-				return err;
-			}
-			err = copyList(in, src->size, &in2);
-			ts_algo_list_destroy(in); free(in);
+		case NOWDB_OFF_VALUE:
+			err = insertProperty(vrow,
+			     &FIELD(expr)->propid,
+		                         cnt,off);
 			if (err != NOWDB_OK) return err;
-		}
-		err = nowdb_filter_newCompare(trg, src->op, *off,
-                                                   src->size,  
-                                                   src->typ,
-		                                   src->val, in2);
-		if (err != NOWDB_OK) {
-			if (in2 != NULL) {
-				DESTROYIN(in2); free(in2);
-			}
-			return err;
-		}
-		if (in2 != NULL) {
-			ts_algo_list_destroy(in2); free(in2);
-		}
-		return NOWDB_OK;
-	}
-	// go left (here we expect the propid)
-	if (src->left != NULL) {
-		*off = -1;
-		err = copyFNode(vrow, cnt, off, src->left, &(*trg)->left);
-		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*trg);
-			free(*trg); *trg = NULL;
-			return err;
-		}
-	}
-	// go left (here we expect the value)
-	if (src->right != NULL) {
-		err = copyFNode(vrow, cnt, off, src->right, &(*trg)->right);
-		if (err != NOWDB_OK) {
-			nowdb_filter_destroy(*trg);
-			free(*trg); *trg = NULL;
-			return err;
+			FIELD(expr)->off = *off;
+			return NOWDB_OK;
+		default: return NOWDB_OK;
 		}
 	}
 	return NOWDB_OK;
@@ -374,7 +445,7 @@ static nowdb_err_t copyFNode(nowdb_vrow_t   *vrow,
  */
 static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
                             int          *cnt,
-                            int          *off,
+                            int          *off, // we don't need to pass this through
                             nowdb_expr_t expr) {
 	nowdb_err_t err;
 
@@ -410,27 +481,56 @@ static nowdb_err_t updXNode(nowdb_vrow_t *vrow,
 }
 
 /* ------------------------------------------------------------------------
+ * replace "IS" for "and(=(key,key), IS(...))
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t handleISNode(nowdb_vrow_t *vrow,
+                                nowdb_expr_t *x) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	if (vrow->eval->model == NULL) return NOWDB_OK;
+
+	err = nowdb_model_getPK(vrow->eval->model,
+                                vrow->role,   &p);
+	if (err != NOWDB_OK) return err;
+
+	err = updISNode(vrow, *x, p);
+	if (err != NOWDB_OK) return err;
+
+	// handle top node
+	err = wrapISNode(vrow, x, p);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Copy/Change filter
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
-                              nowdb_filter_t *fil) {
+static nowdb_err_t copyFilter(nowdb_vrow_t *vrow,
+                              nowdb_expr_t   fil) {
 	nowdb_err_t err;
 	int off=-1;
 	int cnt=0;
 
-	/*
 	fprintf(stderr, "FILTER BEFORE:\n");
-	nowdb_filter_show(fil, stderr); fprintf(stderr, "\n");
-	*/
+	nowdb_expr_show(fil, stderr); fprintf(stderr, "\n");
 
-	err = copyFNode(vrow, &cnt, &off, fil, &vrow->filter);
+	err = nowdb_expr_copy(fil, &vrow->filter);
+	if (err != NOWDB_OK) return err;
+
+	err = handleISNode(vrow, &vrow->filter);
+	if (err != NOWDB_OK) return err;
+
+	err = updFNode(vrow, &cnt, &off, vrow->filter);
 	if (err != NOWDB_OK) return err;
 
 	vrow->np = (uint32_t)cnt;
 	vrow->size = (uint32_t)ROLESZ+cnt*KEYSZ;
 
-	// nowdb_filter_show(vrow->filter, stderr); fprintf(stderr, "\n");
+	nowdb_expr_show(vrow->filter, stderr); fprintf(stderr, "\n");
 
 	return NOWDB_OK;
 }
@@ -441,12 +541,13 @@ static nowdb_err_t copyFilter(nowdb_vrow_t  *vrow,
  */
 nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
                                   nowdb_vrow_t **vrow,
-                                  nowdb_filter_t *fil) {
+                                  nowdb_expr_t    fil,
+                                  nowdb_eval_t  *eval) {
 	nowdb_err_t err;
 
 	if (fil  == NULL) INVALID("filter is NULL");
 
-	err = nowdb_vrow_new(role, vrow);
+	err = nowdb_vrow_new(role, vrow, eval);
 	if (err != NOWDB_OK) return err;
 
 	err = copyFilter(*vrow, fil);
@@ -463,7 +564,8 @@ nowdb_err_t nowdb_vrow_fromFilter(nowdb_roleid_t role,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
-                           nowdb_vrow_t **vrow) {
+                           nowdb_vrow_t **vrow,
+                           nowdb_eval_t  *eval) {
 	nowdb_err_t err;
 
 	if (vrow == NULL) INVALID("vrow pointer is NULL");
@@ -475,6 +577,7 @@ nowdb_err_t nowdb_vrow_new(nowdb_roleid_t role,
 	}
 
 	(*vrow)->role = role;
+	(*vrow)->eval = eval;
 
 	(*vrow)->ready = calloc(1, sizeof(ts_algo_list_t));
 	if ((*vrow)->ready == NULL) {
@@ -548,7 +651,7 @@ void nowdb_vrow_destroy(nowdb_vrow_t *vrow) {
 		DESTROYREADY(vrow);
 	}
 	if (vrow->filter != NULL) {
-		nowdb_filter_destroy(vrow->filter);
+		nowdb_expr_destroy(vrow->filter);
 		free(vrow->filter); vrow->filter = NULL;
 	}
 	if (vrow->prev != NULL) {
@@ -585,14 +688,20 @@ nowdb_err_t nowdb_vrow_add(nowdb_vrow_t   *vrow,
 	pattern.propid = vertex->property;
 	err = getProperty(vrow, &pattern, &pm);
 	if (err != NOWDB_OK) return err;
-	if (pm == NULL) return NOWDB_OK;
+	if (pm == NULL) {
+		/*
+		fprintf(stderr, "prop not found %lu/%lu/%lu\n",
+	                vertex->vertex, vertex->property, vertex->value);
+		*/
+		return NOWDB_OK;
+	}
 
 	// get vrow
 	err = getVRow(vrow, vertex, &v);
 	if (err != NOWDB_OK) return err;
 
 	// add according to offset
-	
+
 	/*
 	fprintf(stderr, "property %lu/%lu/%lu into %u\n",
 	  vertex->vertex, vertex->property, vertex->value, pm->off);
@@ -732,24 +841,36 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
  * Try to evaluate
  * ------------------------------------------------------------------------
  */
-nowdb_bool_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
-                            nowdb_key_t   *vid) {
-	ts_algo_list_node_t *node;
-	char found = 0;
-	vrow_t *v;
+nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
+                            nowdb_key_t   *vid,
+                            nowdb_bool_t *found) {
 
-	if (vrow->ready->len == 0) return 0;
+	nowdb_err_t err;
+	ts_algo_list_node_t *node;
+	vrow_t *v;
+	void *x;
+	nowdb_type_t t;
+
+	*found = 0;
+
+	if (vrow->ready->len == 0) return NOWDB_OK;
 
 	node = vrow->ready->head;
 	v = node->cont;
 	
-	if (nowdb_filter_eval(vrow->filter, v->row)) {
-		found = 1;
+	err = nowdb_expr_eval(vrow->filter,
+	                        vrow->eval,
+	                           v->pmap,
+	             // NOWDB_BITMAP64_ALL,
+	                   v->row, &t, &x);
+	if (err != NOWDB_OK) return err;
+	if (*(nowdb_value_t*)x) {
+		*found = 1;
 		*vid = v->vertex;
 	}
 	ts_algo_list_remove(vrow->ready, node);
 	free(node); destroyVRow(v);
-	return found;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------

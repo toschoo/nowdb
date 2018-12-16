@@ -12,7 +12,7 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/io/dir.h>
 #include <nowdb/io/file.h>
-#include <nowdb/reader/filter.h>
+#include <nowdb/fun/expr.h>
 #include <nowdb/index/index.h>
 #include <nowdb/mem/pplru.h>
 #include <nowdb/sort/sort.h>
@@ -75,7 +75,8 @@ typedef struct nowdb_reader_t {
 	char                    *tmp; /* buffer for keys in bufreader  */
 	char                   *tmp2; /* buffer for keys in bufreader  */
 	char                  *page2; /* buffer for page in bufreader  */
-	nowdb_filter_t       *filter; /* filter                        */
+	nowdb_expr_t          filter; /* filter                        */
+	nowdb_eval_t           *eval; /* evaluation helper             */
 	beet_iter_t             iter; /* iterator                      */
 	beet_state_t           state; /* query state                   */
 	nowdb_bool_t         closeit; /* close file after use          */
@@ -110,7 +111,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader);
  * ----
  * Moves to the next page. When move succeeds without error,
  * it is guaranteed that 'page' is not NULL.
- * It move reaches the end of the dataset, EOF is returned.
+ * If move reaches the end of the dataset, EOF is returned.
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader);
@@ -193,8 +194,8 @@ void nowdb_reader_setPeriod(nowdb_reader_t *reader,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
-                                  ts_algo_list_t  *files,
-                                  nowdb_filter_t  *filter);
+                                  ts_algo_list_t   *files,
+                                  nowdb_expr_t    filter);
 
 /* ------------------------------------------------------------------------
  * Index Search
@@ -211,7 +212,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
                                 char            *key,
-                                nowdb_filter_t  *filter);
+                                nowdb_expr_t filter);
 
 /* ------------------------------------------------------------------------
  * Index Full Range scan
@@ -230,7 +231,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t     filter,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------
@@ -243,7 +244,7 @@ nowdb_err_t nowdb_reader_frange(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t    filter,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------
@@ -256,7 +257,7 @@ nowdb_err_t nowdb_reader_krange(nowdb_reader_t **reader,
 nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
-                                nowdb_filter_t  *filter,
+                                nowdb_expr_t    filter,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------
@@ -271,7 +272,8 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
  */
 nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
-                                nowdb_filter_t   *filter);
+                                nowdb_expr_t     filter,
+                                nowdb_eval_t     *eval);
 
 /* ------------------------------------------------------------------------
  * Buffer simulating an index range scan
@@ -290,7 +292,8 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
                                 ts_algo_list_t   *files,
                                 nowdb_index_t    *index,
-                                nowdb_filter_t   *filter,
+                                nowdb_expr_t     filter,
+                                nowdb_eval_t     *eval, 
                                 nowdb_ord_t        ord,
                                 void *start, void *end);
 
@@ -311,7 +314,8 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 nowdb_err_t nowdb_reader_bkrange(nowdb_reader_t  **reader,
                                  ts_algo_list_t   *files,
                                  nowdb_index_t    *index,
-                                 nowdb_filter_t   *filter,
+                                 nowdb_expr_t     filter,
+                                 nowdb_eval_t     *eval, 
                                  nowdb_ord_t        ord,
                                  void *start,void  *end);
 

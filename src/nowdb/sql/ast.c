@@ -582,10 +582,10 @@ static inline int addfrom(nowdb_ast_t *n,
 static inline int addwhere(nowdb_ast_t *n,
                            nowdb_ast_t *k) {
 	switch(k->ntype) {
-	case NOWDB_AST_AND:
-	case NOWDB_AST_OR:
-	case NOWDB_AST_NOT:
-	case NOWDB_AST_JUST: ADDKID(0);
+	case NOWDB_AST_OP: ADDKID(0);
+	case NOWDB_AST_FIELD: ADDKID(0);
+	case NOWDB_AST_VALUE: ADDKID(0);
+	case NOWDB_AST_FUN: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -976,6 +976,7 @@ nowdb_ast_t *nowdb_ast_field(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_CREATE: return ast->kids[3];
 	case NOWDB_AST_SELECT: return ast->kids[0];
+	case NOWDB_AST_WHERE: return ast->kids[0]; // should not be 'field'
 	case NOWDB_AST_INSERT: return ast->kids[2];
 	case NOWDB_AST_GROUP: return ast->kids[0];
 	case NOWDB_AST_ORDER: return ast->kids[0];

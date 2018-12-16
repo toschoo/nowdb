@@ -94,10 +94,10 @@ char *testSingle(char *row2) {
 		v=txt;
 	}
 
-	// fprintf(stderr, "testing %d\n", t);
+	fprintf(stderr, "testing %d\n", t);
 
+	l += sz;
 	if (row2 != NULL) {
-		l = nowdb_row_len(row2);
 		row = nowdb_row_addValue(row2, t, v, &sz);
 	} else {
 		row = nowdb_row_fromValue(t, v, &sz);
@@ -108,6 +108,7 @@ char *testSingle(char *row2) {
 		if (row2 != NULL) free(row2);
 		return NULL;
 	}
+	nowdb_row_addEOR(row, &sz);
 	if (t == NOWDB_TYP_TEXT && sz != l + s + 3) {
 		fprintf(stderr, "wrong size (text): %u + %u = %u\n", l,s,sz);
 		if (txt != NULL) free(txt);

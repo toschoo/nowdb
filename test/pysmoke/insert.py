@@ -274,6 +274,38 @@ def insertallvertex(c):
               if row.field(0) == k:
                  raise db.TestFailed("NULL field filtered %d: %s" % (k, row.field(0)))
 
+    # filter a non-existing prop using is null
+    stmt = "select prod_key, prod_cat from product where prod_cat is null"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+        found=False
+        n=0
+        for row in cur:
+            n+=1
+            if row.field(0) == k:
+               found=True
+            if row.field(1) is not None:
+               raise db.TestFailed("NULL is not None")
+            print "NULL: %d" % row.field(0)
+        if not found:
+           raise db.TestFailed("NULL not found for %d" % k)
+
+    # filter out non-existing prop using is not null
+    stmt = "select prod_key, prod_cat from product where prod_cat is not null"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+        m=0
+        for row in cur:
+            m+=1
+            if row.field(0) == k:
+               raise db.TestFailed("NULL found with NOT NULL: %d" % k)
+            if row.field(1) is None:
+               raise db.TestFailed("not NULL is None")
+        if m != len(ps):
+           raise db.TestFailed("Couldn't find some of them" % (m,len(ps)))
+
     # insert with field list (complete)
     k = getNextKey()
     stmt = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \
@@ -550,11 +582,11 @@ def insertalledge(c,ps,cs):
 ###########################################################################
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es) = db.loadDB(c, "db100")
 
-        #dupkeyvertex(c)
-        #failedinsert(c)
+        dupkeyvertex(c)
+        failedinsert(c)
         insertallvertex(c)
-        #insertalledge(c,ps,cs)
+        insertalledge(c,ps,cs)
 
         print "PASSED"
