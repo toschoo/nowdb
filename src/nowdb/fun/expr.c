@@ -1122,7 +1122,7 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 #define HANDLETEXT(what) \
 	if ((hlp->needtxt || !field->usekey) && what != NULL) { \
 		*t = (char)NOWDB_TYP_TEXT; \
-		err = getText(hlp, *what, &field->text); \
+		err = getText(hlp, *(uint64_t*)what, &field->text); \
 		if (err != NOWDB_OK) return err; \
 		*res = field->text; \
 	} else { \
@@ -1139,7 +1139,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
                                        nowdb_edge_t  *src,
                                        nowdb_type_t  *t,
                                        void         **res) {
-	nowdb_value_t *w=NULL;
+	void *w=NULL;
 	nowdb_err_t  err;
 
 	switch(field->off) {
@@ -1198,9 +1198,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		}
 		switch(*t) {
 		case NOWDB_TYP_TEXT:
-			if (hlp->needtxt)  {
-				HANDLETEXT(w);
-			}
+			HANDLETEXT(w);
 			break;
 
 		case NOWDB_TYP_DATE:
@@ -1958,13 +1956,13 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 	v0 = (strcmp(v1,v2)!=0)
 
 /* -----------------------------------------------------------------------
- * Perform any 2-placed operation (not text)
+ * Perform any comparison operation (not text)
  * -----------------------------------------------------------------------
  */
-#define PERFANY(o) \
-	switch(*t) { \
+#define PERFCOMP(o) \
+	switch(types[0]) { \
 	case NOWDB_TYP_UINT: \
-		o(*(uint64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
+		o(*(int64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
 		return NOWDB_OK; \
 	case NOWDB_TYP_DATE: \
 	case NOWDB_TYP_TIME: \
@@ -1973,7 +1971,7 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 		o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
 		return NOWDB_OK; \
 	case NOWDB_TYP_FLOAT: \
-		o(*(double*)res, *(double*)argv[0], *(double*)argv[1]); \
+		o(*(int64_t*)res, *(double*)argv[0], *(double*)argv[1]); \
 		return NOWDB_OK; \
 	default: return NOWDB_OK; \
 	}
@@ -1983,7 +1981,7 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFSHORT(o) \
-	o(*(uint64_t*)res, *(uint32_t*)argv[0], *(uint32_t*)argv[1]); \
+	o(*(int64_t*)res, *(uint32_t*)argv[0], *(uint32_t*)argv[1]); \
 	return NOWDB_OK;
 
 /* -----------------------------------------------------------------------
@@ -1991,7 +1989,7 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFSTR(o) \
-	o(*(uint64_t*)res, (char*)argv[0], (char*)argv[1]); \
+	o(*(int64_t*)res, (char*)argv[0], (char*)argv[1]); \
 	return NOWDB_OK;
 
 /* -----------------------------------------------------------------------
@@ -2256,7 +2254,7 @@ static nowdb_err_t evalFun(uint32_t      fun,
 			// fprintf(stderr, "comparing short\n");
 			PERFSHORT(EQ);
 		} else {
-			PERFANY(EQ);
+			PERFCOMP(EQ);
 		}
 
 	case NOWDB_EXPR_OP_NE:
@@ -2265,12 +2263,12 @@ static nowdb_err_t evalFun(uint32_t      fun,
 		} else if (types[0] == NOWDB_TYP_SHORT) {
 			PERFSHORT(EQ);
 		} else {
-			PERFANY(NE);
+			PERFCOMP(NE);
 		}
-	case NOWDB_EXPR_OP_LT: PERFANY(LT);
-	case NOWDB_EXPR_OP_GT: PERFANY(GT);
-	case NOWDB_EXPR_OP_LE: PERFANY(LE);
-	case NOWDB_EXPR_OP_GE: PERFANY(GE);
+	case NOWDB_EXPR_OP_LT: PERFCOMP(LT);
+	case NOWDB_EXPR_OP_GT: PERFCOMP(GT);
+	case NOWDB_EXPR_OP_LE: PERFCOMP(LE);
+	case NOWDB_EXPR_OP_GE: PERFCOMP(GE);
 
 	case NOWDB_EXPR_OP_IN: FINDIN();
 
