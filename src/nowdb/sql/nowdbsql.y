@@ -126,6 +126,9 @@
 %type field_list {nowdb_ast_t*}
 %destructor field_list {nowdb_ast_destroyAndFree($$);}
 
+%type field {nowdb_ast_t*}
+%destructor field {nowdb_ast_destroyAndFree($$);}
+
 %type expr_list {nowdb_ast_t*}
 %destructor expr_list {nowdb_ast_destroyAndFree($$);}
 
@@ -741,9 +744,7 @@ expr(P) ::= value(V). {
 }
 
 expr(P) ::= field(F). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(P, NOWDB_AST_V_STRING, F);
+	P=F;
 }
 
 expr(P) ::= LPAR expr(E) RPAR. {
@@ -901,40 +902,53 @@ where_clause(W) ::= WHERE expr(E). {
 }
 
 field_list(L) ::= field(F). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&L, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(L, NOWDB_AST_V_STRING, F);
+	L=F;
 }
  
-field_list(L) ::= field(F) COMMA field_list(FL). {
-	NOWDB_SQL_CREATEAST(&L, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(L, NOWDB_AST_V_STRING, F);
-	NOWDB_SQL_ADDKID(L,FL);
+field_list(L) ::= field_list(FL) COMMA field(F). {
+	NOWDB_SQL_ADDKID(FL,F);
+	L=FL;
 }
 
 field(F) ::= IDENTIFIER(I). {
-	F=I;
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= ORIGIN(O). {
-	F=O;
+field(F) ::= ORIGIN(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= DESTINATION(D). {
-	F=D;
+field(F) ::= DESTINATION(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= EDGE(E). {
-	F=E;
+field(F) ::= EDGE(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= LABEL(L). {
-	F=L;
+field(F) ::= LABEL(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= TIMESTAMP(T). {
-	F=T;
+field(F) ::= TIMESTAMP(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= WEIGHT(T). {
-	F=T;
+field(F) ::= WEIGHT(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= WEIGHT2(T). {
-	F=T;
+field(F) ::= WEIGHT2(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
 value(V) ::= STRING(S). {
