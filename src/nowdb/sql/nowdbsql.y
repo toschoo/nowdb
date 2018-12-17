@@ -50,6 +50,12 @@
 	free($$);
 }
 
+%stack_overflow {
+     fprintf(stderr,"Giving up.  Parser stack overflow\n");
+}
+
+%stack_size 1000
+
 /* ------------------------------------------------------------------------
  * Everything else is an ast node
  * ------------------------------------------------------------------------
@@ -398,9 +404,9 @@ field_decl_list(L) ::= field_decl(F). {
 	L=F;
 }
 
-field_decl_list(L) ::= field_decl(F) COMMA field_decl_list(L2). {
-	NOWDB_SQL_ADDKID(F,L2);
-	L=F;
+field_decl_list(L) ::= field_decl_list(L2) COMMA field_decl(F). {
+	NOWDB_SQL_ADDKID(L2,F);
+	L=L2;
 }
 
 edge_field_decl(E) ::= ORIGIN IDENTIFIER(I). {
@@ -432,9 +438,9 @@ edge_field_decl_list(L) ::= edge_field_decl(E). {
 	L=E;
 }
 
-edge_field_decl_list(L) ::= edge_field_decl(E) COMMA edge_field_decl_list(L2). {
-	NOWDB_SQL_ADDKID(E,L2);
-	L=E;
+edge_field_decl_list(L) ::= edge_field_decl_list(L2) COMMA edge_field_decl(E). {
+	NOWDB_SQL_ADDKID(L2,E);
+	L=L2;
 }
 
 type(T) ::= TEXT. {
@@ -724,10 +730,10 @@ expr_list(L) ::= expr(F). {
 	L = F;
 }
  
-expr_list(L) ::= expr(F) COMMA expr_list(PL). {
+expr_list(L) ::= expr_list(PL) COMMA expr(F). {
 	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(F,PL);
-	L = F;
+	NOWDB_SQL_ADDKID(PL,F);
+	L = PL;
 }
 
 expr(P) ::= value(V). {
@@ -851,10 +857,10 @@ val_list(L) ::= value(V). {
 	L=V;
 }
 
-val_list(L) ::= value(V) COMMA val_list(L2). {
+val_list(L) ::= val_list(L2) COMMA value(V). {
 	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_ADDKID(V,L2);
-	L = V;
+	NOWDB_SQL_ADDKID(L2,V);
+	L = L2;
 }
 
 /* ------------------------------------------------------------------------
@@ -865,9 +871,9 @@ table_list(T) ::= table_spec(S). {
 	T=S;
 }
 
-table_list(T) ::= table_spec(S) COMMA table_list(L). {
-	NOWDB_SQL_ADDKID(S,L);
-	T=S;
+table_list(T) ::= table_list(L) COMMMA table_spec(S). {
+	NOWDB_SQL_ADDKID(L,S);
+	T=L;
 }
 
 table_spec(T) ::= VERTEX. {
