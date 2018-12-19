@@ -765,6 +765,7 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
         ROW(cp)->sz = CUR(cur)->sz;
         ROW(cp)->lo = 0;
         ROW(cp)->off = 0;
+        ROW(cp)->own = 0;
 
 	return (nowdb_dbrow_t)cp;
 }

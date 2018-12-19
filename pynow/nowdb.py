@@ -277,6 +277,7 @@ class Result:
   def release(self):
     if self._rw is not None:
        self._rw.release()
+       self._rw = None
     if self._r is None:
        return
     x=1
