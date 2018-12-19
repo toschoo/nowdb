@@ -283,6 +283,8 @@ class Result:
     x=1
     if self.rType() == CURSOR:
        x = _rClose(self._r)
+       if x == 0:
+           x = 1
     if x != 0:
        _rDestroy(self._r, 1)
     self._r = None 

@@ -681,7 +681,7 @@ void nowdb_dbcur_close(nowdb_dbcur_t cur) {
 	}
 	nowdb_cursor_destroy(NOWDBCUR(cur));
 	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
-	free(cur);
+	// free(cur);
 }
 
 /* ------------------------------------------------------------------------
