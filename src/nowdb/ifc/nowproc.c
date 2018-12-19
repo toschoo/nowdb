@@ -39,6 +39,7 @@
 
 static char *OBJECT = "PROCIFC";
 
+#define PRSBUFSIZE 0x10000
 #define BUFSIZE 0x12000
 #define MAXROW  0x1000
 
@@ -458,9 +459,9 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 	fprintf(stderr, "result: %p\n", res);
 	*/
 
-	s = strnlen(statement, 4097);
-	if (s > 4096) {
-		INVALID("string too long! (max: 4096)");
+	s = strnlen(statement, PRSBUFSIZE);
+	if (s >= PRSBUFSIZE) {
+		INVALID("string too long!");
 		return -1;
 	}
 	if (s <= 0) {

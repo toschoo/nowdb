@@ -10,6 +10,7 @@
 #include <nowdb/query/rowutl.h>
 
 #define MAXROW 0x1000
+#define MAXBUF 0x10000
 
 /* ------------------------------------------------------------------------
  * write (e.g. print) buffer
@@ -217,6 +218,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 
 		s+=2;
 
+		if (s+l+1 >= MAXBUF) return NULL;
 		if (row == NULL) {
 			row2 = calloc(1,s+1);
 		} else {
@@ -241,6 +243,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		s = t==NOWDB_TYP_BOOL||t==NOWDB_TYP_NOTHING?2:9;
 		m = s-1;
 
+		if (s+l+1 >= MAXBUF) return NULL;
 		if (row == NULL) {
 			row2 = calloc(1,s+1);
 		} else {
