@@ -375,6 +375,19 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 }
 
 /* ------------------------------------------------------------------------
+ * Room left in row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbresult_rowCapacity(nowdb_dbrow_t row) { 
+	nowdb_qry_row_t *qr=NULL;
+
+	if (row == NULL) return -1;
+	if (ROW(row)->res.result == NULL) return BUFSIZE-3;
+	qr = ROW(row)->res.result;
+	return (BUFSIZE - qr->sz);
+}
+
+/* ------------------------------------------------------------------------
  * ADD EOR
  * ------------------------------------------------------------------------
  */
