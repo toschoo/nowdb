@@ -1078,10 +1078,10 @@ static int sendRow(nowdb_session_t    *ses,
 		err = nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
 			                          "writing rows");
 		SETERR();
+		nowdb_qry_result_destroy(res->result);
 		return -1;
 	}
-	free(row->row);
-	free(res->result); res->result = NULL;
+	nowdb_qry_result_destroy(res);
 	LOGMSG("ROW");
 	return 0;
 }

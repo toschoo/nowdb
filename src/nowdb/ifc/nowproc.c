@@ -80,6 +80,7 @@ struct nowdb_dbresult_t {
         int                 lo;
         int                off;
         nowdb_qry_result_t res;
+	char               own;
 };
 
 #define CUR(x) \
@@ -90,6 +91,9 @@ struct nowdb_dbresult_t {
 
 #define NOWDBCUR(x) \
 	CUR(x)->res.result
+
+#define QROW(x) \
+	((nowdb_qry_row_t*)x)
 
 /* ------------------------------------------------------------------------
  * Result types
@@ -180,25 +184,6 @@ int nowdb_dbresult_eof(nowdb_dbresult_t res) {
 	return (res->errcode == nowdb_err_eof);
 }
 
-/* ------------------------------------------------------------------------
- * Destroy result 
- * ------------------------------------------------------------------------
- */
-void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
-	if (res == NULL) return;
-	if (res->err != NULL) {
-		nowdb_err_release(res->err);
-		res->err = NOWDB_OK;
-	}
-	if (all && res->res.result != NULL) {
-		// switch
-		// report
-		// cursor
-		// row
-	}
-	free(res);
-}
-
 #define DBRES(x) \
 	((nowdb_dbresult_t)x)
 
@@ -219,6 +204,7 @@ static nowdb_dbresult_t mkResult(int rtype) {
 	r->errcode = 0;
 	r->err = NOWDB_OK;
 	r->sz = 0;
+	r->own = 0;
 
 	r->res.resType = NOWDB_QRY_RESULT_NOTHING;
 	r->res.result = NULL;
@@ -259,6 +245,7 @@ static void qResDestroy(nowdb_qry_result_t *res) {
 
 	case NOWDB_QRY_RESULT_ROW:
 		if (res->result != NULL) {
+			free(QROW(res->result)->row);
 			free(res->result); res->result = NULL;
 		}
 		break;
@@ -273,6 +260,37 @@ static void qResDestroy(nowdb_qry_result_t *res) {
 	default: return;
 		
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Query result destroy
+ * ------------------------------------------------------------------------
+ */
+void nowdb_qry_result_destroy(nowdb_qry_result_t *res) {
+	qResDestroy(res);
+}
+
+/* ------------------------------------------------------------------------
+ * Destroy result 
+ * ------------------------------------------------------------------------
+ */
+void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
+	if (res == NULL) return;
+	if (res->err != NULL) {
+		nowdb_err_release(res->err);
+		res->err = NOWDB_OK;
+	}
+	if (all && res->res.result != NULL) {
+		switch(res->res.resType) {
+		// row
+		case NOWDB_QRY_RESULT_ROW:
+			if (res->own) qResDestroy(&res->res);
+			break;
+		}
+		// report
+		// cursor
+	}
+	free(res);
 }
 
 /* ------------------------------------------------------------------------
@@ -334,7 +352,10 @@ nowdb_dbresult_t nowdb_dbresult_makeReport(uint64_t affected,
  * ------------------------------------------------------------------------
  */
 nowdb_dbrow_t nowdb_dbresult_makeRow() {
-	return (nowdb_dbrow_t)mkResult(NOWDB_DBRESULT_ROW);
+	nowdb_dbrow_t r = (nowdb_dbrow_t)mkResult(NOWDB_DBRESULT_ROW);
+	if (r == NULL) return NULL;
+	ROW(r)->own = 1;
+	return r;
 }
 
 /* ------------------------------------------------------------------------
@@ -660,6 +681,7 @@ void nowdb_dbcur_close(nowdb_dbcur_t cur) {
 	}
 	nowdb_cursor_destroy(NOWDBCUR(cur));
 	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
+	free(cur);
 }
 
 /* ------------------------------------------------------------------------

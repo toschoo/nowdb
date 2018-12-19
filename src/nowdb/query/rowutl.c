@@ -250,7 +250,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		}
 		if (row2 == NULL) return NULL;
 
-		row2[l] = (char)t; // if (l>0) l++;
+		row2[l] = (char)t;
 		memcpy(row2+l+1, value, m);
 		row2[s+l] = 10;
 
