@@ -228,11 +228,13 @@ class Result:
     # cursor is an iterator
     def __iter__(self):
         if self.rType() == STATUS:
+            if self.code() == 0:
+               return self
             if self.code() == EOF:
                return self
             raise DBError(self.code(), self.details())
           
-        if self.cur == None:
+        if self.cur == None and self.rType() != ROW:
             raise WrongType("result is not a cursor")
 
         self.rw = self.row()
@@ -250,6 +252,8 @@ class Result:
             if not self.rw.nextRow():
                 self.rw.release()
                 self.rw = None
+                if x != CURSOR:
+                   raise StopIteration
                 self.fetch()
                 if not self.ok():
                     x = self.code()
@@ -289,7 +293,7 @@ class Result:
 
     # get row from cursor
     def row(self):
-        if self.rType() != CURSOR:
+        if self.rType() != CURSOR and self.rType() != ROW:
            raise WrongType("result is not a cursor")
         r = _rCopy(_rRow(self.r))
         if r == None:
