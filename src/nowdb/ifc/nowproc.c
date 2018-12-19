@@ -762,7 +762,7 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
 	if (cp == NULL) return NULL;
 
 	ROW(cp)->buf = CUR(cur)->buf;
-        ROW(cp)->sz = CUR(cur)->sz + CUR(cur)->lo;
+        ROW(cp)->sz = CUR(cur)->sz;
         ROW(cp)->lo = 0;
         ROW(cp)->off = 0;
 
