@@ -319,7 +319,7 @@ class Result:
     if self._r is None:
       return False
     if not self.fitsRow(t, value):
-       return False
+       raise DBError(-107, "row is full") 
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
 
