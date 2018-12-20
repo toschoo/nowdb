@@ -229,7 +229,6 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		row2[l] = (char)t; row2[s+l-1] = 0; row2[s+l] = 10;
 		memcpy(row2+l+1, value, s-2);
 
-		// *sz = s+l+1;
 		*sz = s+l;
 		return row2;
 	
@@ -251,11 +250,10 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		}
 		if (row2 == NULL) return NULL;
 
-		row2[l] = (char)t; // if (l>0) l++;
+		row2[l] = (char)t;
 		memcpy(row2+l+1, value, m);
 		row2[s+l] = 10;
 
-		// *sz = s+l+1;
 		*sz = s+l;
 		return row2;
 

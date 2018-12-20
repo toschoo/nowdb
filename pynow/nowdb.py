@@ -63,6 +63,10 @@ _db = None
 _free = libc.free
 _free.argtypes = [c_void_p]
 
+_strlen = libc.strlen
+_strlen.argtypes = [c_char_p]
+_strlen.restype = c_size_t
+
 _exec = now.nowdb_dbexec_statement
 _exec.restype = c_long
 _exec.argtypes = [c_void_p, c_char_p, c_void_p]
@@ -119,7 +123,6 @@ _rOpen.restype = c_long
 _rOpen.argtypes = [c_void_p]
 
 _rClose = now.nowdb_dbcur_close
-_rClose.restype = c_long
 _rClose.argtypes = [c_void_p]
 
 _rRewind = now.nowdb_dbrow_rewind
@@ -140,6 +143,10 @@ _rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
 _rAdd = now.nowdb_dbresult_add2Row
 _rAdd.restype = c_long
 _rAdd.argtypes = [c_void_p, c_byte, c_void_p]
+
+_rCap = now.nowdb_dbresult_rowCapacity
+_rCap.restype = c_int
+_rCap.argtypes = [c_void_p]
 
 _rCloseRow = now.nowdb_dbresult_closeRow
 _rCloseRow.restype = c_long
@@ -269,12 +276,12 @@ class Result:
   def release(self):
     if self._rw is not None:
        self._rw.release()
+       self._rw = None
     if self._r is None:
        return
-    x=1
     if self.rType() == CURSOR:
-       x = _rClose(self._r)
-    if x != 0:
+       _rClose(self._r)
+    else:
        _rDestroy(self._r, 1)
     self._r = None 
 
@@ -311,8 +318,26 @@ class Result:
   def add2Row(self, t, value):
     if self._r is None:
       return False
+    if not self.fitsRow(t, value):
+       return False
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
+
+  def fitsRow(self, t, value):
+    if self._r is None:
+      return False
+    c = _rCap(self._r)
+    if c <= 0:
+       return False
+    if t == BOOL or t == NOTHING:
+       if c < 3:
+          return False
+    if t == TEXT:
+       if c <= c_char_p(value) + 3:
+          return False
+    elif c < 10: 
+       return False
+    return True
 
   def closeRow(self):
     if self._r is None:
