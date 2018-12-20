@@ -123,7 +123,6 @@ _rOpen.restype = c_long
 _rOpen.argtypes = [c_void_p]
 
 _rClose = now.nowdb_dbcur_close
-_rClose.restype = c_long
 _rClose.argtypes = [c_void_p]
 
 _rRewind = now.nowdb_dbrow_rewind
@@ -280,12 +279,9 @@ class Result:
        self._rw = None
     if self._r is None:
        return
-    x=1
     if self.rType() == CURSOR:
-       x = _rClose(self._r)
-       if x == 0:
-           x = 1
-    if x != 0:
+       _rClose(self._r)
+    else:
        _rDestroy(self._r, 1)
     self._r = None 
 
