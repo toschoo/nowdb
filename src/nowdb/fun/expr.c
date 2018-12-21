@@ -1310,6 +1310,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t evalFun(uint32_t     fun,
+                           int         args,
                            void        **argv,
                            nowdb_type_t *types,
                            nowdb_type_t *t,
@@ -1393,7 +1394,9 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	*/
 
 	// evaluate function
-	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
+	err = evalFun(op->fun, op->args,
+	              op->results, op->types,
+	              typ, &op->res);
 	if (err != NOWDB_OK) return err;
 
 	*res=&op->res;
@@ -1916,6 +1919,12 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 #define MOV(r1,r2) \
 	memcpy(r1, r2, 8);
 
+#define COPYADDR(r1,r2) \
+	memcpy(r1, r2, sizeof(char*));
+
+#define MOV(r1,r2) \
+	memcpy(r1, r2, 8);
+
 #define EQ(v0,v1,v2) \
 	v0 = (v1==v2)
 
@@ -2178,8 +2187,9 @@ static inline nowdb_err_t getTimeSubComp(uint32_t fun, void *arg, void *res) {
  * Evaluate Fun
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t evalFun(uint32_t      fun,
-                           void        **argv,
+static nowdb_err_t evalFun(uint32_t       fun,
+                           int            args,
+                           void         **argv,
                            nowdb_type_t *types,
                            nowdb_type_t *t,
                            void         *res) {
@@ -2342,6 +2352,16 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 * Conditionals
 	 * -----------------------------------------------------------------------
 	 */
+	case NOWDB_EXPR_OP_ELSE:
+		COPYADDR(res, argv[0]); *t=types[0]; return NOWDB_OK;
+
+	case NOWDB_EXPR_OP_WHEN:
+		if (*(int64_t*)argv[0]) {
+			COPYADDR(res, argv[1]); *t = types[1];
+		} else {
+			COPYADDR(res, argv[2]); *t = types[2];
+		}
+		return NOWDB_OK;
 
 	/* -----------------------------------------------------------------------
 	 * Bitwise
@@ -2425,6 +2445,10 @@ static inline int getArgs(int o) {
 
 	case NOWDB_EXPR_OP_AND:
 	case NOWDB_EXPR_OP_OR: return 2;
+
+	case NOWDB_EXPR_OP_WHEN: return 3;
+
+	case NOWDB_EXPR_OP_ELSE: return 1;
 
 	default: return -1;
 	}
@@ -2605,6 +2629,12 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_AND:
 	case NOWDB_EXPR_OP_OR: return NOWDB_TYP_BOOL;
 
+	case NOWDB_EXPR_OP_WHEN: 
+		if (op->types[0] != NOWDB_TYP_BOOL) return -1;
+		return op->types[1];
+
+	case NOWDB_EXPR_OP_ELSE: return op->types[0];
+
 	default: return -1;
 	}
 }
@@ -2669,6 +2699,8 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "isnt") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "isnot") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "is not") == 0) return NOWDB_EXPR_OP_ISN;
+	if (strcasecmp(op, "when") == 0) return NOWDB_EXPR_OP_WHEN;
+	if (strcasecmp(op, "else") == 0) return NOWDB_EXPR_OP_ELSE;
 
 	*agg = 1;
 

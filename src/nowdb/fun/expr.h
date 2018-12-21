@@ -454,12 +454,15 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 #define NOWDB_EXPR_OP_IN  107
 #define NOWDB_EXPR_OP_IS  108
 #define NOWDB_EXPR_OP_ISN 109
+#define NOWDB_EXPR_OP_ISN 109
 #define NOWDB_EXPR_OP_TRUE 150
 #define NOWDB_EXPR_OP_FALSE 151
 #define NOWDB_EXPR_OP_NOT 152
 #define NOWDB_EXPR_OP_JUST 153
 #define NOWDB_EXPR_OP_AND 154
 #define NOWDB_EXPR_OP_OR  155
+#define NOWDB_EXPR_OP_WHEN 157
+#define NOWDB_EXPR_OP_ELSE 158
 
 /* -----------------------------------------------------------------------
  * TIME
@@ -486,6 +489,11 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 
 /* -----------------------------------------------------------------------
  * Bitwise
+ * -----------------------------------------------------------------------
+ */
+
+/* -----------------------------------------------------------------------
+ * Geo
  * -----------------------------------------------------------------------
  */
 

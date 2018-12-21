@@ -60,6 +60,33 @@ int mkNull(nowdb_expr_t *c) {
 	return 0;
 }
 
+int ternaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_expr_t o3,
+                                               nowdb_type_t *t, void *r) {
+	nowdb_err_t err;
+	nowdb_expr_t  o;
+	void *x=NULL;
+
+	err = nowdb_expr_newOp(&o, op, o1, o2, o3);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot create new operator\n");
+		nowdb_expr_destroy(o1); free(o1);
+		nowdb_expr_destroy(o2); free(o2);
+		nowdb_expr_destroy(o3); free(o3);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "ERROR: cannot evaluate\n");
+		nowdb_expr_destroy(o); free(o);
+		nowdb_err_print(err); nowdb_err_release(err);
+		return -1;
+	}
+	memcpy(r, x, 8);
+	nowdb_expr_destroy(o); free(o);
+	return 0;
+}
+
 int binaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_type_t *t, void *r) {
 	nowdb_err_t err;
 	nowdb_expr_t  o;
@@ -1019,6 +1046,41 @@ int testFLOAT2UINT() {
 	return 0;
 }
 
+int testCase3UINT() {
+	nowdb_expr_t c1, c2, c3;
+	uint64_t a, b, c, r;
+	nowdb_type_t t = 0;
+	char *op;
+
+	a = rand()%2;
+	b = rand()%1000;
+	c = rand()%10;
+
+	op = a?"true":"false";
+
+	if (mkConst(&c1, &a, NOWDB_TYP_BOOL) != 0) return -1;
+	if (mkConst(&c2, &b, NOWDB_TYP_UINT) != 0) {
+		nowdb_expr_destroy(c1); free(c1);
+		return -1;
+	}
+	if (mkConst(&c3, &c, NOWDB_TYP_UINT) != 0) {
+		nowdb_expr_destroy(c1); free(c1);
+		nowdb_expr_destroy(c2); free(c2);
+		return -1;
+	}
+	if (ternaryOp(NOWDB_EXPR_OP_WHEN, c1, c2, c3, &t, &r) != 0) return -1;
+	if (t != NOWDB_TYP_UINT) {
+		fprintf(stderr, "ERROR: wrong type returned: %u\n", t);
+		return -1;
+	}
+	fprintf(stderr, "COMPUTING when %s then %lu else %lu = %lu\n", op, b, c, r);
+	if (r != (a?b:c)) {
+		fprintf(stderr, "ERROR: results differ: %lu != %lu\n", a?b:c, r);
+		return -1;
+	}
+	return 0;
+}
+
 int main() {
 	int rc = EXIT_SUCCESS;
 
@@ -1162,6 +1224,12 @@ int main() {
 		}
 		if (testNULL2FLOAT() != 0) {
 			fprintf(stderr, "testNULL2FLOATfailed\n");
+			rc = EXIT_FAILURE; goto cleanup;
+		}
+
+		// CASE
+		if (testCase3UINT() != 0) {
+			fprintf(stderr, "testCase3UINT failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 	}
