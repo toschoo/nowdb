@@ -222,6 +222,13 @@ class Result:
 
   # cursor is an iterator
   def __iter__(self):
+    if self.rType() == STATUS:
+       if self.code() == 0:
+          return self
+       if self.code() == EOF:
+          return self
+       raise DBError(self.code(), self.details())
+
     if self.rType() != CURSOR:
        raise WrongType("result is not a cursor")
 
