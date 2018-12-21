@@ -152,6 +152,12 @@ nowdb_dbrow_t nowdb_dbresult_makeRow();
 int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value);
 
 /* ------------------------------------------------------------------------
+ * Bytes left in row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbresult_addCapacity(nowdb_dbrow_t row);
+
+/* ------------------------------------------------------------------------
  * Close row (i.e.: add EOR)
  * ------------------------------------------------------------------------
  */

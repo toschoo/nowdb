@@ -81,4 +81,6 @@ typedef struct nowdb_qry_row_t {
 	uint32_t   sz; /* size       */
 } nowdb_qry_row_t;
 
+void nowdb_qry_result_destroy(nowdb_qry_result_t *result);
+
 #endif

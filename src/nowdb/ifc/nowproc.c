@@ -39,6 +39,7 @@
 
 static char *OBJECT = "PROCIFC";
 
+#define PRSBUFSIZE 0x10000
 #define BUFSIZE 0x12000
 #define MAXROW  0x1000
 
@@ -79,6 +80,7 @@ struct nowdb_dbresult_t {
         int                 lo;
         int                off;
         nowdb_qry_result_t res;
+	char               own;
 };
 
 #define CUR(x) \
@@ -89,6 +91,9 @@ struct nowdb_dbresult_t {
 
 #define NOWDBCUR(x) \
 	CUR(x)->res.result
+
+#define QROW(x) \
+	((nowdb_qry_row_t*)x)
 
 /* ------------------------------------------------------------------------
  * Result types
@@ -179,25 +184,6 @@ int nowdb_dbresult_eof(nowdb_dbresult_t res) {
 	return (res->errcode == nowdb_err_eof);
 }
 
-/* ------------------------------------------------------------------------
- * Destroy result 
- * ------------------------------------------------------------------------
- */
-void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
-	if (res == NULL) return;
-	if (res->err != NULL) {
-		nowdb_err_release(res->err);
-		res->err = NOWDB_OK;
-	}
-	if (all && res->res.result != NULL) {
-		// switch
-		// report
-		// cursor
-		// row
-	}
-	free(res);
-}
-
 #define DBRES(x) \
 	((nowdb_dbresult_t)x)
 
@@ -218,6 +204,7 @@ static nowdb_dbresult_t mkResult(int rtype) {
 	r->errcode = 0;
 	r->err = NOWDB_OK;
 	r->sz = 0;
+	r->own = 0;
 
 	r->res.resType = NOWDB_QRY_RESULT_NOTHING;
 	r->res.result = NULL;
@@ -258,6 +245,7 @@ static void qResDestroy(nowdb_qry_result_t *res) {
 
 	case NOWDB_QRY_RESULT_ROW:
 		if (res->result != NULL) {
+			free(QROW(res->result)->row);
 			free(res->result); res->result = NULL;
 		}
 		break;
@@ -272,6 +260,37 @@ static void qResDestroy(nowdb_qry_result_t *res) {
 	default: return;
 		
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Query result destroy
+ * ------------------------------------------------------------------------
+ */
+void nowdb_qry_result_destroy(nowdb_qry_result_t *res) {
+	qResDestroy(res);
+}
+
+/* ------------------------------------------------------------------------
+ * Destroy result 
+ * ------------------------------------------------------------------------
+ */
+void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
+	if (res == NULL) return;
+	if (res->err != NULL) {
+		nowdb_err_release(res->err);
+		res->err = NOWDB_OK;
+	}
+	if (all && res->res.result != NULL) {
+		switch(res->res.resType) {
+		// row
+		case NOWDB_QRY_RESULT_ROW:
+			if (res->own) qResDestroy(&res->res);
+			break;
+		}
+		// report
+		// cursor
+	}
+	free(res);
 }
 
 /* ------------------------------------------------------------------------
@@ -333,7 +352,10 @@ nowdb_dbresult_t nowdb_dbresult_makeReport(uint64_t affected,
  * ------------------------------------------------------------------------
  */
 nowdb_dbrow_t nowdb_dbresult_makeRow() {
-	return (nowdb_dbrow_t)mkResult(NOWDB_DBRESULT_ROW);
+	nowdb_dbrow_t r = (nowdb_dbrow_t)mkResult(NOWDB_DBRESULT_ROW);
+	if (r == NULL) return NULL;
+	ROW(r)->own = 1;
+	return r;
 }
 
 /* ------------------------------------------------------------------------
@@ -371,6 +393,19 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 	qr->row = tmp;
 	ROW(row)->res.result = qr;
 	return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Room left in row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbresult_rowCapacity(nowdb_dbrow_t row) { 
+	nowdb_qry_row_t *qr=NULL;
+
+	if (row == NULL) return -1;
+	if (ROW(row)->res.result == NULL) return BUFSIZE-3;
+	qr = ROW(row)->res.result;
+	return (BUFSIZE - qr->sz);
 }
 
 /* ------------------------------------------------------------------------
@@ -458,9 +493,9 @@ int nowdb_dbexec_statement(nowdb_db_t         db,
 	fprintf(stderr, "result: %p\n", res);
 	*/
 
-	s = strnlen(statement, 4097);
-	if (s > 4096) {
-		INVALID("string too long! (max: 4096)");
+	s = strnlen(statement, PRSBUFSIZE);
+	if (s >= PRSBUFSIZE) {
+		INVALID("string too long!");
 		return -1;
 	}
 	if (s <= 0) {
@@ -640,12 +675,13 @@ void nowdb_dbcur_close(nowdb_dbcur_t cur) {
 		free(CUR(cur)->buf);
 		CUR(cur)->buf = NULL;
 	}
-	if (CUR(cur)->err != NULL) {
+	if (CUR(cur)->err != NOWDB_OK) {
 		nowdb_err_release(CUR(cur)->err);
+		CUR(cur)->err = NOWDB_OK;
 	}
-	fprintf(stderr, "DESTROY CUR\n");
 	nowdb_cursor_destroy(NOWDBCUR(cur));
 	free(NOWDBCUR(cur)); NOWDBCUR(cur) = NULL;
+	free(cur);
 }
 
 /* ------------------------------------------------------------------------
@@ -722,13 +758,14 @@ nowdb_dbrow_t nowdb_dbcur_row(nowdb_dbcur_t cur) {
 
 	if (cur == NULL) return NULL;
 
-	cp = mkResult(CUR(cur)->rtype);
+	cp = mkResult(NOWDB_DBRESULT_ROW);
 	if (cp == NULL) return NULL;
 
 	ROW(cp)->buf = CUR(cur)->buf;
-        ROW(cp)->sz = CUR(cur)->sz + CUR(cur)->lo;
+        ROW(cp)->sz = CUR(cur)->sz;
         ROW(cp)->lo = 0;
         ROW(cp)->off = 0;
+        ROW(cp)->own = 0;
 
 	return (nowdb_dbrow_t)cp;
 }

@@ -9,7 +9,7 @@
 
 #include <signal.h>
 
-#define BUFSIZE 8192
+#define BUFSIZE 0x10000
 
 /* -----------------------------------------------------------------------
  * Announce the token seen in the stream on stderr.

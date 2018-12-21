@@ -55,10 +55,17 @@ USRERR = 73
 
 utc = tzutc()
 
+TIMEFORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+DATEFORMAT = "%Y-%m-%d"
+
 _db = None
 
 _free = libc.free
 _free.argtypes = [c_void_p]
+
+_strlen = libc.strlen
+_strlen.argtypes = [c_char_p]
+_strlen.restype = c_size_t
 
 _exec = now.nowdb_dbexec_statement
 _exec.restype = c_long
@@ -116,7 +123,6 @@ _rOpen.restype = c_long
 _rOpen.argtypes = [c_void_p]
 
 _rClose = now.nowdb_dbcur_close
-_rClose.restype = c_long
 _rClose.argtypes = [c_void_p]
 
 _rRewind = now.nowdb_dbrow_rewind
@@ -138,6 +144,10 @@ _rAdd = now.nowdb_dbresult_add2Row
 _rAdd.restype = c_long
 _rAdd.argtypes = [c_void_p, c_byte, c_void_p]
 
+_rCap = now.nowdb_dbresult_rowCapacity
+_rCap.restype = c_int
+_rCap.argtypes = [c_void_p]
+
 _rCloseRow = now.nowdb_dbresult_closeRow
 _rCloseRow.restype = c_long
 _rCloseRow.argtypes = [c_void_p]
@@ -145,6 +155,23 @@ _rCloseRow.argtypes = [c_void_p]
 def _setDB(db):
   global _db
   _db = db
+
+# ---- convert datetime to nowdb time
+def dt2now(dt):
+    x = timegm(dt.utctimetuple())
+    x *= 1000000
+    x += dt.microsecond
+    x *= 1000
+    return x
+
+# ---- convert nowdb time to datetime
+def now2dt(p):
+    t = p/1000 # to microseconds
+    s = t / 1000000 # to seconds
+    m = t - s * 1000000 # isolate microseconds
+    dt = datetime.fromtimestamp(s, utc)
+    dt += timedelta(microseconds=m)
+    return dt
 
 def execute(stmt):
     global _db
@@ -195,17 +222,22 @@ class Result:
 
   # cursor is an iterator
   def __iter__(self):
+    if self.rType() == STATUS:
+       if self.code() == 0:
+          return self
+       if self.code() == EOF:
+          return self
+       raise DBError(self.code(), self.details())
+
     if self.rType() != CURSOR:
        raise WrongType("result is not a cursor")
 
     if _rOpen(self._r) != 0:
        if not self.ok():
-          _rClose(self._r)
           return self
 
     if _rFetch(self._r) != 0:
        if not self.ok():
-          _rClose(self._r)
           return self
 
     self._rw = self.row()
@@ -229,6 +261,7 @@ class Result:
               d = self.details()
 
               _rClose(self._r)
+              self._r = None
 
               if x == EOF:
                  raise StopIteration
@@ -248,8 +281,16 @@ class Result:
      return self.__next__()
 
   def release(self):
-    _rDestroy(self._r, 1)
-    self._r = 0
+    if self._rw is not None:
+       self._rw.release()
+       self._rw = None
+    if self._r is None:
+       return
+    if self.rType() == CURSOR:
+       _rClose(self._r)
+    else:
+       _rDestroy(self._r, 1)
+    self._r = None 
 
   def rType(self):
     return _rType(self._r)
@@ -284,8 +325,26 @@ class Result:
   def add2Row(self, t, value):
     if self._r is None:
       return False
+    if not self.fitsRow(t, value):
+       raise DBError(-107, "row is full") 
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
+
+  def fitsRow(self, t, value):
+    if self._r is None:
+      return False
+    c = _rCap(self._r)
+    if c <= 0:
+       return False
+    if t == BOOL or t == NOTHING:
+       if c < 3:
+          return False
+    if t == TEXT:
+       if c <= c_char_p(value) + 3:
+          return False
+    elif c < 10: 
+       return False
+    return True
 
   def closeRow(self):
     if self._r is None:
@@ -335,7 +394,7 @@ class Result:
             return True
 
         else:
-            print "type is %d" % t.value
+            print("type is %d" % t.value)
             return None
 
 class DBError(Exception):
