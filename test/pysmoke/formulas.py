@@ -779,6 +779,167 @@ def timefun(c):
         if n != 1:
            raise db.TestFailed("wrong number of rows: %d" % n)
 
+# test case 
+def casefun(c):
+
+    print "RUNNING TEST 'casefun'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+
+    # three alternatives and else
+    mycase = "case " \
+             "  when prod_packing = 1 then 'tiny'" \
+             "  when prod_packing = 2 then 'medium'" \
+             "  when prod_packing = 3 then 'big'" \
+             "  else 'unknown'" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (row.field(1) == "tiny" and ps[idx].packing != 1) or \
+               (row.field(1) == "medium" and ps[idx].packing != 2) or \
+               (row.field(1) == "big" and ps[idx].packing != 3) or \
+               (row.field(1) == "unknown"):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].packing))
+            print "%s" % row.field(1)
+
+    # three alternatives and else with different type
+    mycase = "case " \
+             "  when prod_cat = 1 then 'one'" \
+             "  when prod_cat = 2 then 'two'" \
+             "  when prod_cat = 3 then 'three'" \
+             "  else prod_cat" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (row.field(1) == "one" and ps[idx].cat != 1) or \
+               (row.field(1) == "two" and ps[idx].cat != 2) or \
+               (row.field(1) == "three" and ps[idx].cat != 3) or \
+               (row.field(1) == 4 and ps[idx].cat != 4) or \
+               (row.field(1) == 5 and ps[idx].cat != 5):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
+            print "%s" % row.field(1)
+
+    # three alternatives else is NULL
+    mycase = "case " \
+             "  when prod_cat = 1 then 'one'" \
+             "  when prod_cat = 2 then 'two'" \
+             "  when prod_cat = 3 then 'three'" \
+             "  else NULL" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (row.field(1) == "one" and ps[idx].cat != 1) or \
+               (row.field(1) == "two" and ps[idx].cat != 2) or \
+               (row.field(1) == "three" and ps[idx].cat != 3) or \
+               (row.field(1) is None and \
+                ps[idx].cat != 4 and ps[idx].cat != 5):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
+            print "%d: %s" % (ps[idx].cat,row.field(1))
+
+    # three alternatives no else
+    mycase = "case " \
+             "  when prod_cat = 1 then 'one'" \
+             "  when prod_cat = 2 then 'two'" \
+             "  when prod_cat = 3 then 'three'" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (row.field(1) == "one" and ps[idx].cat != 1) or \
+               (row.field(1) == "two" and ps[idx].cat != 2) or \
+               (row.field(1) == "three" and ps[idx].cat != 3) or \
+               (row.field(1) is None and \
+                ps[idx].cat != 4 and ps[idx].cat != 5):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
+            print "%d: %s" % (ps[idx].cat,row.field(1))
+
+    # when is null else is not
+    mycase = "case " \
+             "  when prod_cat = 1 then NULL" \
+             "  else prod_cat" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (row.field(1) is None and ps[idx].cat != 1) or \
+               (row.field(1) is not None and row.field(1) != ps[idx].cat):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
+            print "%d: %s" % (ps[idx].cat,row.field(1))
+
+    # complex when
+    mycase = "case " \
+             "  when prod_cat = 1 and prod_packing = 1 then 'tiny one'" \
+             "  when prod_cat = 1 and prod_packing = 3 then 'big  one'" \
+             "  when prod_cat = 2 and prod_packing = 1 then 'tiny two'" \
+             "  when prod_cat = 2 and prod_packing = 3 then 'big  two'" \
+             "  when prod_cat = 1 then 'one'" \
+             "  when prod_cat = 2 then 'two'" \
+             "  when prod_cat = 3 then 'three'" \
+             "  else 'a whole bunch'" \
+             " end"
+
+    stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
+    print stmt
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            print "%d / %d: %s" % (ps[idx].cat,ps[idx].packing,row.field(1))
+            if row.field(0) != ps[idx].desc:
+               raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
+            if (ps[idx].cat == 1 and ps[idx].packing ==1 and \
+                row.field(1) != "tiny one") or \
+               (ps[idx].cat == 1 and ps[idx].packing ==3 and \
+                row.field(1) != "big  one") or \
+               (ps[idx].cat == 2 and ps[idx].packing ==1 and \
+                row.field(1) != "tiny two") or \
+               (ps[idx].cat == 2 and ps[idx].packing ==3 and \
+                row.field(1) != "big  two") or \
+               (ps[idx].cat == 1 and ps[idx].packing != 1 and \
+                ps[idx].packing != 3 and row.field(1) != "one") or \
+               (ps[idx].cat == 2 and ps[idx].packing != 1 and \
+                ps[idx].packing != 3 and row.field(1) != "two") or \
+               (ps[idx].cat == 3 and row.field(1) != "three") or \
+               ((ps[idx].cat == 4 or ps[idx].cat == 5) and \
+                row.field(1) != "a whole bunch"):
+               print "%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1))
+               raise db.TestFailed("unexpected value '%s': %d" % (row.field(1), ps[idx].cat))
+            print "%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1))
+
+    # case with agg
+        
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es) = db.loadDB(c, "db100")
@@ -790,6 +951,7 @@ if __name__ == "__main__":
             simplevrtx(c)
             simpleedge(c)
             punktvorstrich(c)
+            casefun(c)
 
         fibotest(c,20)
 

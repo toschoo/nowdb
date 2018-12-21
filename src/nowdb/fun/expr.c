@@ -1399,7 +1399,11 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	              typ, &op->res);
 	if (err != NOWDB_OK) return err;
 
-	*res=&op->res;
+	if (*typ == NOWDB_TYP_TEXT && hlp != NULL && hlp->needtxt) {
+		*res=(char*)op->res;
+	} else {
+		*res=&op->res;
+	}
 	return NOWDB_OK;
 }
 
@@ -2353,13 +2357,32 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	 * -----------------------------------------------------------------------
 	 */
 	case NOWDB_EXPR_OP_ELSE:
-		COPYADDR(res, argv[0]); *t=types[0]; return NOWDB_OK;
+		if (argv[0] == NULL) {
+			*t = NOWDB_TYP_NOTHING;
+		} else if (types[0] == NOWDB_TYP_TEXT) {
+			COPYADDR(res, &argv[0]); *t = types[0];
+		} else {
+			COPYADDR(res, argv[0]); *t=types[0];
+		}
+		return NOWDB_OK;
 
 	case NOWDB_EXPR_OP_WHEN:
 		if (*(int64_t*)argv[0]) {
-			COPYADDR(res, argv[1]); *t = types[1];
+			if (argv[1] == NULL) {
+				*t = NOWDB_TYP_NOTHING;
+			} else if (types[1] == NOWDB_TYP_TEXT) {
+				COPYADDR(res, &argv[1]); *t = types[1];
+			} else {
+				COPYADDR(res, argv[1]); *t = types[1];
+			}
 		} else {
-			COPYADDR(res, argv[2]); *t = types[2];
+			if (argv[2] == NULL) {
+				*t = NOWDB_TYP_NOTHING;
+			} else if (types[2] == NOWDB_TYP_TEXT) {
+				COPYADDR(res, &argv[2]); *t = types[2];
+			} else {
+				COPYADDR(res, argv[2]); *t = types[2];
+			}
 		}
 		return NOWDB_OK;
 
@@ -2539,7 +2562,10 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	if (!guess) {
 		for (int i=0; i<op->args; i++) {
 			if (op->types[i] == NOWDB_TYP_NOTHING) {
-				// exception IS: then its bool
+				if (op->fun == NOWDB_EXPR_OP_WHEN ||
+				    op->fun == NOWDB_EXPR_OP_ELSE) {
+					continue;
+				}
 				if (op->fun == NOWDB_EXPR_OP_IS ||
                                     op->fun == NOWDB_EXPR_OP_ISN) 
 				{
@@ -2631,7 +2657,8 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 
 	case NOWDB_EXPR_OP_WHEN: 
 		if (op->types[0] != NOWDB_TYP_BOOL) return -1;
-		return op->types[1];
+		if (op->types[1] != NOWDB_TYP_NOTHING) return op->types[1];
+		return op->types[2];
 
 	case NOWDB_EXPR_OP_ELSE: return op->types[0];
 
