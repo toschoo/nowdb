@@ -1387,7 +1387,9 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	// determine type
 	if (op->types != NULL) { 
 		*typ = evalType(op,0);
-		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
+		if ((int)*typ < 0) {
+			INVALIDTYPE("wrong type in operation");
+		}
 	}
 
 	// evaluate function
