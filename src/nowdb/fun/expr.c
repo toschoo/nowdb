@@ -444,6 +444,7 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 	OP(*expr)->argv = NULL;
 	OP(*expr)->types = NULL;
 	OP(*expr)->results = NULL;
+	OP(*expr)->text = NULL;
 
 	OP(*expr)->fun = fun;
 	OP(*expr)->args  = len;
@@ -623,6 +624,9 @@ static void destroyOp(nowdb_op_t *op) {
 	}
 	if (op->results != NULL) {
 		free(op->results); op->results = NULL;
+	}
+	if (op->text != NULL) {
+		free(op->text); op->text = NULL;
 	}
 }
 
@@ -1386,24 +1390,22 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
 	}
 
-	/*
-	if (*typ == 0) {
-		// treat as null here
-		
-	}
-	*/
-
 	// evaluate function
 	err = evalFun(op->fun, op->args,
 	              op->results, op->types,
 	              typ, &op->res);
 	if (err != NOWDB_OK) return err;
 
-	if (*typ == NOWDB_TYP_TEXT && hlp != NULL && hlp->needtxt) {
+	// pointer or value?
+	if (*typ == NOWDB_TYP_TEXT && 
+             hlp != NULL           &&
+             hlp->needtxt)
+	{
 		*res=(char*)op->res;
 	} else {
 		*res=&op->res;
 	}
+
 	return NOWDB_OK;
 }
 
@@ -1845,6 +1847,8 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_JUST: return showargs(op, "just", stream);
 	case NOWDB_EXPR_OP_AND: return showargs(op, "and", stream);
 	case NOWDB_EXPR_OP_OR: return showargs(op, "or", stream);
+	case NOWDB_EXPR_OP_WHEN: return showargs(op, "when", stream);
+	case NOWDB_EXPR_OP_ELSE: return showargs(op, "else", stream);
 	default: showargs(op, "unknown", stream);
 	}
 }
@@ -2299,8 +2303,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_NOT: PER1BOOL(NOT);
 	case NOWDB_EXPR_OP_JUST: PER1BOOL(JUST);
 
-	case NOWDB_EXPR_OP_AND:
-			PERFBOOL(AND);
+	case NOWDB_EXPR_OP_AND: PERFBOOL(AND);
 	case NOWDB_EXPR_OP_OR: PERFBOOL(OR);
 
 	/* -----------------------------------------------------------------------
@@ -2367,6 +2370,9 @@ static nowdb_err_t evalFun(uint32_t       fun,
 		return NOWDB_OK;
 
 	case NOWDB_EXPR_OP_WHEN:
+		if (types[0] != NOWDB_TYP_BOOL) {
+			INVALIDTYPE("first operand of WHEN is not a boolean");
+		}
 		if (*(int64_t*)argv[0]) {
 			if (argv[1] == NULL) {
 				*t = NOWDB_TYP_NOTHING;
@@ -2655,10 +2661,11 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_AND:
 	case NOWDB_EXPR_OP_OR: return NOWDB_TYP_BOOL;
 
-	case NOWDB_EXPR_OP_WHEN: 
-		if (op->types[0] != NOWDB_TYP_BOOL) return -1;
+	case NOWDB_EXPR_OP_WHEN:
 		if (op->types[1] != NOWDB_TYP_NOTHING) return op->types[1];
-		return op->types[2];
+		if (op->types[2] != NOWDB_TYP_NOTHING) return op->types[2];
+		if (guess) return NOWDB_TYP_BOOL;
+		return NOWDB_TYP_NOTHING;
 
 	case NOWDB_EXPR_OP_ELSE: return op->types[0];
 

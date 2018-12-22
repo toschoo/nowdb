@@ -306,6 +306,42 @@ def insertallvertex(c):
         if m != len(ps):
            raise db.TestFailed("Couldn't find some of them" % (m,len(ps)))
 
+    # case with null
+    mycase = "case " \
+             "   when prod_cat is null or prod_packing is null then 0 " \
+             "   when prod_cat = 1 and prod_packing is not null then prod_cat * 100 + prod_packing " \
+             "   when prod_cat = 2 and prod_packing is not null then prod_cat * 1000 + prod_packing " \
+             "   when prod_cat = 3 and prod_packing is not null then prod_cat * 10000 + prod_packing " \
+             "   else prod_packing*(-1) " \
+             "end"
+
+    stmt = "select %s from product" % mycase
+    print stmt
+
+    sm = 0
+    for p in ps:
+        if p.cat == 1:
+           sm += p.cat * 100 + p.packing
+        elif p.cat == 2:
+           sm += p.cat * 1000 + p.packing
+        elif p.cat == 3:
+           sm += p.cat * 10000 + p.packing
+        else:
+           sm += p.packing * (-1)
+
+    print sm
+
+    sm2 = 0
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+        for row in cur:
+            sm2 += row.field(0)
+    print sm2
+
+    if sm != sm2:
+       raise db.TestFailed("not equal: %d != %d" % (sm, sm2))
+
     # insert with field list (complete)
     k = getNextKey()
     stmt = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \

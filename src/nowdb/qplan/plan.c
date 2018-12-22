@@ -546,6 +546,7 @@ static inline int tryTime(char *str, void **value) {
 	size_t s;
 	nowdb_time_t t;
 
+	if (str == NULL) return -1;
 	s = strlen(str);
 	if (s > 30) return -1;
 	if (s == 10) {
@@ -586,6 +587,11 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 	}
 	switch(*typ) {
 	case NOWDB_TYP_TEXT:
+		if (str == NULL) {
+			// this is not correct!
+			*typ = NOWDB_TYP_NOTHING;
+			*value = NULL; return NOWDB_OK;
+		}
 		if (tryTime(str, value) == 0) {
 			*typ = NOWDB_TYP_TIME;
 			return NOWDB_OK;
@@ -1036,10 +1042,6 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 		typ = nowdb_ast_type(field->stype);
 		err = getConstValue(&typ, field->value, &value);
 		if (err != NOWDB_OK) return err;
-
-		if (typ == NOWDB_TYP_BOOL) {
-			fprintf(stderr, "BOOL: %ld\n", *(int64_t*)value);
-		}
 
 		err = nowdb_expr_newConstant(expr, value, typ);
 		if (err != NOWDB_OK) return err;

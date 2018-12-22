@@ -329,9 +329,15 @@ class SalesEdge:
 def createProducts(no):
     p = []
     for i in range(no):
+        x = random.randint(1,100)
+        if x < 55:
+           cat = 2 if random.randint(0,2) == 0 else 4
+        else:
+           cat = (x%5) + 1
+
         p.append(Product(1000 + i, \
                  randomString(random.randint(1,16)), \
-                 random.randint(1,5), \
+                 cat, 
                  random.randint(1,3), \
                  float(random.randint(1,25))/float(random.randint(1,10))))
     return p
@@ -348,7 +354,7 @@ def createClients(no):
 def createStores(no):
     s = []
     for i in range(no):
-        s.append(Store(randomString(random.randint(1,16)), \
+        s.append(Store(str(i+100), \
                        randomString(random.randint(1,5)),  \
                        randomString(random.randint(1,12)), \
                        float(random.randint(500,10000)/float(random.randint(1,5)))))

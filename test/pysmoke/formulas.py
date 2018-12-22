@@ -938,7 +938,76 @@ def casefun(c):
             print "%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1))
 
     # case with agg
-        
+    mycase = "case " \
+             "  when count(*) > 100 then 'too much'" \
+             "  when count(*) = 100 then 'full'" \
+             "  when count(*) >= 75 then '3/4'" \
+             "  when count(*) >= 66 then '2/3'" \
+             "  when count(*) >  50 then 'majority'" \
+             "  when count(*) >= 33 then '1/3'" \
+             "  when count(*) >= 25 then '1/4'" \
+             "  when count(*) >= 10 then 'tens'" \
+             "  when count(*) >   1 then 'some'" \
+             "  when count(*) =   1 then 'one'" \
+             "  else                     'zero'" \
+             " end"
+
+    stmt = "select %s from product where prod_cat = %d" % (mycase, ps[idx].cat)
+
+    cnt=0
+    for p in ps:
+        if p.cat == ps[idx].cat:
+           cnt+=1
+
+    print "counted: %d" % cnt
+
+    with c.execute(stmt) as cur:
+        for row in cur:
+            if (cnt >  100 and row.field(0) != "too much") or \
+               (cnt == 100 and row.field(0) != "full") or \
+               (cnt >=  75 and cnt < 100 and row.field(0) != "3/4") or \
+               (cnt >=  66 and cnt <  75 and row.field(0) != "2/3") or \
+               (cnt >   50 and cnt <  66  and row.field(0) != "majority") or \
+               (cnt >=  33 and cnt <= 50  and row.field(0) != "1/3") or \
+               (cnt >=  25 and cnt <  33 and row.field(0) != "1/4") or \
+               (cnt >=  10 and cnt <  25 and row.field(0) != "tens") or \
+               (cnt >    1 and cnt <  10 and row.field(0) != "some") or \
+               (cnt ==   1 and row.field(0) != "one") or \
+               (cnt ==   0 and row.field(0) != "zero"):
+               raise db.TestFailed("unexpected value %s: %d" % (row.field(0), ps[idx].cat))
+            print "%s" % row.field(0)
+
+    # agg with case
+    mycase = "case " \
+             "  when prod_cat = 1 and prod_packing = 1 then 101" \
+             "  when prod_cat = 1 and prod_packing = 3 then 103" \
+             "  when prod_cat = 2 and prod_packing = 1 then 201" \
+             "  when prod_cat = 2 and prod_packing = 3 then 203" \
+             "  when prod_cat = 3 and prod_packing = 1 then 301" \
+             "  when prod_cat = 3 and prod_packing = 3 then 303" \
+             "  when prod_cat = 4 and prod_packing = 1 then 401" \
+             "  when prod_cat = 4 and prod_packing = 3 then 403" \
+             "  when prod_cat = 5 and prod_packing = 1 then 501" \
+             "  when prod_cat = 5 and prod_packing = 3 then 503" \
+             "  else prod_cat" \
+             " end"
+
+    stmt = "select sum(%s) from product" % mycase
+
+    sm=0
+    for p in ps:
+        if p.packing == 1 or p.packing == 3:
+           sm+=p.cat*100 + p.packing
+        else:
+           sm+=p.cat
+
+    print "sum: %d" % sm
+
+    with c.execute(stmt) as cur:
+        for row in cur:
+            if sm != row.field(0):
+               raise db.TestFailed("unexpected value %d: %d" % (row.field(0), sm))
+            print "%s" % row.field(0)
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:

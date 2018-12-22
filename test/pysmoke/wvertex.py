@@ -294,6 +294,83 @@ def shortcircuit(c):
                 raise db.TestFailed("wrong client: %d / %d" % (row.field(0), cs[idx].key))
          if n != 1:
              raise db.TestFailed("wrong number of clients: %d" % n)
+
+def casefun(c):
+
+    print "RUNNING TEST 'casefun'"
+
+    # case appears in where
+    cnt=0
+    for p in ps:
+        if p.cat < 4:
+           cnt += 1
+
+    stmt = "select prod_key, prod_cat from product " \
+           " where case " \
+           "          when prod_cat = 1 then 0 " \
+           "          when prod_cat = 2 then 1 " \
+           "          when prod_cat = 3 then 2 " \
+           "          when prod_cat = 4 then 3 " \
+           "          when prod_cat = 5 then 4 " \
+           "       end < 3"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
+
+    # where is case
+    cnt=0
+    for p in ps:
+        if p.cat < 4:
+           cnt += 1
+
+    stmt = "select prod_key, prod_cat from product " \
+           " where case " \
+           "          when prod_cat = 1 then true " \
+           "          when prod_cat = 2 then true " \
+           "          when prod_cat = 3 then true " \
+           "          else false " \
+           "       end"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
+
+    # where is case with non-boolean values
+    cnt=0
+    for p in ps:
+        if p.cat == 2 or p.cat == 3:
+           cnt += 1
+
+    stmt = "select prod_key, prod_cat from product " \
+           " where case " \
+           "          when prod_cat = 1 then false" \
+           "          when prod_cat = 2 then 'two'" \
+           "          when prod_cat = 3 then 3" \
+           "          else false " \
+           "       end"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
          
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
@@ -303,6 +380,7 @@ if __name__ == "__main__":
             roundfloats(c)
             weekdays(c)
             shortcircuit(c)
+            casefun(c)
 
         print "PASSED" 
 
