@@ -67,7 +67,10 @@ that represents an error event with error code
 \term{code} and detailed information \term{msg}.
 
 \subsubsection{makeRow()}
-The function creates a \term{Row} result.
+The function creates a \term{Row} result,
+which represents an individual row
+or a bulk of rows that are sent to the client
+in one go.
 The row is initially empty.
 
 \subsubsection{convert(typ, value)}
@@ -273,20 +276,15 @@ A usage example is:
 \begin{python}
 \begin{lstlisting}
 with execute("select origin from edge where edge = 'buys'") as cur:
-    our = None
+    our = makeRow() # create a row result
     for row in cur:
-       if our is None:
-          our = makeRow() # create a row result
-       else:
-          our = closeRow() # terminate row
-
        with execute("select client_name from client\
                       where client_key = " +
                       str(row.field(0))) as cur2:
             for cow in cur2:
                 our.add2Row(UINT, cur.field(0))
                 our.add2Row(TEXT, cow.field(0))
-
+                our.closeRow() # terminate row
     return our.toDB() 
 \end{lstlisting}
 \end{python}
@@ -294,19 +292,29 @@ with execute("select origin from edge where edge = 'buys'") as cur:
 This is a na\"ive join implementation:
 For each edge, the function executes a \term{select}
 on the \term{client} with the key found in \term{origin}.
-The function creates a row ``our'' which is initialised
-to \term{None}. Once it was created, it is closed,
-so that each iteration will write to a new row.
+The function creates a row ``our''.
 Each of the rows contains two fields: the \term{origin}
-from edge and the \term{client\_key} from \term{client}.
+from edge and the \term{client\_name} from \term{client}.
 Finally, the row is returned (calling $toDB()$).
 
+Note that the size of row buffers is limited.
+The exact size is not part of this specification.
+On adding a value to a row that has already reached
+the limits an exception is raised.
+
 \subsubsection{closeRow()}
-The method inserts an \term{end-of-row} marker into the row.
-It is intended to be used with bulks of rows created by
-user-defined procedures. Note that it is not necessary
-to close a single row result. The marker separates
-rows and is therefore needed only for bulks.
+The method inserts an \term{end-of-row} marker
+at the current end of the row.
+Without such a marker, the row would be invalid.
+Moreover, and instance of the \term{row} type
+may contain more than one row.
+The marker, in this case, separates the individual
+rows within that row buffer.
+
+\subsubsection{fitsRow(typ, value)}
+The method checks whether \term{value} of type \term{typ}
+still fits into the row. It returns \term{True}
+if the value still fits and \term{False} otherwise.
 
 \subsection{Reports}
 If the result is a report,

@@ -652,13 +652,10 @@ Further missing are the inverse functions
 parsefloat, parseint, parseuint, parsebool.}
 
 \subsubsection{Boolean}
-\comment{Booleans are currently only available in
-the \term{where} clause}
-
 Boolean operators and functions
 are those resulting in a Boolean value.
 They are, hence, not defined by the type
-of their argument, but by their result type.
+of their arguments, but by their result type.
 
 There are different categories of Boolean
 operators (or functions):
@@ -747,13 +744,12 @@ Special operators are
 \keyword{any} and
 \keyword{all}.
 
-\comment{Available right now is \keyword{in}.
-\keyword{is}, \keyword{between} 
-and \keyword{having} will be
-available soon. Since \keyword{exists},
-\keyword{any} and \keyword{all} are useful
-only with subqueries, it will take some
-more time until they are available.}
+\comment{
+\keyword{between} 
+and \keyword{having} 
+\keyword{exists},
+\keyword{any} and \keyword{all}
+are not yet available.}
 
 The operator \keyword{is} must be used
 to compare with the special value
@@ -819,13 +815,157 @@ The basic form is \keyword{exists} $(1,2,3)$,
 which is $true$.
 \keyword{exists} is especially useful with subqueries.
 
-\comment{
-The operators \keyword{any} and \keyword{all}
-are still to be defined.
-}
-
 \subsubsection{Conditionals}
-\comment{Not yet available}
+\paragraph{The Case Expression}
+Conditionals can be constructed by means
+of the \keyword{case} expression.
+The general syntax is:
+
+\keyword{case}\\
+\hspace*{1cm}\keyword{when} \textit{condition$_1$} 
+\keyword{then} \textit{value$_1$} \\
+\hspace*{1cm}\keyword{when} \textit{condition$_2$} 
+\keyword{then} \textit{value$_2$} \\
+\hspace*{1cm} $\dots$\\
+\hspace*{1cm}\keyword{else} \textit{value$_n$} \\
+\keyword{end}
+
+where the conditions are boolean expressions
+and the values are any expressions.
+For instance:
+
+\keyword{case}\\
+\hspace*{1cm}\keyword{when} \identifier{price} $>$ 100.0
+\keyword{then} 'expensive' \\
+\hspace*{1cm}\keyword{when} \identifier{price} $>$ 50.0
+\keyword{then} 'not cheap' \\
+\hspace*{1cm}\keyword{when} \identifier{price} $>$ 20.0
+\keyword{then} 'considerable' \\
+\hspace*{1cm}\keyword{when} \identifier{price} $>$ 5.0
+\keyword{then} 'not for free' \\
+\hspace*{1cm}\keyword{else} 'acceptable' \\
+\keyword{end}
+
+Note that the whole construct enclosed by
+the keywords \keyword{case} and \keyword{end}
+is an expression. \keyword{when}, \keyword{then}
+and \keyword{else} alone do not form expressions;
+they can only be used with in a \keyword{case}.
+
+A \keyword{case} expression consists of at least
+one \keyword{when}/\keyword{then} construct.
+Without such a construct, the \keyword{case}
+is invalid.
+
+Likewise, a \keyword{case} must contain at most
+one \keyword{else}
+and that \keyword{else}
+must be placed behind all \keyword{when} constructs.
+With more than one \keyword{else}
+or with an \keyword{else} that is followed
+by one or more \keyword{when} constructs,
+the \keyword{case} is invalid.
+
+The \keyword{when} constructs are evaluated
+in the order in which they appear in the \keyword{case} expression.
+The \keyword{case}, thus, evaluates
+to the \term{value} branch of the first \keyword{when}
+whose condition branch evaluates to \keyword{true}.
+
+If none of the \keyword{when} conditions evaluates to \keyword{true},
+the \keyword{case} expression evaluates
+to the \keyword{else} \term{value}.
+If there is no \keyword{else},
+the \keyword{case} expression
+evaluates to \keyword{null}.
+
+The \keyword{when} and \keyword{else} values
+may be of different types.
+For instance:
+
+\keyword{case}\\
+\hspace*{1cm}\keyword{when} \identifier{category} $=$ 1
+\keyword{then} 'true' \\
+\hspace*{1cm}\keyword{when} \identifier{category} $=$ 2
+\keyword{then} 1 \\
+\hspace*{1cm}\keyword{when} \identifier{category} $=$ 3
+\keyword{then} true \\
+\hspace*{1cm}\keyword{else} \keyword{null} \\
+\keyword{end}
+
+However, care must be taken when using this feature.
+Often the context where the \keyword{case} expression
+appears requires a certain type, \eg: 
+
+\keyword{select} 1 +
+\keyword{case}\\
+\hspace*{2.5cm}\keyword{when} \identifier{category} \keyword{is null}
+\keyword{then} 0 \\
+\hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
+\hspace*{2cm}\keyword{end}
+
+This context expects a numerical value.
+Evaluation will fail with a non-numerical value
+like in the following case
+
+\keyword{select} 1 +
+\keyword{case}\\
+\hspace*{2.5cm}\keyword{when} \identifier{category} \keyword{is null}
+\keyword{then} \keyword{false} \\
+\hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
+\hspace*{2cm}\keyword{end}
+
+This is of significant importance in the \keyword{where} clause.
+When a \keyword{case} expression is used in a \keyword{where}
+like this:
+
+\keyword{where} \keyword{case} $\dots$ \keyword{end}
+
+\ie\ the whole \keyword{where} evaluates to the result
+of the \keyword{case} expression, the \keyword{case}
+must evaluate to a boolean. Otherwise the effect of
+the \keyword{where} clause is undefined.
+
+\paragraph{Coalesce}
+\identifier{Coalesce} is a function that accepts a list of expressions
+as its argument. \identifier{Coalesce} evaluates to
+the first value in the list that is \keyword{not null}.
+If none of the values in the list is \keyword{not null},
+\identifier{coalesce} evaluates to \keyword{null}.
+Example:
+
+\identifier{coalesce}(\identifier{category}, 99)
+
+If the field \identifier{category} is \keyword{null},
+\identifier{coalesce} evaluates to 99;
+otherwise, it evaluates to the current
+value of \identifier{category}.
+
+The list may contain an undetermined number of values.
+For instance:
+
+\identifier{coalesce}(\identifier{species},
+                      \identifier{genus},
+                      \identifier{family},
+                      \identifier{order},
+                      \identifier{class},
+                      \identifier{phylum},
+                      \identifier{kingdom},
+                      \identifier{domain},
+                      'life')
+
+The following expression evaluates to \keyword{null},
+whenever \identifier{category} evaluates to \keyword{null}
+(and is as such pointless):
+
+\identifier{coalesce}(\identifier{category}, \keyword{null})
+
+By contrast, this statement always evaluates to 99:
+
+\identifier{coalesce}(\keyword{null}, 99)
+
+The values in the list may be of different types.
+But, again, care must be taken when using this feature.
 
 \subsubsection{Bitwise Operators}
 $\ll, \gg, \&, |,\sim$, xor, bit
@@ -906,6 +1046,19 @@ returns the system's epoch
 
 \paragraph{Time Formatting}
 \comment{Not yet available}
+
+\subsubsection{Geospatial}
+\comment{
+Not yet available.
+Planned are:
+geohashing,
+distance calculation,
+bounding boxes,
+box is in another box,
+boxes share area,
+boxes touch each other,
+etc.
+}
 
 \subsubsection{Text}
 \comment{Not yet available}
@@ -2060,17 +2213,6 @@ Some input from an expert would help ;-)}
 The \term{where} clause adds criteria for the selection
 of specific rows. \term{where} clauses can be very complex.
 Indeed, a \term{where} clause is one complex \term{Boolean} expression.
-\comment{Currently, this is simplified in \nowdb.
-The \term{where} clause is indeed a Boolean expression,
-but the leaves of those expressions are always
-comparisons of the form \identifier{field} = \term{value}.
-It is currently not possible to compare fields with fields
-or values with values; it is also not possible to say,
-for instance,
-\keyword{where} \keyword{true} or
-\keyword{where} \identifier{year}(\keyword{stamp}) = 1984.
-This will change soon, so that all expressions
-will be available in the \term{where} clause.}
 
 A very simple \term{where} clause would be:
 
