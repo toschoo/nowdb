@@ -587,11 +587,6 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 	}
 	switch(*typ) {
 	case NOWDB_TYP_TEXT:
-		if (str == NULL) {
-			// this is not correct!
-			*typ = NOWDB_TYP_NOTHING;
-			*value = NULL; return NOWDB_OK;
-		}
 		if (tryTime(str, value) == 0) {
 			*typ = NOWDB_TYP_TIME;
 			return NOWDB_OK;

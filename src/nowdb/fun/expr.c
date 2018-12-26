@@ -1102,8 +1102,6 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
                                   char        **str) {
 	nowdb_err_t err;
 
-	if (key == 0) return NOWDB_OK;
-
 	err = nowdb_ptlru_get(hlp->tlru, key, str);
 	if (err != NOWDB_OK) return err;
 
