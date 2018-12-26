@@ -1680,6 +1680,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_EQ:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr, c)->value, 8);
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		return; 
@@ -1688,6 +1689,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_GT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_GT) (*start)++;
 		return; 
@@ -1696,6 +1698,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_LT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_LT) (*end)--;
 		return;
@@ -1977,6 +1980,9 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFCOMP(o) \
+	if (types[0] != types[1]) { \
+		INVALIDTYPE("types in comparison differ"); \
+	} \
 	switch(types[0]) { \
 	case NOWDB_TYP_UINT: \
 		o(*(int64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
@@ -2266,6 +2272,9 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	 */
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
+			if (types[1] != NOWDB_TYP_TEXT) {
+				INVALIDTYPE("not a time value");
+			}
 			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
 		} else if (types[0] == NOWDB_TYP_SHORT) {
@@ -2277,6 +2286,9 @@ static nowdb_err_t evalFun(uint32_t       fun,
 
 	case NOWDB_EXPR_OP_NE:
 		if (types[0] == NOWDB_TYP_TEXT) {
+			if (types[1] != NOWDB_TYP_TEXT) {
+				INVALIDTYPE("not a time value");
+			}
 			PERFSTR(SNE);
 		} else if (types[0] == NOWDB_TYP_SHORT) {
 			PERFSHORT(EQ);
@@ -2651,6 +2663,8 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_GT:
 	case NOWDB_EXPR_OP_LE:
 	case NOWDB_EXPR_OP_GE:
+		correctNumTypes(op); return NOWDB_TYP_BOOL;
+
 	case NOWDB_EXPR_OP_IN:
 	case NOWDB_EXPR_OP_IS:
 	case NOWDB_EXPR_OP_ISN:

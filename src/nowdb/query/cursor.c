@@ -940,6 +940,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	} 
 
 	(*cur)->model = scope->model;
+	(*cur)->filter = NULL;
 	(*cur)->rdr = NULL;
 	(*cur)->tmp = NULL;
 	(*cur)->row   = NULL;
