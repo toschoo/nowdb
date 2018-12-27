@@ -342,6 +342,68 @@ def insertallvertex(c):
     if sm != sm2:
        raise db.TestFailed("not equal: %d != %d" % (sm, sm2))
 
+    # coalesce non-existing prop
+    stmt = "select prod_desc, coal(prod_cat, 6) from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ("product %d" % k):
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(1) != 6:
+               raise db.TestFailed("%d: %d != 6" % (k, row.field(1)))
+            print "%s, %s" % (row.field(0), row.field(1))
+
+    # coalesce on 2 non-existing prop
+    stmt = "select prod_desc, coal(prod_cat, prod_packing, 6) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ("product %d" % k):
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(1) != 6:
+               raise db.TestFailed("%d: %d != 6" % (k, row.field(1)))
+            print "%s, %s" % (row.field(0), row.field(1))
+
+    # coalesce all null
+    stmt = "select prod_desc, coal(prod_cat, prod_packing) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n != 0:
+               raise db.TestFailed("multiple rows for %d" % k)
+            n+=1
+            if row.field(0) != ("product %d" % k):
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(1) is not None:
+               raise db.TestFailed("%d: not null" % (k, row.field(1)))
+            print "%s, %s" % (row.field(0), row.field(1))
+
+    # coalesce non-existing prop in where
+    stmt = "select prod_key, prod_cat from product \
+             where coal(prod_cat, 6) = 6"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %d (%s)" % (k, cur.code(),cur.details()))
+        for row in cur:
+            if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+            if row.field(1) is not None:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+
     # insert with field list (complete)
     k = getNextKey()
     stmt = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \

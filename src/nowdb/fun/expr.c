@@ -1325,7 +1325,10 @@ static nowdb_err_t evalFun(uint32_t     fun,
 static inline int evalType(nowdb_op_t *op, char guess);
 
 #define SETRESULT(t,x) \
-	*typ = t; op->res = x; *res = &op->res;
+	*typ = t; op->res=x; *res=&op->res;
+
+#define SETXRESULT(t,x) \
+	*typ = t; memcpy(&op->res,&x,sizeof(char*)); *res=(char*)op->res;
 
 /* -----------------------------------------------------------------------
  * Evaluate operation
@@ -1379,6 +1382,20 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 					return NOWDB_OK;
 				}
 			}
+			if (op->fun == NOWDB_EXPR_OP_COAL) {
+				if (op->types[i] != NOWDB_TYP_NOTHING) {
+					if (op->types[i] == NOWDB_TYP_TEXT &&
+					    hlp != NULL && hlp->needtxt)   {
+						SETXRESULT(NOWDB_TYP_TEXT,
+						           op->results[i]);
+					} else {
+						SETRESULT(op->types[i],
+						     *(nowdb_value_t*)
+						       op->results[i]);
+					}
+					return NOWDB_OK;
+				}
+			}
 		}
 	}
 
@@ -1405,7 +1422,6 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	} else {
 		*res=&op->res;
 	}
-
 	return NOWDB_OK;
 }
 
@@ -1852,6 +1868,7 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_OR: return showargs(op, "or", stream);
 	case NOWDB_EXPR_OP_WHEN: return showargs(op, "when", stream);
 	case NOWDB_EXPR_OP_ELSE: return showargs(op, "else", stream);
+	case NOWDB_EXPR_OP_COAL: return showargs(op, "coalesce", stream);
 	default: showargs(op, "unknown", stream);
 	}
 }
@@ -2490,6 +2507,7 @@ static inline int getArgs(int o) {
 	case NOWDB_EXPR_OP_WHEN: return 3;
 
 	case NOWDB_EXPR_OP_ELSE: return 1;
+	case NOWDB_EXPR_OP_COAL: return 1;
 
 	default: return -1;
 	}
@@ -2590,6 +2608,10 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 					return NOWDB_TYP_BOOL;
 				}
 				return NOWDB_TYP_NOTHING;
+			} else {
+				if (op->fun == NOWDB_EXPR_OP_COAL) {
+					return op->types[i];
+				}
 			}
 		}
 	}
@@ -2683,6 +2705,13 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 
 	case NOWDB_EXPR_OP_ELSE: return op->types[0];
 
+	case NOWDB_EXPR_OP_COAL:
+		for(int i=0;i<op->args;i++) {
+			if (op->types[i] != NOWDB_TYP_NOTHING)
+				return op->types[i];
+		}
+		return NOWDB_TYP_NOTHING;
+
 	default: return -1;
 	}
 }
@@ -2749,6 +2778,8 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "is not") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "when") == 0) return NOWDB_EXPR_OP_WHEN;
 	if (strcasecmp(op, "else") == 0) return NOWDB_EXPR_OP_ELSE;
+	if (strcasecmp(op, "coal") == 0) return NOWDB_EXPR_OP_COAL;
+	if (strcasecmp(op, "coalesce") == 0) return NOWDB_EXPR_OP_COAL;
 
 	*agg = 1;
 

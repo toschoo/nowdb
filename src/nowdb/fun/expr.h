@@ -445,24 +445,24 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
  * Logic
  * -----------------------------------------------------------------------
  */
-#define NOWDB_EXPR_OP_EQ  101
-#define NOWDB_EXPR_OP_NE  102
-#define NOWDB_EXPR_OP_LT  103
-#define NOWDB_EXPR_OP_GT  104
-#define NOWDB_EXPR_OP_LE  105
-#define NOWDB_EXPR_OP_GE  106
-#define NOWDB_EXPR_OP_IN  107
-#define NOWDB_EXPR_OP_IS  108
-#define NOWDB_EXPR_OP_ISN 109
-#define NOWDB_EXPR_OP_ISN 109
-#define NOWDB_EXPR_OP_TRUE 150
+#define NOWDB_EXPR_OP_EQ    101
+#define NOWDB_EXPR_OP_NE    102
+#define NOWDB_EXPR_OP_LT    103
+#define NOWDB_EXPR_OP_GT    104
+#define NOWDB_EXPR_OP_LE    105
+#define NOWDB_EXPR_OP_GE    106
+#define NOWDB_EXPR_OP_IN    107
+#define NOWDB_EXPR_OP_IS    108
+#define NOWDB_EXPR_OP_ISN   109
+#define NOWDB_EXPR_OP_COAL  111
+#define NOWDB_EXPR_OP_TRUE  150
 #define NOWDB_EXPR_OP_FALSE 151
-#define NOWDB_EXPR_OP_NOT 152
-#define NOWDB_EXPR_OP_JUST 153
-#define NOWDB_EXPR_OP_AND 154
-#define NOWDB_EXPR_OP_OR  155
-#define NOWDB_EXPR_OP_WHEN 157
-#define NOWDB_EXPR_OP_ELSE 158
+#define NOWDB_EXPR_OP_NOT   152
+#define NOWDB_EXPR_OP_JUST  153
+#define NOWDB_EXPR_OP_AND   154
+#define NOWDB_EXPR_OP_OR    155
+#define NOWDB_EXPR_OP_WHEN  157
+#define NOWDB_EXPR_OP_ELSE  158
 
 /* -----------------------------------------------------------------------
  * TIME
