@@ -1136,8 +1136,6 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 			sendEOF(ses);
 			goto cleanup;
 		}
-		// internal error
-		// INTERNAL("open cursor");
 		sendErr(ses, err, NULL);
 		goto cleanup;
 	}
@@ -1157,7 +1155,6 @@ static int openCursor(nowdb_session_t *ses, nowdb_cursor_t *cur) {
 				}
 			} else {
 				// internal error
-				// INTERNAL("fetching first row");
 				sendErr(ses, err, NULL);
 				goto cleanup;
 			}

@@ -861,7 +861,6 @@ nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
 	err = nowdb_expr_eval(vrow->filter,
 	                        vrow->eval,
 	                           v->pmap,
-	             // NOWDB_BITMAP64_ALL,
 	                   v->row, &t, &x);
 	if (err != NOWDB_OK) return err;
 	if (*(nowdb_value_t*)x) {
