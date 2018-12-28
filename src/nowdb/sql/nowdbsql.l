@@ -48,6 +48,12 @@
 
 (?i:IS)			return NOWDB_SQL_IS;
 
+(?i:CASE)		return NOWDB_SQL_CASE;
+(?i:END)		return NOWDB_SQL_END;
+(?i:WHEN)		return NOWDB_SQL_WHEN;
+(?i:THEN)		return NOWDB_SQL_THEN;
+(?i:ELSE)		return NOWDB_SQL_ELSE;
+
 (?i:CREATE)		return NOWDB_SQL_CREATE;
 (?i:DROP)		return NOWDB_SQL_DROP;
 	/*

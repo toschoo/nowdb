@@ -864,7 +864,11 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 	                        FALSE, OBJECT, "string is NULL");
 
 	if (key == NULLKEY) {
-		*str = NULL;
+		*str = calloc(1,1);
+		if (*str == NULL) {
+			NOMEM("allocating null text");
+			return err;
+		}
 		return NOWDB_OK;
 	}
 

@@ -1307,6 +1307,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 			memcpy(reader->buf+x, src+i, reader->recsize);
 			x+=reader->recsize;
 		}
+		if (err != NOWDB_OK) break;
 	}
 	reader->size = x;
 	nowdb_reader_destroy(full); free(full);

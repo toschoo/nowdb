@@ -546,6 +546,7 @@ static inline int tryTime(char *str, void **value) {
 	size_t s;
 	nowdb_time_t t;
 
+	if (str == NULL) return -1;
 	s = strlen(str);
 	if (s > 30) return -1;
 	if (s == 10) {
@@ -573,10 +574,11 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
                                         char         *str,
                                         void      **value) {
 	nowdb_err_t err;
-	char x;
+	int64_t x;
 	char *tmp;
 
-	if (*typ != NOWDB_TYP_TEXT) {
+	if (*typ != NOWDB_TYP_TEXT &&
+	    *typ != NOWDB_TYP_NOTHING) {
 		*value = malloc(sizeof(nowdb_key_t));
 		if (value == NULL) {
 			NOMEM("allocating value");
@@ -605,7 +607,7 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 			                         FALSE, OBJECT,
 			                     "invalid boolean");
 		}
-		memcpy(*value, &x, 1);
+		memcpy(*value, &x, sizeof(nowdb_value_t));
 		return NOWDB_OK;
 
 	case NOWDB_TYP_FLOAT:
@@ -620,6 +622,10 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 	case NOWDB_TYP_INT:
 		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
 		break;
+
+	case NOWDB_TYP_NOTHING:
+		*value = NULL;
+		return NOWDB_OK;
 
 	default:
 		if (*value != NULL) {
@@ -709,7 +715,7 @@ static nowdb_err_t getInList(nowdb_ast_t    *ast,
 	nowdb_ast_t *o;
 	nowdb_type_t t;
 	nowdb_expr_t expr;
-	void *value;
+	void *value=NULL;
 
 	o = nowdb_ast_nextParam(ast);
 	if (o == NULL) INVALIDAST("empty 'IN' list");
@@ -718,6 +724,9 @@ static nowdb_err_t getInList(nowdb_ast_t    *ast,
 	if (err != NOWDB_OK) return err;
 
 	while(o != NULL) {
+		if (t == NOWDB_TYP_NOTHING) {
+			o = nowdb_ast_nextParam(o); continue;
+		}
 		err = getConstValue(&t, o->value, &value);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "error in getConstValue\n");
@@ -1012,7 +1021,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 	nowdb_err_t err;
 	nowdb_type_t typ;
 	int off=-1;
-	void *value;
+	void *value=NULL;
 
 	/* expression */
 	if (field->ntype == NOWDB_AST_FUN ||
@@ -1035,7 +1044,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 		// fprintf(stderr, "type: %d / %d\n",
 		//        field->vtype, field->stype);
 
-		free(value);
+		if (value != NULL) free(value);
 
 	} else {
 		/* we need to distinguish the target! */
