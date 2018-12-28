@@ -207,6 +207,22 @@ represents an integer.
 
 The static types are
 
+\ignore{
+\bgroup
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\begin{tabular}{||c||c||c||c||c||}\hline
+Type & Declaration & Range & Constructor & Examples \\\hline\hline
+Integer & $int$, $integer$ & $-2^{63} \dots 2^{63}-1$ & $\pm n$ & $-1, +0, +1$\\
+        & &                & where $n$ is an unsigned ingeger & \\\cline{1-5}
+Unsigned Integer & $uint$, $uinteger$ & $0 \dots 2^{64}-1$ & One digit $(0\dots 9)$ & $0, 1,2, 1024$\\
+        & &                & or one digit $(1\dots 9)$ & but not: $01$\\
+        & &                & followed by a sequence of digits ($0\dots9$). & \\\cline{1-5}
+\end{tabular}
+\end{center}
+\egroup
+}
+
 \begin{minipage}{\textwidth}
 \textbf{Integer}\\
 Declaration: $int$, $integer$ \\
@@ -308,7 +324,6 @@ Note that it is not possible to compare any value to \acronym{null}
 using $= or \neq$. The special operator \keyword{is} must
 be used for that purpose, \eg\
 \keyword{where} \identifier{name} \keyword{is not null}.
-\comment{\acronym{null} is not yet implemented completely!}
 \end{minipage}
 
 \subsection{Dynamic Types}
@@ -745,8 +760,8 @@ Special operators are
 \keyword{all}.
 
 \comment{
-\keyword{between} 
-and \keyword{having} 
+\keyword{between},
+\keyword{having}, 
 \keyword{exists},
 \keyword{any} and \keyword{all}
 are not yet available.}
@@ -757,6 +772,10 @@ to compare with the special value
 (which is $false$) 
 or 1 \keyword{is not null}
 (which is $true$).
+The expression
+$a$ \keyword{is not null} is
+equivalent to
+\keyword{not}($a$ \keyword{is null}).
 
 The operator \keyword{between} tests
 whether a value is in a range.
@@ -850,7 +869,7 @@ Note that the whole construct enclosed by
 the keywords \keyword{case} and \keyword{end}
 is an expression. \keyword{when}, \keyword{then}
 and \keyword{else} alone do not form expressions;
-they can only be used with in a \keyword{case}.
+they can only be used within a \keyword{case}.
 
 A \keyword{case} expression consists of at least
 one \keyword{when}/\keyword{then} construct.
@@ -915,7 +934,7 @@ like in the following case
 \hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
 \hspace*{2cm}\keyword{end}
 
-This is of significant importance in the \keyword{where} clause.
+This is of importance in the \keyword{where} clause.
 When a \keyword{case} expression is used in a \keyword{where}
 like this:
 
@@ -927,10 +946,12 @@ must evaluate to a boolean. Otherwise the effect of
 the \keyword{where} clause is undefined.
 
 \paragraph{Coalesce}
-\identifier{Coalesce} is a function that accepts a list of expressions
-as its argument. \identifier{Coalesce} evaluates to
-the first value in the list that is \keyword{not null}.
-If none of the values in the list is \keyword{not null},
+\identifier{Coalesce} is a function that accepts
+an unspecified number arguments.
+\identifier{Coalesce} evaluates to
+the first argument that itself
+does not evaluate to \keyword{not null}.
+If none of the arguments is \keyword{not null},
 \identifier{coalesce} evaluates to \keyword{null}.
 Example:
 
@@ -941,8 +962,9 @@ If the field \identifier{category} is \keyword{null},
 otherwise, it evaluates to the current
 value of \identifier{category}.
 
-The list may contain an undetermined number of values.
-For instance:
+Since \identifier{coalesce} accepts
+an undetermined number of argument,
+the following expression is legal:
 
 \identifier{coalesce}(\identifier{species},
                       \identifier{genus},
@@ -964,7 +986,7 @@ By contrast, this statement always evaluates to 99:
 
 \identifier{coalesce}(\keyword{null}, 99)
 
-The values in the list may be of different types.
+The arguments may be of different types.
 But, again, care must be taken when using this feature.
 
 \subsubsection{Bitwise Operators}
