@@ -331,16 +331,33 @@ def insertallvertex(c):
 
     print sm
 
-    sm2 = 0
+    # case with null in where
+    mycase = "case when prod_cat is null then true else false end"
+
+    stmt = "select prod_key, prod_cat from product where %s" % mycase
+    print stmt
+
     with c.execute(stmt) as cur:
         if not cur.ok():
                raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
         for row in cur:
-            sm2 += row.field(0)
-    print sm2
+            if row.field(1) is not None:
+               raise db.TestFailed("not null %d: %s" % (row.field(0), row.field(1)))
+            print "%d: %s" % (row.field(0), row.field(1))
 
-    if sm != sm2:
-       raise db.TestFailed("not equal: %d != %d" % (sm, sm2))
+    # case with null in where, logic reversed
+    mycase = "case when prod_cat is not null then true else false end"
+
+    stmt = "select prod_key, prod_cat from product where %s" % mycase
+    print stmt
+
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+        for row in cur:
+            if row.field(1) is None:
+               raise db.TestFailed("null %d: %s" % (row.field(0), row.field(1)))
+            print "%d: %s" % (row.field(0), row.field(1))
 
     # coalesce non-existing prop
     stmt = "select prod_desc, coal(prod_cat, 6) from product where prod_key = %d" % k
