@@ -444,6 +444,7 @@ static inline nowdb_err_t initOp(nowdb_expr_t *expr,
 	OP(*expr)->argv = NULL;
 	OP(*expr)->types = NULL;
 	OP(*expr)->results = NULL;
+	OP(*expr)->text = NULL;
 
 	OP(*expr)->fun = fun;
 	OP(*expr)->args  = len;
@@ -623,6 +624,9 @@ static void destroyOp(nowdb_op_t *op) {
 	}
 	if (op->results != NULL) {
 		free(op->results); op->results = NULL;
+	}
+	if (op->text != NULL) {
+		free(op->text); op->text = NULL;
 	}
 }
 
@@ -1098,8 +1102,6 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
                                   char        **str) {
 	nowdb_err_t err;
 
-	if (key == 0) return NOWDB_OK;
-
 	err = nowdb_ptlru_get(hlp->tlru, key, str);
 	if (err != NOWDB_OK) return err;
 
@@ -1310,6 +1312,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
  * -----------------------------------------------------------------------
  */
 static nowdb_err_t evalFun(uint32_t     fun,
+                           int         args,
                            void        **argv,
                            nowdb_type_t *types,
                            nowdb_type_t *t,
@@ -1322,7 +1325,10 @@ static nowdb_err_t evalFun(uint32_t     fun,
 static inline int evalType(nowdb_op_t *op, char guess);
 
 #define SETRESULT(t,x) \
-	*typ = t; op->res = x; *res = &op->res;
+	*typ = t; op->res=x; *res=&op->res;
+
+#define SETXRESULT(t,x) \
+	*typ = t; memcpy(&op->res,&x,sizeof(char*)); *res=(char*)op->res;
 
 /* -----------------------------------------------------------------------
  * Evaluate operation
@@ -1376,27 +1382,46 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 					return NOWDB_OK;
 				}
 			}
+			if (op->fun == NOWDB_EXPR_OP_COAL) {
+				if (op->types[i] != NOWDB_TYP_NOTHING) {
+					if (op->types[i] == NOWDB_TYP_TEXT &&
+					    hlp != NULL && hlp->needtxt)   {
+						SETXRESULT(NOWDB_TYP_TEXT,
+						           op->results[i]);
+					} else {
+						SETRESULT(op->types[i],
+						     *(nowdb_value_t*)
+						       op->results[i]);
+					}
+					return NOWDB_OK;
+				}
+			}
 		}
 	}
 
 	// determine type
 	if (op->types != NULL) { 
 		*typ = evalType(op,0);
-		if ((int)*typ < 0) INVALIDTYPE("wrong type in operation");
+		if ((int)*typ < 0) {
+			INVALIDTYPE("wrong type in operation");
+		}
 	}
-
-	/*
-	if (*typ == 0) {
-		// treat as null here
-		
-	}
-	*/
 
 	// evaluate function
-	err = evalFun(op->fun, op->results, op->types, typ, &op->res);
+	err = evalFun(op->fun, op->args,
+	              op->results, op->types,
+	              typ, &op->res);
 	if (err != NOWDB_OK) return err;
 
-	*res=&op->res;
+	// pointer or value?
+	if (*typ == NOWDB_TYP_TEXT && 
+             hlp != NULL           &&
+             hlp->needtxt)
+	{
+		*res=(char*)op->res;
+	} else {
+		*res=&op->res;
+	}
 	return NOWDB_OK;
 }
 
@@ -1671,6 +1696,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_EQ:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr, c)->value, 8);
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		return; 
@@ -1679,6 +1705,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_GT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_GT) (*start)++;
 		return; 
@@ -1687,6 +1714,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_LT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
 		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_LT) (*end)--;
 		return;
@@ -1838,6 +1866,9 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_JUST: return showargs(op, "just", stream);
 	case NOWDB_EXPR_OP_AND: return showargs(op, "and", stream);
 	case NOWDB_EXPR_OP_OR: return showargs(op, "or", stream);
+	case NOWDB_EXPR_OP_WHEN: return showargs(op, "when", stream);
+	case NOWDB_EXPR_OP_ELSE: return showargs(op, "else", stream);
+	case NOWDB_EXPR_OP_COAL: return showargs(op, "coalesce", stream);
 	default: showargs(op, "unknown", stream);
 	}
 }
@@ -1916,6 +1947,12 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 #define MOV(r1,r2) \
 	memcpy(r1, r2, 8);
 
+#define COPYADDR(r1,r2) \
+	memcpy(r1, r2, sizeof(char*));
+
+#define MOV(r1,r2) \
+	memcpy(r1, r2, 8);
+
 #define EQ(v0,v1,v2) \
 	v0 = (v1==v2)
 
@@ -1960,6 +1997,9 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFCOMP(o) \
+	if (types[0] != types[1]) { \
+		INVALIDTYPE("types in comparison differ"); \
+	} \
 	switch(types[0]) { \
 	case NOWDB_TYP_UINT: \
 		o(*(int64_t*)res, *(uint64_t*)argv[0], *(uint64_t*)argv[1]); \
@@ -2178,8 +2218,9 @@ static inline nowdb_err_t getTimeSubComp(uint32_t fun, void *arg, void *res) {
  * Evaluate Fun
  * -----------------------------------------------------------------------
  */
-static nowdb_err_t evalFun(uint32_t      fun,
-                           void        **argv,
+static nowdb_err_t evalFun(uint32_t       fun,
+                           int            args,
+                           void         **argv,
                            nowdb_type_t *types,
                            nowdb_type_t *t,
                            void         *res) {
@@ -2248,6 +2289,9 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 */
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
+			if (types[1] != NOWDB_TYP_TEXT) {
+				INVALIDTYPE("not a time value");
+			}
 			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
 		} else if (types[0] == NOWDB_TYP_SHORT) {
@@ -2259,6 +2303,9 @@ static nowdb_err_t evalFun(uint32_t      fun,
 
 	case NOWDB_EXPR_OP_NE:
 		if (types[0] == NOWDB_TYP_TEXT) {
+			if (types[1] != NOWDB_TYP_TEXT) {
+				INVALIDTYPE("not a time value");
+			}
 			PERFSTR(SNE);
 		} else if (types[0] == NOWDB_TYP_SHORT) {
 			PERFSHORT(EQ);
@@ -2285,8 +2332,7 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	case NOWDB_EXPR_OP_NOT: PER1BOOL(NOT);
 	case NOWDB_EXPR_OP_JUST: PER1BOOL(JUST);
 
-	case NOWDB_EXPR_OP_AND:
-			PERFBOOL(AND);
+	case NOWDB_EXPR_OP_AND: PERFBOOL(AND);
 	case NOWDB_EXPR_OP_OR: PERFBOOL(OR);
 
 	/* -----------------------------------------------------------------------
@@ -2342,6 +2388,38 @@ static nowdb_err_t evalFun(uint32_t      fun,
 	 * Conditionals
 	 * -----------------------------------------------------------------------
 	 */
+	case NOWDB_EXPR_OP_ELSE:
+		if (argv[0] == NULL) {
+			*t = NOWDB_TYP_NOTHING;
+		} else if (types[0] == NOWDB_TYP_TEXT) {
+			COPYADDR(res, &argv[0]); *t = types[0];
+		} else {
+			COPYADDR(res, argv[0]); *t=types[0];
+		}
+		return NOWDB_OK;
+
+	case NOWDB_EXPR_OP_WHEN:
+		if (types[0] != NOWDB_TYP_BOOL) {
+			INVALIDTYPE("first operand of WHEN is not a boolean");
+		}
+		if (*(int64_t*)argv[0]) {
+			if (argv[1] == NULL) {
+				*t = NOWDB_TYP_NOTHING;
+			} else if (types[1] == NOWDB_TYP_TEXT) {
+				COPYADDR(res, &argv[1]); *t = types[1];
+			} else {
+				COPYADDR(res, argv[1]); *t = types[1];
+			}
+		} else {
+			if (argv[2] == NULL) {
+				*t = NOWDB_TYP_NOTHING;
+			} else if (types[2] == NOWDB_TYP_TEXT) {
+				COPYADDR(res, &argv[2]); *t = types[2];
+			} else {
+				COPYADDR(res, argv[2]); *t = types[2];
+			}
+		}
+		return NOWDB_OK;
 
 	/* -----------------------------------------------------------------------
 	 * Bitwise
@@ -2425,6 +2503,11 @@ static inline int getArgs(int o) {
 
 	case NOWDB_EXPR_OP_AND:
 	case NOWDB_EXPR_OP_OR: return 2;
+
+	case NOWDB_EXPR_OP_WHEN: return 3;
+
+	case NOWDB_EXPR_OP_ELSE: return 1;
+	case NOWDB_EXPR_OP_COAL: return 1;
 
 	default: return -1;
 	}
@@ -2515,13 +2598,20 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	if (!guess) {
 		for (int i=0; i<op->args; i++) {
 			if (op->types[i] == NOWDB_TYP_NOTHING) {
-				// exception IS: then its bool
+				if (op->fun == NOWDB_EXPR_OP_WHEN ||
+				    op->fun == NOWDB_EXPR_OP_ELSE) {
+					continue;
+				}
 				if (op->fun == NOWDB_EXPR_OP_IS ||
                                     op->fun == NOWDB_EXPR_OP_ISN) 
 				{
 					return NOWDB_TYP_BOOL;
 				}
 				return NOWDB_TYP_NOTHING;
+			} else {
+				if (op->fun == NOWDB_EXPR_OP_COAL) {
+					return op->types[i];
+				}
 			}
 		}
 	}
@@ -2595,6 +2685,8 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_GT:
 	case NOWDB_EXPR_OP_LE:
 	case NOWDB_EXPR_OP_GE:
+		correctNumTypes(op); return NOWDB_TYP_BOOL;
+
 	case NOWDB_EXPR_OP_IN:
 	case NOWDB_EXPR_OP_IS:
 	case NOWDB_EXPR_OP_ISN:
@@ -2604,6 +2696,21 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_JUST:
 	case NOWDB_EXPR_OP_AND:
 	case NOWDB_EXPR_OP_OR: return NOWDB_TYP_BOOL;
+
+	case NOWDB_EXPR_OP_WHEN:
+		if (op->types[1] != NOWDB_TYP_NOTHING) return op->types[1];
+		if (op->types[2] != NOWDB_TYP_NOTHING) return op->types[2];
+		if (guess) return NOWDB_TYP_BOOL;
+		return NOWDB_TYP_NOTHING;
+
+	case NOWDB_EXPR_OP_ELSE: return op->types[0];
+
+	case NOWDB_EXPR_OP_COAL:
+		for(int i=0;i<op->args;i++) {
+			if (op->types[i] != NOWDB_TYP_NOTHING)
+				return op->types[i];
+		}
+		return NOWDB_TYP_NOTHING;
 
 	default: return -1;
 	}
@@ -2669,6 +2776,10 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "isnt") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "isnot") == 0) return NOWDB_EXPR_OP_ISN;
 	if (strcasecmp(op, "is not") == 0) return NOWDB_EXPR_OP_ISN;
+	if (strcasecmp(op, "when") == 0) return NOWDB_EXPR_OP_WHEN;
+	if (strcasecmp(op, "else") == 0) return NOWDB_EXPR_OP_ELSE;
+	if (strcasecmp(op, "coal") == 0) return NOWDB_EXPR_OP_COAL;
+	if (strcasecmp(op, "coalesce") == 0) return NOWDB_EXPR_OP_COAL;
 
 	*agg = 1;
 

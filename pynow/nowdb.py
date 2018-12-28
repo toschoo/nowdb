@@ -222,6 +222,13 @@ class Result:
 
   # cursor is an iterator
   def __iter__(self):
+    if self.rType() == STATUS:
+       if self.code() == 0:
+          return self
+       if self.code() == EOF:
+          return self
+       raise DBError(self.code(), self.details())
+
     if self.rType() != CURSOR:
        raise WrongType("result is not a cursor")
 
@@ -319,7 +326,7 @@ class Result:
     if self._r is None:
       return False
     if not self.fitsRow(t, value):
-       return False
+       raise DBError(-107, "row is full") 
     v = convert(t, value)
     return (_rAdd(self._r, t, byref(v)) == 0)
 

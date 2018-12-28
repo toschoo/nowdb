@@ -109,7 +109,7 @@ typedef struct {
 	char *z; \
 	if (s != NULL) { \
 		x = strnlen(s, 257); \
-		if (x > 2) { \
+		if (x >= 2) { \
 			z = malloc(x-1); \
 			if (z == NULL) { \
 				nowdbres->errcode = NOWDB_SQL_ERR_NO_MEM; \

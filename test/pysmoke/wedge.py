@@ -398,6 +398,90 @@ def shortcircuit(c):
          if n != x:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
+def casefun(c):
+
+    print "RUNNING TEST 'casefun'"
+
+    # case appears in where
+    cnt=0
+    for e in es:
+        if e.destin < 1050:
+           cnt += 1
+
+    stmt = "select destin from sales" \
+           " where edge = 'buys' " \
+           "   and case " \
+           "          when destin-(1000) < 10 then 1.0/10.0" \
+           "          when destin-(1000) < 20 then 2.0/10.0" \
+           "          when destin-(1000) < 30 then 3.0/10.0" \
+           "          when destin-(1000) < 40 then 4.0/10.0" \
+           "          when destin-(1000) < 50 then 5.0/10.0" \
+           "          else 1.0 " \
+           "       end < 1.0"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
+
+    # where is case
+    cnt=0
+    for e in es:
+        if e.origin < 4000010 or \
+           (e.origin >= 4000020 and e.origin < 4000030) or \
+           (e.origin >= 4000040 and e.origin < 4000050):
+           cnt += 1
+
+    stmt = "select origin from sales " \
+           " where case " \
+           "          when origin < 4000010 then true " \
+           "          when origin < 4000020 then false" \
+           "          when origin < 4000030 then true " \
+           "          when origin < 4000040 then false" \
+           "          when origin < 4000050 then true " \
+           "          else false " \
+           "       end"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
+
+    # where is case with non-boolean values
+    cnt=0
+    for e in es:
+        if e.origin >= 4000010 and e.origin < 4000030:
+           cnt += 1
+
+    stmt = "select origin from sales" \
+           " where case " \
+           "          when origin < 4000010 then false" \
+           "          when origin < 4000020 then 'two'" \
+           "          when origin < 4000030 then 3" \
+           "          else false " \
+           "       end"
+
+    with c.execute(stmt) as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         n=0
+         for row in cur:
+             n+=1
+    print "%d ?= %d" % (cnt, n)
+    if n != cnt:
+       raise db.TestFailed("not equal: %d != %d " % (n, cnt))
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es) = db.loadDB(c, "db100")
@@ -406,6 +490,7 @@ if __name__ == "__main__":
             roundfloats(c)
             weekdays(c)
             shortcircuit(c)
+            casefun(c)
 
         print "PASSED"
 

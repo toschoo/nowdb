@@ -1,0 +1,6 @@
+empty string
+------------
+must be handled properly in
+- parser (currently a mem leak results from strdup)
+- plan   (currently the constant is set to NULL)
+- stmt   (update, etc.)

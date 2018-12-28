@@ -61,7 +61,7 @@ char nowdb_expr_compare(nowdb_expr_t expr);
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t        etype; /* expression type         */
+	uint32_t        etype; /* expression type (field) */
 	nowdb_target_t target; /* vertex or edge?         */
 	int               off; /* offset into data source */
 	nowdb_type_t     type; /* Type of field           */
@@ -97,7 +97,7 @@ void nowdb_expr_usekey(nowdb_expr_t expr);
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t       etype; /* expression type         */
+	uint32_t       etype; /* expression type (const) */
 	void          *value; /* the value               */
 	void          *valbk; /* backup                  */
 	ts_algo_tree_t *tree; /* tree for 'in'           */
@@ -116,14 +116,14 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t       etype;  /* expression type             */
-	uint32_t         fun;  /* Operator type (+,-,*,/,...) */
-	uint32_t        args;  /* Number of operands          */
-	nowdb_expr_t   *argv;  /* Operands                    */
-	nowdb_type_t  *types;  /* types of the arg results    */
-	void       **results;  /* arg results                 */
-	nowdb_value_t    res;  /* result                      */
-	                       /* text????                    */
+	uint32_t       etype;  /* expression type (op)                  */
+	uint32_t         fun;  /* Operator type (+,-,*,/,...)           */
+	uint32_t        args;  /* Number of operands                    */
+	nowdb_expr_t   *argv;  /* Operands                              */
+	nowdb_type_t  *types;  /* types of the arg results              */
+	void       **results;  /* pointers to arg results               */
+	nowdb_value_t    res;  /* result holds a value or a pointer     */
+	char           *text;  /* when op result is a text manipulation */
 } nowdb_op_t;
 
 /* ------------------------------------------------------------------------
@@ -138,8 +138,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t    etype; /* expression type     */
-	nowdb_expr_t  ref; /* from where it comes */
+	uint32_t    etype; /* expression type (ref) */
+	nowdb_expr_t  ref; /* from where it comes   */
 } nowdb_ref_t;
 
 /* ------------------------------------------------------------------------
@@ -160,8 +160,8 @@ typedef struct nowdb_fun_t* nowdb_aggfun_t;
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t  etype;    /* expression type     */
-	nowdb_aggfun_t agg; /* from where it comes */
+	uint32_t  etype;    /* expression type (agg) */
+	nowdb_aggfun_t agg; /* from where it comes   */
 } nowdb_agg_t;
 
 /* ------------------------------------------------------------------------
@@ -445,21 +445,24 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
  * Logic
  * -----------------------------------------------------------------------
  */
-#define NOWDB_EXPR_OP_EQ  101
-#define NOWDB_EXPR_OP_NE  102
-#define NOWDB_EXPR_OP_LT  103
-#define NOWDB_EXPR_OP_GT  104
-#define NOWDB_EXPR_OP_LE  105
-#define NOWDB_EXPR_OP_GE  106
-#define NOWDB_EXPR_OP_IN  107
-#define NOWDB_EXPR_OP_IS  108
-#define NOWDB_EXPR_OP_ISN 109
-#define NOWDB_EXPR_OP_TRUE 150
+#define NOWDB_EXPR_OP_EQ    101
+#define NOWDB_EXPR_OP_NE    102
+#define NOWDB_EXPR_OP_LT    103
+#define NOWDB_EXPR_OP_GT    104
+#define NOWDB_EXPR_OP_LE    105
+#define NOWDB_EXPR_OP_GE    106
+#define NOWDB_EXPR_OP_IN    107
+#define NOWDB_EXPR_OP_IS    108
+#define NOWDB_EXPR_OP_ISN   109
+#define NOWDB_EXPR_OP_COAL  111
+#define NOWDB_EXPR_OP_TRUE  150
 #define NOWDB_EXPR_OP_FALSE 151
-#define NOWDB_EXPR_OP_NOT 152
-#define NOWDB_EXPR_OP_JUST 153
-#define NOWDB_EXPR_OP_AND 154
-#define NOWDB_EXPR_OP_OR  155
+#define NOWDB_EXPR_OP_NOT   152
+#define NOWDB_EXPR_OP_JUST  153
+#define NOWDB_EXPR_OP_AND   154
+#define NOWDB_EXPR_OP_OR    155
+#define NOWDB_EXPR_OP_WHEN  157
+#define NOWDB_EXPR_OP_ELSE  158
 
 /* -----------------------------------------------------------------------
  * TIME
@@ -486,6 +489,11 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 
 /* -----------------------------------------------------------------------
  * Bitwise
+ * -----------------------------------------------------------------------
+ */
+
+/* -----------------------------------------------------------------------
+ * Geo
  * -----------------------------------------------------------------------
  */
 

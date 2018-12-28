@@ -87,8 +87,8 @@
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
 
-%type wexpr {nowdb_ast_t*}
-%destructor wexpr {nowdb_ast_destroyAndFree($$);}
+%type case {nowdb_ast_t*}
+%destructor case {nowdb_ast_destroyAndFree($$);}
 
 %type sizing {nowdb_ast_t*}
 %destructor sizing {nowdb_ast_destroyAndFree($$);}
@@ -829,6 +829,47 @@ expr(E) ::= expr(N) IN(OP) LPAR val_list(V) RPAR. {
 	NOWDB_SQL_ADDPARAM(E,V);
 }
 
+expr(E) ::= CASE case(C) END. {
+	E=C;
+}
+
+case(C) ::= WHEN(OP) expr(E1) THEN expr(E2). {
+	NOWDB_SQL_CHECKSTATE()
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(C,E1);
+	NOWDB_SQL_ADDPARAM(C,E2);
+	nowdb_ast_t *C2;
+	nowdb_ast_t *E3;
+	NOWDB_SQL_CREATEAST(&C2, NOWDB_AST_OP, 1);
+	nowdb_ast_setValue(C2, NOWDB_AST_V_STRING, strdup("ELSE"));
+	NOWDB_SQL_CREATEAST(&E3, NOWDB_AST_VALUE, NOWDB_AST_NULL);
+	NOWDB_SQL_ADDPARAM(C2,E3);
+	NOWDB_SQL_ADDPARAM(C,C2);
+}
+
+case(C) ::= WHEN(OP) expr(E1) THEN expr(E2) case(C2). {
+	NOWDB_SQL_CHECKSTATE()
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_OP, 3);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, OP);
+	NOWDB_SQL_ADDPARAM(C,E1);
+	NOWDB_SQL_ADDPARAM(C,E2);
+	NOWDB_SQL_ADDPARAM(C,C2);
+} 
+
+case(C) ::= WHEN(O1) expr(E1) THEN expr(E2) ELSE(O2) expr(E3). {
+	NOWDB_SQL_CHECKSTATE()
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_OP, 2);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, O1);
+	NOWDB_SQL_ADDPARAM(C,E1);
+	NOWDB_SQL_ADDPARAM(C,E2);
+	nowdb_ast_t *C2;
+	NOWDB_SQL_CREATEAST(&C2, NOWDB_AST_OP, 1);
+	nowdb_ast_setValue(C2, NOWDB_AST_V_STRING, O2);
+	NOWDB_SQL_ADDPARAM(C2,E3);
+	NOWDB_SQL_ADDPARAM(C,C2);
+}
+
 expr(P) ::= fun(F). {
 	P=F;
 }
@@ -892,7 +933,7 @@ table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * where clause and wexpr
+ * where clause and expr
  * ------------------------------------------------------------------------
  */
 where_clause(W) ::= WHERE expr(E). {

@@ -223,18 +223,20 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	nowdb_reader_t *range;
 
 	err = getPending(&cur->stf.files, &cur->stf.pending);
-	if (err != NOWDB_OK) {
-		return err;
-	}
+	if (err != NOWDB_OK) return err;
 
 	if (pidx == NULL) {
+		ts_algo_list_destroy(&cur->stf.pending);
 		INVALIDPLAN("no index for merge scan");
 	}
 
 	err = getRange(cur->filter, pidx,
 	              &cur->fromkey,
 	              &cur->tokey);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&cur->stf.pending);
+		return err;
+	}
 	
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
@@ -256,7 +258,10 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "KRANGE or CRANGE");
 	}
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&cur->stf.pending);
+		return err;
+	}
 
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
@@ -270,6 +275,7 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		if (range->ikeys != NULL) {
 			cur->tmp = calloc(1, cur->recsz);
 			if (cur->tmp == NULL) {
+				ts_algo_list_destroy(&cur->stf.pending);
 				NOMEM("allocating temporary buffer");
 				nowdb_reader_destroy(buf);
 				nowdb_reader_destroy(range);
@@ -280,16 +286,19 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 
 	case NOWDB_PLAN_CRANGE_:
 	default:
+		ts_algo_list_destroy(&cur->stf.pending);
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 		                                    "KRANGE or CRANGE");
 	}
 	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&cur->stf.pending);
 		nowdb_reader_destroy(buf);
 		return err;
 	}
 
 	err = nowdb_reader_merge(&cur->rdr, 2, range, buf);
 	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(&cur->stf.pending);
 		nowdb_reader_destroy(buf);
 		nowdb_reader_destroy(range);
 		return err;
@@ -838,7 +847,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 				nowdb_err_release(err);
 				err = NOWDB_OK;
 				if (cnt == 0) break;
-			} else break;
+			} else goto cleanup;
 		}
 		for(int i=0; i<osz; i+=cur->recsz) {
 			uint64_t *vid;
@@ -940,6 +949,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	} 
 
 	(*cur)->model = scope->model;
+	(*cur)->filter = NULL;
 	(*cur)->rdr = NULL;
 	(*cur)->tmp = NULL;
 	(*cur)->row   = NULL;
