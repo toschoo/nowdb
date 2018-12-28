@@ -2368,6 +2368,7 @@ and that are before May, hence:
 \end{verbatim}
 \end{minipage}
 
+\ignore{
 \subsection{While Clause}
 The \term{while} clause implements a common requirement
 in graph databases, namely to follow a link recursively.
@@ -2405,6 +2406,7 @@ how to avoid the combinatorial explosion after some,
 in fact very few, iterations?
 More efficient for such cases is probably just to loop
 through all edges.
+}
 }
 
 \subsection{Group Clause}\label{sec_group}
@@ -2641,6 +2643,9 @@ micro-period, that is fast and does not impact latency.
 The whole query may be slow, but there are always
 data for the caller to make progress.
 }
+
+\subsection{Limit and Sample Clause}
+\comment{not yet available}
 
 \section{Miscellaneous}
 \subsection{Use}
