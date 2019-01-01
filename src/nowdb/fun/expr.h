@@ -99,7 +99,6 @@ void nowdb_expr_usekey(nowdb_expr_t expr);
 typedef struct {
 	uint32_t       etype; /* expression type (const) */
 	void          *value; /* the value               */
-	void          *valbk; /* backup                  */
 	ts_algo_tree_t *tree; /* tree for 'in'           */
 	nowdb_type_t    type; /* and its type            */
 } nowdb_const_t;
