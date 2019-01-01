@@ -2271,7 +2271,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			if (types[1] != NOWDB_TYP_TEXT) {
-				INVALIDTYPE("not a time value");
+				INVALIDTYPE("not a text value");
 			}
 			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
