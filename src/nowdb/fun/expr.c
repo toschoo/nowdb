@@ -286,7 +286,6 @@ static inline nowdb_err_t initConst(nowdb_expr_t *expr,
 	CONST(*expr)->etype = NOWDB_EXPR_CONST;
 	CONST(*expr)->type  = type;
 	CONST(*expr)->value = NULL;
-	CONST(*expr)->valbk = NULL;
 	CONST(*expr)->tree  = NULL;
 
 	return NOWDB_OK;
@@ -320,14 +319,7 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 			free(*expr); *expr = NULL;
 			return err;
 		}
-		CONST(*expr)->valbk = malloc(sz);
-		if (CONST(*expr)->valbk == NULL) {
-			NOMEM("allocating value");
-			free(*expr); *expr = NULL;
-			return err;
-		}
 		memcpy(CONST(*expr)->value, value, sz);
-		memcpy(CONST(*expr)->valbk, value, sz);
 	}
 	return NOWDB_OK;
 }
@@ -597,9 +589,6 @@ static void destroyField(nowdb_field_t *field) {
 static void destroyConst(nowdb_const_t *cst) {
 	if (cst->value != NULL) {
 		free(cst->value); cst->value = NULL;
-	}
-	if (cst->valbk != NULL) {
-		free(cst->valbk); cst->valbk = NULL;
 	}
 	if (cst->tree != NULL) {
 		ts_algo_tree_destroy(cst->tree);
@@ -1447,16 +1436,8 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
                                     void         **res) {
 	*typ = cst->type;
 	if (cst->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
-	if (cst->value != NULL) {
-		if (cst->type == NOWDB_TYP_SHORT) {
-			memcpy(cst->value, cst->valbk, 4);
-		} else if (cst->type != NOWDB_TYP_TEXT) {
-			memcpy(cst->value, cst->valbk, 8);
-		}
-		*res = cst->value;
-		return NOWDB_OK;
-	}
-	if (cst->tree != NULL) *res = cst->tree;
+	if (cst->value != NULL) *res = cst->value;
+	else if (cst->tree != NULL) *res = cst->tree;
 	return NOWDB_OK;
 }
 
@@ -2290,7 +2271,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			if (types[1] != NOWDB_TYP_TEXT) {
-				INVALIDTYPE("not a time value");
+				INVALIDTYPE("not a text value");
 			}
 			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
@@ -2540,6 +2521,9 @@ static inline void enforceType(nowdb_op_t *op,
 			TOFLOAT(op->types[i], op->results[i],
 			                      op->results[i]);
 			op->types[i] = t;
+			if (EXPR(op->argv[i])->etype == NOWDB_EXPR_CONST) {
+				CONST(op->argv[i])->type = t;
+			}
 			break;
 
 		case NOWDB_TYP_INT:
@@ -2548,6 +2532,9 @@ static inline void enforceType(nowdb_op_t *op,
 			TOINT(op->types[i], op->results[i],
 			                    op->results[i]);
 			op->types[i] = t;
+			if (EXPR(op->argv[i])->etype == NOWDB_EXPR_CONST) {
+				CONST(op->argv[i])->type = t;
+			}
 			break;
 
 		default: return;
