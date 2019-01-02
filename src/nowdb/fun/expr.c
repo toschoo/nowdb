@@ -286,7 +286,6 @@ static inline nowdb_err_t initConst(nowdb_expr_t *expr,
 	CONST(*expr)->etype = NOWDB_EXPR_CONST;
 	CONST(*expr)->type  = type;
 	CONST(*expr)->value = NULL;
-	CONST(*expr)->valbk = NULL;
 	CONST(*expr)->tree  = NULL;
 
 	return NOWDB_OK;
@@ -320,14 +319,7 @@ nowdb_err_t nowdb_expr_newConstant(nowdb_expr_t *expr,
 			free(*expr); *expr = NULL;
 			return err;
 		}
-		CONST(*expr)->valbk = malloc(sz);
-		if (CONST(*expr)->valbk == NULL) {
-			NOMEM("allocating value");
-			free(*expr); *expr = NULL;
-			return err;
-		}
 		memcpy(CONST(*expr)->value, value, sz);
-		memcpy(CONST(*expr)->valbk, value, sz);
 	}
 	return NOWDB_OK;
 }
@@ -597,9 +589,6 @@ static void destroyField(nowdb_field_t *field) {
 static void destroyConst(nowdb_const_t *cst) {
 	if (cst->value != NULL) {
 		free(cst->value); cst->value = NULL;
-	}
-	if (cst->valbk != NULL) {
-		free(cst->valbk); cst->valbk = NULL;
 	}
 	if (cst->tree != NULL) {
 		ts_algo_tree_destroy(cst->tree);
@@ -1447,16 +1436,8 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
                                     void         **res) {
 	*typ = cst->type;
 	if (cst->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
-	if (cst->value != NULL) {
-		if (cst->type == NOWDB_TYP_SHORT) {
-			memcpy(cst->value, cst->valbk, 4);
-		} else if (cst->type != NOWDB_TYP_TEXT) {
-			memcpy(cst->value, cst->valbk, 8);
-		}
-		*res = cst->value;
-		return NOWDB_OK;
-	}
-	if (cst->tree != NULL) *res = cst->tree;
+	if (cst->value != NULL) *res = cst->value;
+	else if (cst->tree != NULL) *res = cst->tree;
 	return NOWDB_OK;
 }
 
@@ -1833,6 +1814,22 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_FLOOR: return showargs(op, "floor", stream);
 	case NOWDB_EXPR_OP_ROUND: return showargs(op, "round", stream);
 
+	case NOWDB_EXPR_OP_SIN: return showargs(op, "sin", stream);
+	case NOWDB_EXPR_OP_COS: return showargs(op, "cos", stream);
+	case NOWDB_EXPR_OP_TAN: return showargs(op, "tan", stream);
+	case NOWDB_EXPR_OP_ASIN: return showargs(op, "asin", stream);
+	case NOWDB_EXPR_OP_ACOS: return showargs(op, "acos", stream);
+	case NOWDB_EXPR_OP_ATAN: return showargs(op, "atan", stream);
+	case NOWDB_EXPR_OP_SINH: return showargs(op, "sinh", stream);
+	case NOWDB_EXPR_OP_COSH: return showargs(op, "cosh", stream);
+	case NOWDB_EXPR_OP_TANH: return showargs(op, "tanh", stream);
+	case NOWDB_EXPR_OP_ASINH: return showargs(op, "asinh", stream);
+	case NOWDB_EXPR_OP_ACOSH: return showargs(op, "acosh", stream);
+	case NOWDB_EXPR_OP_ATANH: return showargs(op, "atanh", stream);
+
+	case NOWDB_EXPR_OP_PI: return showargs(op, "pi", stream);
+	case NOWDB_EXPR_OP_E: return showargs(op, "e", stream);
+
 	case NOWDB_EXPR_OP_YEAR: return showargs(op, "year", stream);
 	case NOWDB_EXPR_OP_MONTH: return showargs(op, "month", stream);
 	case NOWDB_EXPR_OP_MDAY: return showargs(op, "mday", stream);
@@ -1943,6 +1940,42 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
 
 #define ABS(v0,v1) \
 	v0 = fabs(v1);
+
+#define SIN(v0,v1) \
+	v0 = sin(v1);
+
+#define COS(v0,v1) \
+	v0 = cos(v1);
+
+#define TAN(v0,v1) \
+	v0 = tan(v1);
+
+#define ASIN(v0,v1) \
+	v0 = asin(v1);
+
+#define ACOS(v0,v1) \
+	v0 = acos(v1);
+
+#define ATAN(v0,v1) \
+	v0 = atan(v1);
+
+#define SINH(v0,v1) \
+	v0 = sinh(v1);
+
+#define COSH(v0,v1) \
+	v0 = cosh(v1);
+
+#define TANH(v0,v1) \
+	v0 = tanh(v1);
+
+#define ASINH(v0,v1) \
+	v0 = asinh(v1);
+
+#define ACOSH(v0,v1) \
+	v0 = acosh(v1);
+
+#define ATANH(v0,v1) \
+	v0 = atanh(v1);
 
 #define MOV(r1,r2) \
 	memcpy(r1, r2, 8);
@@ -2277,7 +2310,25 @@ static nowdb_err_t evalFun(uint32_t       fun,
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
 	case NOWDB_EXPR_OP_LOG: PERFM1(LOG);
+	case NOWDB_EXPR_OP_SIN: PERFM1(SIN);
+	case NOWDB_EXPR_OP_COS: PERFM1(COS);
+	case NOWDB_EXPR_OP_TAN: PERFM1(TAN);
+	case NOWDB_EXPR_OP_ASIN: PERFM1(ASIN);
+	case NOWDB_EXPR_OP_ACOS: PERFM1(ACOS);
+	case NOWDB_EXPR_OP_ATAN: PERFM1(ATAN);
+	case NOWDB_EXPR_OP_SINH: PERFM1(SINH);
+	case NOWDB_EXPR_OP_COSH: PERFM1(COSH);
+	case NOWDB_EXPR_OP_TANH: PERFM1(TANH);
+	case NOWDB_EXPR_OP_ASINH: PERFM1(ASINH);
+	case NOWDB_EXPR_OP_ACOSH: PERFM1(ACOSH);
+	case NOWDB_EXPR_OP_ATANH: PERFM1(ATANH);
 
+	case NOWDB_EXPR_OP_PI:
+		*(double*)res = M_PI; return NOWDB_OK;
+
+	case NOWDB_EXPR_OP_E:
+		*(double*)res = M_E; return NOWDB_OK;
+		
 	case NOWDB_EXPR_OP_CEIL: PERFM1(CEIL);
 	case NOWDB_EXPR_OP_FLOOR: PERFM1(FLOOR);
 	case NOWDB_EXPR_OP_ROUND: PERFM1(ROUND);
@@ -2290,7 +2341,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_EQ:
 		if (types[0] == NOWDB_TYP_TEXT) {
 			if (types[1] != NOWDB_TYP_TEXT) {
-				INVALIDTYPE("not a time value");
+				INVALIDTYPE("not a text value");
 			}
 			// fprintf(stderr, "comparing text\n");
 			PERFSTR(SEQ);
@@ -2465,7 +2516,22 @@ static inline int getArgs(int o) {
 	case NOWDB_EXPR_OP_ABS:
 	case NOWDB_EXPR_OP_CEIL:
 	case NOWDB_EXPR_OP_FLOOR:
-	case NOWDB_EXPR_OP_ROUND: return 1;
+	case NOWDB_EXPR_OP_ROUND:
+	case NOWDB_EXPR_OP_SIN: 
+	case NOWDB_EXPR_OP_COS: 
+	case NOWDB_EXPR_OP_TAN:
+	case NOWDB_EXPR_OP_ASIN: 
+	case NOWDB_EXPR_OP_ACOS: 
+	case NOWDB_EXPR_OP_ATAN:
+	case NOWDB_EXPR_OP_SINH: 
+	case NOWDB_EXPR_OP_COSH: 
+	case NOWDB_EXPR_OP_TANH:
+	case NOWDB_EXPR_OP_ASINH: 
+	case NOWDB_EXPR_OP_ACOSH: 
+	case NOWDB_EXPR_OP_ATANH: return 1;
+
+	case NOWDB_EXPR_OP_PI:
+	case NOWDB_EXPR_OP_E: return 0;
 
 	case NOWDB_EXPR_OP_YEAR:
 	case NOWDB_EXPR_OP_MONTH:
@@ -2540,6 +2606,9 @@ static inline void enforceType(nowdb_op_t *op,
 			TOFLOAT(op->types[i], op->results[i],
 			                      op->results[i]);
 			op->types[i] = t;
+			if (EXPR(op->argv[i])->etype == NOWDB_EXPR_CONST) {
+				CONST(op->argv[i])->type = t;
+			}
 			break;
 
 		case NOWDB_TYP_INT:
@@ -2548,6 +2617,9 @@ static inline void enforceType(nowdb_op_t *op,
 			TOINT(op->types[i], op->results[i],
 			                    op->results[i]);
 			op->types[i] = t;
+			if (EXPR(op->argv[i])->etype == NOWDB_EXPR_CONST) {
+				CONST(op->argv[i])->type = t;
+			}
 			break;
 
 		default: return;
@@ -2653,11 +2725,26 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 	case NOWDB_EXPR_OP_CEIL:
 	case NOWDB_EXPR_OP_FLOOR:
 	case NOWDB_EXPR_OP_ROUND:
+	case NOWDB_EXPR_OP_SIN:
+	case NOWDB_EXPR_OP_COS:
+	case NOWDB_EXPR_OP_TAN:
+	case NOWDB_EXPR_OP_ASIN:
+	case NOWDB_EXPR_OP_ACOS:
+	case NOWDB_EXPR_OP_ATAN:
+	case NOWDB_EXPR_OP_SINH:
+	case NOWDB_EXPR_OP_COSH:
+	case NOWDB_EXPR_OP_TANH:
+	case NOWDB_EXPR_OP_ASINH:
+	case NOWDB_EXPR_OP_ACOSH:
+	case NOWDB_EXPR_OP_ATANH:
 		if (guess) return NOWDB_TYP_FLOAT; 
 		if (op->types[0] != NOWDB_TYP_FLOAT) {
 			enforceType(op, NOWDB_TYP_FLOAT);
 		}
 		return NOWDB_TYP_FLOAT;
+
+	case NOWDB_EXPR_OP_PI:
+	case NOWDB_EXPR_OP_E: return NOWDB_TYP_FLOAT;
 
 	// test that all types are time or int
 	case NOWDB_EXPR_OP_YEAR:
@@ -2744,6 +2831,40 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "ceil") == 0) return NOWDB_EXPR_OP_CEIL;
 	if (strcasecmp(op, "floor") == 0) return NOWDB_EXPR_OP_FLOOR;
 	if (strcasecmp(op, "round") == 0) return NOWDB_EXPR_OP_ROUND;
+
+	if (strcasecmp(op, "sin") == 0) return NOWDB_EXPR_OP_SIN;
+	if (strcasecmp(op, "sine") == 0) return NOWDB_EXPR_OP_SIN;
+	if (strcasecmp(op, "cos") == 0) return NOWDB_EXPR_OP_COS;
+	if (strcasecmp(op, "cosine") == 0) return NOWDB_EXPR_OP_COS;
+	if (strcasecmp(op, "tan") == 0) return NOWDB_EXPR_OP_TAN;
+	if (strcasecmp(op, "tang") == 0) return NOWDB_EXPR_OP_TAN;
+	if (strcasecmp(op, "tangent") == 0) return NOWDB_EXPR_OP_TAN;
+	if (strcasecmp(op, "asin") == 0) return NOWDB_EXPR_OP_ASIN;
+	if (strcasecmp(op, "asine") == 0) return NOWDB_EXPR_OP_ASIN;
+	if (strcasecmp(op, "arcsine") == 0) return NOWDB_EXPR_OP_ASIN;
+	if (strcasecmp(op, "arcsin") == 0) return NOWDB_EXPR_OP_ASIN;
+	if (strcasecmp(op, "acos") == 0) return NOWDB_EXPR_OP_ACOS;
+	if (strcasecmp(op, "acosine") == 0) return NOWDB_EXPR_OP_ACOS;
+	if (strcasecmp(op, "arccos") == 0) return NOWDB_EXPR_OP_ACOS;
+	if (strcasecmp(op, "arccosine") == 0) return NOWDB_EXPR_OP_ACOS;
+	if (strcasecmp(op, "atan") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "atang") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "atangent") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "arctan") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "arctang") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "arctangent") == 0) return NOWDB_EXPR_OP_ATAN;
+	if (strcasecmp(op, "sinh") == 0) return NOWDB_EXPR_OP_SINH;
+	if (strcasecmp(op, "cosh") == 0) return NOWDB_EXPR_OP_COSH;
+	if (strcasecmp(op, "tanh") == 0) return NOWDB_EXPR_OP_TANH;
+	if (strcasecmp(op, "asinh") == 0) return NOWDB_EXPR_OP_ASINH;
+	if (strcasecmp(op, "arcsinh") == 0) return NOWDB_EXPR_OP_ASINH;
+	if (strcasecmp(op, "acosh") == 0) return NOWDB_EXPR_OP_ACOSH;
+	if (strcasecmp(op, "arccosh") == 0) return NOWDB_EXPR_OP_ACOSH;
+	if (strcasecmp(op, "atanh") == 0) return NOWDB_EXPR_OP_ATANH;
+	if (strcasecmp(op, "arctanh") == 0) return NOWDB_EXPR_OP_ATANH;
+
+	if (strcasecmp(op, "pi") == 0) return NOWDB_EXPR_OP_PI;
+	if (strcasecmp(op, "e") == 0) return NOWDB_EXPR_OP_E;
 
 	if (strcasecmp(op, "tofloat") == 0) return NOWDB_EXPR_OP_FLOAT;
 	if (strcasecmp(op, "toint") == 0) return NOWDB_EXPR_OP_INT;

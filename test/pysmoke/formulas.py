@@ -502,6 +502,37 @@ def fibonacci(c,one,two,x):
         if n != 1:
            raise db.TestFailed("wrong number of rows: %d" % (n))
 
+
+def pipitest(c):
+
+    print "RUNNING TEST 'pipitest'"
+
+    stmt = "select pi() from product"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n==0:
+               print "%.9f" % row.field(0)
+               n+=1
+            if row.field(0) > math.pi + 0.00000001 or \
+               row.field(0) < math.pi - 0.00000001:
+                   raise db.TestFailed("this is not pi: %f" % (row.field(0)))
+
+    stmt = "select e() from product"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        n=0
+        for row in cur:
+            if n == 0:
+               print "%.9f" % row.field(0)
+               n+=1
+            if row.field(0) > math.e + 0.00000001 or \
+               row.field(0) < math.e - 0.00000001:
+                   raise db.TestFailed("this is not e: %f" % (row.field(0)))
+
 def fibotest(c,x):
 
     print "RUNNING TEST 'fibonacci %d'" % x
@@ -575,6 +606,172 @@ def constvalues(c):
                raise db.TestFailed("wrong value False: %s" % (row.field(0)))
         if n != 1:
            raise db.TestFailed("wrong number of rows: %d" % (n))
+
+# test trigonometry functions
+def trigofun(c):
+
+    print "RUNNING TEST 'trigofun'"
+
+    idx = random.randint(1,len(ps)-1)
+    k = ps[idx].key
+
+    # -- sine
+    stmt = "select sin(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.sin(ps[idx].price)
+            print "sine: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("sine confusion: %f != %f" % (row.field(0), s))
+
+    # -- arcsine
+    stmt = "select asin(sin(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.asin(math.sin(ps[idx].price))
+            print "asine: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("asine confusion: %f != %f" % (row.field(0), s))
+
+    # -- cosine
+    stmt = "select cos(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.cos(ps[idx].price)
+            print "cosine: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("cosine confusion: %f != %f" % (row.field(0), s))
+
+    # -- arccosine
+    stmt = "select acos(cos(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.acos(math.cos(ps[idx].price))
+            print "acosine: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("acosine confusion: %f != %f" % (row.field(0), s))
+
+    # -- tangent
+    stmt = "select tan(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.tan(ps[idx].price)
+            print "studio tan: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("tangent confusion: %f != %f" % (row.field(0), s))
+
+    # -- arctangent
+    stmt = "select atan(tan(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.atan(math.tan(ps[idx].price))
+            print "atan: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("atan confusion: %f != %f" % (row.field(0), s))
+
+    # -- sineh
+    stmt = "select sinh(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.sinh(ps[idx].price)
+            print "sineh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("sineh confusion: %f != %f" % (row.field(0), s))
+
+    # -- arcsineh
+    stmt = "select asinh(sinh(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.asinh(math.sinh(ps[idx].price))
+            print "asineh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("asineh confusion: %f != %f" % (row.field(0), s))
+
+    # -- cosineh
+    stmt = "select cosh(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.cosh(ps[idx].price)
+            print "cosineh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("cosineh confusion: %f != %f" % (row.field(0), s))
+
+    # -- arccosineh
+    stmt = "select acosh(cosh(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.acosh(math.cosh(ps[idx].price))
+            print "acosineh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("acosineh confusion: %f != %f" % (row.field(0), s))
+
+    # -- tangenth
+    stmt = "select tanh(prod_price) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            s = math.tanh(ps[idx].price)
+            print "tanh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("tangenth confusion: %f != %f" % (row.field(0), s))
+
+    # -- arctangent
+    stmt = "select atanh(tanh(prod_price)) \
+              from product where prod_key = %d" % k
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
+        for row in cur:
+            if row.field(0) >= 1.0:
+                continue
+            s = math.atanh(math.tanh(ps[idx].price))
+            print "atanh: %f %f" % (s, row.field(0))
+            if row.field(0) + 0.0001 < s or \
+               row.field(0) - 0.0001 > s:
+               raise db.TestFailed("atanh confusion: %f != %f" % (row.field(0), s))
 
 # test time functions
 def timefun(c):
@@ -1015,12 +1212,14 @@ if __name__ == "__main__":
 
         constvalues(c)
         timefun(c)
+        pipitest(c)
 
         for i in range(IT):
             simplevrtx(c)
             simpleedge(c)
             punktvorstrich(c)
             casefun(c)
+            trigofun(c)
 
         fibotest(c,20)
 

@@ -207,6 +207,22 @@ represents an integer.
 
 The static types are
 
+\ignore{
+\bgroup
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\begin{tabular}{||c||c||c||c||c||}\hline
+Type & Declaration & Range & Constructor & Examples \\\hline\hline
+Integer & $int$, $integer$ & $-2^{63} \dots 2^{63}-1$ & $\pm n$ & $-1, +0, +1$\\
+        & &                & where $n$ is an unsigned ingeger & \\\cline{1-5}
+Unsigned Integer & $uint$, $uinteger$ & $0 \dots 2^{64}-1$ & One digit $(0\dots 9)$ & $0, 1,2, 1024$\\
+        & &                & or one digit $(1\dots 9)$ & but not: $01$\\
+        & &                & followed by a sequence of digits ($0\dots9$). & \\\cline{1-5}
+\end{tabular}
+\end{center}
+\egroup
+}
+
 \begin{minipage}{\textwidth}
 \textbf{Integer}\\
 Declaration: $int$, $integer$ \\
@@ -308,7 +324,6 @@ Note that it is not possible to compare any value to \acronym{null}
 using $= or \neq$. The special operator \keyword{is} must
 be used for that purpose, \eg\
 \keyword{where} \identifier{name} \keyword{is not null}.
-\comment{\acronym{null} is not yet implemented completely!}
 \end{minipage}
 
 \subsection{Dynamic Types}
@@ -607,6 +622,76 @@ $floor(n)$ returns either $n$ if $n$ is an integer
 or, otherwise, the previous integer, \ie\ it always rounds down;
 \eg: $floor(1.9)$ is 1.
 
+\subsubsection{Trigonometry}
+\nowdb\ provides the trigonometry functions
+\identifier{sin} ($sine$),
+\identifier{cos} ($cosine$) and
+\identifier{tan} ($tangent$)
+as well as their inverses
+\identifier{asin} ($arcsine$),
+\identifier{acos} ($arccosine$) and
+\identifier{atan} ($arctangent$) and
+the corresponding hyperbolic functions
+\identifier{sinh} ($hyperbolic\ sine$),
+\identifier{cosh} ($hyperbolic\ cosine$) and
+\identifier{tanh} ($hyperbolic\ tangent$)
+as well as their inverses
+\identifier{asinh} ($hyperbolic\ arcsine$),
+\identifier{acosh} ($hyperbolic\ arccosine$) and
+\identifier{atanh} ($hyperbolic\ arctangent$).
+
+Example:
+
+\keyword{select} \identifier{sin}(1)
+\keyword{from} \identifier{mytable}
+
+results in (approximately) 0.84147098.
+
+All these functions expect a \term{float} argument
+and also return a \term{float}.
+If the argument is of a numeric type other than \term{float},
+the argument is promoted to \term{float} if possible.
+The argument is expected to be in units of radians.
+
+The return value of the trigonometric functions
+\identifier{sin} and \identifier{cos} is in the range $-1\dots 1$.
+
+The tangent function has singularities at odd multiples of $\pi/2$.
+If the argument is too close to one of these singularities,
+the result is undefined.
+
+The inverse trigonometric functions
+\identifier{asin} and \identifier{acos}
+are defined over the domain $-1\dots 1$.
+For arguments outside of that domain,
+\identifier{asin} and \identifier{acos}
+return $NaN$ (\term{not a number}).
+The result of all inverse trigonometric functions
+is in the range $-\pi/2\dots\pi/2$.
+
+The hyperbolic function \identifier{acosh}
+is valid only for values $\ge 1$.
+For smaller values, \identifier{acosh} returns $NaN$.
+
+The hyperbolic function \identifier{atanh}
+is valid only for values $\le 1$.
+For 1, it returns $\infty$.
+For greater values, it returns $NaN$.
+
+\subsubsection{Mathematical Constants}
+\nowdb\ defines the mathematical constants
+$\pi$ and $e$ (the Euler-Napier number) as
+functions \identifier{pi} and, respectively, \identifier{e}.
+Both expect no arguments and return a float value.
+Example:
+
+\keyword{select} \identifier{pi}(), \identifier{e}()
+\keyword{from} \identifier{mytable}
+
+returns (approximately)
+3.1415926 and
+2.7182818.
+
 \subsubsection{Conversions}
 \nowdb\ provides explicit conversion functions
 between numerical types. The conversion functions
@@ -745,8 +830,8 @@ Special operators are
 \keyword{all}.
 
 \comment{
-\keyword{between} 
-and \keyword{having} 
+\keyword{between},
+\keyword{having}, 
 \keyword{exists},
 \keyword{any} and \keyword{all}
 are not yet available.}
@@ -757,6 +842,10 @@ to compare with the special value
 (which is $false$) 
 or 1 \keyword{is not null}
 (which is $true$).
+The expression
+$a$ \keyword{is not null} is
+equivalent to
+\keyword{not}($a$ \keyword{is null}).
 
 The operator \keyword{between} tests
 whether a value is in a range.
@@ -850,7 +939,7 @@ Note that the whole construct enclosed by
 the keywords \keyword{case} and \keyword{end}
 is an expression. \keyword{when}, \keyword{then}
 and \keyword{else} alone do not form expressions;
-they can only be used with in a \keyword{case}.
+they can only be used within a \keyword{case}.
 
 A \keyword{case} expression consists of at least
 one \keyword{when}/\keyword{then} construct.
@@ -915,7 +1004,7 @@ like in the following case
 \hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
 \hspace*{2cm}\keyword{end}
 
-This is of significant importance in the \keyword{where} clause.
+This is of importance in the \keyword{where} clause.
 When a \keyword{case} expression is used in a \keyword{where}
 like this:
 
@@ -927,10 +1016,12 @@ must evaluate to a boolean. Otherwise the effect of
 the \keyword{where} clause is undefined.
 
 \paragraph{Coalesce}
-\identifier{Coalesce} is a function that accepts a list of expressions
-as its argument. \identifier{Coalesce} evaluates to
-the first value in the list that is \keyword{not null}.
-If none of the values in the list is \keyword{not null},
+\identifier{Coalesce} is a function that accepts
+an unspecified number arguments.
+\identifier{Coalesce} evaluates to
+the first argument that itself
+does not evaluate to \keyword{not null}.
+If none of the arguments is \keyword{not null},
 \identifier{coalesce} evaluates to \keyword{null}.
 Example:
 
@@ -941,8 +1032,9 @@ If the field \identifier{category} is \keyword{null},
 otherwise, it evaluates to the current
 value of \identifier{category}.
 
-The list may contain an undetermined number of values.
-For instance:
+Since \identifier{coalesce} accepts
+an undetermined number of argument,
+the following expression is legal:
 
 \identifier{coalesce}(\identifier{species},
                       \identifier{genus},
@@ -964,7 +1056,7 @@ By contrast, this statement always evaluates to 99:
 
 \identifier{coalesce}(\keyword{null}, 99)
 
-The values in the list may be of different types.
+The arguments may be of different types.
 But, again, care must be taken when using this feature.
 
 \subsubsection{Bitwise Operators}
@@ -2346,6 +2438,7 @@ and that are before May, hence:
 \end{verbatim}
 \end{minipage}
 
+\ignore{
 \subsection{While Clause}
 The \term{while} clause implements a common requirement
 in graph databases, namely to follow a link recursively.
@@ -2383,6 +2476,7 @@ how to avoid the combinatorial explosion after some,
 in fact very few, iterations?
 More efficient for such cases is probably just to loop
 through all edges.
+}
 }
 
 \subsection{Group Clause}\label{sec_group}
@@ -2619,6 +2713,9 @@ micro-period, that is fast and does not impact latency.
 The whole query may be slow, but there are always
 data for the caller to make progress.
 }
+
+\subsection{Limit and Sample Clause}
+\comment{not yet available}
 
 \section{Miscellaneous}
 \subsection{Use}

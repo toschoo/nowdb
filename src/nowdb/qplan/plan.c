@@ -863,7 +863,7 @@ static inline nowdb_err_t rebuildConst(nowdb_scope_t *scope,
 }
 
 /* -----------------------------------------------------------------------
- * Helper: optimise familiy triangle
+ * Helper: optimise family triangle
  * -----------------------------------------------------------------------
  */
 static inline nowdb_err_t textoptimise(nowdb_scope_t *scope,

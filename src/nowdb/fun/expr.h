@@ -99,7 +99,6 @@ void nowdb_expr_usekey(nowdb_expr_t expr);
 typedef struct {
 	uint32_t       etype; /* expression type (const) */
 	void          *value; /* the value               */
-	void          *valbk; /* backup                  */
 	ts_algo_tree_t *tree; /* tree for 'in'           */
 	nowdb_type_t    type; /* and its type            */
 } nowdb_const_t;
@@ -425,7 +424,7 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 #define NOWDB_EXPR_OP_TEXT  5
 
 /* -----------------------------------------------------------------------
- * Arithmetic
+ * Arithmetic and Trigonometry
  * -----------------------------------------------------------------------
  */
 #define NOWDB_EXPR_OP_ADD   10
@@ -440,6 +439,21 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 #define NOWDB_EXPR_OP_FLOOR 19
 #define NOWDB_EXPR_OP_ROUND 20
 #define NOWDB_EXPR_OP_ABS   21
+#define NOWDB_EXPR_OP_SIN   22
+#define NOWDB_EXPR_OP_COS   23
+#define NOWDB_EXPR_OP_TAN   24
+#define NOWDB_EXPR_OP_ASIN  25
+#define NOWDB_EXPR_OP_ACOS  26
+#define NOWDB_EXPR_OP_ATAN  27
+#define NOWDB_EXPR_OP_SINH  28
+#define NOWDB_EXPR_OP_COSH  29
+#define NOWDB_EXPR_OP_TANH  30
+#define NOWDB_EXPR_OP_ASINH 31
+#define NOWDB_EXPR_OP_ACOSH 32
+#define NOWDB_EXPR_OP_ATANH 33
+
+#define NOWDB_EXPR_OP_PI 314159265
+#define NOWDB_EXPR_OP_E  271828182
 
 /* -----------------------------------------------------------------------
  * Logic
