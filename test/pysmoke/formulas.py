@@ -765,6 +765,8 @@ def trigofun(c):
         if not cur.ok():
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
+            if row.field(0) >= 1.0:
+                continue
             s = math.atanh(math.tanh(ps[idx].price))
             print "atanh: %f %f" % (s, row.field(0))
             if row.field(0) + 0.0001 < s or \
