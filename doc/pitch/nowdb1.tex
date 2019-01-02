@@ -1,0 +1,219 @@
+\documentclass{beamer}
+%\usetheme{Bergen}
+%\usetheme{Copenhagen}
+% \usetheme{Darmstadt}
+% \usetheme{Frankfurt}
+%\usetheme{Luebeck}
+\usetheme{Madrid}
+\usecolortheme{beetle}
+%\usecolortheme{dove}
+%\usecolortheme{fly}
+%\usecolortheme{seagull}
+%\useinnertheme{rectangles}
+%\useinnertheme{circles}
+%\useinnertheme{inmargin}
+%\useinnertheme{rounded}
+\include{cmds}
+\title{What is \nowdb?}
+\author{Tobias Schoofs}
+\begin{document}
+
+% TITLE
+\frame{\titlepage}
+
+% OVERVIEW 
+\begin{frame}
+\frametitle{Overview}
+\begin{itemize}
+\item What?
+\item Why?
+\item How?
+\item Vision!
+\item Where are we now?
+\item Market?
+\item Why the funny name?
+\end{itemize}
+\end{frame}
+
+% WHAT
+\begin{frame}
+\frametitle{What?}
+\begin{equation}
+\nowdb = (graph +  timeseries + \acronym{sql}) \times (Python + Lua)
+\end{equation}
+\end{frame}
+
+% WHY TIMESERIES
+\begin{frame}[shrink]
+\frametitle{Why Timeseries?}
+\begin{itemize}
+\item Always more data are timeseries \emph{to some extent}\\
+      important driver: \acronym{i}o\acronym{t}\\
+      but also: ``traditional'' industries:
+      \begin{itemize} 
+      \item energy,
+      \item manufacturing
+      \item retail
+      \item \etc
+      \end{itemize}
+\item Avalailable timeseries databases are too narrow,\\
+      \ie\ \emph{pure} timeseries data.\\
+      There are projects trying to solve this issue,
+      \eg:
+      $Timescale = Postgres + Timeseries$ \\
+      $\dots$ but it's still a bit slow
+
+\item Timeseries data have special requirements:
+      \begin{itemize}
+      \item Fast ingestion ($> 1M/s$)
+      \item Scalability of queries ($> 1B metrics$)
+      \item Special handling of time dimension
+      \item Timeseries are less rigid
+            (time points may be lost or duplicated)
+      \end{itemize}
+\end{itemize}
+\end{frame}
+\begin{frame}
+
+% WHY GRAPH
+\frametitle{Why Graph?}
+\begin{itemize}
+\item The main point is:\\
+      Make timeseries \st{great again} more widely applicable!
+\item Natural candidates: Relational and Graph.
+\item Graph is more flexible:\\
+      one can add new edges without changing the structure of entities
+\item Graph is less rigid:\\
+      edges pointing to nowhere or\\
+            pointing to duplicated data are no issue
+\item Graph may be easier to grasp:\\
+      and this way reduce common errors in data modelling.\\
+      (This, however, is pure speculation on my side $\dots$)
+\end{itemize}
+\end{frame}
+
+% WHY SQL
+\begin{frame}
+\frametitle{Why \acronym{sql}?}
+\begin{itemize}
+\item \acronym{sql} is standard.
+\item \acronym{sql} is actively developed with new ideas flowing in.
+\item \acronym{sql} is known by virtually everybody in the industry.
+\item \acronym{sql} is easy to learn (even though tricky to master \dots)
+\item \acronym{sql} is designed for integration with other languages and tools.
+\item Thousands of tools support \acronym{sql}.
+\item \acronym{sql} is not bad anyway \dots
+\item Well \dots
+\item Next slide!
+\end{itemize}
+\end{frame}
+
+% Why Python?
+\begin{frame}[shrink]
+\frametitle{Why Python?}
+\includegraphics[width=0.3\linewidth]{pythonlogo.png}
+\begin{itemize}
+\item An important application domain for \nowdb\ is data science.
+\item There will be strong demand for tools, libraries, languages supporting
+\begin{itemize}
+\item Calculus
+\item Numerical analysis
+\item Function analysis and function plotting
+\item Linear Algebra (vectors, matrices, \etc)
+\item Graph(!)-oriented data structures
+\item Complex Analysis
+\item \dots
+\end{itemize}
+\item Millions of lines of source code implementing this kind of stuff
+      are available in (or through) Python
+\item Python is \textbf{the} data science language.\\
+      (There is also $R$, but $R$ has serious drawbacks
+       as general purpose language and for embedding in another system.)
+\item It is in particular interesting to have Python available
+      on server side.
+      This will reduce client/server round trips
+      and network traffic.
+\end{itemize}
+\end{frame}
+
+% Why Lua?
+\begin{frame}[shrink]
+\frametitle{Why Lua?}
+\begin{itemize}
+\item Unfortunately, nothing is perfect and also
+      Python has its drawbacks.
+\item The main issue (from our perspective) is
+      the design of the Python interpreter:
+      it does not allow running many interpreters ($=$sessions)
+      in parallel in one process ($=$\nowdb\ server).
+\item In consequence:
+      Python is not good for tasks that frequently run
+      in parallel.
+\item We therefore need a second language for more
+      down-to-earth, day-to-day \acronym{dba} jobs.
+\item Lua appears to be a good candidate because:
+\begin{itemize}
+\item Lua is well known in the data science community
+\item Lua already had its appearance on the database stage
+      (namely in the redis \term{in-memory} database.
+\item Lua is designed as configuration language
+      (\acronym{dba} jobs typically involve configuration work)
+\item Lua is designed for integration with the C language.
+\end{itemize}
+\end{itemize}
+\begin{flushright}
+\includegraphics[width=0.16\linewidth]{lualogo.png}
+\end{flushright}
+\end{frame}
+
+% HOW
+\ignore{
+datamodel example with
+simple edges:
+- product of category or
+- client has address
+timeseries edges:
+- client buys product
+on joins
+select client.buys.destin
+}
+\ignore{
+2 storage types
+1) tables for edges
+   optimised for fast ingestion
+   data packed to favour typical queries
+   special handling of time
+2) vertices
+   store vertex types
+   store consistent data (no duplicates)
+   optimised for large datatypes (many attributes)
+   with potentially many NULL values
+   "column-oriented"
+3 types of indices:
+1) for primary keys
+   - b-trees to store limited amount of data per key
+   - used mainly for vertices (store vids and page numbers)
+2) page indices ("secondary indices")
+   - store page numbers per key in a second-level b-tree
+   - for mass data per key (i.e. timeseries)
+3) labels
+   - store a known number of values per key
+   - used to quickly find related edges
+}
+\ignore{
+Python in the database...
+}
+% VISION
+\ignore{
+- data management platform scalable
+  to billions of metrics on one server
+- easy to handle for people with db experience
+- server- and client-side modules for data analysis
+- integrated with big-data tools for reliable ingestion
+  (e.g. Kafka)
+- integration with GUIs, e.g. Grafana
+}
+% WHERE ARE WE NOW 
+% MARKET
+% NORBERT WIENER
+\end{document}
