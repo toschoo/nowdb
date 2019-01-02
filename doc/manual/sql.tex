@@ -622,6 +622,76 @@ $floor(n)$ returns either $n$ if $n$ is an integer
 or, otherwise, the previous integer, \ie\ it always rounds down;
 \eg: $floor(1.9)$ is 1.
 
+\subsubsection{Trigonometry}
+\nowdb\ provides the trigonometry functions
+\identifier{sin} ($sine$),
+\identifier{cos} ($cosine$) and
+\identifier{tan} ($tangent$)
+as well as their inverses
+\identifier{asin} ($arcsine$),
+\identifier{acos} ($arccosine$) and
+\identifier{atan} ($arctangent$) and
+the corresponding hyperbolic functions
+\identifier{sinh} ($hyperbolic\ sine$),
+\identifier{cosh} ($hyperbolic\ cosine$) and
+\identifier{tanh} ($hyperbolic\ tangent$)
+as well as their inverses
+\identifier{asinh} ($hyperbolic\ arcsine$),
+\identifier{acosh} ($hyperbolic\ arccosine$) and
+\identifier{atanh} ($hyperbolic\ arctangent$).
+
+Example:
+
+\keyword{select} \identifier{sin}(1)
+\keyword{from} \identifier{mytable}
+
+results in (approximately) 0.84147098.
+
+All these functions expect a \term{float} argument
+and also return a \term{float}.
+If the argument is of a numeric type other than \term{float},
+the argument is promoted to \term{float} if possible.
+The argument is expected to be in units of radians.
+
+The return value of the trigonometric functions
+\identifier{sin} and \identifier{cos} is in the range $-1\dots 1$.
+
+The tangent function has singularities at odd multiples of $\pi/2$.
+If the argument is too close to one of these singularities,
+the result is undefined.
+
+The inverse trigonometric functions
+\identifier{asin} and \identifier{acos}
+are defined over the domain $-1\dots 1$.
+For arguments outside of that domain,
+\identifier{asin} and \identifier{acos}
+return $NaN$ (\term{not a number}).
+The result of all inverse trigonometric functions
+is in the range $-\pi/2\dots\pi/2$.
+
+The hyperbolic function \identifier{acosh}
+is valid only for values $\ge 1$.
+For smaller values, \identifier{acosh} returns $NaN$.
+
+The hyperbolic function \identifier{atanh}
+is valid only for values $\le 1$.
+For 1, it returns $\infty$.
+For greater values, it returns $NaN$.
+
+\subsubsection{Mathematical Constants}
+\nowdb\ defines the mathematical constants
+$\pi$ and $e$ (the Euler-Napier number) as
+functions \identifier{pi} and, respectively, \identifier{e}.
+Both expect no arguments and return a float value.
+Example:
+
+\keyword{select} \identifier{pi}(), \identifier{e}()
+\keyword{from} \identifier{mytable}
+
+returns (approximately)
+3.1415926 and
+2.7182818.
+
 \subsubsection{Conversions}
 \nowdb\ provides explicit conversion functions
 between numerical types. The conversion functions
