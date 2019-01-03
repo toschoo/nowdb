@@ -1,4 +1,4 @@
-\documentclass{beamer}
+\documentclass[mathserif]{beamer}
 \usepackage{algorithmic}
 %\usetheme{Bergen}
 %\usetheme{Copenhagen}
@@ -7,6 +7,7 @@
 %\usetheme{Luebeck}
 \usetheme{Madrid}
 \usecolortheme{beetle}
+%\usefonttheme{serif}
 %\usecolortheme{dove}
 %\usecolortheme{fly}
 %\usecolortheme{seagull}
@@ -32,46 +33,47 @@
 \item Vision!
 \item Market!
 \item Where are we now?
-\item Why the funny name?
+\item What means the funny name?
 \end{itemize}
 \end{frame}
 
 % WHAT
 \begin{frame}
 \frametitle{What?}
-\begin{equation}
+\begin{equation*}
 \nowdb = (graph +  timeseries + \acronym{sql}) \times (Python + Lua)
-\end{equation}
+\end{equation*}
 \end{frame}
 
 % WHY TIMESERIES
 \begin{frame}[shrink]
 \frametitle{Why Timeseries?}
 \begin{itemize}
-\item Always more data are timeseries \emph{to some extent}\\
-      important driver: \acronym{i}o\acronym{t}\\
-      but also: ``traditional'' industries:
+\item Growing amount of data that are timeseries \emph{to some extent}
+\item Important driver: \acronym{i}o\acronym{t}
+\item But also: ``traditional'' industries:
       \begin{itemize} 
-      \item energy,
-      \item manufacturing
-      \item retail
-      \item \etc
+      \item \acronym{it} infrastructure providers,
+      \item Energy,
+      \item Manufacturing (``Industry 4.0'')
+      \item Retail
+      \item \dots
       \end{itemize}
-\item Avalailable timeseries databases are too narrow,\\
-      \ie\ \emph{pure} timeseries data.\\
-      There are projects trying to solve this issue,
-      \eg:
-      $timescale = postgres + timeseries$ \\
-      $\dots$ but it's still a bit slow
-
 \item Timeseries data have special requirements:
       \begin{itemize}
       \item Fast ingestion ($> 1M/s$)
       \item Scalability of queries ($> 1B metrics$)
       \item Special handling of time dimension
-      \item Timeseries are less rigid
+      \item Timeseries are less rigid compared to relational data\\
             (time points may be lost or duplicated)
       \end{itemize}
+\item Avalailable timeseries databases
+     (\eg\ \acronym{i}nflux\acronym{db}, \acronym{o}pen\acronym{tsdb}) are too narrow, 
+      \ie\ \emph{pure} timeseries.
+\item There are projects trying to solve this issue,
+      \eg: \[
+      timescale = postgres + timeseries\]
+      $\dots$ but it's still Postgres: somewhat slow
 \end{itemize}
 \end{frame}
 
@@ -82,7 +84,8 @@
 \item Make timeseries more widely applicable!
 \item Natural candidates: Relational and Graph.
 \item Graph is more flexible:\\
-      one can add new edges without changing the structure of entities
+      we can add new edges \\
+      without changing the structure of entities
 \item Graph is less rigid:\\
       edges pointing to nowhere or\\
             pointing to duplicated data are no issue
@@ -103,7 +106,7 @@
 \item \acronym{sql} is easy to learn (even though tricky to master \dots)
 \item \acronym{sql} is designed for integration with other languages and tools.
 \item \acronym{sql} is supported by thousands of tools.
-\item \acronym{sql} is not bad anyway \dots
+\item \acronym{sql} is not bad anyway.
 \item Well \dots
 \item Next slide!
 \end{itemize}
@@ -114,18 +117,18 @@
 \frametitle{Why Python?}
 \includegraphics[width=0.2\linewidth]{pythonlogo.png}
 \begin{itemize}
-\item An important application domain for \nowdb\ is data science.
-\item There will be strong demand for tools, libraries, languages supporting
+\item An important application domain is data science.
+\item There will be demand for tools, libraries, languages supporting
 \begin{itemize}
 \item Calculus
 \item Numerical analysis
 \item Function analysis and function plotting
-\item Linear Algebra (vectors, matrices, \etc)
+\item Linear algebra (vectors, matrices, \etc)
 \item Graph(!)-oriented data structures
-\item Complex Analysis
+\item Complex analysis
 \item \dots
 \end{itemize}
-\item Millions of lines of source code available in (or through) Python
+\item Millions of lines of code available in (or through) Python
 \item Python is \textbf{the} data science language.\\
       (There also is $R$, but $R$ is very limited as general purpose language)
 \item It is in particular interesting to have Python available
@@ -141,11 +144,10 @@
 \begin{columns}[T]
 \column{0.9\linewidth}
 \begin{itemize}
-\item The main issue with Python (from our perspective):
-      the design of the interpreter:
+\item Python has an issue with its interpreter:
       \begin{itemize}
-      \item difficult to run many interpreters ($=$sessions)
-      \item in parallel in one process ($=$\nowdb\ server).
+      \item difficult to run many interpreters ($=$ sessions)
+      \item in parallel in one process ($=$ \nowdb\ server).
       \end{itemize}
 \item In consequence:
       Python is not good for tasks that frequently run
@@ -156,8 +158,9 @@
 \begin{itemize}
 \item Lua is well known in the data science community
 \item Lua already had its appearance on the database stage\\
-      (namely in the redis \term{in-memory} database).
-\item Lua is designed as configuration language
+      (namely in the redis \term{in-memory} database)
+\item Lua is designed as configuration language\\
+      (and \acronym{dba} tasks are often configuration tasks)
 \item Lua is designed for integration with the C language.
 \end{itemize}
 \end{itemize}
@@ -188,24 +191,80 @@ select client.buys.destin
 \begin{center}
 \vskip0.5cm
 The Relational Way\\
-\vskip2.5cm
-\includegraphics[width=1.2\linewidth]{relational.png}
+\vskip1cm
+\hspace*{0.5cm}
+%\includegraphics[width=1.2\linewidth]{relational.png}
+\begin{tikzpicture}
+\draw (0,3) rectangle (1,1.5);
+\draw (0,3) rectangle (1,2.6);
+\node [font=\tiny,align=center] (sup) at (0.5,2.8) {Supplier};
+\node [font=\tiny,align=center,anchor=west] (sup1) at (0,2.3) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (sup2) at (0,2.0) {name};
+\node [font=\tiny,align=center,anchor=west] (sup3) at (0,1.7) {\dots};
+
+\draw (3,2) rectangle (4,0);
+\draw (3,2) rectangle (4,1.5);
+\node [font=\tiny,align=center] (prod) at (3.5,1.75) {Product};
+\node [font=\tiny,align=center,anchor=west] (sup1) at (3,1.2) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (sup2) at (3,0.9) {desc};
+\node [font=\tiny,align=center,anchor=west,text=red] (sup2) at (3,0.6) {supplier};
+\node [font=\tiny,align=center,anchor=west] (sup3) at (3,0.3) {\dots};
+
+\draw (1,2.3) -- (1.75,2.3) -- (1.75,0.6) -- (3,0.6);
+\node [font=\tiny,align=center,anchor=west] (one) at (1,2.4) {1};
+\node [font=\tiny,align=center,anchor=west] (n) at (2.6,0.7) {$n$};
+\end{tikzpicture}
 \end{center}
 \column{0.33\linewidth}
 \begin{center}
 The Logical Fact\\[12pt]
-\includegraphics[width=0.9\linewidth]{logic.png}
-%\begin{tikzpicture}
-%\draw [<->] (-3,0) -- (3,0);
-%\end{tikzpicture}
+%\includegraphics[width=0.9\linewidth]{logic.png}
+\begin{tikzpicture}
+\draw (0.1,2.3) circle (0.1cm); % head
+\draw (0.1,2.2) -- (0.1,1.8);   % body
+\draw (-0.1,2.1) -- (0.3,2.1);  % arms
+\draw (0.1,1.8) -- (-0.1,1.5);  % left leg
+\draw (0.1,1.8) -- (0.3,1.5);   % right leg
+\node [font=\tiny,align=center] (sup) at (0.1,1.3) {Supplier};
+
+\draw (1.9,2.3) circle (0.1cm); % head
+\draw (1.9,2.2) -- (1.9,1.8);   % body
+\draw (1.7,2.1) -- (2.1,2.1);   % arms
+\draw (1.9,1.8) -- (1.7,1.5);  % left leg
+\draw (1.9,1.8) -- (2.1,1.5);   % right leg
+\node [font=\tiny,align=center] (prod) at (1.9,1.3) {Product};
+
+\draw [->] (0.5,1.9) -- (1.5,1.9);  % edge
+\node [font=\tiny,align=center] (edg) at (1.0,1.7) {supplies};
+\end{tikzpicture}
 \end{center}
 \column{0.33\linewidth}
 \begin{center}
 \vskip0.5cm
 The Graph Way\\
-\vskip2.5cm
-\hskip-0.2\linewidth
-\includegraphics[width=1.2\linewidth]{graph.png}
+\vskip1cm
+%\hskip-0.5\linewidth
+\hskip-1cm
+%\includegraphics[width=1.2\linewidth]{graph.png}
+\begin{tikzpicture}
+\draw (3,3) rectangle (4,1.5);
+\draw (3,3) rectangle (4,2.6);
+\node [font=\tiny,align=center] (sup) at (3.5,2.8) {Supplier};
+\node [font=\tiny,align=center,anchor=west] (sup1) at (3,2.3) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (sup2) at (3,2.0) {name};
+\node [font=\tiny,align=center,anchor=west] (sup3) at (3,1.7) {\dots};
+
+\draw (0,2) rectangle (1,0);
+\draw (0,2) rectangle (1,1.5);
+\node [font=\tiny,align=center] (prod) at (0.5,1.75) {Product};
+\node [font=\tiny,align=center,anchor=west] (sup1) at (0,1.2) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (sup2) at (0,0.9) {desc};
+\node [font=\tiny,align=center,anchor=west] (sup3) at (0,0.6) {\dots};
+
+\draw [->] (3,2.3) -- (2,2.3) -- (2,1.2) -- (1,1.2);
+\node [font=\tiny,align=center,anchor=west] (origin) at (2.05,2.4) {$origin$};
+\node [font=\tiny,align=center,anchor=west] (destin) at (0.98,1.32) {$destin$};
+\end{tikzpicture}
 \end{center}
 \end{columns}
 \end{frame}
@@ -219,7 +278,7 @@ The Graph Way\\
 {\small Create a vertex type}
 \vskip1.7cm
 {\small Create another vertex type}
-\vskip1.2cm
+\vskip1.7cm
 {\small Add an edge \\without changing the types}
 \column{0.5\linewidth}
 \begin{sqlcode}
@@ -281,13 +340,13 @@ create edge buys (
 
 % Query
 \begin{frame}[fragile]
-\frametitle{How? Queries}
+\frametitle{How? Queries (1/2)}
 \begin{columns}[T]
 \column{0.25\linewidth}
 \vskip0.5cm
-{\small Who bought product 12345?}
-{\small This query runs in milliseconds!}
-\vskip0.7cm
+{\small Who bought product 12345?}\\
+{\tiny  (This query runs in ms!)}
+\vskip1.0cm
 {\small Traditional Join}
 \vskip1.9cm
 {\small Implicit join}
@@ -300,16 +359,53 @@ select origin
    and year(stamp) = 2018
    and month(stamp) >= 10;
 
-select p.supplier
+select p.description
   from buys (join product as p on destin)
             (join client  as c on origin)
  where c.name = 'Smith'
    and year(stamp) = 2018;
 
-select destin.supplier
+select destin.description
   from buys
  where origin.name = 'Smith'
    and year(stamp) = 2018;
+\end{lstlisting}
+\end{sqlcode}
+\end{columns}
+\end{frame}
+
+% Query 2
+\begin{frame}[fragile]
+\frametitle{How? Queries (2/2)}
+\begin{columns}[T]
+\column{0.25\linewidth}
+\vskip0.3cm
+{\small Who are the suppliers of products bought by client 'Smith'?}
+\vskip0.7cm
+{\small Can we use \acronym{cte} for recursive search on paths?}\\
+{\small Well \dots}\\
+{\small Next Slide!}
+\column{0.75\linewidth}
+\begin{sqlcode}
+\begin{lstlisting}
+select destin.supplies.origin.name
+  from buys
+ where origin.name = 'Smith'
+   and year(stamp) = 2018;
+
+with path (n,e) as (
+  select 1, origin.friend
+    from friend
+   where origin.name = 'Smith' 
+     and year(stamp) = 2018
+  union
+  select n+1, destin.friend
+    from friend
+   where year(stamp) = 2018
+     and n < 10)
+select count(*)
+  from path
+ where origin.name = 'Muller';
 \end{lstlisting}
 \end{sqlcode}
 \end{columns}
@@ -361,7 +457,7 @@ Four index types:
       \begin{itemize}
       \item B$^+$Tree
       \item storing ``embedded'' B$^+$Trees
-            pointing to data pages
+            storing pageids
       \item used for queries and joins on edges
       \end{itemize}
 \item Label Index (Edge):
@@ -411,15 +507,16 @@ Four index types:
       providing a low-cost alternative 
       to frameworks with high cost of ownership
       (\eg: Hadoop, large \acronym{olap} systems, \etc)
-\item Target industries with partly timeseries data 
+\item Target industries with ``timeserish'' data 
       and need of data science
-      (\eg\ \acronym{i}o\acronym{t}, retail, fintech, ``industry 4.0'')
+      (\eg\ \acronym{i}o\acronym{t}, retail, fintech, ``Industry 4.0'')
 \item Provide pre-packaged out-of-the-box solutions
       (\eg\ integration with Kafka, Zookeeper, \acronym{spark} \& Grafana)
 \item Operate with a mix of open-source and proprietary licenses
       (\eg\ generic modules for free, specific modules for pay)
 \item Foster a community among customers to grow repository of
       available solutions and modules
+\item Foster community of \term{certified} service providers
 \end{itemize}
 \end{frame}
 
@@ -465,8 +562,8 @@ Four index types:
 \begin{columns}[T]
 \column{0.4\linewidth}
 \begin{itemize}
-\item a pun on \term{no}- and \term{new}\acronym{sql}
 \item a reference to time
+\item a pun on \term{no}\acronym{sql} and \term{new}\acronym{sql}
 \item \dots and a homage to Norbert Wiener,\\
       the father of \\ timeseries analysis \\
       for Control \& Communication

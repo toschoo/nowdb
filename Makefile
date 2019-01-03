@@ -759,5 +759,6 @@ clean:
 	rm -f $(DOC)/*/*.toc
 	rm -f $(DOC)/*/*.nav
 	rm -f $(DOC)/*/*.snm
+	rm -f $(DOC)/*/*.vrb
 	rm -f $(DOC)/*/*.pdf
 
