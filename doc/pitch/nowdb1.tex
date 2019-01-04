@@ -1,4 +1,4 @@
-\documentclass[mathserif]{beamer}
+\documentclass[mathserif,usenames,dvipsnames]{beamer}
 \usepackage{algorithmic}
 %\usetheme{Bergen}
 %\usetheme{Copenhagen}
@@ -33,7 +33,7 @@
 \item Vision!
 \item Market!
 \item Where are we now?
-\item What means the funny name?
+\item What means the name?
 \end{itemize}
 \end{frame}
 
@@ -80,9 +80,11 @@
 % WHY GRAPH
 \begin{frame}
 \frametitle{Why Graph?}
+\begin{columns}[T]
+\column{0.75\linewidth}
 \begin{itemize}
 \item Make timeseries more widely applicable!
-\item Natural candidates: Relational and Graph.
+\item Natural candidates: Relational and Graph
 \item Graph is more flexible:\\
       we can add new edges \\
       without changing the structure of entities
@@ -93,6 +95,11 @@
       and this way reduce common errors in data modelling.\\
       (This, however, is pure speculation on my side $\dots$)
 \end{itemize}
+\column{0.25\linewidth}
+\vskip1cm
+\hskip-0.2\linewidth
+\includegraphics[width=0.75\linewidth]{leoeuler.jpg}
+\end{columns}
 \end{frame}
 
 % WHY SQL
@@ -120,12 +127,12 @@
 \item An important application domain is data science.
 \item There will be demand for tools, libraries, languages supporting
 \begin{itemize}
+\item Statistics
 \item Calculus
 \item Numerical analysis
 \item Function analysis and function plotting
 \item Linear algebra (vectors, matrices, \etc)
 \item Graph(!)-oriented data structures
-\item Complex analysis
 \item \dots
 \end{itemize}
 \item Millions of lines of code available in (or through) Python
@@ -192,7 +199,7 @@ select client.buys.destin
 \vskip0.5cm
 The Relational Way\\
 \vskip1cm
-\hspace*{0.5cm}
+\hspace*{1.2cm}
 %\includegraphics[width=1.2\linewidth]{relational.png}
 \begin{tikzpicture}
 \draw (0,3) rectangle (1,1.5);
@@ -244,7 +251,7 @@ The Logical Fact\\[12pt]
 The Graph Way\\
 \vskip1cm
 %\hskip-0.5\linewidth
-\hskip-1cm
+\hskip-2.7cm
 %\includegraphics[width=1.2\linewidth]{graph.png}
 \begin{tikzpicture}
 \draw (3,3) rectangle (4,1.5);
@@ -271,7 +278,7 @@ The Graph Way\\
 
 % SQL Example
 \begin{frame}[fragile]
-\frametitle{How? \acronym{sql}}
+\frametitle{How? Graph}
 \begin{columns}[T]
 \column{0.4\linewidth}
 \vskip0.5cm
@@ -522,7 +529,7 @@ Four index types:
 
 % WHERE ARE WE NOW 
 \begin{frame}[shrink]
-\frametitle{Where are we now?}
+\frametitle{Where are we now? (1/2)}
 \begin{itemize}
 \item Prototype is available:
       \bgroup
@@ -550,10 +557,50 @@ Four index types:
       \item Todo: security and user management
       \end{itemize}
       \egroup
-\item We are currently working with the \acronym{i}o\acronym{t}
-      startup \term{Loka Systems} (\url{https://loka.systems})
-      to identify strengths and weaknesses.
 \end{itemize}
+\end{frame}
+
+\begin{frame}[shrink]
+\frametitle{Where are we now? (2/2)}
+\begin{columns}[T]
+\column{0.75\linewidth}
+\begin{itemize}
+\item We are currently working with the \acronym{i}o\acronym{t}
+      startup \textbf{Loka Systems} (\url{https://loka.systems})
+      to identify strengths and weaknesses.
+      \begin{itemize}
+      \item The Loka database has about 30M metrics
+      \item It was imported into \nowdb\ in $< 30s$
+      \item Queries were implemented by means of\\
+            server-side Python modules
+      \item Results are visualised by Grafana and Plotly
+      \item The feedback of the Loka team already led
+            to conceptional and technical improvements
+      \end{itemize}
+\item We created a database with data
+      by the World Meteorological Organisation
+      (\acronym{wmo})
+      \begin{itemize}
+      \item with weather data covering the years 1970 -- 2018
+      \item with more than 1B metrics
+      \item Import takes about 5 minutes
+      \item Index-based queries run in milliseconds
+      \item Benchmarks reveal some weaknesses \\
+            (\eg\ grouping)
+      \end{itemize}
+\end{itemize}
+\column{0.25\linewidth}
+\begin{center}
+\hskip-0.5\linewidth
+\includegraphics[width=0.85\linewidth]{lokalogo.png}
+\vskip0.85cm
+\hskip-0.4\linewidth
+\includegraphics[width=0.85\linewidth]{grafanalogo.png}
+\vskip1.0cm
+\hskip-0.4\linewidth
+{\color{MidnightBlue} \url{www.wmo.int}}
+\end{center}
+\end{columns}
 \end{frame}
 
 % NORBERT WIENER
