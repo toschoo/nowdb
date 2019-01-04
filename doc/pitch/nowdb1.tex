@@ -46,10 +46,10 @@
 \end{frame}
 
 % WHY TIMESERIES
-\begin{frame}[shrink]
-\frametitle{Why Timeseries?}
+\begin{frame}
+\frametitle{Why Timeseries? (1/2)}
 \begin{itemize}
-\item Growing amount of data that are timeseries \emph{to some extent}
+\item Growing amount of data are timeseries \emph{to some extent}
 \item Important driver: \acronym{i}o\acronym{t}
 \item But also: ``traditional'' industries:
       \begin{itemize} 
@@ -57,6 +57,7 @@
       \item Energy,
       \item Manufacturing (``Industry 4.0'')
       \item Retail
+      \item Fintech
       \item \dots
       \end{itemize}
 \item Timeseries data have special requirements:
@@ -67,14 +68,33 @@
       \item Timeseries are less rigid compared to relational data\\
             (time points may be lost or duplicated)
       \end{itemize}
-\item Avalailable timeseries databases
-     (\eg\ \acronym{i}nflux\acronym{db}, \acronym{o}pen\acronym{tsdb}) are too narrow, 
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Why Timeseries? (2/2)}
+\begin{columns}[T]
+\column{0.75\linewidth}
+\begin{itemize}
+\item Avalailable timeseries databases are too narrow, 
       \ie\ \emph{pure} timeseries.
+\item Examples:
+      \begin{itemize}
+      \item \acronym{i}nflux\acronym{db}
+      \item \acronym{o}pen\acronym{tsdb}
+      \end{itemize}
 \item There are projects trying to solve this issue,
       \eg: \[
       timescale = postgres + timeseries\]
       $\dots$ but it's still Postgres: somewhat slow
 \end{itemize}
+\column{0.25\linewidth}
+\vskip1.0cm
+\includegraphics[width=0.7\linewidth]{influxlogo.png}\\[12pt]
+\includegraphics[width=0.8\linewidth]{tsdblogo.png}\\[12pt]
+\vskip0.5cm
+\includegraphics[width=0.8\linewidth]{timescalelogo.png}
+\end{columns}
 \end{frame}
 
 % WHY GRAPH
