@@ -124,6 +124,10 @@ _rField = now.nowdb_row_field
 _rField.restype = c_void_p
 _rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
 
+_rCount = now.nowdb_row_count
+_rCount.restype = c_long
+_rCount.argtypes = [c_void_p]
+
 _rNext = now.nowdb_row_next
 _rNext.restype = c_long
 _rNext.argtypes = [c_void_p]
@@ -311,6 +315,17 @@ class Result:
         if x == EOF:
           return False
         raise ClientError(x)
+
+    # count fields in row
+    def count(self):
+        x = self.rType()
+        if x != ROW:
+            raise WrongType("result not a row")
+
+	if self.r is None:
+           return 0
+
+        return int(_rCount(self.r))
 
     # field from row
     def field(self, idx):

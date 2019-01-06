@@ -599,6 +599,29 @@ int nowdb_dbrow_off(nowdb_dbrow_t p) {
 }
 
 /* ------------------------------------------------------------------------
+ * Count fields in current row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_count(nowdb_dbrow_t p) {
+	int i;
+	int f=0;
+
+	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != NOWDB_EOR;)  {
+		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
+		} else if (ROW(p)->buf[i] == NOWDB_TYP_BOOL ||
+                           ROW(p)->buf[i] == NOWDB_TYP_NOTHING) {
+			i+=2;
+		} else {
+			i+=9;
+		}
+		f++;
+	}
+	return f;
+}
+
+/* ------------------------------------------------------------------------
  * Get nth field in current row
  * ------------------------------------------------------------------------
  */

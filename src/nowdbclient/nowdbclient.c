@@ -676,6 +676,29 @@ void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
 }
 
 /* ------------------------------------------------------------------------
+ * Count fields in current row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_row_count(nowdb_row_t p) {
+	int i;
+	int f=0;
+
+	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != EOROW;)  {
+		if (ROW(p)->buf[i] == NOWDB_TEXT) {
+			i = findEndOfStr(ROW(p)->buf,
+			                 ROW(p)->sz,i);
+		} else if (ROW(p)->buf[i] == NOWDB_BOOL ||
+                           ROW(p)->buf[i] == NOWDB_NOTHING) {
+			i+=2;
+		} else {
+			i+=9;
+		}
+		f++;
+	}
+	return f;
+}
+
+/* ------------------------------------------------------------------------
  * Write the row to file 'stream'
  * ------------------------------------------------------------------------
  */
