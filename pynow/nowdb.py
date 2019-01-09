@@ -136,6 +136,10 @@ _rOff = now.nowdb_dbrow_off
 _rOff.restype = c_long
 _rOff.argtypes = [c_void_p]
 
+_rCount = now.nowdb_dbrow_count
+_rCount.restype = c_long
+_rCount.argtypes = [c_void_p]
+
 _rField = now.nowdb_dbrow_field
 _rField.restype = c_void_p
 _rField.argtypes = [c_void_p, c_long, POINTER(c_long)]
@@ -361,6 +365,17 @@ class Result:
 
   def nextRow(self):
     return (_rNext(self._r) == 0)
+
+  # count fields in row
+  def count(self):
+        x = self.rType()
+        if x != ROW:
+            raise WrongType("result not a row")
+
+	if self.r is None:
+           return 0
+
+        return int(_rCount(self.r))
 
   # field from row
   def field(self, idx):

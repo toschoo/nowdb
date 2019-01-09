@@ -30,6 +30,12 @@ if __name__ == '__main__':
               print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
             for r in cur:
+               if r.count() != 3:
+                  print "ERROR: wrong number of fields: %d != %ds" % (r.count(), 3)
+                  exit(1)
+               else:
+                  print "fields: %d" % r.count()
+
                cnt2 = r.field(0)
                sm2 = r.field(1)
                avg2 = r.field(2)

@@ -182,6 +182,12 @@ void nowdb_dbrow_rewind(nowdb_dbrow_t row);
 int nowdb_dbrow_off(nowdb_dbrow_t row);
 
 /* ------------------------------------------------------------------------
+ * Count number of fields in row
+ * ------------------------------------------------------------------------
+ */
+int nowdb_dbrow_count(nowdb_dbrow_t p);
+
+/* ------------------------------------------------------------------------
  * Get field from row
  * ---------
  * The 'fieldth' field is selected

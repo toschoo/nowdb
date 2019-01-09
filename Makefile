@@ -169,6 +169,7 @@ install:	lib server client tools
 		cp bin/nowdbd /usr/local/bin
 		cp bin/nowclient /usr/local/bin
 		cp -r pynow /usr/local/
+		cp -r include/nowdb /usr/local/include/
 
 server:	$(BIN)/nowdbd
 
@@ -753,9 +754,12 @@ clean:
 	rm -f $(BIN)/catalog
 	rm -f $(BIN)/nowdbd
 	rm -f $(BIN)/nowclient
-	rm -f $(MAN)/*.aux
-	rm -f $(MAN)/*.log
-	rm -f $(MAN)/*.out
-	rm -f $(MAN)/*.toc
-	rm -f $(MAN)/*.pdf
+	rm -f $(DOC)/*/*.aux
+	rm -f $(DOC)/*/*.log
+	rm -f $(DOC)/*/*.out
+	rm -f $(DOC)/*/*.toc
+	rm -f $(DOC)/*/*.nav
+	rm -f $(DOC)/*/*.snm
+	rm -f $(DOC)/*/*.vrb
+	rm -f $(DOC)/*/*.pdf
 
