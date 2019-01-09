@@ -37,7 +37,8 @@ with requests.Session() as s:
        print "Status Code: %s" % r.status_code
        print "%s" % r.text
     else:
-       print "%s" % r.json()
+       # print "%s" % r.json()
+       print "%s" % json.dumps(r.json(),indent=4)
 
     """
 
