@@ -40,7 +40,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define BUFSIZE 0x12000
+#define BUFSIZE 0x102000
 #define MAXROW  0x1000
 
 #ifdef _NOWDB_LE_

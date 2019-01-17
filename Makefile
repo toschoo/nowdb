@@ -171,6 +171,12 @@ install:	lib server client tools
 		cp -r pynow /usr/local/
 		cp -r include/nowdb /usr/local/include/
 
+client_install:	client tools
+		cp lib/libnowdbclient.so /usr/local/lib
+		cp bin/nowclient /usr/local/bin
+		cp -r pynow /usr/local/
+		cp -r include/nowdb /usr/local/include/
+
 server:	$(BIN)/nowdbd
 
 client:	$(BIN)/nowclient

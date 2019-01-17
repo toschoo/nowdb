@@ -149,7 +149,7 @@ _rAdd.restype = c_long
 _rAdd.argtypes = [c_void_p, c_byte, c_void_p]
 
 _rCap = now.nowdb_dbresult_rowCapacity
-_rCap.restype = c_int
+_rCap.restype = c_long
 _rCap.argtypes = [c_void_p]
 
 _rCloseRow = now.nowdb_dbresult_closeRow
@@ -332,7 +332,8 @@ class Result:
     if not self.fitsRow(t, value):
        raise DBError(-107, "row is full") 
     v = convert(t, value)
-    return (_rAdd(self._r, t, byref(v)) == 0)
+    if _rAdd(self._r, t, byref(v)) != 0:
+       raise DBError(-107, "cannot add to row") 
 
   def fitsRow(self, t, value):
     if self._r is None:
@@ -343,8 +344,8 @@ class Result:
     if t == BOOL or t == NOTHING:
        if c < 3:
           return False
-    if t == TEXT:
-       if c <= c_char_p(value) + 3:
+    elif t == TEXT:
+       if c <= libc.strlen(c_char_p(value)) + 3:
           return False
     elif c < 10: 
        return False
