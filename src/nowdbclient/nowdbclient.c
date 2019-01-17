@@ -40,7 +40,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define BUFSIZE 0x12000
+#define BUFSIZE 0x102000
 #define MAXROW  0x1000
 
 #ifdef _NOWDB_LE_
@@ -247,7 +247,7 @@ static inline int readSize(struct nowdb_con_t *con, int *sz) {
 	x = readN(con->sock, (char*)sz, 4);
 	if (x != 0) return x;
 	if (*sz > BUFSIZE-MAXROW) {
-		fprintf(stderr, "SIZE: %d\n", *sz);
+		fprintf(stderr, "SIZE: %d (%x)\n", *sz, *sz);
 		return NOWDB_ERR_TOOBIG;
 	}
 	return NOWDB_OK;
