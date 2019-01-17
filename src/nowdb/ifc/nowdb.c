@@ -14,7 +14,7 @@
 
 static char *OBJECT = "lib";
 
-#define BUFSIZE 0x102000
+#define BUFSIZE 0x101000
 #define MAXROW  0x1000
 #define HDRSIZE 16
 
