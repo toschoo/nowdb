@@ -1,0 +1,4 @@
+always use index for vertex query
+=================================
+
+Always use an indices on vertex

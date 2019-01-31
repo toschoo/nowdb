@@ -59,6 +59,15 @@ def prompath(path):
        return "done"
     return None
 
+def deprompath(path):
+    if path == "done":
+       return "progress"
+    if path == "progress":
+       return "pending"
+    if path == "pending":
+       return "idea"
+    return None
+
 def show(base, what="pending"):
     print what
     p = getDir(base, what)
@@ -94,6 +103,15 @@ def prom(base, what, itm):
     trg = path(base,prompath(what))
     if trg is None:
        print "cannot promote that item"
+       return
+    cmd = "mv %s %s" % (src, trg)
+    os.system(cmd)
+
+def deprom(base, what, itm):
+    src = path(path(base, what), delabel(itm))
+    trg = path(base,deprompath(what))
+    if trg is None:
+       print "cannot depromote that item"
        return
     cmd = "mv %s %s" % (src, trg)
     os.system(cmd)
@@ -142,10 +160,14 @@ if __name__ == "__main__":
        itm = sys.argv[3]
        edit(BASE, what, itm)
 
-    if sys.argv[1] == "promote":
+    if sys.argv[1] == "promote" or \
+       sys.argv[1] == "depromote":
        if len(sys.argv) < 4:
           print "Tell me where the item is and which item you want to promote"
           exit(1)
        what = sys.argv[2]
        itm = sys.argv[3]
-       prom(BASE, what, itm)
+       if sys.argv[1] == "promote":
+          prom(BASE, what, itm)
+       else:
+          deprom(BASE, what, itm)
