@@ -294,6 +294,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 	case NOWDB_READER_FRANGE:
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
+	case NOWDB_READER_MRANGE:
 		reader->files = NULL;
 		if (reader->iter != NULL) {
 			beet_iter_destroy(reader->iter);
@@ -306,6 +307,10 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		}
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
+		}
+		if (reader->map != NULL) {
+			ts_algo_tree_destroy(reader->map);
+			free(reader->map); reader->map = NULL;
 		}
 		return;
 
@@ -546,6 +551,14 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: check if current key is in map
+ * ------------------------------------------------------------------------
+ */
+static inline char hasKey(nowdb_reader_t *reader) {
+	return (ts_algo_tree_find(reader->map, reader->key) != NULL);
+}
+
+/* ------------------------------------------------------------------------
  * Helper: move for range, reading all pages
  * ------------------------------------------------------------------------
  */
@@ -577,6 +590,11 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			BEETERR(ber,1);
 
 			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
+
+			// is key in map?
+			if (reader->map != NULL) {
+				if (!hasKey(reader)) continue;
+			}
 
 			ber = beet_iter_enter(reader->iter);
 			if (ber == BEET_ERR_EOF) continue;
@@ -866,6 +884,7 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 		return moveSearch(reader);
 
 	case NOWDB_READER_FRANGE:
+	case NOWDB_READER_MRANGE:
 		return moveFRange(reader);
 
 	case NOWDB_READER_KRANGE:
@@ -1137,8 +1156,9 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
 	(*reader)->ko  = rtype == NOWDB_READER_KRANGE;
+	(*reader)->map = NULL;
 
-	if (rtype == NOWDB_READER_FRANGE) {
+	if (rtype == NOWDB_READER_FRANGE || rtype == NOWDB_READER_MRANGE) {
 		(*reader)->plru = calloc(1, sizeof(nowdb_pplru_t));
 		if ((*reader)->plru == NULL) {
 			nowdb_reader_destroy(*reader); free(*reader);
@@ -1242,6 +1262,26 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
 	return mkRange(reader, NOWDB_READER_CRANGE,
 	                      files, index, filter,
 	                                start, end);
+}
+
+/* ------------------------------------------------------------------------
+ * Index Map Range scan
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_expr_t    filter,
+                                ts_algo_tree_t    *map,
+                                void *start, void *end) {
+	nowdb_err_t err;
+
+	err = mkRange(reader, NOWDB_READER_MRANGE,
+	                     files, index, filter,
+	                              start, end);
+	if (err != NOWDB_OK) return err;
+	(*reader)->map = map;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
