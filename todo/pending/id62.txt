@@ -1,0 +1,4 @@
+free format for edge
+====================
+
+it shall be possible to define n fields for edge

@@ -1,0 +1,8 @@
+eliminate table
+===============
+
+make edge a table
+add concept of tablespace (i.e. context)
+- with default context
+- and one context per edge
+- and one context per vertex

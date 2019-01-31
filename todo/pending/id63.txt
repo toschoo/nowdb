@@ -1,0 +1,4 @@
+vertex type is table
+====================
+
+Store each vertex type in its own table

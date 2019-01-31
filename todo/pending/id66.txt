@@ -1,0 +1,5 @@
+light index
+===========
+
+more light-weight index type
+(aka ref)
