@@ -65,6 +65,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->file = NULL;
 	reader->cont = NULL;
 	reader->ikeys = NULL;
+	reader->maps = NULL;
 	reader->from = NOWDB_TIME_DAWN;
 	reader->to   = NOWDB_TIME_DUSK;
 
@@ -308,9 +309,15 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
 		}
-		if (reader->map != NULL) {
-			ts_algo_tree_destroy(reader->map);
-			free(reader->map); reader->map = NULL;
+		if (reader->maps != NULL) {
+			/*
+			 * who is responsible? expression?
+			for(int i=0; i<reader->ikeys->sz; i++) {
+				ts_algo_tree_destroy(reader->maps[i]);
+				free(reader->maps[i];
+			}
+			*/
+			free(reader->maps); reader->maps = NULL;
 		}
 		return;
 
@@ -555,7 +562,12 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
  * ------------------------------------------------------------------------
  */
 static inline char hasKey(nowdb_reader_t *reader) {
-	return (ts_algo_tree_find(reader->map, reader->key) != NULL);
+	for(int i=0;i<reader->ikeys->sz;i++) {
+		if (reader->maps[i] == NULL) continue;
+		if (ts_algo_tree_find(reader->maps[i],
+		    reader->key+reader->ikeys->off[i]) == NULL) return 0;
+	}
+	return 1;
 }
 
 /* ------------------------------------------------------------------------
@@ -572,10 +584,20 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	                       FALSE, OBJECT, NULL);
 	}
 	if (reader->key == NULL) {
-		ber = beet_iter_move(reader->iter, &reader->key, NULL);
-		BEETERR(ber,1);
-		ber = beet_iter_enter(reader->iter);
-		BEETERR(ber,0);
+		for(;;) {
+			ber = beet_iter_move(reader->iter, &reader->key, NULL);
+			BEETERR(ber,1);
+
+			// is key in map?
+			if (reader->maps != NULL) {
+				if (!hasKey(reader)) continue;
+			}
+
+			ber = beet_iter_enter(reader->iter);
+			BEETERR(ber,0);
+
+			break;
+		}
 	}
 	for(;;) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
@@ -591,8 +613,7 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 
 			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
-			// is key in map?
-			if (reader->map != NULL) {
+			if (reader->maps != NULL) {
 				if (!hasKey(reader)) continue;
 			}
 
@@ -809,6 +830,7 @@ static inline nowdb_err_t moveSeq(nowdb_reader_t *reader) {
 			return nowdb_err_get(nowdb_err_eof,
 			               FALSE, OBJECT, NULL);
 		}
+		// fprintf(stderr, "sequence on %u\n", reader->cur);
 		err = nowdb_reader_move(reader->sub[reader->cur]);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_eof) {
@@ -931,6 +953,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 
 	case NOWDB_READER_FRANGE:
 	case NOWDB_READER_KRANGE:
+	case NOWDB_READER_MRANGE:
 	case NOWDB_READER_CRANGE:
 		return rewindRange(reader);
 
@@ -960,6 +983,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
 	case NOWDB_READER_SEARCH:
+	case NOWDB_READER_MRANGE:
 	case NOWDB_READER_FRANGE: return reader->page;
 
 	case NOWDB_READER_KRANGE:
@@ -1156,7 +1180,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
 	(*reader)->ko  = rtype == NOWDB_READER_KRANGE;
-	(*reader)->map = NULL;
+	(*reader)->maps = NULL;
 
 	if (rtype == NOWDB_READER_FRANGE || rtype == NOWDB_READER_MRANGE) {
 		(*reader)->plru = calloc(1, sizeof(nowdb_pplru_t));
@@ -1272,7 +1296,7 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
                                 nowdb_expr_t    filter,
-                                ts_algo_tree_t    *map,
+                                ts_algo_tree_t  **maps,
                                 void *start, void *end) {
 	nowdb_err_t err;
 
@@ -1280,7 +1304,17 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
 	                     files, index, filter,
 	                              start, end);
 	if (err != NOWDB_OK) return err;
-	(*reader)->map = map;
+	(*reader)->maps = calloc((*reader)->ikeys->sz,
+	                      sizeof(ts_algo_tree_t*));
+	if ((*reader)->maps == NULL) {
+		nowdb_reader_destroy(*reader);
+		free(*reader); *reader = NULL;
+		NOMEM("allocating maps");
+		return err;
+	}
+	for(int i=0; i<(*reader)->ikeys->sz; i++) {
+		(*reader)->maps[i] = maps[i];
+	}
 	return NOWDB_OK;
 }
 

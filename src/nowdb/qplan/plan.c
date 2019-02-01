@@ -72,18 +72,10 @@ static nowdb_err_t idxFromFilter(nowdb_expr_t   filter,
 	if (filter == NULL) return NOWDB_OK;
 
 	if (nowdb_expr_type(filter) == NOWDB_EXPR_OP) {
-		/*
-		if (NOWDB_EXPR_TOOP(filter)->fun == NOWDB_EXPR_OP_EQ) {
-			if (ts_algo_list_append(cands,
-			        filter) != TS_ALGO_OK) {
-				return nowdb_err_get(nowdb_err_no_mem,
-				        FALSE, OBJECT, "list.append");
-			}
-			return NOWDB_OK;
-		}
-		*/
+
 		switch(OP(filter)->fun) {
 		case NOWDB_EXPR_OP_EQ:
+		case NOWDB_EXPR_OP_IN:
 			if (!nowdb_expr_family3(filter)) return NOWDB_OK;
 			if (ts_algo_list_append(cands,
 			        filter) != TS_ALGO_OK) {
@@ -100,6 +92,8 @@ static nowdb_err_t idxFromFilter(nowdb_expr_t   filter,
 			            filter)->argv[1], cands);
 			if (err != NOWDB_OK) return err;
 			return NOWDB_OK;
+
+		// or!
 
 		case NOWDB_EXPR_OP_JUST:
 			err = idxFromFilter(NOWDB_EXPR_TOOP(
@@ -170,6 +164,21 @@ static ts_algo_cmp_t comparekeysz(void *one, void *two) {
 }
 
 /* ------------------------------------------------------------------------
+ * destroy pidx
+ * ------------------------------------------------------------------------
+ */
+static inline void destroyPlanIdx(nowdb_plan_idx_t *pidx) {
+	if (pidx == NULL) return;
+	if (pidx->maps != NULL) {
+		free(pidx->maps); pidx->maps = NULL;
+	}
+	if (pidx->keys != NULL) {
+		free(pidx->keys); pidx->keys = NULL;
+	}
+	free(pidx);
+}
+
+/* ------------------------------------------------------------------------
  * make idx+keys
  * ------------------------------------------------------------------------
  */
@@ -181,7 +190,8 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_scope_t  *scope,
 	nowdb_err_t err;
 	ts_algo_list_node_t *runner;
 	nowdb_expr_t      node;
-	int i=0;
+	int i=0, off=0;
+	char usedmaps = 0;
 
 	if (nodes == NULL || nodes->len == 0) {
 		INVALIDAST("no nodes");
@@ -196,16 +206,32 @@ static inline nowdb_err_t makeIndexAndKeys(nowdb_scope_t  *scope,
 		NOMEM("allocating keys");
 		return err;
 	}
+	pidx->maps = malloc(nodes->len*sizeof(ts_algo_tree_t*));
+	if (pidx->maps == NULL) {
+		destroyPlanIdx(pidx);
+		NOMEM("allocating maps");
+		return err;
+	}
 	for(runner=nodes->head;runner!=NULL;runner=runner->nxt) {
 		node = runner->cont;
 		nowdb_expr_t f, c;
 		if (!nowdb_expr_getFieldAndConst(node, &f, &c)) continue;
 		int sz = CONST(c)->type==NOWDB_TYP_SHORT?4:8;
-		memcpy(pidx->keys+i, CONST(c)->value, sz);
-		i+=sz;
+
+		if (CONST(c)->tree != NULL) {
+			usedmaps = 1;
+			pidx->maps[i] = CONST(c)->tree;
+		} else {
+			pidx->maps[i] = NULL;
+			memcpy(pidx->keys+off, CONST(c)->value, sz);
+		}
+		off+=sz;i++;
+	}
+	if (!usedmaps) {
+		free(pidx->maps); pidx->maps = NULL;
 	}
 	if (ts_algo_list_append(res, pidx) != TS_ALGO_OK) {
-		free(pidx->keys); free(pidx);
+		destroyPlanIdx(pidx);
 		return nowdb_err_get(nowdb_err_no_mem,
 	                FALSE, OBJECT, "list.append");
 	}
@@ -1680,7 +1706,7 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char cont) {
 				    node->stype == NOWDB_PLAN_CRANGE_) 
 				{
 					nowdb_plan_idx_t *pidx = node->load;
-					free(pidx->keys); free(pidx);
+					destroyPlanIdx(pidx);
 				}
 			}
 		}

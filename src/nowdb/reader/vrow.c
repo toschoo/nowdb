@@ -730,6 +730,7 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	// filter all with np > 0
 	for(run=vrow->ready->head; run!=NULL;) {
 		if (run->nxt == NULL) break;
+		run = run->nxt;
 	}
 	if (ts_algo_tree_filter(vrow->vrtx, vrow->ready,
 	                  NULL, &oneProp) != TS_ALGO_OK) 

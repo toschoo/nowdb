@@ -70,7 +70,6 @@ typedef struct nowdb_reader_t {
 	ts_algo_tree_t       readers; /* files for index-based readers */
 	nowdb_pplru_t          *plru; /* LRU cache for range reader    */
 	nowdb_pplru_t         *bplru; /* black list                    */
-	ts_algo_tree_t          *map; /* Map of keys for MRANGE        */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
 	char                    *tmp; /* buffer for keys in bufreader  */
@@ -85,6 +84,7 @@ typedef struct nowdb_reader_t {
 	int32_t                  off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
+	ts_algo_tree_t        **maps; /* Maps of keys for MRANGE       */
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
@@ -274,7 +274,7 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
                                 nowdb_expr_t    filter,
-                                ts_algo_tree_t    *map,
+                                ts_algo_tree_t  **maps,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------
