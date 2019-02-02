@@ -310,13 +310,6 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 			free(reader->buf); reader->buf = NULL;
 		}
 		if (reader->maps != NULL) {
-			/*
-			 * who is responsible? expression?
-			for(int i=0; i<reader->ikeys->sz; i++) {
-				ts_algo_tree_destroy(reader->maps[i]);
-				free(reader->maps[i];
-			}
-			*/
 			free(reader->maps); reader->maps = NULL;
 		}
 		return;
@@ -1304,17 +1297,7 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
 	                     files, index, filter,
 	                              start, end);
 	if (err != NOWDB_OK) return err;
-	(*reader)->maps = calloc((*reader)->ikeys->sz,
-	                      sizeof(ts_algo_tree_t*));
-	if ((*reader)->maps == NULL) {
-		nowdb_reader_destroy(*reader);
-		free(*reader); *reader = NULL;
-		NOMEM("allocating maps");
-		return err;
-	}
-	for(int i=0; i<(*reader)->ikeys->sz; i++) {
-		(*reader)->maps[i] = maps[i];
-	}
+	(*reader)->maps = maps;
 	return NOWDB_OK;
 }
 

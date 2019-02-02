@@ -369,6 +369,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		// fprintf(stderr, "SEARCH\n");
 		err = createSeq(cur, rplan->stype, pidx, 1);
+		pidx->maps = NULL;
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_ ||
 	           rplan->stype == NOWDB_PLAN_MRANGE_ ||
@@ -379,6 +380,8 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		} else {
 			fprintf(stderr, "MRANGE\n");
 			err = createMerge(cur, NOWDB_PLAN_MRANGE_, pidx);
+			fprintf(stderr, "setting %p in %p to NULL\n", pidx->maps, pidx);
+			pidx->maps = NULL;
 		}
 
 	// KRANGE only allowd with model id
@@ -442,7 +445,7 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_new(cur->v->roleid, &cur->prow, cur->eval);
 	if (err != NOWDB_OK) return err;
 
-	nowdb_vrow_autoComplete(cur->prow);
+	// nowdb_vrow_autoComplete(cur->prow);
 
 	for(int i=0; i<cur->row->sz; i++) {
 		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
@@ -529,34 +532,23 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t  *row,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
-                                 ts_algo_list_t *vlst) {
+                                 ts_algo_tree_t *vids) {
 	nowdb_err_t err;
 	nowdb_expr_t f, o1, o2;
 	nowdb_expr_t r, rc, v, vc;
-	ts_algo_list_t vids;
-	ts_algo_list_node_t *run;
 
-	// copy the list of vids (which is owned by the filter)
-	ts_algo_list_init(&vids);
-	for(run=vlst->head;run!=NULL;run=run->nxt) {
-		uint64_t *vid = malloc(8);
-		if (vid == NULL) {
-			NOMEM("allocating vid");
-			DESTROYVIDS(vids);
-			return err;
-		}
-		memcpy(vid, run->cont, 8);
-		if (ts_algo_list_append(&vids, vid) != TS_ALGO_OK) {
-			NOMEM("list.append");
-			DESTROYVIDS(vids);
-			return err;
-		}
+	// vertex constant
+	// we make this first, so the memory management for vids is done
+	err = nowdb_expr_constFromTree(&vc, vids, NOWDB_TYP_UINT);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_destroy(vids); free(vids);
+		return err;
 	}
 
 	// role field
 	err = nowdb_expr_newVertexOffField(&r, NOWDB_OFF_ROLE);
 	if (err != NOWDB_OK) {
-		DESTROYVIDS(vids);
+		nowdb_expr_destroy(vc); free(vc);
 		return err;
 	}
 
@@ -564,34 +556,25 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	err = nowdb_expr_newConstant(&rc, &cur->v->roleid,
 	                                 NOWDB_TYP_SHORT);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(r); free(r);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
 	// roleid = role
 	err = nowdb_expr_newOp(&o1, NOWDB_EXPR_OP_EQ, r, rc);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(r); free(r);
 		nowdb_expr_destroy(rc); free(rc);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
 	// vid field
 	err = nowdb_expr_newVertexOffField(&v, NOWDB_OFF_VERTEX);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(o1); free(o1);
-		DESTROYVIDS(vids);
-		return err;
-	}
-
-	// vertex constant
-	err = nowdb_expr_constFromList(&vc, &vids, NOWDB_TYP_UINT);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(o1); free(o1);
-		nowdb_expr_destroy(v); free(v);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
@@ -601,7 +584,6 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(v); free(v);
 		nowdb_expr_destroy(vc); free(vc);
-		ts_algo_list_destroy(&vids);
 		return err;
 	}
 
@@ -610,13 +592,8 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(o2); free(o2);
-		ts_algo_list_destroy(&vids);
 		return err;
 	}
-
-	// destroy the list but *only* the list
-	// its content is now owned by the filter
-	ts_algo_list_destroy(&vids);
 
 	// nowdb_filter_show(f,stderr);fprintf(stderr, "\n");
 
@@ -694,6 +671,7 @@ static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
 	pidx->maps[1] = vtree;
 
 	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, 1);
+	pidx->maps = NULL;
 	DESTROYPIDX(1,pidx);
 	if (err != NOWDB_OK) {
 		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
@@ -934,6 +912,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 			// fprintf(stderr, "got vid %lu (%u)\n", *vid, cur->recsz);
 			if (ts_algo_tree_insert(vids, vid) != TS_ALGO_OK) {
 				free(vid);
+				ts_algo_tree_destroy(vids); free(vids);
 				NOMEM("tree.insert");
 				goto cleanup;
 			}
@@ -944,18 +923,20 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	if (vids->count == 0) {
 		err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT,
 		                                 "preprocessing");
+		ts_algo_tree_destroy(vids); free(vids);
 		goto cleanup;
 	}
 
 	// tree to list
 	vlst = ts_algo_tree_toList(vids);
 	if (vlst == NULL) {
+		ts_algo_tree_destroy(vids); free(vids);
 		NOMEM("tree.toList");
 		goto cleanup;
 	}
 
 	// create filter with in compare
-	err = makeVidCompare(mom, vlst);
+	err = makeVidCompare(mom, vids);
 	if (err != NOWDB_OK) goto cleanup;
 
 	// make reader (using the built-in index if possible)
@@ -963,10 +944,6 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	if (err != NOWDB_OK) goto cleanup;
 
 cleanup:
-	// who controls the tree?
-	if (vids != NULL) {
-		// ts_algo_tree_destroy(vids); free(vids);
-	}
 	if (vlst != NULL) {
 		ts_algo_list_destroy(vlst); free(vlst);
 	}
