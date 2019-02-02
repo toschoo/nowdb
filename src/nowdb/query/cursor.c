@@ -424,8 +424,6 @@ static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
 	                               cur->filter, cur->eval);
 	if (err != NOWDB_OK) return err;
-	// activate autoComplete
-	// when using bufidx instead of fullscan
 	nowdb_vrow_autoComplete(cur->wrow);
 	return NOWDB_OK;
 }
