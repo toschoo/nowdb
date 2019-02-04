@@ -593,12 +593,15 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		}
 	}
 	for(;;) {
+		char left = 0;
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
 			// fprintf(stderr, "in inner loop\n");
-			ber = beet_iter_leave(reader->iter);
-			BEETERR(ber,0);
+			if (left == 0) {
+				ber = beet_iter_leave(reader->iter);
+				BEETERR(ber,0);
+			}
 			
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
@@ -607,10 +610,15 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
 			if (reader->maps != NULL) {
-				if (!hasKey(reader)) continue;
+				if (!hasKey(reader)) {
+					left=1;
+					ber = BEET_ERR_EOF;
+					continue;
+				}
 			}
 
 			ber = beet_iter_enter(reader->iter);
+			left=0;
 			if (ber == BEET_ERR_EOF) continue;
 			BEETERR(ber,0);
 

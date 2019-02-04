@@ -770,7 +770,6 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
 			}
 		}
 		if (CUR(cur)->err != NOWDB_OK) {
-			CUR(cur)->eof = 1;
 			nowdb_err_release(CUR(cur)->err);
 		}
 		CUR(cur)->err = err;
