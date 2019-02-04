@@ -405,7 +405,6 @@ int initEval() {
 	_ce.d = &_dst;
 
 	_hlp.ce = &_ce;
-	_hlp.needtxt = 0;
 
 	return 0;
 }

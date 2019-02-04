@@ -266,8 +266,8 @@ void nowdb_expr_usekey(nowdb_expr_t expr) {
 	if (EXPR(expr)->etype != NOWDB_EXPR_FIELD) return;
 	if (FIELD(expr)->type != NOWDB_TYP_TEXT &&
 	    FIELD(expr)->type != NOWDB_TYP_NOTHING) return;
-	FIELD(expr)->usekey = 1;
-	// FIELD(expr)->type = NOWDB_TYP_UINT; // compare EQ in evalFun
+	FIELD(expr)->usekey = 1; // this overrules the model
+	FIELD(expr)->type = NOWDB_TYP_UINT;
 }
 
 /* -----------------------------------------------------------------------
@@ -1112,7 +1112,7 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
  * ------------------------------------------------------------------------
  */
 #define HANDLETEXT(what) \
-	if ((hlp->needtxt || !field->usekey) && what != NULL) { \
+	if (( !field->usekey) && what != NULL) { \
 		*t = (char)NOWDB_TYP_TEXT; \
 		err = getText(hlp, *(uint64_t*)what, &field->text); \
 		if (err != NOWDB_OK) return err; \
@@ -1137,13 +1137,12 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 	switch(field->off) {
 	case NOWDB_OFF_EDGE:
 
-		*t = !hlp->needtxt && field->usekey?
-		     (char)NOWDB_TYP_UINT:
-		     (char)NOWDB_TYP_TEXT;
-		if (hlp->needtxt || !field->usekey) {
-			*res = hlp->ce->e->name;
-		} else {
+		if (field->usekey) {
+			*t = (char)NOWDB_TYP_UINT;
 			*res = &src->edge; 
+		} else {
+			*t = (char)NOWDB_TYP_TEXT;
+			*res = hlp->ce->e->name;
 		}
 		break;
 
@@ -1374,8 +1373,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 			}
 			if (op->fun == NOWDB_EXPR_OP_COAL) {
 				if (op->types[i] != NOWDB_TYP_NOTHING) {
-					if (op->types[i] == NOWDB_TYP_TEXT) { // this is not clean!
-					    // hlp != NULL && hlp->needtxt)   {
+					if (op->types[i] == NOWDB_TYP_TEXT) {
 						SETXRESULT(NOWDB_TYP_TEXT,
 						           op->results[i]);
 					} else {
@@ -1404,8 +1402,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 	if (err != NOWDB_OK) return err;
 
 	// pointer or value?
-	if (*typ == NOWDB_TYP_TEXT && 
-             hlp != NULL  && hlp->needtxt)
+	if (*typ == NOWDB_TYP_TEXT)
 	{
 		*res=(char*)op->res;
 	} else {
