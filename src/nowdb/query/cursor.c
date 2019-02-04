@@ -375,12 +375,11 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	           rplan->stype == NOWDB_PLAN_MRANGE_ ||
 	          (rplan->stype == NOWDB_PLAN_KRANGE_ && !hasId(pidx))) {
 		if (pidx->maps == NULL) {
-			fprintf(stderr, "FRANGE\n");
+			// fprintf(stderr, "FRANGE\n");
 			err = createMerge(cur, NOWDB_PLAN_FRANGE_, pidx);
 		} else {
-			fprintf(stderr, "MRANGE\n");
+			// fprintf(stderr, "MRANGE\n");
 			err = createMerge(cur, NOWDB_PLAN_MRANGE_, pidx);
-			fprintf(stderr, "setting %p in %p to NULL\n", pidx->maps, pidx);
 			pidx->maps = NULL;
 		}
 
@@ -424,7 +423,7 @@ static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
 	                               cur->filter, cur->eval);
 	if (err != NOWDB_OK) return err;
-	nowdb_vrow_autoComplete(cur->wrow);
+	// nowdb_vrow_autoComplete(cur->wrow);
 	return NOWDB_OK;
 }
 
@@ -443,6 +442,7 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_new(cur->v->roleid, &cur->prow, cur->eval);
 	if (err != NOWDB_OK) return err;
 
+	// not yet working
 	// nowdb_vrow_autoComplete(cur->prow);
 
 	for(int i=0; i<cur->row->sz; i++) {
@@ -759,17 +759,12 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 	                          NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 	if (err != NOWDB_OK) return err;
 
-	// this magical number reflects an internal of reader
-        // (which, currently, can have only 64 subreaders). 
-	// On the long run, we should improve readers
-	// so that we can have a meaningful limit or
-	// threshold, preferrably a ratio with the number
-	// of keys in the type.
+	// this magical number is not based on any benchmarks!
 	if (vlst->len > 31) {
-		fprintf(stderr, "MRANGE\n");
+		// fprintf(stderr, "MRANGE\n");
 		err = makeVidRange(scope, cur, vids);
 	} else {
-		fprintf(stderr, "SEARCH: %d\n", vlst->len);
+		// fprintf(stderr, "SEARCH: %d\n", vlst->len);
 		err = makeVidSearch(scope, cur, vlst);
 	}
 	if (err != NOWDB_OK) {
@@ -788,7 +783,7 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 
 /* ------------------------------------------------------------------------
  * Helper: Get the vids according to the original query,
- *         put then in a list and then create new second
+ *         put them in a list and then create new second
  *         cursor identical to the first, but with
  *         filter and readers accepting all vertices
  *         (of this type) that are 'in (...)' the vertices.
@@ -864,10 +859,12 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	err = initWRow(cur);
 	if (err != NOWDB_OK) goto cleanup;
 
+	/*
 	if (cur->wrow != NULL) {
 		nowdb_expr_show(cur->wrow->filter,stderr);
 		fprintf(stderr, "\n");
 	}
+	*/
 
 	// open it
 	err = nowdb_cursor_open(cur);
@@ -924,6 +921,8 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 		ts_algo_tree_destroy(vids); free(vids);
 		goto cleanup;
 	}
+
+	// fprintf(stderr, "HAVING %d\n", vids->count);
 
 	// tree to list
 	vlst = ts_algo_tree_toList(vids);
@@ -1468,11 +1467,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
-	char vrtx[32];
 	uint32_t mx;
 
 	// we have already reached eof
-	CHECKEOF()
+	// CHECKEOF()
 
 	// initialise like after move
 	AFTERMOVE()
@@ -1504,15 +1502,16 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			err = nowdb_vrow_force(cur->wrow);
 			if (err != NOWDB_OK) return err;
 
+			// memset(cur->vrtx, 0, 32);
 			err = nowdb_vrow_eval(cur->wrow,
-                                (nowdb_key_t*)vrtx, &x);
+                                (nowdb_key_t*)cur->vrtx, &x);
 			if (err != NOWDB_OK) return err;
 			if (x) {
-				memset(vrtx+8, 0, 24);
-				realsrc = vrtx;
+				realsrc = cur->vrtx;
 				realsz = 32;
 				goto projection;
 			}
+			if (!nowdb_vrow_empty(cur->wrow)) continue;
 		}
 		// END OF FILE
 		if (cur->eof) {
@@ -1554,7 +1553,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		}
 		// FILTER
 		if (cur->wrow != NULL) {
-			nowdb_key_t vid;
 			char x=0;
 
 			// we add one more property
@@ -1566,7 +1564,8 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 			// the only record that could have been completed
 			// by that is the one to which the current belongs
-			err = nowdb_vrow_eval(cur->wrow, &vid, &x);
+			err = nowdb_vrow_eval(cur->wrow,
+			    (nowdb_key_t*)cur->vrtx, &x);
 			if (err != NOWDB_OK) return err;
 			if (!x) {
 				cur->off += recsz; continue;
@@ -1652,7 +1651,8 @@ projection:
 			cur->pmap = pmap;
 
 			// this is still ugly
-			if (realsrc != src+cur->off &&
+			if (realsrc != cur->vrtx    &&
+			    realsrc != src+cur->off &&
 			    realsrc != src+cur->off-cur->recsz) cur->freesrc=1;
 		}
 		if (full) break;

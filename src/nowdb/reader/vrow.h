@@ -118,6 +118,11 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
                                  uint64_t     *pmap,
                                  char        **row);
 
+/* ------------------------------------------------------------------------
+ * Check whether vrow is empty
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_vrow_empty(nowdb_vrow_t *vrow);
 
 /* ------------------------------------------------------------------------
  * Show current vrows and their state (debugging)
