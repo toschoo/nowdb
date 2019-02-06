@@ -540,8 +540,8 @@ int execStatement(nowdb_con_t     con,
 	int x;
 	size_t sz;
 
-	sz = strnlen(statement, 4097);
-	if (sz > 4096) return NOWDB_ERR_INVALID;
+	sz = strnlen(statement, BUFSIZE);
+	if (sz >= BUFSIZE-1) return NOWDB_ERR_INVALID;
 
 	x = sendbytes(con, statement, sz);
 	if (x != NOWDB_OK) return x;
