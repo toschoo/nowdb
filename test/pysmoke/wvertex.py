@@ -10,6 +10,13 @@ import random
 
 IT = 10
 
+def countvrtxby(vs, key, pivot):
+    n=0
+    for v in vs:
+        if key(v) == pivot:
+           n += 1
+    return n
+
 def roundfloats(c):
     print "RUNNING TEST 'roundfloats'"
 
@@ -371,7 +378,41 @@ def casefun(c):
     print "%d ?= %d" % (cnt, n)
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
-         
+
+def countalledges(keys, n):
+    x = 0
+    for i in range(n):
+        x += countedgeby(es, lambda e: e.destin, keys[i])
+    return x
+
+def mkin(keys,key,n):
+    x = 0
+    stmt = "("
+
+    for k in keys:
+       stmt += str(key(k))
+       x+=1
+       if x < n:
+          stmt += ","
+       else:
+          break
+
+    stmt += ")"
+    return stmt
+
+def infun(c):
+
+    print "RUNNING TEST 'infun'"
+
+    stmt = "select count(*) from product where prod_key in %s"
+    for i in range(1, 100, 5):
+        print "%d out of %d" % (i, len(ps))
+        # print stmt % mkin(ps, lambda k: k.key, i)
+        with c.execute(stmt % mkin(ps, lambda k: k.key, i)) as cur:
+             for row in cur:
+                 if row.field(0) != i:
+                    raise db.TestFailed("count does not match for %d: %d" % (i, row.field(0)))
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es) = db.loadDB(c, "db100")
@@ -381,6 +422,7 @@ if __name__ == "__main__":
             weekdays(c)
             shortcircuit(c)
             casefun(c)
+            infun(c)
 
         print "PASSED" 
 
