@@ -47,10 +47,12 @@
 #define NOWDB_PLAN_SEARCH_  21
 #define NOWDB_PLAN_FRANGE   30
 #define NOWDB_PLAN_FRANGE_  31
-#define NOWDB_PLAN_KRANGE   40
-#define NOWDB_PLAN_KRANGE_  41
-#define NOWDB_PLAN_CRANGE   50
-#define NOWDB_PLAN_CRANGE_  51
+#define NOWDB_PLAN_MRANGE   40
+#define NOWDB_PLAN_MRANGE_  41
+#define NOWDB_PLAN_KRANGE   50
+#define NOWDB_PLAN_KRANGE_  51
+#define NOWDB_PLAN_CRANGE   60
+#define NOWDB_PLAN_CRANGE_  61
 
 /* ------------------------------------------------------------------------
  * Plan node
@@ -69,8 +71,9 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_index_t *idx;
-	char          *keys;
+	nowdb_index_t  *idx;    /* the index                   */
+	char           *keys;   /* the keys as buffer of bytes */
+	ts_algo_tree_t **maps;  /* maps in case of mrange      */
 } nowdb_plan_idx_t;
 
 /* ------------------------------------------------------------------------

@@ -699,7 +699,6 @@ void initEval(nowdb_scope_t *scope) {
 	_eval.ce = NULL;
 	_eval.cv = NULL;
 
-	_eval.needtxt = 0;
 }
 
 void destroyEval() {

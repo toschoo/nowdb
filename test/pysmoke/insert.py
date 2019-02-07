@@ -375,7 +375,7 @@ def insertallvertex(c):
                raise db.TestFailed("%d: %d != 6" % (k, row.field(1)))
             print "%s, %s" % (row.field(0), row.field(1))
 
-    # coalesce on 2 non-existing prop
+    # coalesce on 2 non-existing props
     stmt = "select prod_desc, coal(prod_cat, prod_packing, 6) \
               from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
@@ -419,6 +419,72 @@ def insertallvertex(c):
             if not cur.ok():
                raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
             if row.field(1) is not None:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+
+    # insert with field list (without desc)
+    k = getNextKey()
+    dsc = "product %d" % k
+    price = 1.69
+    stmt = "insert into product (prod_key, prod_price) \
+                                (%d, 1.69)" % k
+    with c.execute(stmt) as r:
+       if not r.ok():
+          raise db.TestFailed("cannot insert %d: %s" % (k,r.details()))
+
+    # is null on text prop
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc is null"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %d (%s)" % (k, cur.code(),cur.details()))
+        for row in cur:
+            if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+            if row.field(1) is not None:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(0) != k:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+
+    # is not null on text prop
+    stmt = "select prod_key, prod_desc from product \
+             where prod_desc is not null"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %d (%s)" % (k, cur.code(),cur.details()))
+        for row in cur:
+            if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+            if row.field(1) is None:
+               raise db.TestFailed("is null %d: %s" % (k, row.field(0)))
+            if row.field(0) == k:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+
+    # coalesce non-existing prop in where
+    stmt = "select prod_key, prod_desc from product \
+             where coal(prod_desc, ' ') = ' '"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %d (%s)" % (k, cur.code(),cur.details()))
+        for row in cur:
+            if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+            if row.field(1) is not None:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(0) != k:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+
+    # coalesce non-existing exclude null
+    stmt = "select prod_key, prod_desc from product \
+             where coal(prod_desc, ' ') != ' '"
+    with c.execute(stmt) as cur:
+        if not cur.ok():
+          raise db.TestFailed("cannot find %d: %d (%s)" % (k, cur.code(),cur.details()))
+        for row in cur:
+            if not cur.ok():
+               raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+            if row.field(1) is None:
+               raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
+            if row.field(0) == k:
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
 
     # insert with field list (complete)

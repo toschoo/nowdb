@@ -65,6 +65,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->file = NULL;
 	reader->cont = NULL;
 	reader->ikeys = NULL;
+	reader->maps = NULL;
 	reader->from = NOWDB_TIME_DAWN;
 	reader->to   = NOWDB_TIME_DUSK;
 
@@ -294,6 +295,7 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 	case NOWDB_READER_FRANGE:
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
+	case NOWDB_READER_MRANGE:
 		reader->files = NULL;
 		if (reader->iter != NULL) {
 			beet_iter_destroy(reader->iter);
@@ -306,6 +308,9 @@ void nowdb_reader_destroy(nowdb_reader_t *reader) {
 		}
 		if (reader->buf != NULL) {
 			free(reader->buf); reader->buf = NULL;
+		}
+		if (reader->maps != NULL) {
+			free(reader->maps); reader->maps = NULL;
 		}
 		return;
 
@@ -546,6 +551,19 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: check if current key is in map
+ * ------------------------------------------------------------------------
+ */
+static inline char hasKey(nowdb_reader_t *reader) {
+	for(int i=0;i<reader->ikeys->sz;i++) {
+		if (reader->maps[i] == NULL) continue;
+		if (ts_algo_tree_find(reader->maps[i],
+		    reader->key+reader->ikeys->off[i]) == NULL) return 0;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: move for range, reading all pages
  * ------------------------------------------------------------------------
  */
@@ -559,18 +577,31 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	                       FALSE, OBJECT, NULL);
 	}
 	if (reader->key == NULL) {
-		ber = beet_iter_move(reader->iter, &reader->key, NULL);
-		BEETERR(ber,1);
-		ber = beet_iter_enter(reader->iter);
-		BEETERR(ber,0);
+		for(;;) {
+			ber = beet_iter_move(reader->iter, &reader->key, NULL);
+			BEETERR(ber,1);
+
+			// is key in map?
+			if (reader->maps != NULL) {
+				if (!hasKey(reader)) continue;
+			}
+
+			ber = beet_iter_enter(reader->iter);
+			BEETERR(ber,0);
+
+			break;
+		}
 	}
 	for(;;) {
+		char left = 0;
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
 			// fprintf(stderr, "in inner loop\n");
-			ber = beet_iter_leave(reader->iter);
-			BEETERR(ber,0);
+			if (left == 0) {
+				ber = beet_iter_leave(reader->iter);
+				BEETERR(ber,0);
+			}
 			
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
@@ -578,7 +609,16 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 
 			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
+			if (reader->maps != NULL) {
+				if (!hasKey(reader)) {
+					left=1;
+					ber = BEET_ERR_EOF;
+					continue;
+				}
+			}
+
 			ber = beet_iter_enter(reader->iter);
+			left=0;
 			if (ber == BEET_ERR_EOF) continue;
 			BEETERR(ber,0);
 
@@ -662,41 +702,52 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	}
 	if (reader->off < 0) {
 		reader->off = 0;
-	} else if (reader->off >= reader->size) {
-		reader->eof = 1;
-		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
-	if (reader->key != NULL) {
-		if (reader->recsize == NOWDB_EDGE_SIZE) {
-			nowdb_index_grabEdgeKeys(reader->ikeys,
-		                       reader->buf+reader->off,
-			                         reader->tmp2);
-		        x = nowdb_index_edge_compare(reader->tmp,
-			                             reader->tmp2,
-			                             reader->ikeys);
-		} else {
-			nowdb_index_grabVertexKeys(reader->ikeys,
-		                         reader->buf+reader->off,
-			                           reader->tmp2);
-		        x = nowdb_index_edge_compare(reader->tmp,
-			                             reader->tmp2,
-			                             reader->ikeys);
+	for(;;) {
+		if (reader->off >= reader->size) {
+			reader->eof = 1;
+			return nowdb_err_get(nowdb_err_eof,
+			               FALSE, OBJECT, NULL);
 		}
-		if (x != BEET_CMP_EQUAL) {
-			memcpy(reader->tmp, reader->tmp2,
-			             reader->ikeys->sz*8);
-		}
-	} else {
-		if (reader->recsize == NOWDB_EDGE_SIZE) {
-			nowdb_index_grabEdgeKeys(reader->ikeys,
-		                       reader->buf+reader->off,
-			                           reader->tmp);
+		if (reader->key != NULL) {
+			if (reader->recsize == NOWDB_EDGE_SIZE) {
+				nowdb_index_grabEdgeKeys(reader->ikeys,
+			                       reader->buf+reader->off,
+				                         reader->tmp2);
+			        x = nowdb_index_edge_compare(reader->tmp,
+				                             reader->tmp2,
+				                             reader->ikeys);
+			} else {
+				nowdb_index_grabVertexKeys(reader->ikeys,
+			                         reader->buf+reader->off,
+				                           reader->tmp2);
+			        x = nowdb_index_edge_compare(reader->tmp,
+				                             reader->tmp2,
+				                             reader->ikeys);
+			}
+			if (x != BEET_CMP_EQUAL) {
+				memcpy(reader->tmp, reader->tmp2,
+				             reader->ikeys->sz*8);
+			}
 		} else {
-			nowdb_index_grabVertexKeys(reader->ikeys,
-		                         reader->buf+reader->off,
-			                            reader->tmp);
+			if (reader->recsize == NOWDB_EDGE_SIZE) {
+				nowdb_index_grabEdgeKeys(reader->ikeys,
+			                       reader->buf+reader->off,
+				                           reader->tmp);
+			} else {
+				nowdb_index_grabVertexKeys(reader->ikeys,
+			                         reader->buf+reader->off,
+				                            reader->tmp);
+			}
 		}
 		reader->key = reader->tmp;
+		if (reader->maps != NULL) {
+			if (!hasKey(reader)) {
+				reader->off += reader->recsize;
+				continue;
+			}
+		}
+		break;
 	}
 	p = reader->buf+reader->off;
 	memset(reader->page2, 0, NOWDB_IDX_PAGE);
@@ -791,6 +842,7 @@ static inline nowdb_err_t moveSeq(nowdb_reader_t *reader) {
 			return nowdb_err_get(nowdb_err_eof,
 			               FALSE, OBJECT, NULL);
 		}
+		// fprintf(stderr, "sequence on %u\n", reader->cur);
 		err = nowdb_reader_move(reader->sub[reader->cur]);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_eof) {
@@ -866,6 +918,7 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 		return moveSearch(reader);
 
 	case NOWDB_READER_FRANGE:
+	case NOWDB_READER_MRANGE:
 		return moveFRange(reader);
 
 	case NOWDB_READER_KRANGE:
@@ -912,6 +965,7 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 
 	case NOWDB_READER_FRANGE:
 	case NOWDB_READER_KRANGE:
+	case NOWDB_READER_MRANGE:
 	case NOWDB_READER_CRANGE:
 		return rewindRange(reader);
 
@@ -941,6 +995,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	switch(reader->type) {
 	case NOWDB_READER_FULLSCAN:
 	case NOWDB_READER_SEARCH:
+	case NOWDB_READER_MRANGE:
 	case NOWDB_READER_FRANGE: return reader->page;
 
 	case NOWDB_READER_KRANGE:
@@ -1137,8 +1192,9 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
 	(*reader)->ko  = rtype == NOWDB_READER_KRANGE;
+	(*reader)->maps = NULL;
 
-	if (rtype == NOWDB_READER_FRANGE) {
+	if (rtype == NOWDB_READER_FRANGE || rtype == NOWDB_READER_MRANGE) {
 		(*reader)->plru = calloc(1, sizeof(nowdb_pplru_t));
 		if ((*reader)->plru == NULL) {
 			nowdb_reader_destroy(*reader); free(*reader);
@@ -1242,6 +1298,26 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
 	return mkRange(reader, NOWDB_READER_CRANGE,
 	                      files, index, filter,
 	                                start, end);
+}
+
+/* ------------------------------------------------------------------------
+ * Index Map Range scan
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_expr_t    filter,
+                                ts_algo_tree_t  **maps,
+                                void *start, void *end) {
+	nowdb_err_t err;
+
+	err = mkRange(reader, NOWDB_READER_MRANGE,
+	                     files, index, filter,
+	                              start, end);
+	if (err != NOWDB_OK) return err;
+	(*reader)->maps = maps;
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------

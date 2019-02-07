@@ -40,7 +40,6 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->eval.tlru = NULL;
 	row->eval.ce = NULL;
 	row->eval.cv = NULL;
-	row->eval.needtxt = 1;
 	row->cur = 0;
 	row->fur = 0;
 	row->dirty = 0;

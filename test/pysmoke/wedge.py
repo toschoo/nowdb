@@ -17,6 +17,13 @@ def countedge(es,edge):
            n+=1
     return n
 
+def countedgeby(es, key, pivot):
+    n=0
+    for e in es:
+        if key(e) == pivot:
+           n += 1
+    return n
+
 def roundfloats(c):
     print "RUNNING TEST 'roundfloats'"
 
@@ -482,6 +489,49 @@ def casefun(c):
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
+def countalledges(keys, n):
+    x = 0
+    for i in range(n):
+        x += countedgeby(es, lambda e: e.destin, keys[i])
+    return x
+
+def mkin(keys,n):
+    x = 0
+    stmt = "("
+
+    for k in keys:
+       stmt += str(k)
+       x+=1
+       if x < n:
+          stmt += ","
+       else:
+          break
+
+    stmt += ")"
+    return stmt
+
+def infun(c):
+
+    print "RUNNING TEST 'infun'"
+
+    keys = []
+
+    with c.execute("select prod_key from product where prod_cat is not null") as cur:
+         if not cur.ok():
+            raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
+         for row in cur:
+             keys.append(row.field(0))
+
+    stmt = "select count(*) from sales where edge = 'buys' and destin in %s"
+    for i in range(1, 100, 5):
+        print "%d out of %d" % (i, len(keys))
+        # print "select count(*) from sales where edge = 'buys' and destin in %s" % mkin(keys,i)
+        with c.execute(stmt % mkin(keys, i)) as cur:
+             for row in cur:
+                 if row.field(0) != countalledges(keys, i):
+                    raise db.TestFailed("count does not match for %d: %d vs. %d" % \
+                                        (i, row.field(0), countalledges(keys, i)))
+
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es) = db.loadDB(c, "db100")
@@ -491,6 +541,7 @@ if __name__ == "__main__":
             weekdays(c)
             shortcircuit(c)
             casefun(c)
+            infun(c)
 
         print "PASSED"
 

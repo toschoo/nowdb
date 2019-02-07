@@ -204,7 +204,6 @@ typedef struct {
 	ts_algo_list_t         vm; /* vertex model helper (tree???)     */
 	nowdb_edge_helper_t   *ce; /* current edge helper               */
 	nowdb_vertex_helper_t *cv; /* currrent vertext helper           */
-	char              needtxt; /* we need to evaluate text          */
 } nowdb_eval_t;
 
 /* -----------------------------------------------------------------------
