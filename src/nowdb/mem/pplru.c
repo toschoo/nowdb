@@ -127,13 +127,15 @@ nowdb_err_t nowdb_pplru_add(nowdb_pplru_t *lru,
 	}
 
 	pair->pge = pge;
-	pair->page = malloc(NOWDB_IDX_PAGE);
-	if (pair->page == NULL) {
-		free(pair);
-		NOMEM("allocating page");
-		return err;
-	}
+	pair->page = NULL;
+
 	if (page != NOWDB_BLACK_PAGE) {
+		pair->page = malloc(NOWDB_IDX_PAGE);
+		if (pair->page == NULL) {
+			free(pair);
+			NOMEM("allocating page");
+			return err;
+		}
 		memcpy(pair->page, page, NOWDB_IDX_PAGE);
 	}
 
