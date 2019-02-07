@@ -287,9 +287,8 @@ void nowdb_dbresult_destroy(nowdb_dbresult_t res, int all) {
 		case NOWDB_QRY_RESULT_ROW:
 			if (res->own) qResDestroy(&res->res);
 			break;
+		default: qResDestroy(&res->res);
 		}
-		// report
-		// cursor
 	}
 	free(res);
 }
