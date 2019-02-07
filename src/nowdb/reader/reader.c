@@ -702,41 +702,52 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	}
 	if (reader->off < 0) {
 		reader->off = 0;
-	} else if (reader->off >= reader->size) {
-		reader->eof = 1;
-		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
-	if (reader->key != NULL) {
-		if (reader->recsize == NOWDB_EDGE_SIZE) {
-			nowdb_index_grabEdgeKeys(reader->ikeys,
-		                       reader->buf+reader->off,
-			                         reader->tmp2);
-		        x = nowdb_index_edge_compare(reader->tmp,
-			                             reader->tmp2,
-			                             reader->ikeys);
-		} else {
-			nowdb_index_grabVertexKeys(reader->ikeys,
-		                         reader->buf+reader->off,
-			                           reader->tmp2);
-		        x = nowdb_index_edge_compare(reader->tmp,
-			                             reader->tmp2,
-			                             reader->ikeys);
+	for(;;) {
+		if (reader->off >= reader->size) {
+			reader->eof = 1;
+			return nowdb_err_get(nowdb_err_eof,
+			               FALSE, OBJECT, NULL);
 		}
-		if (x != BEET_CMP_EQUAL) {
-			memcpy(reader->tmp, reader->tmp2,
-			             reader->ikeys->sz*8);
-		}
-	} else {
-		if (reader->recsize == NOWDB_EDGE_SIZE) {
-			nowdb_index_grabEdgeKeys(reader->ikeys,
-		                       reader->buf+reader->off,
-			                           reader->tmp);
+		if (reader->key != NULL) {
+			if (reader->recsize == NOWDB_EDGE_SIZE) {
+				nowdb_index_grabEdgeKeys(reader->ikeys,
+			                       reader->buf+reader->off,
+				                         reader->tmp2);
+			        x = nowdb_index_edge_compare(reader->tmp,
+				                             reader->tmp2,
+				                             reader->ikeys);
+			} else {
+				nowdb_index_grabVertexKeys(reader->ikeys,
+			                         reader->buf+reader->off,
+				                           reader->tmp2);
+			        x = nowdb_index_edge_compare(reader->tmp,
+				                             reader->tmp2,
+				                             reader->ikeys);
+			}
+			if (x != BEET_CMP_EQUAL) {
+				memcpy(reader->tmp, reader->tmp2,
+				             reader->ikeys->sz*8);
+			}
 		} else {
-			nowdb_index_grabVertexKeys(reader->ikeys,
-		                         reader->buf+reader->off,
-			                            reader->tmp);
+			if (reader->recsize == NOWDB_EDGE_SIZE) {
+				nowdb_index_grabEdgeKeys(reader->ikeys,
+			                       reader->buf+reader->off,
+				                           reader->tmp);
+			} else {
+				nowdb_index_grabVertexKeys(reader->ikeys,
+			                         reader->buf+reader->off,
+				                            reader->tmp);
+			}
 		}
 		reader->key = reader->tmp;
+		if (reader->maps != NULL) {
+			if (!hasKey(reader)) {
+				reader->off += reader->recsize;
+				continue;
+			}
+		}
+		break;
 	}
 	p = reader->buf+reader->off;
 	memset(reader->page2, 0, NOWDB_IDX_PAGE);

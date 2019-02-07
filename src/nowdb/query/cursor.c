@@ -251,6 +251,7 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 		                pidx->idx, cur->filter, cur->eval,
 		                                    NOWDB_ORD_ASC,
 		                        cur->fromkey, cur->tokey);
+		if (err == NOWDB_OK) buf->maps = pidx->maps;
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
