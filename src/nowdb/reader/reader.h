@@ -84,6 +84,7 @@ typedef struct nowdb_reader_t {
 	int32_t                  off; /* offset into win               */
 	nowdb_bitmap64_t       *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
+	ts_algo_tree_t        **maps; /* Maps of keys for MRANGE       */
 	void                    *key; /* current key                   */
 	void                  *start; /* start of range                */
 	void                    *end; /* end of range                  */
@@ -258,6 +259,22 @@ nowdb_err_t nowdb_reader_crange(nowdb_reader_t **reader,
                                 ts_algo_list_t  *files,
                                 nowdb_index_t   *index,
                                 nowdb_expr_t    filter,
+                                void *start, void *end);
+
+/* ------------------------------------------------------------------------
+ * Index Map Range scan
+ * --------------------
+ * Instantiate a reader as map index range scan,
+ * reading all keys in range, but only the bitmaps and pages
+ * of those whose key matches with a key in the "map" (i.e. tree)
+ * passed in as argument
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
+                                ts_algo_list_t  *files,
+                                nowdb_index_t   *index,
+                                nowdb_expr_t    filter,
+                                ts_algo_tree_t  **maps,
                                 void *start, void *end);
 
 /* ------------------------------------------------------------------------

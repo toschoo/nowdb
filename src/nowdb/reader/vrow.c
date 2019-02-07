@@ -730,6 +730,7 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 	// filter all with np > 0
 	for(run=vrow->ready->head; run!=NULL;) {
 		if (run->nxt == NULL) break;
+		run = run->nxt;
 	}
 	if (ts_algo_tree_filter(vrow->vrtx, vrow->ready,
 	                  NULL, &oneProp) != TS_ALGO_OK) 
@@ -737,10 +738,11 @@ nowdb_err_t nowdb_vrow_force(nowdb_vrow_t *vrow) {
 		NOMEM("tree.filter");
 		return err;
 	}
-	if (run==NULL) run=vrow->ready->head;
+	if (run==NULL) run=vrow->ready->head; else run=run->nxt;
 	for(;run!=NULL;run=run->nxt) {
 		ts_algo_tree_delete(vrow->vrtx, run->cont);
 	}
+	// fprintf(stderr, "having %d\n", vrow->ready->len);
 	return NOWDB_OK;
 }
 
@@ -767,6 +769,14 @@ nowdb_bool_t nowdb_vrow_complete(nowdb_vrow_t *vrow,
 	free(node); destroyVRow(v);
 		
 	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Check if vrow is empty
+ * ------------------------------------------------------------------------
+ */
+nowdb_bool_t nowdb_vrow_empty(nowdb_vrow_t *vrow) {
+	return (vrow->ready->len == 0);
 }
 
 /* ------------------------------------------------------------------------
@@ -798,7 +808,7 @@ nowdb_err_t nowdb_vrow_eval(nowdb_vrow_t *vrow,
 	if (t != NOWDB_TYP_NOTHING &&
 	    *(nowdb_value_t*)x) {
 		*found = 1;
-		*vid = v->vertex;
+		memcpy(vid, &v->vertex, 8);
 	}
 	ts_algo_list_remove(vrow->ready, node);
 	free(node); destroyVRow(v);

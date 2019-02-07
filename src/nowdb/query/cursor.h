@@ -50,6 +50,7 @@ typedef struct {
 	uint32_t           recsz; /* record size                   */
 	char                *tmp; /* temporary buffer for group    */
 	char               *tmp2; /* temporary buffer for row      */
+	char            vrtx[32]; /* yet another temporary buffer  */
 	char            *fromkey; /* range: fromkey                */
 	char              *tokey; /* range:   tokey                */
 	char             freesrc; /* free the source               */

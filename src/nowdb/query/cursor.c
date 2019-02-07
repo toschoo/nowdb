@@ -187,8 +187,14 @@ static inline nowdb_err_t createSeq(nowdb_cursor_t    *cur,
 			} else {
 				files = &cur->stf.files;
 			}
-			err = nowdb_reader_search(&rds[i+1], files,
-			           pidx[i].idx, pidx[i].keys, NULL);
+			if (pidx[i].maps == NULL) {
+				err = nowdb_reader_search(&rds[i+1], files,
+			           	pidx[i].idx, pidx[i].keys, NULL);
+			} else {
+				err = nowdb_reader_mrange(&rds[i+1], files,
+				           pidx[i].idx, NULL, pidx[i].maps,
+				                               NULL, NULL);
+			}
 			break;
 		default:
 			return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
@@ -240,10 +246,12 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	
 	switch(type) {
 	case NOWDB_PLAN_FRANGE_:
+	case NOWDB_PLAN_MRANGE_: // we need to handle this one!
 		err = nowdb_reader_bufidx(&buf, &cur->stf.pending,
 		                pidx->idx, cur->filter, cur->eval,
 		                                    NOWDB_ORD_ASC,
 		                        cur->fromkey, cur->tokey);
+		if (err == NOWDB_OK) buf->maps = pidx->maps;
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
@@ -267,6 +275,11 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
 	case NOWDB_PLAN_FRANGE_:
 		err = nowdb_reader_frange(&range, &cur->stf.files, pidx->idx,
 		                              NULL, cur->fromkey, cur->tokey);
+		break;
+
+	case NOWDB_PLAN_MRANGE_:
+		err = nowdb_reader_mrange(&range, &cur->stf.files, pidx->idx,
+		                 NULL, pidx->maps, cur->fromkey, cur->tokey);
 		break;
 
 	case NOWDB_PLAN_KRANGE_:
@@ -357,11 +370,19 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	if (rplan->stype == NOWDB_PLAN_SEARCH_) {
 		// fprintf(stderr, "SEARCH\n");
 		err = createSeq(cur, rplan->stype, pidx, 1);
+		pidx->maps = NULL;
 
 	} else if (rplan->stype == NOWDB_PLAN_FRANGE_ ||
+	           rplan->stype == NOWDB_PLAN_MRANGE_ ||
 	          (rplan->stype == NOWDB_PLAN_KRANGE_ && !hasId(pidx))) {
-		// fprintf(stderr, "FRANGE\n");
-		err = createMerge(cur, NOWDB_PLAN_FRANGE_, pidx);
+		if (pidx->maps == NULL) {
+			// fprintf(stderr, "FRANGE\n");
+			err = createMerge(cur, NOWDB_PLAN_FRANGE_, pidx);
+		} else {
+			// fprintf(stderr, "MRANGE\n");
+			err = createMerge(cur, NOWDB_PLAN_MRANGE_, pidx);
+			pidx->maps = NULL;
+		}
 
 	// KRANGE only allowd with model id
 	} else if (rplan->stype == NOWDB_PLAN_KRANGE_) {
@@ -422,7 +443,8 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	err = nowdb_vrow_new(cur->v->roleid, &cur->prow, cur->eval);
 	if (err != NOWDB_OK) return err;
 
-	nowdb_vrow_autoComplete(cur->prow);
+	// not yet working
+	// nowdb_vrow_autoComplete(cur->prow);
 
 	for(int i=0; i<cur->row->sz; i++) {
 		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
@@ -509,34 +531,23 @@ static nowdb_err_t hasOnlyVid(nowdb_row_t  *row,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
-                                 ts_algo_list_t *vlst) {
+                                 ts_algo_tree_t *vids) {
 	nowdb_err_t err;
 	nowdb_expr_t f, o1, o2;
 	nowdb_expr_t r, rc, v, vc;
-	ts_algo_list_t vids;
-	ts_algo_list_node_t *run;
 
-	// copy the list of vids (which is owned by the filter)
-	ts_algo_list_init(&vids);
-	for(run=vlst->head;run!=NULL;run=run->nxt) {
-		uint64_t *vid = malloc(8);
-		if (vid == NULL) {
-			NOMEM("allocating vid");
-			DESTROYVIDS(vids);
-			return err;
-		}
-		memcpy(vid, run->cont, 8);
-		if (ts_algo_list_append(&vids, vid) != TS_ALGO_OK) {
-			NOMEM("list.append");
-			DESTROYVIDS(vids);
-			return err;
-		}
+	// vertex constant
+	// we make this first, so the memory management for vids is done
+	err = nowdb_expr_constFromTree(&vc, vids, NOWDB_TYP_UINT);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_destroy(vids); free(vids);
+		return err;
 	}
 
 	// role field
 	err = nowdb_expr_newVertexOffField(&r, NOWDB_OFF_ROLE);
 	if (err != NOWDB_OK) {
-		DESTROYVIDS(vids);
+		nowdb_expr_destroy(vc); free(vc);
 		return err;
 	}
 
@@ -544,34 +555,25 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	err = nowdb_expr_newConstant(&rc, &cur->v->roleid,
 	                                 NOWDB_TYP_SHORT);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(r); free(r);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
 	// roleid = role
 	err = nowdb_expr_newOp(&o1, NOWDB_EXPR_OP_EQ, r, rc);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(r); free(r);
 		nowdb_expr_destroy(rc); free(rc);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
 	// vid field
 	err = nowdb_expr_newVertexOffField(&v, NOWDB_OFF_VERTEX);
 	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(vc); free(vc);
 		nowdb_expr_destroy(o1); free(o1);
-		DESTROYVIDS(vids);
-		return err;
-	}
-
-	// vertex constant
-	err = nowdb_expr_constFromList(&vc, &vids, NOWDB_TYP_UINT);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(o1); free(o1);
-		nowdb_expr_destroy(v); free(v);
-		DESTROYVIDS(vids);
 		return err;
 	}
 
@@ -581,7 +583,6 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(v); free(v);
 		nowdb_expr_destroy(vc); free(vc);
-		ts_algo_list_destroy(&vids);
 		return err;
 	}
 
@@ -590,13 +591,8 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(o1); free(o1);
 		nowdb_expr_destroy(o2); free(o2);
-		ts_algo_list_destroy(&vids);
 		return err;
 	}
-
-	// destroy the list but *only* the list
-	// its content is now owned by the filter
-	ts_algo_list_destroy(&vids);
 
 	// nowdb_filter_show(f,stderr);fprintf(stderr, "\n");
 
@@ -617,12 +613,74 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
  */
 #define DESTROYPIDX(n,ps) \
 	for(int i=0; i<n; i++) { \
-		free(ps[i].keys); \
+		if (ps[i].keys != NULL) { \
+			free(ps[i].keys); \
+		} \
+		if (ps[i].maps != NULL) { \
+			free(ps[i].maps); \
+		} \
 	} \
 	free(ps);
 
 /* ------------------------------------------------------------------------
- * Helper: Build search readers, on reader per vid 'in (...)'
+ * Helper: Build mrange reader for vid 'in (...)'
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
+                                       nowdb_cursor_t *cur,
+                                       ts_algo_tree_t *vtree) {
+	nowdb_err_t err;
+	nowdb_plan_idx_t *pidx;
+	nowdb_index_desc_t *desc;
+
+	// get the internal index on vertex
+	err = nowdb_index_man_getByName(scope->iman,
+	                              VINDEX, &desc);
+	if (err != NOWDB_OK) return err;
+
+	// one plan index per vid
+	pidx = calloc(1, sizeof(nowdb_plan_idx_t));
+	if (pidx == NULL) {
+		NOMEM("allocating plan index");
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		return err;
+	}
+
+	// create index keys
+	pidx->idx = desc->idx;
+	pidx->keys = malloc(12);
+	if (pidx->keys == NULL) {
+		NOMEM("allocating keys");
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		DESTROYPIDX(0,pidx);
+		return err;
+	}
+
+	memcpy(pidx->keys, &cur->v->roleid, 4);
+
+	pidx->maps = calloc(2, sizeof(ts_algo_tree_t*));
+	if (pidx->maps == NULL) {
+		NOMEM("allocating keys");
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		DESTROYPIDX(1,pidx);
+		return err;
+	}
+
+	pidx->maps[0] = NULL;
+	pidx->maps[1] = vtree;
+
+	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, 1);
+	pidx->maps = NULL;
+	DESTROYPIDX(1,pidx);
+	if (err != NOWDB_OK) {
+		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: Build search readers, one reader per vid 'in (...)'
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
@@ -645,7 +703,6 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
 		NOMEM("allocating plan index");
 		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
 		return err;
-		
 	}
 
 	// create index keys
@@ -678,7 +735,8 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
  */
 static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
                                  nowdb_cursor_t *cur,
-                                 ts_algo_list_t *vlst) {
+                                 ts_algo_list_t *vlst,
+                                 ts_algo_tree_t *vids) {
 	nowdb_err_t err;
 
 	// first destroy existing reader
@@ -702,20 +760,10 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 	                          NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 	if (err != NOWDB_OK) return err;
 
-	// this magical number reflects an internal of reader
-        // (which, currently, can have only 64 subreaders). 
-	// On the long run, we should improve readers
-	// so that we can have a meaningful limit or
-	// threshold, preferrably a ratio with the number
-	// of keys in the type.
-	// Furthermore, instead of performing a fullscan
-	// we should use a MRANGE merge reader, i.e.
-	// a reader that presents only relevant keys (vid),
-	// i.e. keys that correspond to the 'in' list.
-	if (vlst->len > 61) {
-		// fprintf(stderr, "FULLSCAN\n");
-		err = nowdb_reader_fullscan(&cur->rdr,
-		                &cur->stf.files, NULL);
+	// this magical number is not based on any benchmarks!
+	if (vlst->len > 31) {
+		// fprintf(stderr, "MRANGE\n");
+		err = makeVidRange(scope, cur, vids);
 	} else {
 		// fprintf(stderr, "SEARCH: %d\n", vlst->len);
 		err = makeVidSearch(scope, cur, vlst);
@@ -736,7 +784,7 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 
 /* ------------------------------------------------------------------------
  * Helper: Get the vids according to the original query,
- *         put then in a list and then create new second
+ *         put them in a list and then create new second
  *         cursor identical to the first, but with
  *         filter and readers accepting all vertices
  *         (of this type) that are 'in (...)' the vertices.
@@ -857,42 +905,43 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 				goto cleanup;
 			}
 			memcpy(vid, buf+i, 8);
-			// fprintf(stderr, "got vid %lu\n", *vid);
+			// fprintf(stderr, "got vid %lu (%u)\n", *vid, cur->recsz);
 			if (ts_algo_tree_insert(vids, vid) != TS_ALGO_OK) {
 				free(vid);
+				ts_algo_tree_destroy(vids); free(vids);
 				NOMEM("tree.insert");
 				goto cleanup;
 			}
 		}
-		break;
 	}
 
 	// nothing found
 	if (vids->count == 0) {
 		err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT,
 		                                 "preprocessing");
+		ts_algo_tree_destroy(vids); free(vids);
 		goto cleanup;
 	}
+
+	// fprintf(stderr, "HAVING %d\n", vids->count);
 
 	// tree to list
 	vlst = ts_algo_tree_toList(vids);
 	if (vlst == NULL) {
+		ts_algo_tree_destroy(vids); free(vids);
 		NOMEM("tree.toList");
 		goto cleanup;
 	}
 
 	// create filter with in compare
-	err = makeVidCompare(mom, vlst);
+	err = makeVidCompare(mom, vids);
 	if (err != NOWDB_OK) goto cleanup;
 
 	// make reader (using the built-in index if possible)
-	err = makeVidReader(scope, mom, vlst);
+	err = makeVidReader(scope, mom, vlst, vids);
 	if (err != NOWDB_OK) goto cleanup;
 
 cleanup:
-	if (vids != NULL) {
-		ts_algo_tree_destroy(vids); free(vids);
-	}
 	if (vlst != NULL) {
 		ts_algo_list_destroy(vlst); free(vlst);
 	}
@@ -987,8 +1036,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	(*cur)->eval->tlru = NULL;
 	(*cur)->eval->ce = NULL;
 	(*cur)->eval->cv = NULL;
-
-	(*cur)->eval->needtxt = 0; // check!
 
 	ts_algo_list_init(&(*cur)->eval->em);
 	ts_algo_list_init(&(*cur)->eval->vm);
@@ -1421,11 +1468,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	char *src;
 	nowdb_content_t ctype;
 	char complete=0, cc=0, x=1, full=0;
-	char vrtx[32];
 	uint32_t mx;
 
 	// we have already reached eof
-	CHECKEOF()
+	// CHECKEOF()
 
 	// initialise like after move
 	AFTERMOVE()
@@ -1457,15 +1503,16 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			err = nowdb_vrow_force(cur->wrow);
 			if (err != NOWDB_OK) return err;
 
+			// memset(cur->vrtx, 0, 32);
 			err = nowdb_vrow_eval(cur->wrow,
-                                (nowdb_key_t*)vrtx, &x);
+                                (nowdb_key_t*)cur->vrtx, &x);
 			if (err != NOWDB_OK) return err;
 			if (x) {
-				memset(vrtx+8, 0, 24);
-				realsrc = vrtx;
+				realsrc = cur->vrtx;
 				realsz = 32;
 				goto projection;
 			}
+			if (!nowdb_vrow_empty(cur->wrow)) continue;
 		}
 		// END OF FILE
 		if (cur->eof) {
@@ -1507,7 +1554,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		}
 		// FILTER
 		if (cur->wrow != NULL) {
-			nowdb_key_t vid;
 			char x=0;
 
 			// we add one more property
@@ -1519,7 +1565,8 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 			// the only record that could have been completed
 			// by that is the one to which the current belongs
-			err = nowdb_vrow_eval(cur->wrow, &vid, &x);
+			err = nowdb_vrow_eval(cur->wrow,
+			    (nowdb_key_t*)cur->vrtx, &x);
 			if (err != NOWDB_OK) return err;
 			if (!x) {
 				cur->off += recsz; continue;
@@ -1603,7 +1650,11 @@ projection:
 			cur->recsz = realsz;
 			recsz = cur->recsz;
 			cur->pmap = pmap;
-			if (ctype == NOWDB_CONT_VERTEX) cur->freesrc=1;
+
+			// this is still ugly
+			if (realsrc != cur->vrtx    &&
+			    realsrc != src+cur->off &&
+			    realsrc != src+cur->off-cur->recsz) cur->freesrc=1;
 		}
 		if (full) break;
 	}

@@ -80,6 +80,7 @@ struct nowdb_dbresult_t {
         int                 lo;
         int                off;
         nowdb_qry_result_t res;
+        char               eof;
 	char               own;
 };
 
@@ -671,6 +672,7 @@ int nowdb_dbcur_open(nowdb_dbresult_t cur) {
 		CURSETERR(nowdb_err_no_mem, "allocating fetch buffer");
 		return -1;
 	}
+	CUR(cur)->eof = 0;
 	CUR(cur)->off = 0;
 	CUR(cur)->lo  = 0;
 	CUR(cur)->sz  = 0;
@@ -745,6 +747,10 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
 
 	// already at eof
 	if (CUR(cur)->errcode == nowdb_err_eof) return -1;
+	if (CUR(cur)->eof) {
+		CUR(cur)->errcode = nowdb_err_eof;
+		return -1;
+	}
 	if (leftover(cur) != 0) return -1;
 
 	buf = CUR(cur)->buf+CUR(cur)->lo;
@@ -758,6 +764,7 @@ int nowdb_dbcur_fetch(nowdb_dbcur_t  cur) {
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
 			if (CUR(cur)->sz > 0) {
+				CUR(cur)->eof = 1;
 				nowdb_err_release(err);
 				return 0;
 			}
