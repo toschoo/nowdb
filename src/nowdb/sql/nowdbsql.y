@@ -102,6 +102,12 @@
 %type drop_clause {nowdb_ast_t*}
 %destructor drop_clause {nowdb_ast_destroyAndFree($$);}
 
+%type show_clause {nowdb_ast_t*}
+%destructor show_clause {nowdb_ast_destroyAndFree($$);}
+
+%type desc_clause {nowdb_ast_t*}
+%destructor desc_clause {nowdb_ast_destroyAndFree($$);}
+
 %type projection_clause {nowdb_ast_t*}
 %destructor projection_clause {nowdb_ast_destroyAndFree($$);}
 
@@ -217,6 +223,26 @@ ddl ::= drop_clause(C) IF EXISTS. {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADD_OPTION(C, NOWDB_AST_IFEXISTS, 0, NULL);
 	NOWDB_SQL_MAKE_DDL(C);
+}
+
+ddl ::= show_clause(C). {
+	NOWDB_SQL_MAKE_DDL(C);
+}
+
+ddl ::= desc_clause(C). {
+	NOWDB_SQL_MAKE_DDL(C);
+}
+
+show_clause(C) ::= SHOW IDENTIFIER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_SHOW, 0);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
+}
+
+desc_clause(C) ::= DESC IDENTIFIER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_DESC, 0);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
 }
 
 /* ------------------------------------------------------------------------

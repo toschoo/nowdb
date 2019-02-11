@@ -60,6 +60,9 @@
 (?i:ALTER)		return NOWDB_SQL_ALTER;
 	*/
 
+(?i:SHOW)		return NOWDB_SQL_SHOW;
+(?i:DESCRIBE)		return NOWDB_SQL_DESC;
+
 (?i:LOAD)		return NOWDB_SQL_LOAD;
 (?i:USE)		return NOWDB_SQL_USE;
 (?i:FETCH)		return NOWDB_SQL_FETCH;

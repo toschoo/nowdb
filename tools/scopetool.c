@@ -334,6 +334,7 @@ int handleAst(nowdb_path_t path, nowdb_ast_t *ast) {
 	case NOWDB_QRY_RESULT_REPORT: return printReport(&res);
 	case NOWDB_QRY_RESULT_SCOPE: global_scope = res.result; break;
 	case NOWDB_QRY_RESULT_CURSOR: return processCursor(res.result);
+	// case NOWDB_QRY_RESULT_ROW: return processRow(res.result);
 
 	case NOWDB_QRY_RESULT_PLAN:
 		fprintf(stderr, 

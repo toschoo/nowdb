@@ -46,6 +46,8 @@
 #define NOWDB_AST_CREATE 1001
 #define NOWDB_AST_ALTER  1002
 #define NOWDB_AST_DROP   1003
+#define NOWDB_AST_SHOW   1011
+#define NOWDB_AST_DESC   1012
 
 /* -----------------------------------------------------------------------
  * DLL is load

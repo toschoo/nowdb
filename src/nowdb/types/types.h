@@ -215,4 +215,6 @@ int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 
 int nowdb_edge_offByName(char *field);
 
+char *nowdb_typename(nowdb_type_t typ);
+
 #endif

@@ -79,6 +79,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_CREATE: ASTCALLOC(4);
 	case NOWDB_AST_ALTER: ASTCALLOC(2);
 	case NOWDB_AST_DROP:  ASTCALLOC(2);
+	case NOWDB_AST_SHOW:  ASTCALLOC(0);
+	case NOWDB_AST_DESC:  ASTCALLOC(0);
 
 	case NOWDB_AST_LOAD:  ASTCALLOC(2); 
 
@@ -139,6 +141,9 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_CREATE: return "create";
 	case NOWDB_AST_ALTER: return "alter";
 	case NOWDB_AST_DROP:  return "drop";
+
+	case NOWDB_AST_SHOW:  return "show";
+	case NOWDB_AST_DESC:  return "describe";
 
 	case NOWDB_AST_LOAD:  return "load";
 
@@ -355,7 +360,9 @@ static inline int ad4l(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_CREATE:
 	case NOWDB_AST_ALTER: 
-	case NOWDB_AST_DROP: ADDKID(0);
+	case NOWDB_AST_DROP:
+	case NOWDB_AST_SHOW:
+	case NOWDB_AST_DESC: ADDKID(0);
 	default: return -1;
 	}
 }

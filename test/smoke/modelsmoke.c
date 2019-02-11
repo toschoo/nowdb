@@ -175,6 +175,8 @@ int addEdge(nowdb_model_t *model,
 	e->edgeid = edgeid;
 	e->origin = 1;
 	e->destin = 2;
+        e->num = 6;
+	e->size = 48;
 	e->edge = NOWDB_MODEL_TEXT;
 	e->label= NOWDB_MODEL_NUM;
 	e->weight = NOWDB_TYP_UINT;
@@ -335,6 +337,54 @@ int testGetProp(nowdb_model_t  *model,
 	return 0;
 }
 
+nowdb_key_t EID = 1 << 20;
+
+int testGetEdgeProp(nowdb_model_t  *model,
+                    char            *name) {
+	nowdb_err_t err;
+	nowdb_model_pedge_t *p;
+	nowdb_key_t propid;
+        nowdb_key_t    edgeid;
+
+	edgeid = EID;
+
+	err = nowdb_model_getPedgeByName(model, edgeid, name, &p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (p == NULL) {
+		fprintf(stderr, "no prop\n");
+		return -1;
+	}
+	if (strcmp(p->name, name) != 0) {
+		fprintf(stderr, "wrong prop: %s\n", p->name);
+		return -1;
+	}
+	propid = p->propid;
+	p = NULL;
+	err = nowdb_model_getPedgeById(model, edgeid, propid, &p);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);	
+		return -1;
+	}
+	if (p == NULL) {
+		fprintf(stderr, "no prop by this id\n");
+		return -1;
+	}
+	if (strcmp(p->name, name) != 0) {
+		fprintf(stderr, "wrong prop: %s\n", p->name);
+		return -1;
+	}
+	if (p->propid != propid) {
+		fprintf(stderr, "wrong prop: %lu\n", p->propid);
+		return -1;
+	}
+	return 0;
+}
+
 void destroyProps(ts_algo_list_t *props) {
 	nowdb_model_prop_t *prop;
 	ts_algo_list_node_t *runner, *tmp;
@@ -407,6 +457,76 @@ int removeType(nowdb_model_t *model,
 	fprintf(stderr, "removing type '%s'\n", name);
 
 	err = nowdb_model_removeType(model, name);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return -1;
+	}
+	return 0;
+}
+
+int addEdgeType(nowdb_model_t *model,
+                char          *name) {
+	nowdb_err_t err;
+	nowdb_model_pedge_t *prop;
+	nowdb_key_t eid;
+	ts_algo_list_t props;
+
+	ts_algo_list_init(&props);
+
+	fprintf(stderr, "adding edge type '%s'\n", name);
+
+	EID++; eid = EID;
+
+	for(int i=0; i<3; i++) {
+		prop = calloc(1, sizeof(nowdb_model_pedge_t));
+		if (prop == NULL) {
+			fprintf(stderr, "out-of-mem\n");
+			return -1;
+		}
+		switch(i) {
+		case 0: 
+			prop->name = strdup("lat");
+			prop->value = NOWDB_TYP_FLOAT;
+			break;
+		case 1:
+			prop->name = strdup("lon");
+			prop->value = NOWDB_TYP_FLOAT;
+			break;
+		case 2: 
+			prop->name = strdup("id");
+			prop->value = NOWDB_TYP_TEXT;
+			break;
+		}
+		if (prop->name == NULL) {
+			free(prop);
+			fprintf(stderr, "out-of-mem\n");
+			return -1;
+		}
+		prop->propid = 1000 + i;
+		if (ts_algo_list_append(&props, prop) != TS_ALGO_OK) {
+			free(prop->name); free(prop);
+			destroyProps(&props);
+		}
+	}
+	err = nowdb_model_addEdgeType(model, name, eid, &props);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		destroyProps(&props);
+		return -1;
+	}
+	ts_algo_list_destroy(&props);
+	return 0;
+}
+
+int removeEdgeType(nowdb_model_t *model,
+               char          *name) {
+	nowdb_err_t err;
+
+	fprintf(stderr, "removing edge type '%s'\n", name);
+
+	err = nowdb_model_removeEdgeType(model, name);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -633,6 +753,34 @@ int main() {
 		fprintf(stderr, "cannot add type 'product' (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	if (testGetEdgeProp(model, "lat") == 0) {
+		fprintf(stderr, "found pedge 'lat' before create type\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdgeType(model, "buys") != 0) {
+		fprintf(stderr, "cannot add edge 'buys'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdgeProp(model, "lat") != 0) {
+		fprintf(stderr, "cannot find pedge 'lat'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeEdgeType(model, "buys") != 0) {
+		fprintf(stderr, "cannot remove edge type 'buys'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (removeEdgeType(model, "buys") == 0) {
+		fprintf(stderr, "can remove already removed edge type 'buys'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdgeProp(model, "lat") == 0) {
+		fprintf(stderr, "found pedge 'lat' before create type\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdgeType(model, "buys") != 0) {
+		fprintf(stderr, "cannot add edge 'buys'\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
 
 	/* destroy and open again */
 	nowdb_model_destroy(model); free(model);
@@ -695,6 +843,14 @@ int main() {
 	}
 	if (addType(model, "product") == 0) {
 		fprintf(stderr, "adding existing type 'product' (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (testGetEdgeProp(model, "lat") != 0) {
+		fprintf(stderr, "cannot find pedge 'lat' (2)\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (addEdgeType(model, "buys") == 0) {
+		fprintf(stderr, "adding existing edge 'buys'\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

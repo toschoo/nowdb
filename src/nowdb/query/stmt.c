@@ -1328,6 +1328,182 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 }
 
 /* -------------------------------------------------------------------------
+ * Show edges
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t showThings(nowdb_scope_t    *scope,
+                              nowdb_ast_t        *ast,
+                              nowdb_qry_result_t *res) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_t *list;
+	ts_algo_list_node_t *run;
+	uint32_t sz = 0;
+	char *row=NULL;
+	char *tmp;
+	nowdb_qry_row_t *r;
+	char what;
+	char *name;
+
+	if (ast->value == NULL) INVALIDAST("no target in ast");
+	if (strcasecmp(ast->value, "edges") == 0) what=0;
+	else if (strcasecmp(ast->value, "vertices") == 0 ||
+	         strcasecmp(ast->value, "types") == 0) what=1;
+	else INVALIDAST("unknown target in ast");
+
+	if (what == 0) {
+		err = nowdb_model_getEdges(scope->model, &list);
+	} else {
+		err = nowdb_model_getVertices(scope->model, &list);
+	}
+	if (err != NOWDB_OK) return err;
+
+	for(run=list->head; run!=NULL; run=run->nxt) {
+		name = what==0?((nowdb_model_edge_t*)run->cont)->name:
+		               ((nowdb_model_vertex_t*)run->cont)->name;
+		if (row == NULL) {
+			row = nowdb_row_fromValue(NOWDB_TYP_TEXT,
+			                              name, &sz);
+			if (row == NULL) {
+				NOMEM("allocating row");
+				break;
+			}
+		} else {
+			tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+			                                  name, &sz);
+			if (tmp == NULL) {
+				free(row);
+				NOMEM("allocating row");
+				break;
+			}
+			row = tmp;
+		}
+		nowdb_row_addEOR(row, &sz);
+	}
+	ts_algo_list_destroy(list); free(list);
+	if (err == NOWDB_OK) {
+		r = calloc(1, sizeof(nowdb_qry_row_t));
+		if (r == NULL) {
+			NOMEM("allocating qryrow");
+			return err;
+		}
+		r->sz = sz;
+		r->row = row;
+		res->resType = NOWDB_QRY_RESULT_ROW;
+		res->result = r;
+	}
+	return err;
+}
+
+static nowdb_err_t getProps(nowdb_scope_t  *scope,
+                            char           *name,
+                            ts_algo_list_t *list) {
+	nowdb_err_t err;
+	nowdb_model_vertex_t *v;
+
+	err = nowdb_model_getVertexByName(scope->model, name, &v);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_model_getProperties(scope->model, v->roleid, list);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+static nowdb_err_t getPedges(nowdb_scope_t  *scope,
+                             char           *name,
+                             ts_algo_list_t *list) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e;
+
+	err = nowdb_model_getEdgeByName(scope->model, name, &e);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_model_getPedges(scope->model, e->edgeid, list);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Describe
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t describeThing(nowdb_scope_t      *scope,
+                                 nowdb_ast_t        *ast,
+                                 nowdb_qry_result_t *res) {
+	nowdb_err_t err=NOWDB_OK;
+	ts_algo_list_t list;
+	ts_algo_list_node_t  *run;
+	uint32_t sz = 0;
+	uint32_t typ = 0;
+	char *row=NULL;
+	char *tmp;
+	nowdb_qry_row_t *r;
+	char what;
+	char *name;
+
+	if (ast->value == NULL) INVALIDAST("no target in ast");
+	err = nowdb_model_whatIs(scope->model, ast->value, &what);
+	if (err != NOWDB_OK) return err;
+
+	ts_algo_list_init(&list);
+	if (what == NOWDB_TARGET_EDGE) {
+		err = getPedges(scope, ast->value, &list);
+	} else if (what == NOWDB_TARGET_VERTEX) {
+		err = getProps(scope, ast->value, &list);
+	} else INVALIDAST("unknown target in ast");
+
+	for(run=list.head; run!=NULL; run=run->nxt) {
+		if (what == NOWDB_TARGET_EDGE) {
+			name = ((nowdb_model_pedge_t*)run->cont)->name;
+			typ  = ((nowdb_model_pedge_t*)run->cont)->value;
+		} else {
+			name = ((nowdb_model_prop_t*)run->cont)->name;
+			typ  = ((nowdb_model_prop_t*)run->cont)->value;
+		}
+		if (row == NULL) {
+			row = nowdb_row_fromValue(NOWDB_TYP_TEXT,
+			                              name, &sz);
+			if (row == NULL) {
+				NOMEM("allocating row");
+				break;
+			}
+		} else {
+			tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+			                                  name, &sz);
+			if (tmp == NULL) {
+				free(row);
+				NOMEM("allocating row");
+				break;
+			}
+			row = tmp;
+		}
+		tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+		                   nowdb_typename(typ), &sz);
+		if (tmp == NULL) {
+			free(row);
+			NOMEM("allocating row");
+			break;
+		}
+		row = tmp;
+		nowdb_row_addEOR(row, &sz);
+	}
+	ts_algo_list_destroy(&list);
+	if (err == NOWDB_OK) {
+		r = calloc(1, sizeof(nowdb_qry_row_t));
+		if (r == NULL) {
+			NOMEM("allocating qryrow");
+			return err;
+		}
+		r->sz = sz;
+		r->row = row;
+		res->resType = NOWDB_QRY_RESULT_ROW;
+		res->result = r;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
  * Handle DDL statement
  * -------------------------------------------------------------------------
  */
@@ -1345,6 +1521,13 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	
 	op = nowdb_ast_operation(ast);
 	if (op == NULL) INVALIDAST("no operation in AST");
+
+	if (op->ntype == NOWDB_AST_SHOW) {
+		return showThings(scope, op, res);
+	}
+	if (op->ntype == NOWDB_AST_DESC) {
+		return describeThing(scope, op, res);
+	}
 	
 	trg = nowdb_ast_target(ast);
 	if (trg == NULL) INVALIDAST("no target in AST");

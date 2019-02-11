@@ -402,3 +402,17 @@ int nowdb_strtotype(char *str) {
 	if (strcasecmp(str, "bool")    == 0) return NOWDB_TYP_BOOL;
 	return -1;
 }
+
+char *nowdb_typename(nowdb_type_t typ) {
+	switch(typ) {
+	case NOWDB_TYP_FLOAT: return "float";
+	case NOWDB_TYP_INT: return "int";
+	case NOWDB_TYP_UINT: return "uint";
+	case NOWDB_TYP_DATE: return "date";
+	case NOWDB_TYP_TIME: return "time";
+	case NOWDB_TYP_TEXT: return "text";
+	case NOWDB_TYP_NOTHING: return "NULL";
+	default: return "unknown";
+	}
+}
+
