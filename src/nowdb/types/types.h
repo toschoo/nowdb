@@ -204,6 +204,16 @@ typedef struct {
 	nowdb_type_t   wtype[2]; /* type of the weights     */
 } nowdb_edge_t;
 
+/*
+typedef struct {
+	nowdb_key_t      origin; // id of the left  vertex  
+	nowdb_key_t      destin; // id of the right vertex  
+	nowdb_time_t  timestamp; // timestamp               
+} nowdb_edge_t;
+
+typedef char[9] nowdb_efield_t;
+*/
+
 void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 

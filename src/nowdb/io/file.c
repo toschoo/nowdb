@@ -17,6 +17,9 @@ static char *OBJECT = "file";
 
 #define MAX32 2147483647
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
+
 /* ------------------------------------------------------------------------
  * Allocate and initialise a new file descriptor
  * ------------------------------------------------------------------------
@@ -70,6 +73,8 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             nowdb_time_t   grain,
                             nowdb_time_t  oldest,
                             nowdb_time_t  newest) {
+	nowdb_err_t err;
+
 	if (file == NULL) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                            "file descriptor is NULL");
@@ -84,6 +89,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->ddict    = NULL;
 	file->cctx     = NULL;
 	file->dctx     = NULL;
+	file->hdr      = NULL;
 	file->off      = 0;
 	file->size     = size;
 	file->capacity = cap;
@@ -94,7 +100,17 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->fd       = -1;
 	file->state    = nowdb_file_state_closed;
 	file->order    = 0;
-	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+
+	uint32_t setsz = blocksize / recordsize;
+	if (setsz * recordsize < blocksize) setsz+=1;
+	file->setsize = setsz / 8;
+	if (8*file->setsize < setsz) file->setsize+=1;
+	file->hdrsize = NOWDB_HDR_BASE_SIZE + file->setsize;
+
+	/*
+	fprintf(stderr, "HEADERSIZE: %u\n", file->hdrsize);
+	fprintf(stderr, "   SETSIZE: %u\n", file->setsize);
+	*/
 
 	if ((ctrl & NOWDB_FILE_WRITER) && cap == 0) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
@@ -129,9 +145,17 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	}
 	file->path = malloc(s+1);
 	if (file->path == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, NULL);
+		NOMEM("allocating path");
+		return err;
 	}
 	strcpy(file->path, path);
+
+	file->hdr = calloc(1, file->hdrsize);
+	if (file->hdr == NULL) {
+		nowdb_file_destroy(file);
+		NOMEM("allocating header");
+		return err;
+	}
 
 	/* the other stuff */
 	file->id         = id;
@@ -226,6 +250,9 @@ void nowdb_file_destroy(nowdb_file_t *file) {
 	}
 	if (file->path != NULL) {
 		free(file->path); file->path = NULL;
+	}
+	if (file->hdr != NULL) {
+		free(file->hdr); file->hdr = NULL;
 	}
 }
 
@@ -399,23 +426,22 @@ nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
  * Helper function to compute time deltas
  * ------------------------------------------------------------------------
  */
-static inline void deltas(char *buf, uint32_t size,
-                      nowdb_time_t *t, uint32_t *d) {
+static inline void deltas(char *buf,
+                          uint32_t size,
+                          uint32_t recsize,
+                          nowdb_time_t *f,
+                          nowdb_time_t *t) {
 	nowdb_time_t to   = NOWDB_TIME_DAWN;
 	nowdb_time_t from = NOWDB_TIME_DUSK;
-	nowdb_time_t delta;
 	nowdb_time_t *tmp;
 
-	for(int i=0; i<size; i+=64) {
+	for(int i=0; i<size; i+=recsize) {
 		tmp = (nowdb_time_t*)(buf+i+NOWDB_OFF_TMSTMP);
 		if (*tmp > to) to = *tmp;
 		if (*tmp < from) from = *tmp;
 	}
-	delta = to - from;
-	*d = (uint32_t)(delta >> 32);
-	(*d)++;
-	// fprintf(stderr, "%lu - %lu = %lu (%u,%lu)\n", to, from, delta, x,y);
-	*t = from;
+	*f = from;
+	*t = to;
 }
 
 /* ------------------------------------------------------------------------
@@ -425,9 +451,9 @@ static inline void deltas(char *buf, uint32_t size,
 static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
                              char *buf, uint32_t size) {
 	ssize_t x;
-	size_t sz;
+	size_t sz=0;
 	nowdb_time_t from=0;
-	uint32_t d=0;
+	nowdb_time_t to=0;
 
 	if (file->cdict != NULL) {
 		/*
@@ -447,16 +473,18 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 			              (char*)ZSTD_getErrorName(sz));
 	}
 
-	if (file->recordsize == 64) deltas(buf, size, &from, &d);
+	if (file->ctrl & NOWDB_FILE_TS) deltas(buf, size,
+	                                       file->recordsize,
+	                                       &from, &to);
 
-	file->hdr.set[0] = NOWDB_BITMAP64_ALL;
-	file->hdr.set[1] = NOWDB_BITMAP64_ALL;
-	file->hdr.size = (uint32_t)sz;
-	file->hdr.delta = d;
-	file->hdr.from = from;
+	file->hdr->reserved = 0;
+	file->hdr->size = (uint32_t)sz;
+	file->hdr->from = from;
+	file->hdr->to = to;
+	memset((char*)(file->hdr)+NOWDB_HDR_BASE_SIZE, 0xff, file->setsize);
 
-	x = write(file->fd, &file->hdr, NOWDB_HDR_SIZE);
-	if (x != NOWDB_HDR_SIZE) {
+	x = write(file->fd, file->hdr, file->hdrsize);
+	if (x != file->hdrsize) {
 		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
 			                               file->path);
 	}
@@ -465,7 +493,7 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 		return nowdb_err_get(nowdb_err_write, TRUE, OBJECT,
 			                               file->path);
 	}
-	file->size += sz + NOWDB_HDR_SIZE;
+	file->size += sz + file->hdrsize;
 	return NOWDB_OK;
 }
 
@@ -717,7 +745,7 @@ nowdb_err_t nowdb_file_rewind(nowdb_file_t *file) {
 	}
 	file->off = 0;
 	file->tmpsize = 0;
-	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+	memset(file->hdr, 0, file->hdrsize);
 	return NOWDB_OK;
 }
 
@@ -741,7 +769,7 @@ static inline nowdb_err_t plainload(nowdb_file_t *file) {
  * ------------------------------------------------------------------------
  */
 static inline void showtmp(nowdb_file_t *file) {
-	for(int i=0;i<file->hdr.size;i++) {
+	for(int i=0;i<file->hdr->size;i++) {
 		fprintf(stderr, "%x ",
 		       (unsigned char)(file->tmp+file->off)[i]);
 	}
@@ -758,12 +786,12 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 		sz = ZSTD_decompress_usingDDict(file->dctx,
 		                                file->bptr, file->bufsize,
 		                                file->tmp+file->off,
-		                                file->hdr.size,
+		                                file->hdr->size,
 		                                file->ddict);
 	} else {
 		sz = ZSTD_decompress(file->bptr, file->bufsize,
 		                     file->tmp+file->off,
-		                     file->hdr.size);
+		                     file->hdr->size);
 	}
 	/*
 	showtmp(file);
@@ -782,24 +810,17 @@ static inline nowdb_err_t zstddecomp(nowdb_file_t *file) {
 static inline char worthBlock(nowdb_file_t  *file,
                               nowdb_time_t  start,
                               nowdb_time_t    end) {
-	nowdb_time_t to;
-	nowdb_time_t tmp;
 
 	if (start == NOWDB_TIME_DAWN &&
 	    end   == NOWDB_TIME_DUSK) return 1;
 
-	if (file->hdr.delta == 0 && file->hdr.from == 0) return 1;
-
-	to = file->hdr.from;
-	tmp = (nowdb_time_t)file->hdr.delta;
-	tmp <<= 32;
-	to += tmp;
+	if (file->hdr->to == 0 && file->hdr->from == 0) return 1;
 
 	/* 
 	fprintf(stderr, "comparing %ld -- %ld and %ld -- %ld\n",
-	                         start, end, file->hdr.from, to);
+	                         start, end, file->hdr->from, to);
 	*/
-	if (end < file->hdr.from || start > to) return 0;
+	if (end < file->hdr->from || start > file->hdr->to) return 0;
 
 	return 1;
 }
@@ -814,13 +835,13 @@ static inline nowdb_err_t compload(nowdb_file_t *file,
 
 	/* if we are behind file end: set header.size 0 */
 	if (file->pos >= file->size) {
-		memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+		memset(file->hdr, 0, file->hdrsize);
 		return NOWDB_OK;
 	}
 
 	/* if we have already something loaded
 	 * preserve non-processed data */
-	if (file->hdr.size != 0) {
+	if (file->hdr->size != 0) {
 		uint32_t sz = file->tmpsize - file->off;
 		memcpy(file->tmp, file->tmp+file->off, sz);
 		file->tmpsize = sz;
@@ -847,8 +868,8 @@ static inline nowdb_err_t compload(nowdb_file_t *file,
 
 	/* load header */
 	if (hdr) {
-		file->off = NOWDB_HDR_SIZE;
-		memcpy(&file->hdr, file->tmp, NOWDB_HDR_SIZE);
+		file->off = file->hdrsize;
+		memcpy(file->hdr, file->tmp, file->hdrsize);
 	} else {
 		file->off = 0;
 	}
@@ -865,17 +886,17 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 	nowdb_err_t err = NOWDB_OK;
 
 	/* no header loaded */
-	if (file->hdr.size == 0) err = compload(file, TRUE);
+	if (file->hdr->size == 0) err = compload(file, TRUE);
 	/* data missing from block for this header */
 	if (file->tmpsize <
-	    file->hdr.size + file->off) err = compload(file, FALSE);
+	    file->hdr->size + file->off) err = compload(file, FALSE);
 
 	/* check for error */
 	if (err != NOWDB_OK) return err;
 
 	/* no header found: EOF */
-	if (file->hdr.size == 0) return nowdb_err_get(nowdb_err_eof,
-		                         FALSE, OBJECT, file->path);
+	if (file->hdr->size == 0) return nowdb_err_get(nowdb_err_eof,
+		                          FALSE, OBJECT, file->path);
 	/* decompress using ZSTD */
 	if (file->comp == NOWDB_COMP_ZSTD) {
 
@@ -884,20 +905,20 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
 		if (err != NOWDB_OK) return err;
 
 		/* move on to next header */
-		file->off += file->hdr.size;
+		file->off += file->hdr->size;
 
 		/* next header incomplete */
-		if (file->off + NOWDB_HDR_SIZE >= file->tmpsize) {
+		if (file->off + file->hdrsize >= file->tmpsize) {
 			err = compload(file, FALSE);
 			if (err != NOWDB_OK) return err;
 			file->off = 0;
 		}
 		/* that was the last block */
-		if (file->hdr.size == 0) return NOWDB_OK;
+		if (file->hdr->size == 0) return NOWDB_OK;
 
 		/* load header */
-		memcpy(&file->hdr, file->tmp+file->off, NOWDB_HDR_SIZE);
-		file->off += NOWDB_HDR_SIZE;
+		memcpy(file->hdr, file->tmp+file->off, file->hdrsize);
+		file->off += file->hdrsize;
 		return err;
 	}
 	/* unknown compression algorithm */
@@ -993,7 +1014,7 @@ nowdb_err_t nowdb_file_loadBlock(nowdb_file_t *file) {
 		                 "file descriptor is in wrong state");
 	}
 	if (file->comp == NOWDB_COMP_FLAT) return plainload(file);
-	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
+	memset(file->hdr, 0, file->hdrsize);
 	return compmove(file, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 }
 
@@ -1014,12 +1035,12 @@ nowdb_err_t nowdb_file_loadHeader(nowdb_file_t *file) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                "file has no headers");
 	}
-	memset(&file->hdr, 0, NOWDB_HDR_SIZE);
-	if (read(file->fd, &file->hdr, NOWDB_HDR_SIZE) != NOWDB_HDR_SIZE) {
+	memset(file->hdr, 0, file->hdrsize);
+	if (read(file->fd, file->hdr, file->hdrsize) != file->hdrsize) {
 		return nowdb_err_get(nowdb_err_read,
 		           TRUE, OBJECT, file->path);
 	}
-	if (lseek(file->fd, -NOWDB_HDR_SIZE, SEEK_CUR) < 0) {
+	if (lseek(file->fd, -file->hdrsize, SEEK_CUR) < 0) {
 		return nowdb_err_get(nowdb_err_seek,
 		           TRUE, OBJECT, file->path);
 	}

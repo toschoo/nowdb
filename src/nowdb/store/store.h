@@ -34,6 +34,8 @@ typedef struct {
 	uint32_t        recsize; /* size of record stored       */
 	uint32_t       filesize; /* size of new files           */
 	uint32_t      largesize; /* size of new readers         */
+	uint32_t       pagesize; /* size of page                */
+	uint32_t        hdrsize; /* headersize                  */
 	nowdb_path_t       path; /* base path                   */
 	nowdb_path_t    catalog; /* path to catalog             */
 	nowdb_file_t    *writer; /* where we currently write to */
@@ -52,6 +54,7 @@ typedef struct {
 	nowdb_worker_t  sortwrk; /* background sorter           */
 	nowdb_bool_t   starting; /* set during startup          */
 	char              state; /* open or closed              */
+	char                 ts; /* stores a timeseries         */
 } nowdb_store_t;
 
 /* ------------------------------------------------------------------------
@@ -71,7 +74,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
                             uint32_t     filesize,
-                            uint32_t    largesize);
+                            uint32_t    largesize,
+                            char               ts);
 
 /* ------------------------------------------------------------------------
  * Initialise already allocated store object
@@ -83,7 +87,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
                              uint32_t     filesize,
-                             uint32_t    largesize);
+                             uint32_t    largesize,
+                             char               ts);
 
 /* ------------------------------------------------------------------------
  * Configure sorting

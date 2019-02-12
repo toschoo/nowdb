@@ -243,25 +243,18 @@ nowdb_cmp_t nowdb_sort_edge_compare(const void *left,
 	if (((nowdb_edge_t*)left)->origin >
 	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_GREATER;
 
-	if (((nowdb_edge_t*)left)->edge   <
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->edge   >
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_GREATER;
-
 	if (((nowdb_edge_t*)left)->destin <
 	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_LESS;
 	if (((nowdb_edge_t*)left)->destin >
 	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_GREATER;
 
-	if (((nowdb_edge_t*)left)->label  <
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->label >
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_GREATER;
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) <
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+		return NOWDB_SORT_LESS;
 
-	if (((nowdb_edge_t*)left)->timestamp <
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->timestamp >
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_GREATER;
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) >
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+		return NOWDB_SORT_GREATER;
 
 	return NOWDB_SORT_EQUAL;
 }

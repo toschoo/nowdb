@@ -23,7 +23,7 @@ nowdb_bool_t createStore() {
 	}
 	*/
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                     NOWDB_MEGA, NOWDB_MEGA);
+	                                   NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -45,7 +45,7 @@ nowdb_bool_t dropStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                     NOWDB_MEGA, NOWDB_MEGA);
+	                                   NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -67,7 +67,7 @@ nowdb_bool_t testInitDestroyStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                     NOWDB_MEGA, NOWDB_MEGA);
+	                                   NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -82,7 +82,7 @@ nowdb_bool_t testNewDestroyStore() {
 	nowdb_err_t      err;
 
 	err = nowdb_store_new(&store, "rsc/teststore", NULL, 1, 64,
-	                                    NOWDB_MEGA, NOWDB_MEGA);
+	                                   NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -97,7 +97,7 @@ nowdb_bool_t testOpenStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                    NOWDB_MEGA, NOWDB_MEGA);
+	                                  NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -118,7 +118,7 @@ nowdb_bool_t testOpenCloseStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                    NOWDB_MEGA, NOWDB_MEGA);
+	                                  NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -147,7 +147,7 @@ nowdb_bool_t testInsert() {
 	int rc;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                    NOWDB_MEGA, NOWDB_MEGA);
+	                                  NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

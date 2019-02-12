@@ -138,32 +138,16 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 				return FALSE;
 			}
 			if (e->origin == last.origin &&
-			    e->edge   <  last.edge) {
-				fprintf(stderr, "not sorted (edge)\n");
-				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
-			}
-			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
 			    e->destin <  last.destin) {
 				fprintf(stderr, "not sorted (destin)\n");
 				NOWDB_IGNORE(nowdb_file_close(file));
 				return FALSE;
 			}
 			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
 			    e->destin == last.destin &&
-			    e->label  <  last.label) {
-				fprintf(stderr, "not sorted (label)\n");
-				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
-			}
-			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
-			    e->destin == last.destin &&
-			    e->label  == last.label  &&
 			    e->timestamp < last.timestamp) {
-				fprintf(stderr, "not sorted (timestamp)\n");
+				fprintf(stderr, "%d: not sorted (timestamp)\n", i);
+				fprintf(stderr, "%lu < %lu\n", e->timestamp, last.timestamp);
 				NOWDB_IGNORE(nowdb_file_close(file));
 				return FALSE;
 			}

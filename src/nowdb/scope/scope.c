@@ -273,7 +273,7 @@ static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
 	                       sizeof(nowdb_vertex_t),
 	                       NOWDB_FILE_MAPSIZE,
 	                       NOWDB_MEGA *
-	                       sizeof(nowdb_vertex_t));
+	                       sizeof(nowdb_vertex_t),0);
 	free(p);
 	if (err != NOWDB_OK) return NOWDB_OK;
 
@@ -631,8 +631,8 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	      nowdb_store_init(&(*ctx)->store, p,
 	                         NULL, ver,
 	                         sizeof(nowdb_edge_t),
-	                               cfg->allocsize,
-	                              cfg->largesize));
+	                         cfg->allocsize,
+	                         cfg->largesize, 1));
 	free(p);
 	if (err != NOWDB_OK) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;

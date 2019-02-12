@@ -47,7 +47,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_version_t   ver,
                             uint32_t      recsize,
                             uint32_t     filesize,
-                            uint32_t    largesize)
+                            uint32_t    largesize,
+                            char               ts)
 {
 	nowdb_err_t err = NOWDB_OK;
 
@@ -59,8 +60,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		                          "allocating store object");
 	}
 	err = nowdb_store_init(*store, base, lru, ver, recsize,
-	                                              filesize,
-						     largesize);
+	                               filesize, largesize, ts);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -312,7 +312,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_version_t   ver,
                              uint32_t      recsize,
                              uint32_t     filesize,
-                             uint32_t    largesize)
+                             uint32_t    largesize,
+                             char               ts)
 {
 	nowdb_err_t err;
 	size_t s;
@@ -337,6 +338,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->ctx  = NULL;
 	store->nextid = 1;
 	store->tasknum = 1;
+	store->ts = ts;
 
 	/* lists of files */
 	err = initAllFiles(store);
@@ -508,12 +510,15 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
                                    nowdb_fileid_t   fid) {
 	nowdb_path_t  p;
 	nowdb_err_t err;
+	nowdb_bitmap8_t ctrl = NOWDB_FILE_WRITER | NOWDB_FILE_SPARE;
+
+	if (store->ts) ctrl |= NOWDB_FILE_TS;
+
 	p = nowdb_path_append(store->path, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "allocating file path");
 	err = nowdb_file_new(file, fid, p, store->filesize,0,
-	                     NOWDB_IDX_PAGE, store->recsize, 
-	                     NOWDB_FILE_WRITER | NOWDB_FILE_SPARE,
+	                     NOWDB_IDX_PAGE, store->recsize, ctrl,
 	                     NOWDB_COMP_FLAT, NOWDB_ENCP_NONE,
 	                     1, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK); 
 	free(p); return err;
@@ -818,6 +823,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 		                  FALSE, OBJECT, store->catalog);
 	if (buf[*off+i] != 0) return nowdb_err_get(nowdb_err_catalog,
 		                      FALSE, OBJECT, store->catalog);
+
 	p = nowdb_path_append(store->path, buf+(*off)); *off+=i+1;
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		       FALSE, OBJECT, "allocating store path");

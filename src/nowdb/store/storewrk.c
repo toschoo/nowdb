@@ -157,7 +157,8 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	nowdb_time_t max = NOWDB_TIME_DAWN;
 	nowdb_time_t min = NOWDB_TIME_DUSK;
-	nowdb_edge_t *e;
+	nowdb_edge_t *e; // instead of edge:
+	                 // *(nowdb_time_t*)(buf+i+STAMP_OFF) 
 	for (int i=0; i<file->size; i+=file->recordsize) {
 		e = (nowdb_edge_t*)(buf+i);
 		if (e->timestamp < min) min = e->timestamp;
@@ -480,7 +481,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	}
 
 	/* find min/max (if this is edges) */
-	if (store->recsize == 64) { /* not too convincing */
+	if (store->ts) {
 		err = findMinMax(buf, src);
 		if (err != NOWDB_OK) {
 			nowdb_store_releaseWaiting(store, src);
@@ -520,7 +521,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	}
 
 	/* set and reset min/max */
-	if (store->recsize == 64) { /* not too convincing */
+	if (store->ts) { /* not too convincing */
 		setMinMax(src, reader);
 		src->oldest = NOWDB_TIME_DAWN;
 		src->newest = NOWDB_TIME_DUSK;
