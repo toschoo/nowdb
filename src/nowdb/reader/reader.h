@@ -64,6 +64,7 @@
 typedef struct nowdb_reader_t {
 	uint32_t                type; /* reader type                   */
 	uint32_t             recsize; /* set according to first file   */
+	nowdb_content_t      content; /* vertex or edge                */
 	ts_algo_list_t        *files; /* list of relevant files        */
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	nowdb_file_t           *file; /* current file (search)         */

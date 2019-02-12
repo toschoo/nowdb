@@ -55,6 +55,7 @@ nowdb_file_t *makeFile(nowdb_path_t path, uint32_t size) {
 	nowdb_err_t   err;
 
 	err = nowdb_file_new(&file, 0, path, size, 0, 8192, 64,
+	                                       NOWDB_CONT_EDGE,
 	                    NOWDB_FILE_WRITER, NOWDB_COMP_FLAT,
 	                             NOWDB_ENCP_NONE, 1, 0, 0);
 	if (err != NOWDB_OK) {

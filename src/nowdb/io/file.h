@@ -78,6 +78,7 @@ typedef struct {
 	uint32_t    recordsize; /* size of one record                 */
 	uint32_t       hdrsize; /* headersize                         */
 	uint32_t       setsize; /* size of the control set            */
+	nowdb_content_t   cont; /* content type                       */
 	uint32_t         state; /* current state of the descriptor    */
 	uint32_t           pos; /* current position in the file       */
 	nowdb_bool_t     dirty; /* map was written                    */
@@ -113,6 +114,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
                            uint32_t        size,
                            uint32_t   blocksize,
                            uint32_t  recordsize,
+                           nowdb_content_t cont,
                            nowdb_bitmap8_t ctrl,
                            nowdb_comp_t    comp,
                            nowdb_encp_t    encp,
@@ -131,6 +133,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             uint32_t        size,
                             uint32_t   blocksize,
                             uint32_t  recordsize,
+                            nowdb_content_t cont,
                             nowdb_bitmap8_t ctrl,
                             nowdb_comp_t    comp,
                             nowdb_encp_t    encp,

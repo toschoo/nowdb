@@ -186,6 +186,7 @@ int nowdb_vertex_offByName(char *field);
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56
 #define NOWDB_OFF_WTYPE2  60
+#define NOWDB_OFF_USER    24
 
 /* ------------------------------------------------------------------------
  * Edge

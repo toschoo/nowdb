@@ -45,6 +45,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
+                            nowdb_content_t  cont,
                             uint32_t      recsize,
                             uint32_t     filesize,
                             uint32_t    largesize,
@@ -59,8 +60,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating store object");
 	}
-	err = nowdb_store_init(*store, base, lru, ver, recsize,
-	                               filesize, largesize, ts);
+	err = nowdb_store_init(*store, base, lru, ver, cont,
+                           recsize, filesize, largesize, ts);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -310,6 +311,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
+                             nowdb_content_t  cont,
                              uint32_t      recsize,
                              uint32_t     filesize,
                              uint32_t    largesize,
@@ -339,6 +341,15 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->nextid = 1;
 	store->tasknum = 1;
 	store->ts = ts;
+	store->cont = cont;
+
+	// this fragment is identical
+	// to the setsize initialisation in file
+	// this should be a function!
+	uint32_t setsz = NOWDB_IDX_PAGE / recsize;
+	if (setsz * recsize < NOWDB_IDX_PAGE) setsz+=1;
+	store->setsize = setsz / 8;
+	if (8*store->setsize < setsz) store->setsize+=1;
 
 	/* lists of files */
 	err = initAllFiles(store);
@@ -518,7 +529,8 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "allocating file path");
 	err = nowdb_file_new(file, fid, p, store->filesize,0,
-	                     NOWDB_IDX_PAGE, store->recsize, ctrl,
+	                     NOWDB_IDX_PAGE, store->recsize,
+	                     store->cont, ctrl,
 	                     NOWDB_COMP_FLAT, NOWDB_ENCP_NONE,
 	                     1, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK); 
 	free(p); return err;
@@ -832,6 +844,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	                            tmp.size,
 	                            tmp.blocksize,
 	                            tmp.recordsize,
+	                            tmp.cont,
 	                            tmp.ctrl,
 	                            tmp.comp,
                                     tmp.encp,

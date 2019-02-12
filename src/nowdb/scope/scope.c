@@ -270,6 +270,7 @@ static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
 
 	err = nowdb_store_init(&scope->vertices, p,
 	                       scope->evache, ver,
+	                       NOWDB_CONT_VERTEX,
 	                       sizeof(nowdb_vertex_t),
 	                       NOWDB_FILE_MAPSIZE,
 	                       NOWDB_MEGA *
@@ -630,6 +631,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	err = nowdb_context_err(*ctx,
 	      nowdb_store_init(&(*ctx)->store, p,
 	                         NULL, ver,
+	                         NOWDB_CONT_EDGE,
 	                         sizeof(nowdb_edge_t),
 	                         cfg->allocsize,
 	                         cfg->largesize, 1));

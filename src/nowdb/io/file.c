@@ -31,6 +31,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
                            uint32_t        size,
                            uint32_t   blocksize,
                            uint32_t  recordsize,
+                           nowdb_content_t cont,
                            nowdb_bitmap8_t ctrl,
                            nowdb_comp_t    comp,
                            nowdb_encp_t    encp,
@@ -48,7 +49,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
 	nowdb_err_t r = nowdb_file_init(*file,id,path,
 	                                cap,size,
 	                                blocksize,recordsize,
-	                                ctrl,comp,encp,
+	                                cont,ctrl,comp,encp,
 	                                grain,oldest,newest);
 	if (r != NOWDB_OK) {
 		free(*file); return r;
@@ -67,6 +68,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             uint32_t        size,
                             uint32_t   blocksize,
                             uint32_t  recordsize,
+                            nowdb_content_t cont,
                             nowdb_bitmap8_t ctrl,
                             nowdb_comp_t    comp,
                             nowdb_encp_t    encp,
@@ -93,6 +95,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->off      = 0;
 	file->size     = size;
 	file->capacity = cap;
+	file->cont     = cont;
 	file->tmpsize  = 0;
 	file->pos      = 0;
 	file->dirty    = FALSE;
@@ -278,6 +281,7 @@ nowdb_err_t nowdb_file_copy(nowdb_file_t *source, nowdb_file_t *target) {
 	                      source->size,
 	                      source->blocksize,
 	                      source->recordsize,
+	                      source->cont,
 	                      source->ctrl,
 	                      source->comp,
 	                      source->encp,

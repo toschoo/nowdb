@@ -20,6 +20,7 @@
 	    (*(nowdb_key_t*)((char*)right+o))) return BEET_CMP_GREATER;
 
 /* this should be with either rounding or tolerance */
+// float compare?
 #define WEIGHTCMP(left,right,o) \
 	if ((*(nowdb_value_t*)((char*)left+o)) < \
 	    (*(nowdb_value_t*)((char*)right+o))) return BEET_CMP_LESS; \
@@ -100,6 +101,8 @@ char nowdb_index_vertex_compare(const void *left,
 	return BEET_CMP_EQUAL;
 }
 
+// REVIEW:
+// adapt sz to size of edges + type
 void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
                               const char      *edge,
                               char            *keys) {

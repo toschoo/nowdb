@@ -3,7 +3,8 @@
 nowdb_store_t *mkStoreBlock(nowdb_path_t path, uint32_t block, uint32_t large) {
 	nowdb_store_t *store;
 	nowdb_err_t err;
-	err = nowdb_store_new(&store, path, NULL, 1, 64, block, large,1);
+	err = nowdb_store_new(&store, path, NULL, 1, NOWDB_CONT_EDGE,
+	                                         64, block, large, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

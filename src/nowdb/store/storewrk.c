@@ -151,18 +151,21 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 }
 
 /* ------------------------------------------------------------------------
- * Find minmax (edges only)
+ * Find minmax (only with timestamp)
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	nowdb_time_t max = NOWDB_TIME_DAWN;
 	nowdb_time_t min = NOWDB_TIME_DUSK;
-	nowdb_edge_t *e; // instead of edge:
-	                 // *(nowdb_time_t*)(buf+i+STAMP_OFF) 
+
 	for (int i=0; i<file->size; i+=file->recordsize) {
-		e = (nowdb_edge_t*)(buf+i);
-		if (e->timestamp < min) min = e->timestamp;
-		if (e->timestamp > max) max = e->timestamp;
+	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) < min)
+	        	memcpy(&min, buf+i+NOWDB_OFF_STAMP,
+			              sizeof(nowdb_time_t));
+		
+	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) > max)
+	        	memcpy(&max, buf+i+NOWDB_OFF_STAMP,
+			              sizeof(nowdb_time_t));
 	}
 	file->oldest = min;
 	file->newest = max;
@@ -170,7 +173,7 @@ static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
- * Find set min and max (edges only)
+ * Find set min and max (only with timestamp)
  * ------------------------------------------------------------------------
  */
 static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
@@ -357,7 +360,7 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 		nowdb_index_desc_t *desc= runner->cont;
 		err = nowdb_indexer_init((*xer)+(*n),
 		                         desc->idx,
-		                         store->recsize);
+		                         store->cont);
 		if (err != NOWDB_OK) break;
 		(*n)++;
 	}
@@ -480,7 +483,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		free(buf); return err;
 	}
 
-	/* find min/max (if this is edges) */
+	/* find min/max (if this is timestamp) */
 	if (store->ts) {
 		err = findMinMax(buf, src);
 		if (err != NOWDB_OK) {

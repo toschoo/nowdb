@@ -22,8 +22,9 @@ nowdb_bool_t createStore() {
 		return FALSE;
 	}
 	*/
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                   NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -44,8 +45,9 @@ nowdb_bool_t dropStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
 
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                   NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -66,8 +68,9 @@ nowdb_bool_t testInitDestroyStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
 
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                   NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -81,8 +84,9 @@ nowdb_bool_t testNewDestroyStore() {
 	nowdb_store_t *store;
 	nowdb_err_t      err;
 
-	err = nowdb_store_new(&store, "rsc/teststore", NULL, 1, 64,
-	                                   NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_new(&store, "rsc/teststore", NULL, 1,
+	                                   NOWDB_CONT_EDGE, 64,
+	                              NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -96,8 +100,9 @@ nowdb_bool_t testOpenStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
 
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                  NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -117,8 +122,9 @@ nowdb_bool_t testOpenCloseStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
 
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                  NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -146,8 +152,9 @@ nowdb_bool_t testInsert() {
 	nowdb_edge_t    e,k;
 	int rc;
 
-	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1, 64,
-	                                  NOWDB_MEGA, NOWDB_MEGA,1);
+	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
+	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

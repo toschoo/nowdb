@@ -16,7 +16,7 @@ static char *OBJECT = "xer";
  */
 typedef struct {
 	beet_compare_t compare;
-	void *rsc;
+	void     *rsc;
 	uint32_t *off;
 	uint32_t  keysz;
 } xhelper_t;
@@ -26,8 +26,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	char         *keys;
-	uint64_t    map[2];
+	char     *keys;
+	uint64_t *map;
 } xnode_t;
 
 #define XHLP(x) ((xhelper_t*)x)
@@ -58,6 +58,10 @@ void xerdestroy(void *x, void **n) {
 			free(XNODE(*n)->keys);	
 			XNODE(*n)->keys = NULL;	
 		}
+		if (XNODE(*n)->map != NULL) {
+			free(XNODE(*n)->map);	
+			XNODE(*n)->map = NULL;	
+		}
 		free(*n); *n = NULL;
 	}
 }
@@ -68,17 +72,11 @@ void xerdestroy(void *x, void **n) {
  */
 ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
 	uint64_t k=1;
-	if (*XHLPT(x)->off == 0) {
-		XNODE(o)->map[0] = 1;
-	} else if (*XHLPT(x)->off == 64) {
-		XNODE(o)->map[1] = 1;
-	} else if (*XHLPT(x)->off < 64) {
-		k <<= *XHLPT(x)->off;
-		XNODE(o)->map[0] |= k;
-	} else {
-		k <<= (*XHLPT(x)->off-64);
-		XNODE(o)->map[1] |= k;
-	}
+	uint64_t d = (*XHLPT(x)->off)/64;
+
+	k <<= ((*XHLPT(x)->off) - d*64);
+	XNODE(o)->map[d] |= k;
+
 	xerdestroy(x, &n);
 	return TS_ALGO_OK;
 }
@@ -89,7 +87,7 @@ ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
  */
 nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
                                nowdb_index_t   *idx,
-                               uint32_t         isz) {
+                               nowdb_content_t cont) {
 	nowdb_err_t err;
 	xhelper_t   *x;
 	xer->idx = idx;
@@ -115,8 +113,8 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 	x->rsc = nowdb_index_getResource(idx);
 	xer->tree->rsc = x;
 
-	x->keysz = isz==64?nowdb_index_keySizeEdge(x->rsc):
-		           nowdb_index_keySizeVertex(x->rsc);
+	x->keysz = cont==NOWDB_CONT_EDGE?nowdb_index_keySizeEdge(x->rsc):
+		                         nowdb_index_keySizeVertex(x->rsc);
 	if (x->keysz == 0) {
 		free(x);
 		ts_algo_tree_destroy(xer->tree);
@@ -148,7 +146,7 @@ void nowdb_indexer_destroy(nowdb_indexer_t *xer) {
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
-                                uint32_t         isz,
+                                nowdb_store_t *store,
                                 char            *rec) {
 	xnode_t *n;
 
@@ -161,9 +159,16 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                             "allocating index key");
 	}
-	memset(n->map, 0, 16);
 
-	if (isz == 64) { // this is bad!
+	n->map = malloc(store->setsize);
+	if (n->map == NULL) {
+		free(n->keys); free(n);
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                             "allocating index key");
+	}
+	memset(n->map, 0, store->setsize);
+
+	if (store->cont==NOWDB_CONT_EDGE) {
 		nowdb_index_grabEdgeKeys(XHLPT(xer->tree)->rsc,
 		                                  rec, n->keys);
 	} else {
@@ -221,7 +226,7 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 	/* insert all records into trees */
 	for(; o<m; o++) {
 		for(int i=0; i<n; i++) {
-			err = doxer(xers+i, isz, buf+isz*o);
+			err = doxer(xers+i, store, buf+isz*o);
 			if (err != NOWDB_OK) return err;
 		}
 		err = revokeResidence(store, buf+isz*o);

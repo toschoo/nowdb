@@ -31,11 +31,11 @@
 typedef struct {
 	nowdb_rwlock_t     lock; /* read/write lock             */
 	nowdb_version_t version; /* database version            */
+	nowdb_content_t    cont; /* edge or vertex              */
 	uint32_t        recsize; /* size of record stored       */
 	uint32_t       filesize; /* size of new files           */
 	uint32_t      largesize; /* size of new readers         */
-	uint32_t       pagesize; /* size of page                */
-	uint32_t        hdrsize; /* headersize                  */
+	uint32_t        setsize; /* records per page            */
 	nowdb_path_t       path; /* base path                   */
 	nowdb_path_t    catalog; /* path to catalog             */
 	nowdb_file_t    *writer; /* where we currently write to */
@@ -72,6 +72,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
+                            nowdb_content_t  cont,
                             uint32_t      recsize,
                             uint32_t     filesize,
                             uint32_t    largesize,
@@ -85,6 +86,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
+                             nowdb_content_t  cont,
                              uint32_t      recsize,
                              uint32_t     filesize,
                              uint32_t    largesize,

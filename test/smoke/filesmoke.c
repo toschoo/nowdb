@@ -54,6 +54,7 @@ nowdb_file_t *testMakeFile(nowdb_path_t path) {
 	nowdb_err_t   err;
 
 	err = nowdb_file_new(&file, 0, path, NOWDB_MEGA, 0, 8192, 64,
+	                      NOWDB_CONT_EDGE,
 	                      NOWDB_FILE_READER, NOWDB_COMP_FLAT,
 	                      NOWDB_ENCP_NONE, 1, 0, 0);
 	if (err != NOWDB_OK) {

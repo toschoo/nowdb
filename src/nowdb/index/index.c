@@ -124,10 +124,8 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
  */
 uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
 	uint32_t sz = 0;
-
 	for(int i=0; i<k->sz; i++) {
 		if (k->off[i] < NOWDB_OFF_VTYPE) sz += 8; else sz +=4;
-		
 	}
 	return sz;
 }
@@ -137,15 +135,8 @@ uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
  * ------------------------------------------------------------------------
  */
 uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k) {
-	uint32_t sz = 0;
-
-	for(int i=0; i<k->sz; i++) {
-		if (k->off[i] < NOWDB_OFF_WTYPE) sz += 8; else sz +=4;
-		
-	}
-	return sz;
+	return (k->sz * sizeof(nowdb_key_t));
 }
-
 
 /* -----------------------------------------------------------------------
  * Destroy index keys
@@ -271,8 +262,10 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 	cfg->subPath = NULL;
 
 	cfg->keySize = EMBKSZ;
-	cfg->dataSize = EMBDSZ;
-	
+	cfg->dataSize = desc->ctx != NULL &&
+	                desc->ctx->store.setsize > 0 ?
+	                desc->ctx->store.setsize     : EMBDSZ;
+
 	switch(size) {
 		case NOWDB_CONFIG_SIZE_TINY:
 

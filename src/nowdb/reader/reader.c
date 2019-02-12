@@ -41,6 +41,7 @@ static char *OBJECT = "reader";
 static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->type = 0;
 	reader->recsize = 0;
+	reader->content = NOWDB_CONT_UNKNOWN;
 	reader->size = 0;
 	reader->off = 0;
 	reader->nodata = 0;
@@ -710,7 +711,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 			               FALSE, OBJECT, NULL);
 		}
 		if (reader->key != NULL) {
-			if (reader->recsize == NOWDB_EDGE_SIZE) {
+			if (reader->content == NOWDB_CONT_EDGE) {
 				nowdb_index_grabEdgeKeys(reader->ikeys,
 			                       reader->buf+reader->off,
 				                         reader->tmp2);
@@ -730,7 +731,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 				             reader->ikeys->sz*8);
 			}
 		} else {
-			if (reader->recsize == NOWDB_EDGE_SIZE) {
+			if (reader->content == NOWDB_CONT_EDGE) {
 				nowdb_index_grabEdgeKeys(reader->ikeys,
 			                       reader->buf+reader->off,
 				                           reader->tmp);
@@ -773,7 +774,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
  * ------------------------------------------------------------------------
  */
 #define KEYCMP(k1, k2) \
-	reader->recsize == NOWDB_EDGE_SIZE ? \
+	reader->content == NOWDB_CONT_EDGE ? \
 	                   nowdb_index_edge_compare(k1, k2, reader->ikeys): \
 	                   nowdb_index_vertex_compare(k1, k2, reader->ikeys)
 
@@ -1087,6 +1088,7 @@ nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
 	(*reader)->type = NOWDB_READER_FULLSCAN;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	err = rewindFullscan(*reader);
@@ -1123,6 +1125,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 	(*reader)->type = NOWDB_READER_SEARCH;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	ber = beet_iter_alloc(index->idx, &(*reader)->iter);
@@ -1188,6 +1191,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->type = rtype;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
@@ -1431,6 +1435,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 	(*reader)->filter = filter;
 	(*reader)->eval = eval;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	/* alloc buffer */
@@ -1498,7 +1503,7 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 	nowdb_mem_sort((*reader)->buf,
 		       (*reader)->size/(*reader)->recsize,
 		       (*reader)->recsize,
-		       (*reader)->recsize == NOWDB_EDGE_SIZE ?
+		       (*reader)->content == NOWDB_CONT_EDGE ?
 		               &nowdb_sort_edge_keys_compare :
 		               &nowdb_sort_vertex_keys_compare,
 		       (*reader)->ikeys);
@@ -1572,6 +1577,7 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
 	(*reader)->recsize = (*reader)->sub[0]->recsize;
+	(*reader)->content = (*reader)->sub[0]->content;
 	(*reader)->ko = (*reader)->sub[0]->ko;
 
 	return nowdb_reader_rewind(*reader);
