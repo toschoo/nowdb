@@ -11,17 +11,25 @@
 #include <stdlib.h>
 #include <limits.h>
 
+typedef struct {
+	uint64_t origin;
+	uint64_t destin;
+	uint64_t label;
+	uint64_t stamp; // position of stamp is wrong!
+	uint64_t weight;
+	uint64_t value;
+	uint64_t reserved[2];
+} myedge_t;
+
 nowdb_bool_t writeData(nowdb_file_t *file) {
 	if (file->mptr == NULL) return FALSE;
-	nowdb_edge_t e;
+	myedge_t e;
 
 	e.origin = 1;
 	e.destin = 1;
 	e.label  = 0;
-	e.wtype[0] = NOWDB_TYP_UINT;
-	e.weight2 = 1;
-	e.wtype[1] = 0;
-	e.timestamp = 0;
+	e.value = 1;
+	e.stamp = 0;
 
 	int cnt = 0;
 	for(int i=0; i<file->bufsize; i+=64) {
@@ -38,11 +46,11 @@ nowdb_bool_t writeData(nowdb_file_t *file) {
 
 nowdb_bool_t checkData(nowdb_file_t *file) {
 	if (file->mptr == NULL) return FALSE;
-	nowdb_edge_t *e;
+	myedge_t *e;
 	int k = 0;
 
 	for(int i=0; i<file->bufsize; i+=64) {
-		e = (nowdb_edge_t*)(file->mptr+i);
+		e = (myedge_t*)(file->mptr+i);
 		if (e->weight == 42) k++;
 	}
 	if (k != (file->bufsize/file->recordsize)/16) return FALSE;
@@ -241,7 +249,7 @@ nowdb_bool_t testReadFile() {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
-	nowdb_edge_t *e;
+	myedge_t *e;
 	int z = 0;
 
 	file = testMakeFile("rsc/test.db");
@@ -272,7 +280,7 @@ nowdb_bool_t testReadFile() {
 			rc = FALSE; break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 	}
@@ -296,7 +304,7 @@ nowdb_bool_t testReadRewind() {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
-	nowdb_edge_t *e;
+	myedge_t *e;
 	int z = 0;
 
 	file = testMakeFile("rsc/test.db");
@@ -327,7 +335,7 @@ nowdb_bool_t testReadRewind() {
 			rc = FALSE; break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 	}
@@ -352,7 +360,7 @@ nowdb_bool_t testReadRewind() {
 			rc = FALSE; break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 	}
@@ -453,7 +461,7 @@ nowdb_bool_t testReadCompressed(uint32_t sz) {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
-	nowdb_edge_t *e;
+	myedge_t *e;
 	int z = 0;
 
 	file = testMakeFile("rsc/test.dbz");
@@ -485,7 +493,7 @@ nowdb_bool_t testReadCompressed(uint32_t sz) {
 			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 		/*
@@ -512,7 +520,7 @@ nowdb_bool_t testReadCompRewind(uint32_t sz) {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_bool_t rc = TRUE;
-	nowdb_edge_t *e;
+	myedge_t *e;
 	int z = 0;
 
 	file = testMakeFile("rsc/test.dbz");
@@ -545,7 +553,7 @@ nowdb_bool_t testReadCompRewind(uint32_t sz) {
 			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 		/*
@@ -574,7 +582,7 @@ nowdb_bool_t testReadCompRewind(uint32_t sz) {
 			break;
 		}
 		for(int k=0; k<file->bufsize; k+=64) {
-			e = (nowdb_edge_t*)(file->bptr+k);
+			e = (myedge_t*)(file->bptr+k);
 			if (e->weight == 42) z++;
 		}
 		/*
@@ -691,4 +699,3 @@ cleanup:
 	}
 	return rc;
 }
-

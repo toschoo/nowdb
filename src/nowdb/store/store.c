@@ -343,13 +343,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->ts = ts;
 	store->cont = cont;
 
-	// this fragment is identical
-	// to the setsize initialisation in file
-	// this should be a function!
-	uint32_t setsz = NOWDB_IDX_PAGE / recsize;
-	if (setsz * recsize < NOWDB_IDX_PAGE) setsz+=1;
-	store->setsize = setsz / 8;
-	if (8*store->setsize < setsz) store->setsize+=1;
+	store->setsize = nowdb_edge_pagectrlSize(recsize);
 
 	/* lists of files */
 	err = initAllFiles(store);

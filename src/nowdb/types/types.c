@@ -416,3 +416,41 @@ char *nowdb_typename(nowdb_type_t typ) {
 	}
 }
 
+static inline uint32_t edgeAttctrlSize(uint16_t atts) {
+	return (atts%8==0?atts/8:atts/8+1);
+}
+
+static inline uint32_t edgeRecSize(char stamped, uint16_t atts) {
+	if (atts == 0) {
+		if (stamped) return 24; else return 16;
+	}
+	uint16_t xb = edgeAttctrlSize(atts);
+	return (24+xb+8*atts);
+}
+
+uint32_t nowdb_edge_recSize(char stamped, uint16_t atts) {
+	return edgeRecSize(stamped, atts);
+}
+
+static inline uint32_t edgePerPage(uint32_t recsz) {
+	return (NOWDB_IDX_PAGE/recsz);
+}
+
+uint32_t nowdb_edge_perPage(uint32_t recsize) {
+	return edgePerPage(recsize);
+}
+
+static inline uint32_t edgePagectrlSize(uint32_t recsz) {
+	if (recsz <= 24) return 0;
+	uint32_t rp = edgePerPage(recsz);
+	return (rp%8==0?rp/8:rp/8+1);
+}
+
+uint32_t nowdb_edge_pagectrlSize(uint32_t recsz) {
+	return edgePagectrlSize(recsz);
+}
+
+uint32_t nowdb_edge_attctrlSize(uint16_t atts) {
+	return edgeAttctrlSize(atts);
+}
+

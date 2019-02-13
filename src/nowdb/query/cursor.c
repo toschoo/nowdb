@@ -1430,7 +1430,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	src = nowdb_reader_page(cur->rdr); \
 	cur->recsz = cur->rdr->recsize; \
 	recsz = cur->recsz; \
-	mx = cur->rdr->ko?recsz:NOWDB_IDX_PAGE; \
+	mx = cur->rdr->ko?recsz:(NOWDB_IDX_PAGE/recsz)*recsz; \
 	filter = cur->rdr->filter; \
 	ctype = recsz == NOWDB_EDGE_SIZE? \
                          NOWDB_CONT_EDGE: \

@@ -104,10 +104,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->state    = nowdb_file_state_closed;
 	file->order    = 0;
 
-	uint32_t setsz = blocksize / recordsize;
-	if (setsz * recordsize < blocksize) setsz+=1;
-	file->setsize = setsz / 8;
-	if (8*file->setsize < setsz) file->setsize+=1;
+	file->setsize = nowdb_edge_pagectrlSize(recordsize);
 	file->hdrsize = NOWDB_HDR_BASE_SIZE + file->setsize;
 
 	/*

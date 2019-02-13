@@ -12,6 +12,17 @@
 #include <stdlib.h>
 #include <limits.h>
 
+typedef struct {
+	uint64_t origin;
+	uint64_t destin;
+	nowdb_time_t stamp;
+	uint64_t reg1;
+	uint64_t reg2;
+	uint64_t reg3;
+	uint64_t reg4;
+	uint64_t reg5;
+} myedge_t;
+
 nowdb_bool_t createStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
@@ -149,7 +160,7 @@ nowdb_bool_t testOpenCloseStore() {
 nowdb_bool_t testInsert() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
-	nowdb_edge_t    e,k;
+	myedge_t        e,k;
 	int rc;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
@@ -167,16 +178,15 @@ nowdb_bool_t testInsert() {
 		return FALSE;
 	}
 
-	e.edge = 3;
 	e.origin = 1;
 	e.destin = 2;
-	e.label = 5;
-	e.weight = 42;
-	e.weight2 = 0;
-	e.wtype[0] = NOWDB_TYP_UINT;
-	e.wtype[1] = NOWDB_TYP_NOTHING;
+	e.reg1   = 5;
+	e.reg2   = 42;
+	e.reg3   = 0;
+	e.reg4   = 0;
+	e.reg5   = 0;
 
-	rc = nowdb_time_now(&e.timestamp);
+	rc = nowdb_time_now(&e.stamp);
 	if (rc != 0) {
 		fprintf(stderr, "cannot get timestamp: %d\n", rc);
 		return FALSE;
@@ -189,7 +199,7 @@ nowdb_bool_t testInsert() {
 		return FALSE;
 	}
 
-	e.weight++;
+	e.reg2++;
 	err = nowdb_store_insert(&store, &e);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -197,7 +207,7 @@ nowdb_bool_t testInsert() {
 		return FALSE;
 	}
 
-	e.weight++;
+	e.reg2++;
 	err = nowdb_store_insert(&store, &e);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -206,17 +216,17 @@ nowdb_bool_t testInsert() {
 	}
 
 	memcpy(&k, store.writer->mptr, 64);
-	if (k.weight != e.weight-2) {
+	if (k.reg2 != e.reg2-2) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;
 	}
 	memcpy(&k, store.writer->mptr+64, 64);
-	if (k.weight != e.weight-1) {
+	if (k.reg2 != e.reg2-1) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;
 	}
 	memcpy(&k, store.writer->mptr+128, 64);
-	if (k.weight != e.weight) {
+	if (k.reg2 != e.reg2) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;
 	}
