@@ -395,7 +395,13 @@ create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
 	NOWDB_SQL_ADDKID(C,L);
 }
 
-create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
+create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl(O) COMMA edge_field_decl(D) RPAR. {
+	NOWDB_SQL_ADDKID(O,D);
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+create_clause(C) ::= CREATE STAMPED EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
 	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
 	NOWDB_SQL_ADDKID(C,L);
 }
@@ -446,21 +452,9 @@ edge_field_decl(E) ::= DESTINATION IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_DESTIN,I);
 }
 
-edge_field_decl(E) ::= LABEL type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	         (void*)(uint64_t)NOWDB_OFF_LABEL);
-}
-edge_field_decl(E) ::= WEIGHT type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	        (void*)(uint64_t)NOWDB_OFF_WEIGHT);
-}
-
-edge_field_decl(E) ::= WEIGHT2 type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	        (void*)(uint64_t)NOWDB_OFF_WEIGHT2);
+edge_field_decl(F) ::= IDENTIFIER(I) type(T). {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
 edge_field_decl_list(L) ::= edge_field_decl(E). {

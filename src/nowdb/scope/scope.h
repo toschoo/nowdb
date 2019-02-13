@@ -200,9 +200,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
                                    char           *name,
                                    char           *origin,
                                    char           *destin,
-                                   uint32_t        label,
-                                   uint32_t        weight,
-                                   uint32_t        weight2);
+                                   ts_algo_list_t *props);
 
 /* -----------------------------------------------------------------------
  * Drop Edge

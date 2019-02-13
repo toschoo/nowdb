@@ -175,7 +175,10 @@ static void valdestroy(void *ignore, void **n) {
  * Create edge field expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off) {
+nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
+                                    char     *propname,
+                                    nowdb_key_t edgeid,
+                                    uint32_t       off) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_field_t));
@@ -190,7 +193,15 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off) {
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->target = NOWDB_TARGET_EDGE;
 	FIELD(*expr)->off = (int)off;
-	
+
+	if (propname != NULL) {
+		FIELD(*expr)->name = strdup(propname);
+		if (FIELD(*expr)->name == NULL) {
+			NOMEM("allocating field name");
+			free(*expr); *expr = NULL;
+			return err;
+		}
+	}
 	return NOWDB_OK;
 }
 
@@ -688,7 +699,8 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	nowdb_err_t err;
 
 	if (src->target == NOWDB_TARGET_EDGE) {
-		err = nowdb_expr_newEdgeField(trg, src->off);
+		err = nowdb_expr_newEdgeField(trg, src->name,
+		                      src->edgeid, src->off);
 		
 	} else {
 		err = src->name == NULL?
@@ -1031,6 +1043,7 @@ char nowdb_expr_has(nowdb_expr_t   expr,
 
 /* -----------------------------------------------------------------------
  * Find edge model
+ * WE NEED TO DO THIS ONLY ONCE!
  * -----------------------------------------------------------------------
  */
 static inline nowdb_err_t findEdge(nowdb_eval_t *hlp,
@@ -1128,68 +1141,43 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
  */
 static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
                                        nowdb_eval_t  *hlp,
-                                       nowdb_edge_t  *src,
+                                       char          *src,
                                        nowdb_type_t  *t,
                                        void         **res) {
-	void *w=NULL;
+	void *u=NULL;
 	nowdb_err_t  err;
 
 	switch(field->off) {
-	case NOWDB_OFF_EDGE:
-
-		if (field->usekey) {
-			*t = (char)NOWDB_TYP_UINT;
-			*res = &src->edge; 
-		} else {
-			*t = (char)NOWDB_TYP_TEXT;
-			*res = hlp->ce->e->name;
-		}
-		break;
-
 	case NOWDB_OFF_ORIGIN:
 		if (hlp->ce->o->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(&src->origin);
+			HANDLETEXT(src+NOWDB_OFF_ORIGIN);
 		} else {
-			*t = NOWDB_TYP_UINT;
-			*res = &src->origin;
+			*t = NOWDB_TYP_UINT; // why uint?
+			*res = src+NOWDB_OFF_ORIGIN;
 		}
 		break;
 
 	case NOWDB_OFF_DESTIN:
 		if (hlp->ce->d->vid == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(&src->destin);
+			HANDLETEXT(src+NOWDB_OFF_DESTIN);
 		} else {
-			*t = NOWDB_TYP_UINT;
-			*res = &src->destin;
+			*t = NOWDB_TYP_UINT; // why uint?
+			*res = src+NOWDB_OFF_DESTIN;
 		}
 		break;
 
-	case NOWDB_OFF_LABEL:
-		if (hlp->ce->e->label == NOWDB_MODEL_TEXT) {
-			HANDLETEXT(&src->label);
-		} else {
-			*t = NOWDB_TYP_UINT;
-			*res = &src->label;
-		}
-		break;
-
-	case NOWDB_OFF_TMSTMP:
+	case NOWDB_OFF_STAMP:
 		*t = NOWDB_TYP_TIME;
-		*res = &src->timestamp;
+		*res = src+NOWDB_OFF_STAMP;
 		break;
 
-	case NOWDB_OFF_WEIGHT:
-		w = &src->weight;
-		*t = hlp->ce->e->weight;
+	default:
+		u = &src+field->off;
+		*t = field->type; // where does the type come from?
 
-	case NOWDB_OFF_WEIGHT2:
-		if (w == NULL) {
-			w = &src->weight2;
-			*t = hlp->ce->e->weight2;
-		}
 		switch(*t) {
 		case NOWDB_TYP_TEXT:
-			HANDLETEXT(w);
+			HANDLETEXT(u);
 			break;
 
 		case NOWDB_TYP_DATE:
@@ -1197,10 +1185,8 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		case NOWDB_TYP_FLOAT:
 		case NOWDB_TYP_INT:
 		case NOWDB_TYP_UINT:
-			*res = w;
+			*res = u;
 			break;
-
-		default: break;
 		}
 	}
 	return NOWDB_OK;
@@ -1255,10 +1241,10 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
 	if ((rmap & 1<<i) == 0) {
 		// fprintf(stderr, "%s evaluates to NULL\n", field->name);
-		*t = 0; return NOWDB_OK;
+		*t = NOWDB_TYP_NOTHING; return NOWDB_OK;
 	}
 
-	*t = field->type;
+	*t = field->type; // where does the type come from?
 	if (*t == NOWDB_TYP_TEXT) {
 		HANDLETEXT((nowdb_key_t*)(src+field->off));
 	} else {
@@ -1282,10 +1268,12 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 	if (field->off < 0) INVALID("uninitialised expression");
 
 	if (field->target == NOWDB_TARGET_EDGE) {
+		/* we don't need this anymore!!!
 		err = findEdge(hlp, (nowdb_edge_t*)row);
 		if (err != NOWDB_OK) return err;
+		*/
 
-		err = getEdgeValue(field, hlp, (nowdb_edge_t*)row, typ, res);
+		err = getEdgeValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 		
 	} else {

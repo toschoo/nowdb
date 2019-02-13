@@ -68,6 +68,7 @@ typedef struct {
 	char            *text; /* string if off is text   */
 	char            *name; /* property name if vertex */
 	nowdb_roleid_t   role; /* vertex type if vertex   */
+	nowdb_key_t    edgeid; /* edge   type if edge     */
 	nowdb_key_t    propid; /* propid if vertex        */
 	char               pk; /* primary key if vertex   */
 	char           usekey; /* use key instead of text */
@@ -216,7 +217,10 @@ void nowdb_eval_destroy(nowdb_eval_t *eval);
  * Create EdgeField expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
+nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
+                                    char     *propname,
+                                    nowdb_key_t edgeid,
+                                    uint32_t      off);
 
 /* -----------------------------------------------------------------------
  * Create EdgeField expression

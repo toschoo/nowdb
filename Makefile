@@ -693,6 +693,9 @@ clean:
 	rm -f $(RSC)/*.sql
 	rm -rf $(RSC)/test
 	rm -rf $(RSC)/teststore
+	rm -rf $(RSC)/test?
+	rm -rf $(RSC)/test??
+	rm -rf $(RSC)/test???
 	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
 	rm -rf $(RSC)/testscope

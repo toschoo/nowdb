@@ -1507,14 +1507,19 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 		goto unlock;
 	}
 
-	// there is no edge nor type with that name
+	// there is an edge, but not a type with that name
 	err = nowdb_model_whatIs(scope->model, name, &t);
 	if (err == NOWDB_OK) {
-		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+		if (t == NOWDB_TARGET_VERTEX) {
+			// dup key is not good here
+			// better: wrong type or something
+			err = nowdb_err_get(nowdb_err_dup_key,
+			                  FALSE, OBJECT, name);
+			goto unlock;
+		}
+	} else {
 		goto unlock;
 	}
-	if (err->errcode != nowdb_err_key_not_found) goto unlock;
-	nowdb_err_release(err);
 
 	err = initContext(scope, name, cfg, scope->ver, &ctx);
 	if (err != NOWDB_OK) goto unlock;
@@ -1904,7 +1909,7 @@ nowdb_err_t nowdb_scope_createType(nowdb_scope_t     *scope,
 	                          FALSE, OBJECT, "name is NULL");
 
 	/* currently, we lock the scope
-	 * for reading, so it cannot be 
+	 * for writing, so it cannot be 
 	 * closed while we are working */
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
@@ -1970,12 +1975,11 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
                                    char           *name,
                                    char           *origin,
                                    char           *destin,
-                                   uint32_t        label,
-                                   uint32_t        weight,
-                                   uint32_t        weight2) {
+                                   ts_algo_list_t *props) {
 	nowdb_err_t err2,err=NOWDB_OK;
-	nowdb_model_edge_t   *e=NULL;
 	nowdb_model_vertex_t *v=NULL;
+	nowdb_roleid_t      oid, did;
+	nowdb_key_t           edgeid;
 	nowdb_context_t *ctx;
 
 	SCOPENULL();
@@ -1992,7 +1996,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 
 	SCOPENOTOPEN();
 
-	// not context with that name exists
+	// no context with that name exists
 	err = findContext(scope, name, &ctx);
 	if (err == NOWDB_OK) {
 		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
@@ -2001,51 +2005,25 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	if (err->errcode != nowdb_err_key_not_found) goto unlock;
 	nowdb_err_release(err);
 
-	e = calloc(1,sizeof(nowdb_model_edge_t));
-	if (e == NULL) {
-		NOMEM("allocating edge");
-		goto unlock;
-	}
-
-	e->name = strdup(name);
-	if (e->name == NULL) {
-		free(e);
-		NOMEM("allocating edge name");
-		goto unlock;
-	}
-
-	e->edge = NOWDB_MODEL_TEXT;
-	e->label = label==NOWDB_TYP_TEXT?
-	                  NOWDB_MODEL_TEXT:
-	                  NOWDB_MODEL_NUM;
-	e->weight = weight;
-	e->weight2 = weight2;
-
 	err = nowdb_model_getVertexByName(scope->model, origin, &v);
-	if (err != NOWDB_OK) {
-		free(e->name); free(e);
-		goto unlock;
-	}
-	e->origin = v->roleid;
+	if (err != NOWDB_OK) goto unlock;
+	oid = v->roleid;
 
 	err = nowdb_model_getVertexByName(scope->model, destin, &v);
-	if (err != NOWDB_OK) {
-		free(e->name); free(e);
-		goto unlock;
-	}
-	e->destin = v->roleid;
+	if (err != NOWDB_OK) goto unlock;
+	did = v->roleid;
 
-	err = nowdb_text_insert(scope->text, name, &e->edgeid);
+	err = nowdb_text_insert(scope->text, name, &edgeid);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = nowdb_model_addEdgeType(scope->model, name,
+	                         edgeid, oid, did, props);
 	if (err != NOWDB_OK) {
-		free(e->name); free(e);
 		goto unlock;
 	}
 
-	err = nowdb_model_addEdge(scope->model, e);
-	if (err != NOWDB_OK) {
-		free(e->name); free(e);
-		goto unlock;
-	}
+	// create index on origin
+	// create index on destin
 
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);

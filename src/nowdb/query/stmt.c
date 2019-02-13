@@ -376,6 +376,24 @@ static void destroyProps(ts_algo_list_t *props) {
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: destroy list of edge properties
+ * -------------------------------------------------------------------------
+ */
+static void destroyPedges(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner, *tmp;
+	nowdb_model_pedge_t *p;
+
+	runner=props->head;
+	while(runner!=NULL) {
+		p = runner->cont;
+		free(p->name); free(p);
+		tmp = runner->nxt;
+		ts_algo_list_remove(props, runner);
+		free(runner); runner = tmp;
+	}
+}
+
+/* -------------------------------------------------------------------------
  * Create Type
  * -------------------------------------------------------------------------
  */
@@ -480,6 +498,159 @@ static nowdb_err_t dropType(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Apply create options on config
+ * NOTE: configs shall be handled on the level of tablespace!
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
+                                nowdb_ctx_config_t *cfg) {
+	nowdb_ast_t *o;
+	uint64_t cfgopts = 0;
+	uint64_t utmp;
+
+	/* with no options given: use defaults */
+	if (opts == NULL) {
+		cfgopts = NOWDB_CONFIG_SIZE_BIG        |
+		          NOWDB_CONFIG_INSERT_CONSTANT | 
+		          NOWDB_CONFIG_DISK_HDD;
+		nowdb_ctx_config(cfg, cfgopts);
+		return NOWDB_OK;
+	}
+
+	/* get sizing (or use default) */
+	o = nowdb_ast_option(opts, NOWDB_AST_SIZING);
+	if (o == NULL) cfgopts |= NOWDB_CONFIG_SIZE_BIG;
+	else {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid sizing");
+		cfgopts |= utmp;
+	}
+
+	/* get stress (or use default) */
+	o = nowdb_ast_option(opts, NOWDB_AST_STRESS);
+	if (o == NULL) cfgopts |= NOWDB_CONFIG_INSERT_CONSTANT;
+	else {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid throughput");
+		cfgopts |= utmp;
+	}
+
+	/* get disk (or use default) */
+	o = nowdb_ast_option(opts, NOWDB_AST_DISK);
+	if (o == NULL) cfgopts |= NOWDB_CONFIG_DISK_HDD;
+	else {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid disk");
+		cfgopts |= utmp;
+	}
+
+	/* get nocomp */
+	o = nowdb_ast_option(opts, NOWDB_AST_COMP);
+	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOCOMP;
+
+	/* get nosort */
+	o = nowdb_ast_option(opts, NOWDB_AST_SORT);
+	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOSORT;
+
+	/* apply the options */
+	nowdb_ctx_config(cfg, cfgopts);
+
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Apply explicitly stated options on config
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
+                                 nowdb_ctx_config_t *cfg) {
+
+	nowdb_ast_t *o;
+	uint64_t utmp;
+
+	if (opts == NULL) return NOWDB_OK;
+
+	o = nowdb_ast_option(opts, NOWDB_AST_SORTERS);
+	if (o != NULL) {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid sorters");
+		cfg->sorters = (uint32_t)utmp;
+	}
+	o = nowdb_ast_option(opts, NOWDB_AST_ALLOCSZ);
+	if (o != NULL) {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid alloc size");
+		cfg->allocsize = (uint32_t)utmp;
+	}
+	o = nowdb_ast_option(opts, NOWDB_AST_LARGESZ);
+	if (o != NULL) {
+		if (nowdb_ast_getUInt(o, &utmp) != 0)
+			INVALIDAST("invalid ast: invalid large size");
+		cfg->largesize = (uint32_t)utmp;
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Check whether the context exists or not
+ * TODO:
+ * - we should use "nosuch context" instead of "key not found".
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
+                                             char          *name,
+                                             nowdb_bool_t  *b) {
+	nowdb_err_t err;
+	nowdb_context_t *ctx;
+
+	err = nowdb_scope_getContext(scope, name, &ctx);
+	if (err == NOWDB_OK) {
+		*b = TRUE; return NOWDB_OK;
+	}
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		nowdb_err_release(err);
+		*b = FALSE; return NOWDB_OK;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Create context
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createContext(nowdb_ast_t  *op,
+                                 char       *name,
+                             nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_ast_t *opts, *o;
+	nowdb_ctx_config_t cfg;
+
+	/* get options and, if 'ifexists' is given,
+	 * check if the context exists */
+	opts = nowdb_ast_option(op, 0);
+	if (opts != NULL) {
+		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_bool_t x = FALSE;
+			err = checkContextExists(scope, name, &x);
+			if (err != NOWDB_OK) return err;
+			if (x) return NOWDB_OK;
+		}
+	}
+
+	/* apply implicit options */
+	err = applyCreateOptions(opts, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	/* apply explicit options */
+	err = applyGenericOptions(opts, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	/* create the context */
+	return nowdb_scope_createContext(scope, name, &cfg);
+}
+
+/* -------------------------------------------------------------------------
  * Create Edge
  * -------------------------------------------------------------------------
  */
@@ -491,46 +662,90 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 	nowdb_ast_t  *f;
 	nowdb_ast_t  *d;
 	char *origin=NULL, *destin=NULL;
-	uint32_t weight = NOWDB_TYP_NOTHING;
-	uint32_t weight2 = NOWDB_TYP_NOTHING;
-	uint32_t label = NOWDB_TYP_NOTHING;
+	nowdb_model_pedge_t *p;
+	ts_algo_list_t props;
 
 	d = nowdb_ast_declare(op);
 	if (d == NULL) INVALIDAST("no declarations in AST");
+	ts_algo_list_init(&props);
 
 	while(d != NULL) {
 		if (d->stype == NOWDB_AST_TYPE) {
 			f = nowdb_ast_off(d);
-			if (f == NULL) INVALIDAST("no offset in decl");
+			if (f == NULL) {
+				destroyPedges(&props);
+				INVALIDAST("no offset in decl");
+			}
 			if (f->stype == NOWDB_OFF_ORIGIN) {
+				fprintf(stderr, "ORIGIN\n");
 				origin = d->value;
 			} else {
+				fprintf(stderr, "DESTIN\n");
 				destin = d->value;
 			}
 		} else {
-			switch((uint32_t)(uint64_t)d->value) {
-			case NOWDB_OFF_LABEL:
-				label = nowdb_ast_type(d->stype); break;
-			case NOWDB_OFF_WEIGHT:
-				weight = nowdb_ast_type(d->stype); break;
-			case NOWDB_OFF_WEIGHT2:
-				weight2 = nowdb_ast_type(d->stype); break;
-			default:
-				INVALIDAST("unknown field in edge");
+			if (d->vtype != NOWDB_AST_V_STRING) {
+				destroyPedges(&props);
+				INVALIDAST("missing property name");
+			}
+			p = calloc(1,sizeof(nowdb_model_pedge_t));
+			if (p == NULL) {
+				destroyPedges(&props);
+				NOMEM("allocating property");
+				return err;
+			}
+	
+			p->name  = strdup(d->value);
+			if (p->name == NULL) {
+				destroyPedges(&props); free(p);
+				NOMEM("allocating property name");
+				return err;
+			}
+			fprintf(stderr, "%s\n", p->name);
+	
+			p->value = nowdb_ast_type(d->stype);
+			p->edgeid = 0;
+			p->off = 0;
+			
+			err = nowdb_text_insert(scope->text,
+			               p->name, &p->propid);
+			if (err != NOWDB_OK) {
+				destroyPedges(&props);
+				free(p->name); free(p);
+				return err;
+			}
+	
+			if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+				destroyPedges(&props);
+				free(p->name); free(p);
+				NOMEM("list.append");
+				return err;
 			}
 		}
 		d = nowdb_ast_declare(d);
 	}
+
 	if (origin == NULL && destin == NULL) {
+		destroyPedges(&props);
 		INVALIDAST("no vertex in edge");
 	}
-	err = nowdb_scope_createEdge(scope, name, origin, destin,
-	                                  label, weight, weight2);
+	err = nowdb_scope_createEdge(scope, name, origin, destin, &props);
 	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+		destroyPedges(&props);
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
 			nowdb_err_release(err);
 			err = NOWDB_OK;
+		}
+	}
+	ts_algo_list_destroy(&props);
+	err = createContext(op, name, scope);
+	if (err != NOWDB_OK) {
+		nowdb_err_t err2;
+		err2 = nowdb_model_removeEdgeType(scope->model, name);
+		if (err2 != NOWDB_OK) {
+			nowdb_err_cascade(err2, err);
+			return err2;
 		}
 	}
 	return err;
@@ -815,158 +1030,6 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	}
 	nowdb_loader_destroy(&ldr);
 	return err;
-}
-
-/* -------------------------------------------------------------------------
- * Apply create options on config
- * -------------------------------------------------------------------------
- */
-static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
-                                nowdb_ctx_config_t *cfg) {
-	nowdb_ast_t *o;
-	uint64_t cfgopts = 0;
-	uint64_t utmp;
-
-	/* with no options given: use defaults */
-	if (opts == NULL) {
-		cfgopts = NOWDB_CONFIG_SIZE_BIG        |
-		          NOWDB_CONFIG_INSERT_CONSTANT | 
-		          NOWDB_CONFIG_DISK_HDD;
-		nowdb_ctx_config(cfg, cfgopts);
-		return NOWDB_OK;
-	}
-
-	/* get sizing (or use default) */
-	o = nowdb_ast_option(opts, NOWDB_AST_SIZING);
-	if (o == NULL) cfgopts |= NOWDB_CONFIG_SIZE_BIG;
-	else {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid sizing");
-		cfgopts |= utmp;
-	}
-
-	/* get stress (or use default) */
-	o = nowdb_ast_option(opts, NOWDB_AST_STRESS);
-	if (o == NULL) cfgopts |= NOWDB_CONFIG_INSERT_CONSTANT;
-	else {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid throughput");
-		cfgopts |= utmp;
-	}
-
-	/* get disk (or use default) */
-	o = nowdb_ast_option(opts, NOWDB_AST_DISK);
-	if (o == NULL) cfgopts |= NOWDB_CONFIG_DISK_HDD;
-	else {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid disk");
-		cfgopts |= utmp;
-	}
-
-	/* get nocomp */
-	o = nowdb_ast_option(opts, NOWDB_AST_COMP);
-	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOCOMP;
-
-	/* get nosort */
-	o = nowdb_ast_option(opts, NOWDB_AST_SORT);
-	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOSORT;
-
-	/* apply the options */
-	nowdb_ctx_config(cfg, cfgopts);
-
-	return NOWDB_OK;
-}
-
-/* -------------------------------------------------------------------------
- * Apply explicitly stated options on config
- * -------------------------------------------------------------------------
- */
-static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
-                                 nowdb_ctx_config_t *cfg) {
-
-	nowdb_ast_t *o;
-	uint64_t utmp;
-
-	if (opts == NULL) return NOWDB_OK;
-
-	o = nowdb_ast_option(opts, NOWDB_AST_SORTERS);
-	if (o != NULL) {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid sorters");
-		cfg->sorters = (uint32_t)utmp;
-	}
-	o = nowdb_ast_option(opts, NOWDB_AST_ALLOCSZ);
-	if (o != NULL) {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid alloc size");
-		cfg->allocsize = (uint32_t)utmp;
-	}
-	o = nowdb_ast_option(opts, NOWDB_AST_LARGESZ);
-	if (o != NULL) {
-		if (nowdb_ast_getUInt(o, &utmp) != 0)
-			INVALIDAST("invalid ast: invalid large size");
-		cfg->largesize = (uint32_t)utmp;
-	}
-	return NOWDB_OK;
-}
-
-/* -------------------------------------------------------------------------
- * Check whether the context exists or not
- * TODO:
- * - we should use "nosuch context" instead of "key not found".
- * -------------------------------------------------------------------------
- */
-static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
-                                             char          *name,
-                                             nowdb_bool_t  *b) {
-	nowdb_err_t err;
-	nowdb_context_t *ctx;
-
-	err = nowdb_scope_getContext(scope, name, &ctx);
-	if (err == NOWDB_OK) {
-		*b = TRUE; return NOWDB_OK;
-	}
-	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
-		nowdb_err_release(err);
-		*b = FALSE; return NOWDB_OK;
-	}
-	return err;
-}
-
-/* -------------------------------------------------------------------------
- * Create context
- * -------------------------------------------------------------------------
- */
-static nowdb_err_t createContext(nowdb_ast_t  *op,
-                                 char       *name,
-                             nowdb_scope_t *scope) {
-	nowdb_err_t err;
-	nowdb_ast_t *opts, *o;
-	nowdb_ctx_config_t cfg;
-
-	/* get options and, if 'ifexists' is given,
-	 * check if the context exists */
-	opts = nowdb_ast_option(op, 0);
-	if (opts != NULL) {
-		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
-		if (o != NULL) {
-			nowdb_bool_t x = FALSE;
-			err = checkContextExists(scope, name, &x);
-			if (err != NOWDB_OK) return err;
-			if (x) return NOWDB_OK;
-		}
-	}
-
-	/* apply implicit options */
-	err = applyCreateOptions(opts, &cfg);
-	if (err != NOWDB_OK) return err;
-
-	/* apply explicit options */
-	err = applyGenericOptions(opts, &cfg);
-	if (err != NOWDB_OK) return err;
-
-	/* create the context */
-	return nowdb_scope_createContext(scope, name, &cfg);
 }
 
 /* -------------------------------------------------------------------------

@@ -1368,14 +1368,21 @@ static char pedgeUnique(ts_algo_list_t  *props,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
-                               nowdb_key_t    edgeid,
-                               ts_algo_list_t *props) {
+                                nowdb_key_t    edgeid,
+                                ts_algo_list_t *props) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_pedge_t *p, *tmp;
+	uint32_t off, xb;
+	
+	xb = nowdb_edge_attctrlSize(props->len);
+	off = NOWDB_OFF_USER+xb;
 
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		p = runner->cont;
+
 		p->edgeid = edgeid;
+		p->off = off; off+=8;
+
 		tmp = ts_algo_tree_find(model->pedgeById, p);
 		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
 		                                 FALSE, OBJECT, p->name);
@@ -1386,6 +1393,8 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 			return nowdb_err_get(nowdb_err_dup_key,
 		                        FALSE, OBJECT, p->name);
 		}
+
+		// get propid
 	}
 	return NOWDB_OK;
 }
@@ -1511,6 +1520,8 @@ unlock:
 nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
                                     char           *name,
                                     nowdb_key_t     edgeid,
+                                    nowdb_roleid_t  origin,
+                                    nowdb_roleid_t  destin,
                                     ts_algo_list_t *props) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
@@ -1543,6 +1554,8 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 	}
 
 	edge->edgeid = edgeid;
+	edge->origin = origin;
+	edge->destin = destin;
 
 	if (props != NULL) {
 		err = pedgesUnique(model, edge->edgeid, props);
