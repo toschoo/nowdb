@@ -2274,6 +2274,7 @@ nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
                                   nowdb_key_t    edgeid,
                                   ts_algo_list_t *props) {
 	nowdb_err_t err;
+	nowdb_model_edge_t *e, pattern;
 	nowdb_model_pedge_t tmp;
 	ts_algo_list_t unsorted, *sorted;
 
@@ -2281,29 +2282,49 @@ nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
 	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                           FALSE, OBJECT, "list is NULL");
 
-	ts_algo_list_init(&unsorted);
-	tmp.edgeid = edgeid;
+	pattern.edgeid = edgeid;
+	e = ts_algo_tree_find(model->edgeById, &pattern);
+	if (e == NULL) INVALID("no such edge");
 
-	// filter properties using tmp (i.e. roleid)
-	if (ts_algo_tree_filter(model->pedgeById, &unsorted, &tmp,
-	                        pedgesByEdgeid) != TS_ALGO_OK) {
-		NOMEM("tree.filter");
-		return err;
+	if (e->size > NOWDB_OFF_USER) {
+
+		ts_algo_list_init(&unsorted);
+		tmp.edgeid = edgeid;
+
+		// filter properties using tmp (i.e. roleid)
+		if (ts_algo_tree_filter(model->pedgeById, &unsorted, &tmp,
+		                        pedgesByEdgeid) != TS_ALGO_OK) {
+			NOMEM("tree.filter");
+			return err;
+		}
+	
+		// sort properties by off
+		sorted = ts_algo_list_sort(&unsorted, sortByOff);
+		ts_algo_list_destroy(&unsorted);
+		if (sorted == NULL) {
+			NOMEM("list.sort");
+			return err;
+		}
+
+		// copy sorted list to result list
+		err = copyList(sorted, props);
+		ts_algo_list_destroy(sorted); free(sorted);
+		if (err != NOWDB_OK) {
+			NOMEM("list.copy");
+			return err;
+		}
 	}
-
-	// sort properties by off
-	sorted = ts_algo_list_sort(&unsorted, sortByOff);
-	ts_algo_list_destroy(&unsorted);
-	if (sorted == NULL) {
-		NOMEM("list.sort");
-		return err;
+	if (e->size > NOWDB_OFF_STAMP) {
+		if (ts_algo_list_insert(props, &e->tp) != TS_ALGO_OK) {
+			ts_algo_list_destroy(props);
+			NOMEM("list.insert");
+			return err;
+		}
 	}
-
-	// copy sorted list to result list
-	err = copyList(sorted, props);
-	ts_algo_list_destroy(sorted); free(sorted);
-	if (err != NOWDB_OK) {
-		NOMEM("list.copy");
+	if (ts_algo_list_insert(props, &e->dp) != TS_ALGO_OK ||
+	    ts_algo_list_insert(props, &e->op) != TS_ALGO_OK) {
+		ts_algo_list_destroy(props);
+		NOMEM("list.insert");
 		return err;
 	}
 	return NOWDB_OK;

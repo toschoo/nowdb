@@ -1183,7 +1183,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 	default:
 		HANDLENULL(src,field);
 		
-		u = &src+field->off;
+		u = src+field->off;
 		*t = field->type;
 
 		switch(*t) {

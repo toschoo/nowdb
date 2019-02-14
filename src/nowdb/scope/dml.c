@@ -34,10 +34,12 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 	dml->tlru  = NULL;
 	dml->v = NULL;
 	dml->p = NULL;
+	dml->pe = NULL;
 	dml->e = NULL;
 	dml->o = NULL;
 	dml->d = NULL;
-	dml->num = 0;
+	dml->propn = 0;
+	dml->pedgen = 0;
 
 	if (withCache) {
 		dml->tlru = calloc(1,sizeof(nowdb_pklru_t));
@@ -69,8 +71,40 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 		free(dml->tlru ); dml->tlru = NULL;
 	}
 	if (dml->p != NULL) {
-		free(dml->p); dml->p = NULL; dml->num = 0;
+		free(dml->p); dml->p = NULL; dml->propn = 0;
 	}
+	if (dml->pe != NULL) {
+		free(dml->pe); dml->pe = NULL; dml->pedgen = 0;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Are we context or vertex?
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdge(nowdb_dml_t *dml,
+                                  char    *trgname,
+                                  char      *found) {
+	nowdb_err_t err;
+	nowdb_context_t *ctx;
+
+	err = nowdb_scope_getContext(dml->scope, trgname, &ctx);
+	if (err != NOWDB_OK) {
+		if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+	}
+	dml->target = NOWDB_TARGET_EDGE;
+	dml->store = &ctx->store;
+
+	err = nowdb_model_getEdgeByName(dml->scope->model,
+	                                 trgname, &dml->e);
+	if (err != NOWDB_OK) return err;
+
+	*found=1;
+
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -79,24 +113,15 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
  */
 static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
                                       char    *trgname) {
-	nowdb_err_t err1, err2;
-	nowdb_context_t *ctx;
+	nowdb_err_t err;
+	char x=0;
 
-	err1 = nowdb_scope_getContext(dml->scope, trgname, &ctx);
-	if (err1 == NOWDB_OK) {
-		dml->target = NOWDB_TARGET_EDGE;
-		dml->store = &ctx->store;
-		return NOWDB_OK;
-	}
+	err = getEdge(dml, trgname, &x);
+	if (err != NOWDB_OK) return err;
+	if (x) return NOWDB_OK;
 
-	if (!nowdb_err_contains(err1, nowdb_err_key_not_found)) return err1;
-
-	err2 = nowdb_model_getVertexByName(dml->scope->model,trgname,&dml->v);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err1; return err2;
-	}
-
-	nowdb_err_release(err1);
+	err = nowdb_model_getVertexByName(dml->scope->model,trgname,&dml->v);
+	if (err != NOWDB_OK) return err;
 
 	dml->target = NOWDB_TARGET_VERTEX;
 	dml->store = &dml->scope->vertices;
@@ -118,7 +143,7 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
 	int i;
 
 	if (dml->p != NULL) {
-		free(dml->p); dml->p = NULL; dml->num = 0;
+		free(dml->p); dml->p = NULL; dml->propn = 0;
 	}
 	if (fields == NULL) {
 		ts_algo_list_init(&props);
@@ -140,7 +165,7 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
 		if (fields == NULL) ts_algo_list_destroy(&props);
 		return err;
 	}
-	dml->num = len;
+	dml->propn = len;
 	i = 0;
 	for(run=fields==NULL?props.head:fields->head;
 	    run!=NULL; run=run->nxt) {
@@ -158,11 +183,11 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
 	}
 	if (fields == NULL) ts_algo_list_destroy(&props);
 	if (err != NOWDB_OK) {
-		free(dml->p); dml->p = NULL; dml->num = 0;
+		free(dml->p); dml->p = NULL; dml->propn = 0;
 		return err;
 	}
 	if (!havePK) {
-		free(dml->p); dml->p = NULL; dml->num = 0;
+		free(dml->p); dml->p = NULL; dml->propn = 0;
 		INVALIDVAL("PK not in list");
 		return err;
 	}
@@ -174,10 +199,67 @@ static nowdb_err_t getVertexProperties(nowdb_dml_t *dml,
  * ------------------------------------------------------------------------
  */
 static char propsSorted(nowdb_dml_t *dml) {
-	for(int i=0; i<dml->num; i++) {
+	for(int i=0; i<dml->propn; i++) {
 		if (dml->p[i]->pos != i) return 0;
 	}
 	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Get edge properties from model
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t getEdgeProperties(nowdb_dml_t *dml,
+                               ts_algo_list_t *fields) {
+	nowdb_err_t err;
+	ts_algo_list_t props;
+	ts_algo_list_node_t *run;
+	int len;
+	int i;
+
+	if (dml->pe != NULL) {
+		free(dml->pe); dml->pe = NULL; dml->pedgen = 0;
+	}
+	if (fields == NULL) {
+		ts_algo_list_init(&props);
+		err = nowdb_model_getPedges(dml->scope->model,
+			                    dml->e->edgeid,&props);
+		if (err != NOWDB_OK) {
+			ts_algo_list_destroy(&props);
+			return err;
+		}
+		len = props.len;
+	} else {
+		len = fields->len;
+	}
+
+	dml->pe = calloc(len, sizeof(nowdb_model_pedge_t*));
+	if (dml->pe == NULL) {
+		NOMEM("allocating properties");
+		if (fields == NULL) ts_algo_list_destroy(&props);
+		return err;
+	}
+	dml->pedgen = len;
+	i = 0;
+	for(run=fields==NULL?props.head:fields->head;
+	    run!=NULL; run=run->nxt) {
+		if (fields == NULL) {
+			dml->pe[i] = run->cont;
+		} else {
+			err = nowdb_model_getPedgeByName(dml->scope->model,
+			                                 dml->e->edgeid,
+			                                 run->cont,
+			                                 dml->pe+i);
+			if (err != NOWDB_OK) break;
+		}
+		i++;
+	}
+	if (fields == NULL) ts_algo_list_destroy(&props);
+	if (err != NOWDB_OK) {
+		free(dml->pe); dml->pe = NULL; dml->pedgen = 0;
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -193,10 +275,38 @@ static char vertexComplete(nowdb_dml_t *dml,
 
 	if (dml->p == NULL) return 0;
 	if (fields == NULL) {
-		if (values->len != dml->num) return 0;
+		if (values->len != dml->propn) return 0;
 		return propsSorted(dml);
 	}
-	if (dml->num != fields->len) return 0;
+	if (dml->propn != fields->len) return 0;
+	for(run=fields->head; run!=NULL; run=run->nxt) {
+		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
+			return 0;
+		}
+		i++;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Do we insert the complete edge?
+ * ------------------------------------------------------------------------
+ */
+static char edgeComplete(nowdb_dml_t *dml,
+                   ts_algo_list_t *fields, 
+                   ts_algo_list_t *values) 
+{
+	ts_algo_list_node_t *run;
+	int i=0;
+
+	if (dml->pe == NULL) return 0;
+	if (fields == NULL) {
+		if (values->len != dml->pedgen) return 0;
+		// return pedgesSorted(dml);
+		return 1;
+	}
+	if (dml->pedgen != fields->len) return 0;
+	// origin / destin / timestamp
 	for(run=fields->head; run!=NULL; run=run->nxt) {
 		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
 			return 0;
@@ -232,15 +342,24 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 		if (strcasecmp(dml->trgname,
 	                            trgname) == 0) {
 			if (dml->target == NOWDB_TARGET_EDGE) {
-				return NOWDB_OK;
-			} else if (vertexComplete(dml, fields, values)) {
-				return NOWDB_OK;
+				if (edgeComplete(dml, fields, values)) {
+					return NOWDB_OK;
+				} else {
+					return getEdgeProperties(
+					              dml,fields);
+				}
 			} else {
-				return getVertexProperties(dml, fields);
+				if (vertexComplete(dml, fields, values)) {
+					return NOWDB_OK;
+				} else {
+					return getVertexProperties(
+					                dml,fields);
+				}
 			}
 		}
 		free(dml->trgname); dml->trgname = NULL;
 	}
+
 	dml->trgname = strdup(trgname);
 	if (dml->trgname == NULL) {
 		NOMEM("allocating target name");
@@ -251,9 +370,10 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	err = getContextOrVertex(dml, trgname);
 	if (err != NOWDB_OK) return err;
 
-	if (dml->target == NOWDB_TARGET_VERTEX) {
-		err = getVertexProperties(dml, fields);
-		if (err != NOWDB_OK) return err;
+	if (dml->target == NOWDB_TARGET_EDGE) {
+		return getEdgeProperties(dml,fields);
+	} else {
+		return getVertexProperties(dml, fields);
 	}
 	return NOWDB_OK;
 }
@@ -298,8 +418,8 @@ static inline nowdb_err_t getKey(nowdb_dml_t *dml,
  * Set edge model
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
-                                       char       *edge) {
+/*
+static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml) {
 	nowdb_err_t err;
 	nowdb_key_t eid;
 
@@ -323,11 +443,13 @@ static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml,
 
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Get edge model
  * ------------------------------------------------------------------------
  */
+/*
 static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
                                  ts_algo_list_t *fields,
                                  ts_algo_list_t *values) {
@@ -356,13 +478,11 @@ static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
 		val = edge->cont;
 	} else {
 		if (values == NULL) INVALID("no values");
-		if (values->len < 7) INVALID("incomplete value list");
-		if (values->len > 7) INVALID("too many values");
-		val = values->head->cont;
 	}
 	// fprintf(stderr, "%s\n", (char*)val->value);
-	return setEdgeModel(dml, val->value);
+	return setEdgeModel(dml);
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Check edge model
@@ -372,13 +492,8 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
                                          uint32_t              off,
                                          nowdb_simple_value_t *val) {
 	switch(off) {
-	case NOWDB_OFF_EDGE:
-		if (val->type != NOWDB_TYP_TEXT) {
-			INVALID("edge must be text");
-		}
-		break;
-
 	case NOWDB_OFF_ORIGIN:
+		/*
 		if (dml->o->vid == NOWDB_MODEL_TEXT &&
 		    val->type != NOWDB_TYP_TEXT) {
 			INVALID("origin must be text");
@@ -386,9 +501,11 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		           val->type != NOWDB_TYP_UINT) {
 			INVALID("origin must be unsigned integer");
 		}
+		*/
 		break;
 
 	case NOWDB_OFF_DESTIN:
+		/*
 		if (dml->d->vid == NOWDB_MODEL_TEXT &&
 		    val->type != NOWDB_TYP_TEXT) {
 			INVALID("destination must be text");
@@ -396,16 +513,7 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		           val->type != NOWDB_TYP_UINT) {
 			INVALID("destination must be unsigned integer");
 		}
-		break;
-
-	case NOWDB_OFF_LABEL:
-		if (dml->e->label == NOWDB_MODEL_TEXT &&
-		    val->type != NOWDB_TYP_TEXT) {
-			INVALID("label must be text");
-		} else if (dml->e->label != NOWDB_MODEL_TEXT &&
-		           val->type != NOWDB_TYP_UINT) {
-			INVALID("label must be unsigned integer");
-		}
+		*/
 		break;
 
 	case NOWDB_OFF_TMSTMP:
@@ -418,6 +526,7 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		}
 		break;
 
+	/*
 	case NOWDB_OFF_WEIGHT:
  		if (dml->e->weight == NOWDB_TYP_INT &&
 		    val->type == NOWDB_TYP_UINT) {
@@ -450,9 +559,11 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 			INVALID("wrong type in weight");
 		}
 		break;
+	*/
 
 	default:
-		INVALID("unknown type");
+		break;
+		// INVALID("unknown type");
 
 	}
 	return NOWDB_OK;
@@ -512,17 +623,17 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		memset(target, 0, sizeof(nowdb_key_t)); break;
 
 	case NOWDB_TYP_TEXT:
-		// fprintf(stderr, "TEXT: %s\n", (char*)val->value);
+		fprintf(stderr, "TEXT: %s\n", (char*)val->value);
 		return getKey(dml, val->value, target);
 
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
-		// fprintf(stderr, "TIME: %s\n", (char*)val->value);
+		fprintf(stderr, "TIME: %s\n", (char*)val->value);
 		STRTOTIME();
 		break;
 
 	case NOWDB_TYP_FLOAT:
-		// fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
+		fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
 		STROD();
 		break;
 
@@ -531,7 +642,7 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		break;
 
 	case NOWDB_TYP_UINT:
-		// fprintf(stderr, "UINT: %s\n", (char*)val->value);
+		fprintf(stderr, "UINT: %s\n", (char*)val->value);
 		STROX(uint64_t, strtoul);
 		break;
 
@@ -547,10 +658,49 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
-                                        nowdb_edge_t *edge,
+                                        char         *edge,
                                         uint32_t       off,
                                  nowdb_simple_value_t *val) {
-	return getValueAsType(dml, val, ((char*)edge)+off);
+	nowdb_err_t err;
+	err = getValueAsType(dml, val, edge+off);
+	if (err != NOWDB_OK) return err;
+
+	fprintf(stderr, "writing %s offset %u\n", (char*)val->value, off);
+
+	if (off < NOWDB_OFF_USER) return NOWDB_OK;
+
+	uint8_t bit;
+	uint16_t byte;
+
+	nowdb_edge_getCtrl(dml->e->num, off, &bit, &byte);
+
+	fprintf(stderr, "setting bit %u in byte %hu at offset %u\n",
+	                              bit, byte, NOWDB_OFF_USER);
+
+	char *xbyte = edge+NOWDB_OFF_USER+byte;
+	(*xbyte) |= 1<<bit;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get off by name
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdgeOffByName(nowdb_dml_t *dml,
+                                           char       *name,
+                                           uint32_t    *off) {
+	nowdb_err_t err;
+	nowdb_model_pedge_t *p;
+
+	err = nowdb_model_getPedgeByName(dml->scope->model,
+	                                 dml->e->edgeid,
+	                                 name, &p);
+	if (err != NOWDB_OK) return err;
+
+	*off = p->off;
+
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -564,14 +714,15 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	nowdb_err_t err = NOWDB_OK;
 	ts_algo_list_node_t *vrun, *frun=NULL;
 	nowdb_simple_value_t *val;
-	nowdb_edge_t edge;
-	int off=0;
+	char *edge;
+	uint32_t off=0;
+	int i=0;
 
-	err = getEdgeModel(dml, fields, values);
-	if (err != NOWDB_OK) return err;
-
-	memset(&edge, 0, NOWDB_EDGE_SIZE);
-
+	edge = calloc(1, dml->e->size);
+	if (edge == NULL) {
+		NOMEM("allocating edge");
+		return err;
+	}
 	if (fields != NULL) {
 		frun = fields->head;
 	}
@@ -579,16 +730,10 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 
 		// get offset from name
 		if (fields != NULL) {
-			off = nowdb_edge_offByName(frun->cont);
-			if (off < 0) {
-				INVALIDVAL("unknown field name");
-				break;
-			}
-		}
-
-		if (off > NOWDB_OFF_WEIGHT2) {
-			INVALIDVAL("too many fields");
-			break;
+			err = getEdgeOffByName(dml, frun->cont, &off);
+			if (err != NOWDB_OK) break;
+		} else {
+			off = dml->pe[i]->off;
 		}
 
 		val = vrun->cont;
@@ -602,36 +747,31 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		if (err != NOWDB_OK) break;
 		
 		// write to edge (get edge model like in row)
-		err = copyEdgeValue(dml, &edge, off, val);
+		err = copyEdgeValue(dml, edge, off, val);
 		if (err != NOWDB_OK) break;
 
-		if (off == NOWDB_OFF_WEIGHT) {
-			edge.wtype[0] = val->type;
-		} else if (off == NOWDB_OFF_WEIGHT2) {
-			edge.wtype[1] = val->type;
-		}
-		
 		if (fields != NULL) {
 			frun = frun->nxt;
 		} else {
-			off += 8;
+			i++;
 		}
+
 	}
 	if (err != NOWDB_OK) return err;
-	if (fields == NULL && off < NOWDB_OFF_WTYPE) {
+	if (fields == NULL && i < dml->pedgen) {
+		fprintf(stderr, "have: %d, need: %u\n", i, dml->pedgen);
 		INVALIDVAL("not enough fields");
 		return err;
 	}
 
 	/*
-	fprintf(stderr, "INSERTING %lu-%lu-%lu @%ld\n",
-	                 edge.edge,
+	fprintf(stderr, "INSERTING %lu-%lu @%ld\n",
 	                 edge.origin,
 	                 edge.destin,
 	                 edge.timestamp);
 	*/
 
-	return nowdb_store_insert(dml->store, &edge);
+	return nowdb_store_insert(dml->store, edge);
 }
 
 /* ------------------------------------------------------------------------
