@@ -718,14 +718,19 @@ static inline nowdb_err_t getEdgeField(nowdb_scope_t  *scope,
 		INVALIDAST("edge type is NULL");
 	}
 	err = nowdb_model_getPedgeByName(scope->model,
-	                                   e->edgeid,
+	                                    e->edgeid,
 	                            field->value, &p);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_expr_newEdgeField(exp, field->value,
-	                          e->edgeid, p->propid);
+	                             e->edgeid, p->off);
 	if (err != NOWDB_OK) return err;
 	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
+	if (p->off > NOWDB_OFF_USER) {
+		nowdb_edge_getCtrl(e->num, p->off,
+		    &NOWDB_EXPR_TOFIELD(*exp)->ctrlbit,
+		    &NOWDB_EXPR_TOFIELD(*exp)->ctrlbyte);
+	}
 	return NOWDB_OK;
 }
 
@@ -1183,7 +1188,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 	}
 
 	// get edge type
-	if (trg->stype == NOWDB_AST_EDGE && trg->value != NULL) {
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
 		fprintf(stderr, "EDGE %s\n", (char*)trg->value);
 		err = nowdb_model_getEdgeByName(scope->model,
 		                             trg->value, &e);

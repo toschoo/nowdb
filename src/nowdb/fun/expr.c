@@ -1135,6 +1135,14 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 		*res=what; \
 	}
 
+#define HANDLENULL(src,f) \
+	if (!(*(int*)(src+NOWDB_OFF_USER+f->ctrlbyte) & \
+	                           (1 << f->ctrlbit))) \
+	{ \
+		*t = NOWDB_TYP_NOTHING; break; \
+	} \
+
+
 /* ------------------------------------------------------------------------
  * Helper: get EdgeValue
  * ------------------------------------------------------------------------
@@ -1149,7 +1157,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	switch(field->off) {
 	case NOWDB_OFF_ORIGIN:
-		if (hlp->ce->o->vid == NOWDB_MODEL_TEXT) {
+		if (field->type == NOWDB_TYP_TEXT) {
 			HANDLETEXT(src+NOWDB_OFF_ORIGIN);
 		} else {
 			*t = NOWDB_TYP_UINT; // why uint?
@@ -1158,7 +1166,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		break;
 
 	case NOWDB_OFF_DESTIN:
-		if (hlp->ce->d->vid == NOWDB_MODEL_TEXT) {
+		if (field->type == NOWDB_TYP_TEXT) {
 			HANDLETEXT(src+NOWDB_OFF_DESTIN);
 		} else {
 			*t = NOWDB_TYP_UINT; // why uint?
@@ -1171,9 +1179,12 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		*res = src+NOWDB_OFF_STAMP;
 		break;
 
+	// HANDLE NULL!
 	default:
+		HANDLENULL(src,field);
+		
 		u = &src+field->off;
-		*t = field->type; // where does the type come from?
+		*t = field->type;
 
 		switch(*t) {
 		case NOWDB_TYP_TEXT:

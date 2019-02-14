@@ -730,13 +730,17 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 		INVALIDAST("no vertex in edge");
 	}
 	err = nowdb_scope_createEdge(scope, name, origin, destin, &props);
-	if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+	if (err != NOWDB_OK) {
 		destroyPedges(&props);
-		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
-		if (o != NULL) {
-			nowdb_err_release(err);
-			err = NOWDB_OK;
+		// what if dup key because of other object, i.e. type
+		if (nowdb_err_contains(err, nowdb_err_dup_key)) {
+			o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+			if (o != NULL) {
+				nowdb_err_release(err);
+				return NOWDB_OK;
+			}
 		}
+		return err;
 	}
 	ts_algo_list_destroy(&props);
 	err = createContext(op, name, scope);

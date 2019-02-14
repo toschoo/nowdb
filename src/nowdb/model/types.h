@@ -80,7 +80,11 @@ typedef struct {
 	nowdb_key_t       edgeid; /* the edgeid (= edge)   */
 	nowdb_roleid_t    origin; /* roleid of the origin  */
 	nowdb_roleid_t    destin; /* roleid of the destin  */
+	nowdb_model_pedge_t   op; /* origin pedge          */
+	nowdb_model_pedge_t   dp; /* destin pedge          */
+	nowdb_model_pedge_t   tp; /* stamp  pedge          */
 	uint16_t             num; /* number of attributes  */
+	uint32_t            ctrl; /* size of control block */
 	uint32_t            size; /* size of edge          */
 	nowdb_type_t      weight; /* to be removed         */
 	nowdb_type_t     weight2; /* to be removed         */

@@ -70,6 +70,8 @@ typedef struct {
 	nowdb_roleid_t   role; /* vertex type if vertex   */
 	nowdb_key_t    edgeid; /* edge   type if edge     */
 	nowdb_key_t    propid; /* propid if vertex        */
+	uint8_t       ctrlbit; /* control bit  for edge   */
+	uint16_t     ctrlbyte; /* control byte for edge   */
 	char               pk; /* primary key if vertex   */
 	char           usekey; /* use key instead of text */
 } nowdb_field_t;

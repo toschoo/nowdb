@@ -345,6 +345,34 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: generic find
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t find(nowdb_model_t *model,
+                               ts_algo_tree_t *tree,
+                               void         *wanted,
+                               void         **found) {
+
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+
+	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                                 FALSE, OBJECT, "object");
+
+	err = nowdb_lock_read(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	*found = ts_algo_tree_find(tree, wanted);
+
+	err2 = nowdb_unlock_read(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * init model
  * ------------------------------------------------------------------------
  */
@@ -628,7 +656,7 @@ static uint32_t computeEdgeSize(ts_algo_list_t *list) {
 
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		e = runner->cont;
-		sz+=strlen(e->name) + 1 + 8 + 4 + 4 + 2 + 4 + 4 + 4 + 1 + 1;
+		sz+=strlen(e->name) + 1 + 8 + 4 + 4 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -705,10 +733,7 @@ static void edge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &e->destin, 4); sz+=4;
 		memcpy(buf+sz, &e->num, 2); sz+=2;
 		memcpy(buf+sz, &e->size, 4); sz+=4;
-		memcpy(buf+sz, &e->weight, 4); sz+=4;
-		memcpy(buf+sz, &e->weight2, 4); sz+=4;
-		memcpy(buf+sz, &e->edge, 1); sz+=1;
-		memcpy(buf+sz, &e->label, 1); sz+=1;
+		memcpy(buf+sz, &e->ctrl, 4); sz+=4;
 		strcpy(buf+sz, e->name); sz+=strlen(e->name)+1;
 	}
 }
@@ -930,6 +955,50 @@ static nowdb_err_t loadPedge(ts_algo_list_t   *list,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: initialise op, dp, tp
+ * ------------------------------------------------------------------------
+ */
+static inline void initEdgePedge(nowdb_model_edge_t *e) {
+
+	e->op.name = "origin";
+	e->op.edgeid = e->edgeid;
+	e->op.off = NOWDB_OFF_ORIGIN;
+
+	e->dp.name = "destin";
+	e->dp.edgeid = e->edgeid;
+	e->dp.off = NOWDB_OFF_DESTIN;
+
+	e->tp.name = "stamp";
+	e->tp.edgeid = e->edgeid;
+	e->tp.off = NOWDB_OFF_STAMP;
+	e->tp.value = NOWDB_TYP_TIME;
+}
+
+static inline nowdb_err_t updEdgePedge(nowdb_model_t  *model,
+                                       nowdb_model_edge_t *e) {
+	nowdb_model_vertex_t pattern, *v;
+
+	pattern.roleid = e->origin;
+	v = ts_algo_tree_find(model->vrtxById, &pattern);
+	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
+	        FALSE, OBJECT, "origin is not a known vertex");
+
+	e->op.value = v->vid == NOWDB_MODEL_NUM?
+	                         NOWDB_TYP_UINT:
+	                         NOWDB_TYP_TEXT;
+
+	pattern.roleid = e->destin;
+	v = ts_algo_tree_find(model->vrtxById, &pattern);
+	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
+	        FALSE, OBJECT, "destin is not a known vertex");
+
+	e->dp.value = v->vid == NOWDB_MODEL_NUM?
+	                         NOWDB_TYP_UINT:
+	                         NOWDB_TYP_TEXT;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: load edge model
  * ------------------------------------------------------------------------
  */
@@ -951,10 +1020,7 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 		memcpy(&e->destin, buf+off, 4); off+=4;
 		memcpy(&e->num, buf+off, 2); off+=2;
 		memcpy(&e->size, buf+off, 4); off+=4;
-		memcpy(&e->weight, buf+off, 4); off+=4;
-		memcpy(&e->weight2, buf+off, 4); off+=4;
-		memcpy(&e->edge, buf+off, 1); off+=1;
-		memcpy(&e->label, buf+off, 1); off+=1;
+		memcpy(&e->ctrl, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s > 4096) {
 			free(e);
@@ -973,6 +1039,8 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 			NOMEM("list.append");
 			return err;
 		}
+
+		initEdgePedge(e);
 	}
 	return NOWDB_OK;
 }
@@ -1053,6 +1121,13 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 		ts_algo_list_destroy(&list); return err;
 	}
 	for(runner=list.head;runner!=NULL;runner=runner->nxt) {
+		if (what == E) {
+			err = updEdgePedge(model, runner->cont);
+			if (err != NOWDB_OK) {
+				ts_algo_list_destroy(&list);
+				return err;
+			}
+		}
 		if (ts_algo_tree_insert(byId, runner->cont) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byId.insert");
@@ -1369,7 +1444,10 @@ static char pedgeUnique(ts_algo_list_t  *props,
  */
 static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
                                 nowdb_key_t    edgeid,
-                                ts_algo_list_t *props) {
+                                ts_algo_list_t *props,
+                                uint16_t         *num, 
+                                uint32_t        *size,
+                                uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_pedge_t *p, *tmp;
 	uint32_t off, xb;
@@ -1377,11 +1455,15 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 	xb = nowdb_edge_attctrlSize(props->len);
 	off = NOWDB_OFF_USER+xb;
 
+	*ctrl = xb;
+
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		p = runner->cont;
 
 		p->edgeid = edgeid;
 		p->off = off; off+=8;
+
+		(*num)++;
 
 		tmp = ts_algo_tree_find(model->pedgeById, p);
 		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
@@ -1396,6 +1478,7 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 
 		// get propid
 	}
+	(*size)+=off;
 	return NOWDB_OK;
 }
 
@@ -1518,10 +1601,11 @@ unlock:
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
-                                    char           *name,
-                                    nowdb_key_t     edgeid,
-                                    nowdb_roleid_t  origin,
-                                    nowdb_roleid_t  destin,
+                                    char            *name,
+                                    char          stamped,
+                                    nowdb_key_t    edgeid,
+                                    nowdb_roleid_t origin,
+                                    nowdb_roleid_t destin,
                                     ts_algo_list_t *props) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
@@ -1556,9 +1640,20 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 	edge->edgeid = edgeid;
 	edge->origin = origin;
 	edge->destin = destin;
+	edge->num    = 0;
+	edge->ctrl   = 0;
+	edge->size=stamped?NOWDB_OFF_USER:NOWDB_OFF_STAMP;
+
+	initEdgePedge(edge);
+	err = updEdgePedge(model, edge);
+	if (err != NOWDB_OK) {
+		free(edge->name); free(edge);
+		goto unlock;
+	}
 
 	if (props != NULL) {
-		err = pedgesUnique(model, edge->edgeid, props);
+		err = pedgesUnique(model, edge->edgeid, props,
+		        &edge->num, &edge->size, &edge->ctrl);
 		if (err != NOWDB_OK) {
 			free(edge->name); free(edge);
 			goto unlock;
@@ -1883,34 +1978,6 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
- * Helper: generic find
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t find(nowdb_model_t *model,
-                               ts_algo_tree_t *tree,
-                               void         *wanted,
-                               void         **found) {
-
-	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2 = NOWDB_OK;
-
-	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                                 FALSE, OBJECT, "object");
-
-	err = nowdb_lock_read(&model->lock);
-	if (err != NOWDB_OK) return err;
-
-	*found = ts_algo_tree_find(tree, wanted);
-
-	err2 = nowdb_unlock_read(&model->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err;
-		return err2;
-	}
-	return err;
-}
-
-/* ------------------------------------------------------------------------
  * find vertex by name
  * ------------------------------------------------------------------------
  */
@@ -2059,6 +2126,38 @@ nowdb_err_t nowdb_model_getPedgeById(nowdb_model_t       *model,
 	return NOWDB_OK;
 }
 
+static inline char getCanonicalPedge(nowdb_model_t       *model,
+                                     nowdb_key_t         edgeid,
+                                     char                 *name,
+                                     nowdb_model_pedge_t **prop) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e, pattern;
+	char x = 0;
+
+	if (strcasecmp(name, "origin")         == 0) x=1;
+	else if (strcasecmp(name, "destin")    == 0  ||
+	         strcasecmp(name, "dest")      == 0  ||
+	         strcasecmp(name, "dst")       == 0) x=2;
+	else if (strcasecmp(name, "stamp")     == 0  ||
+	         strcasecmp(name, "timestamp") == 0) x=3;
+	else return 0;
+
+	pattern.edgeid = edgeid;
+	err = find(model, model->edgeById, &pattern, (void**)&e);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(err); // we ignore it here
+		return 0;
+	}
+	
+	switch(x) {
+	case 1: *prop = &e->op; break;
+	case 2: *prop = &e->dp; break;
+	case 3: *prop = &e->tp; break;
+	}
+
+	return 1;
+}
+
 /* ------------------------------------------------------------------------
  * find pedge by name
  * ------------------------------------------------------------------------
@@ -2071,6 +2170,8 @@ nowdb_err_t nowdb_model_getPedgeByName(nowdb_model_t       *model,
 	nowdb_model_pedge_t tmp;
 
 	MODELNULL();
+
+	if (getCanonicalPedge(model, edgeid, name, prop)) return NOWDB_OK;
 
 	tmp.edgeid = edgeid;
 	tmp.name   = name;

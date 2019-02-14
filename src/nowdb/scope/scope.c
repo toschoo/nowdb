@@ -1980,6 +1980,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_roleid_t      oid, did;
 	nowdb_key_t           edgeid;
+	char                 stamped;
 	nowdb_context_t *ctx;
 
 	SCOPENULL();
@@ -2016,11 +2017,10 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	err = nowdb_text_insert(scope->text, name, &edgeid);
 	if (err != NOWDB_OK) goto unlock;
 
-	err = nowdb_model_addEdgeType(scope->model, name,
-	                         edgeid, oid, did, props);
-	if (err != NOWDB_OK) {
-		goto unlock;
-	}
+	stamped = (props != NULL && props->len > 0);
+	err = nowdb_model_addEdgeType(scope->model, name, stamped,
+	                                 edgeid, oid, did, props);
+	if (err != NOWDB_OK) goto unlock;
 
 	// create index on origin
 	// create index on destin

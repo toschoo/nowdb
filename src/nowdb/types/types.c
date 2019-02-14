@@ -454,3 +454,16 @@ uint32_t nowdb_edge_attctrlSize(uint16_t atts) {
 	return edgeAttctrlSize(atts);
 }
 
+// get attribute control bit and byte for specific offset
+void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
+                        uint8_t  *bit, uint16_t *byte) {
+	uint32_t xb = edgeAttctrlSize(atts);
+	uint32_t o = (off - NOWDB_OFF_USER - xb)/8;
+	*byte = o/8;
+	*bit  = o%8;
+	/*
+	fprintf(stderr, "xb: %u, off: %u, o: %u, byte: %hu, bit: %u\n",
+	                 xb, off, o, *byte, *bit);
+	*/
+}
+

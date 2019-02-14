@@ -176,17 +176,19 @@ int nowdb_vertex_offByName(char *field);
  * Edge Offsets
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OFF_EDGE     0
-#define NOWDB_OFF_ORIGIN   8
-#define NOWDB_OFF_DESTIN  16
+#define NOWDB_OFF_ORIGIN   0
+#define NOWDB_OFF_DESTIN   8
+#define NOWDB_OFF_TMSTMP  16
+#define NOWDB_OFF_STAMP   16
+#define NOWDB_OFF_USER    24
+
+// TO BE REMOVED!!!
+#define NOWDB_OFF_EDGE    32
 #define NOWDB_OFF_LABEL   24
-#define NOWDB_OFF_TMSTMP  32
-#define NOWDB_OFF_STAMP   32
 #define NOWDB_OFF_WEIGHT  40
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56
 #define NOWDB_OFF_WTYPE2  60
-#define NOWDB_OFF_USER    24
 
 /* ------------------------------------------------------------------------
  * Edge
@@ -241,6 +243,10 @@ uint32_t nowdb_edge_pagectrlSize(uint32_t recsz);
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL
 uint32_t nowdb_edge_attctrlSize(uint16_t atts);
+
+// get attribute control bit and byte for specific offset
+void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
+                        uint8_t *bit,  uint16_t *byte);
 
 char *nowdb_typename(nowdb_type_t typ);
 
