@@ -596,8 +596,15 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
                                       nowdb_version_t     ver,
                                       nowdb_context_t   **ctx) {
 	nowdb_path_t tmp,p;
+	nowdb_model_edge_t *e;
 	nowdb_err_t err;
 	uint32_t s;
+
+	err = nowdb_model_getEdgeByName(scope->model, name, &e);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "NO MODEL!!!\n");
+		return err;
+	}
 
 	s = strnlen(name, NOWDB_MAX_NAME+1);
 	if (s >= NOWDB_MAX_NAME) return nowdb_err_get(nowdb_err_invalid,
@@ -628,11 +635,14 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                     "allocating context/name path");
 	}
+
+	fprintf(stderr, "RECORDSIZE: %u\n", e->size);
+
 	err = nowdb_context_err(*ctx,
 	      nowdb_store_init(&(*ctx)->store, p,
 	                         NULL, ver,
 	                         NOWDB_CONT_EDGE,
-	                         sizeof(nowdb_edge_t),
+	                         e->size,
 	                         cfg->allocsize,
 	                         cfg->largesize, 1));
 	free(p);
@@ -896,6 +906,9 @@ static inline nowdb_err_t dropAllContexts(nowdb_scope_t *scope) {
 	nowdb_context_t   *ctx;
 
 	if (scope->contexts.count == 0) {
+		err = openModel(scope);
+		if (err != NOWDB_OK) return err;
+		
 		err = readCatalog(scope);
 		if (err != NOWDB_OK) return err;
 	}
@@ -1337,25 +1350,44 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
-	err = readCatalog(scope);
+	err = openModel(scope);
 	if (err != NOWDB_OK) goto unlock;
+
+	err = readCatalog(scope);
+	if (err != NOWDB_OK) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
 
 	err = initIndexMan(scope);
-	if (err != NOWDB_OK) goto unlock;
+	if (err != NOWDB_OK) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
 
 	err = nowdb_procman_load(scope->pman);
-	if (err != NOWDB_OK) goto unlock;
+	if (err != NOWDB_OK) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
 
 	err = nowdb_store_open(&scope->vertices);
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 		goto unlock;
 	}
 	err = fillEVache(scope);
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 		goto unlock;
 	}
 
@@ -1363,16 +1395,9 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
 		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
-		goto unlock;
-	}
-
-	err = openModel(scope);
-	if (err != NOWDB_OK) {
-		nowdb_index_man_destroy(scope->iman);
-		free(scope->iman); scope->iman = NULL;
-		NOWDB_IGNORE(nowdb_store_close(&scope->vertices));
-		NOWDB_IGNORE(closeAllContexts(scope));
 		goto unlock;
 	}
 

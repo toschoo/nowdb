@@ -1041,61 +1041,6 @@ char nowdb_expr_has(nowdb_expr_t   expr,
 	return 0;
 }
 
-/* -----------------------------------------------------------------------
- * Find edge model
- * WE NEED TO DO THIS ONLY ONCE!
- * -----------------------------------------------------------------------
- */
-static inline nowdb_err_t findEdge(nowdb_eval_t *hlp,
-                                   nowdb_edge_t *src) {
-	nowdb_err_t err;
-	ts_algo_list_node_t *run;
-	nowdb_edge_helper_t *em;
-
-	if (hlp->ce != NULL &&
-	    hlp->ce->e->edgeid == src->edge) return NOWDB_OK;
-
-	for(run=hlp->em.head; run!=NULL; run=run->nxt) {
-		em = run->cont;
-		if (em->e->edgeid == src->edge) {
-			hlp->ce = em;
-			return NOWDB_OK;
-		}
-	}
-	em = calloc(1,sizeof(nowdb_edge_helper_t));
-	if (em == NULL) {
-		NOMEM("allocating edge helper");
-		return err;
-	}
-	err = nowdb_model_getEdgeById(hlp->model,
-		              src->edge, &em->e);
-	if (err != NOWDB_OK) {
-		free(em); 
-		return err;
-	}
-
-	err = nowdb_model_getVertexById(hlp->model,
-		            em->e->origin, &em->o);
-	if (err != NOWDB_OK) {
-		free(em); 
-		return err;
-	}
-
-	err = nowdb_model_getVertexById(hlp->model,
-		            em->e->destin, &em->d);
-	if (err != NOWDB_OK) {
-		free(em);
-		return err;
-	}
-	if (ts_algo_list_append(&hlp->em, em) != TS_ALGO_OK) {
-		free(em); em = NULL;
-		NOMEM("list.append");
-		return err;
-	}
-	hlp->ce = em;
-	return NOWDB_OK;
-}
-
 /* ------------------------------------------------------------------------
  * Helper: get text and cache it
  * ------------------------------------------------------------------------
@@ -1279,14 +1224,8 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 	if (field->off < 0) INVALID("uninitialised expression");
 
 	if (field->target == NOWDB_TARGET_EDGE) {
-		/* we don't need this anymore!!!
-		err = findEdge(hlp, (nowdb_edge_t*)row);
-		if (err != NOWDB_OK) return err;
-		*/
-
 		err = getEdgeValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
-		
 	} else {
 		err = getVertexValue(field, hlp, rmap, row, typ, res);
 		if (err != NOWDB_OK) return err;

@@ -17,23 +17,33 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define HALF 8192
-#define FULL 16384
+typedef struct {
+	uint64_t origin;
+	uint64_t destin;
+	nowdb_time_t timestamp;
+	uint64_t value1;
+	uint64_t value2;
+	uint64_t value3;
+} myedge_t;
 
-void makeEdgePattern(nowdb_edge_t *e) {
+#define RECSIZE sizeof(myedge_t)
+
+void makeEdgePattern(myedge_t *e) {
 	e->origin   = 1;
 	e->destin   = 1;
-	e->edge     = 1;
-	e->label    = 0;
-	e->weight2  = 0;
-	e->wtype[0] = NOWDB_TYP_UINT;
-	e->wtype[1] = NOWDB_TYP_NOTHING;
+	e->value1   = 0;
+	e->value2   = 0;
+	e->value3   = 0;
 }
+
+#define RECPAGE (NOWDB_IDX_PAGE/RECSIZE)
+#define FULL (128*RECPAGE)
+#define HALF (FULL/2)
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	int rc;
 	nowdb_err_t err;
-	nowdb_edge_t e;
+	myedge_t e;
 	uint64_t max = start + count;
 
 	makeEdgePattern(&e);
@@ -43,7 +53,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 		return FALSE;
 	}
 	for(uint64_t i=start; i<max; i++) {
-		e.weight = i;
+		e.value1 = i;
 		err = nowdb_store_insert(store, &e);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "insert error\n");
@@ -53,7 +63,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 		}
 	}
 	fprintf(stderr, "inserted %u from %lu to %lu (%lu)\n",
-	                         count, start, max, e.weight);
+	                         count, start, max, e.value1);
 	return TRUE;
 }
 
@@ -119,6 +129,7 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 	nowdb_reader_t *reader;
 	ts_algo_list_t files;
 	uint64_t s = 0;
+	uint32_t mx = (NOWDB_IDX_PAGE/RECSIZE)*RECSIZE;
 
 	ts_algo_list_init(&files);
 	err = nowdb_store_getReaders(store, &files, NOWDB_TIME_DAWN,
@@ -148,14 +159,14 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 			}
 			nowdb_err_release(err); break;
 		}
-		for(int i=0; i<NOWDB_IDX_PAGE; i+= reader->recsize) {
+		for(int i=0; i<mx; i+= reader->recsize) {
 			s++;
 		}
 	}
 	nowdb_reader_destroy(reader); free(reader);
 	nowdb_store_destroyFiles(store, &files);
 	if (s != 5*FULL) {
-		fprintf(stderr, "count does not match: %lu/%d\n", s, 5*FULL);
+		fprintf(stderr, "count does not match: %lu/%lu\n", s, 5*FULL);
 		return FALSE;
 	}
 	return TRUE;
@@ -167,9 +178,11 @@ int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store1=NULL, *store2=NULL;
 
+	fprintf(stderr, "RECSIZE: %lu, FULL: %lu\n", RECSIZE, FULL);
+
 	nowdb_err_init();
 	fprintf(stderr, "uncompressed...\n");
-	store1 = bootstrap("rsc/store40");
+	store1 = bootstrap("rsc/store40", RECSIZE);
 	if (store1 == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		return EXIT_FAILURE;
@@ -203,7 +216,7 @@ int main() {
 	nowdb_store_destroy(store1); free(store1); store1=NULL;
 
 	store2 = xBootstrap("rsc/store50", &nowdb_sort_edge_compare,
-	                 NOWDB_COMP_ZSTD, 2, NOWDB_MEGA, NOWDB_MEGA);
+	        NOWDB_COMP_ZSTD, 2, RECSIZE, NOWDB_MEGA, NOWDB_MEGA);
 	if (store2 == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		return EXIT_FAILURE;

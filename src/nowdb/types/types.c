@@ -204,9 +204,15 @@ static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
 	return 0;
 }
 
+// correct Type
+// str2type
+
 int nowdb_correctType(nowdb_type_t good,
                       nowdb_type_t *bad,
-                      void       *value) {
+                      void       *value) 
+{
+	if (good == *bad) return 0;
+
 	if (good == NOWDB_TYP_TIME ||
             good == NOWDB_TYP_DATE) {
 		if (*bad == NOWDB_TYP_INT) {
@@ -240,6 +246,16 @@ int nowdb_correctType(nowdb_type_t good,
 			if (rc != 0) return -1;
 			*bad = good; memcpy(value, &tmp, 8);
 			return 0;
+		}
+	}
+	if (good == NOWDB_TYP_FLOAT) {
+		if (*bad == NOWDB_TYP_INT || *bad == NOWDB_TYP_UINT) {
+			*bad = good; return 0;
+		}
+	}
+	if (good == NOWDB_TYP_INT) {
+		if (*bad == NOWDB_TYP_UINT) {
+			*bad = good; return 0;
 		}
 	}
 	return -1;

@@ -170,8 +170,6 @@ int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 int nowdb_vertex_offByName(char *field);
 
-#define NOWDB_EDGE_SIZE 64
-
 /* ------------------------------------------------------------------------
  * Edge Offsets
  * ------------------------------------------------------------------------

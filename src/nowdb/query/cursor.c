@@ -352,10 +352,10 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	/* target is a context */
 	} else {
 		cur->target = NOWDB_TARGET_EDGE;
-		cur->recsz = 64;
 		err = nowdb_scope_getContext(scope, rplan->name, &ctx);
 		if (err != NOWDB_OK) return err;
 		store = &ctx->store;
+		cur->recsz = store->recsize;
 	}
 
 	cur->hasid = TRUE;
@@ -1274,6 +1274,7 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 
 /* ------------------------------------------------------------------------
  * Check whether this position is "in"
+ * REVIEW!!!!
  * ------------------------------------------------------------------------
  */
 static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
@@ -1337,7 +1338,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 		}
 		return NOWDB_OK;
 	}
-	cmp = cur->recsz == NOWDB_EDGE_SIZE? // won't work for prow
+	cmp = ctype == NOWDB_CONT_EDGE?
 	      nowdb_sort_edge_keys_compare(cur->tmp, src,
 		                           cur->rdr->ikeys):
 	      nowdb_sort_vertex_keys_compare(cur->tmp, src,
@@ -1432,9 +1433,9 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	recsz = cur->recsz; \
 	mx = cur->rdr->ko?recsz:(NOWDB_IDX_PAGE/recsz)*recsz; \
 	filter = cur->rdr->filter; \
-	ctype = recsz == NOWDB_EDGE_SIZE? \
-                         NOWDB_CONT_EDGE: \
-                         NOWDB_CONT_VERTEX;
+	ctype = cur->rdr->content; \
+	fprintf(stderr, "AFTERMOVE: %u / %u\n", recsz, mx);
+
 #define CHECKEOF() \
 	if (cur->eof) { \
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL); \
@@ -1622,6 +1623,8 @@ grouping:
 		}
 projection:
 		if (cur->group == NULL) {
+			fprintf(stderr, "%lu - %lu\n", *(uint64_t*)realsrc,
+			                               *(uint64_t*)(realsrc+8));
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
 			                   pmap, buf, sz,

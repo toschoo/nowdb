@@ -285,13 +285,13 @@ int processCursor(nowdb_cursor_t *cur) {
 			} else {
 				printVertex((nowdb_vertex_t*)buf, osz/32);
 			}
-		} else if (cur->recsz == 64) {
+		} else {
 			if (global_typed) {
 				printTypedEdge((nowdb_edge_t*)buf, osz/64);
 			} else if (cur->row != NULL && cur->hasid) {
 				printRow(buf, osz);
 			} else {
-				printEdge((nowdb_edge_t*)buf, osz/64);
+				printEdge((nowdb_edge_t*)buf, osz/cur->recsz);
 			}
 		}
 		if (eof) break;

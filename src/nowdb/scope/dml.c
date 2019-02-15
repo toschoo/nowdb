@@ -79,7 +79,7 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 }
 
 /* ------------------------------------------------------------------------
- * Are we context or vertex?
+ * Get context and edge
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getEdge(nowdb_dml_t *dml,
@@ -97,6 +97,8 @@ static inline nowdb_err_t getEdge(nowdb_dml_t *dml,
 	}
 	dml->target = NOWDB_TARGET_EDGE;
 	dml->store = &ctx->store;
+
+	fprintf(stderr, "RECSIZE: %u\n", dml->store->recsize);
 
 	err = nowdb_model_getEdgeByName(dml->scope->model,
 	                                 trgname, &dml->e);
@@ -489,34 +491,33 @@ static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
-                                         uint32_t              off,
+                                         uint32_t off,       int i,
+                                         char               *fname,
                                          nowdb_simple_value_t *val) {
+	nowdb_model_pedge_t *pe;
+	nowdb_err_t err;
+
 	switch(off) {
 	case NOWDB_OFF_ORIGIN:
-		/*
-		if (dml->o->vid == NOWDB_MODEL_TEXT &&
-		    val->type != NOWDB_TYP_TEXT) {
+	case NOWDB_OFF_DESTIN:
+		if (fname == NULL) {
+			pe = dml->pe[i];
+		} else {
+			err = nowdb_model_getPedgeByName(dml->scope->model,
+			                                 dml->e->edgeid,
+			                                 fname, &pe);
+			if (err != NOWDB_OK) return err;
+		}
+		if  (pe->value == NOWDB_TYP_TEXT &&
+		     val->type != NOWDB_TYP_TEXT) {
 			INVALID("origin must be text");
-		} else if (dml->o->vid != NOWDB_MODEL_TEXT &&
+		} else if (pe->value != NOWDB_MODEL_TEXT &&
 		           val->type != NOWDB_TYP_UINT) {
 			INVALID("origin must be unsigned integer");
 		}
-		*/
 		break;
 
-	case NOWDB_OFF_DESTIN:
-		/*
-		if (dml->d->vid == NOWDB_MODEL_TEXT &&
-		    val->type != NOWDB_TYP_TEXT) {
-			INVALID("destination must be text");
-		} else if (dml->d->vid != NOWDB_MODEL_TEXT &&
-		           val->type != NOWDB_TYP_UINT) {
-			INVALID("destination must be unsigned integer");
-		}
-		*/
-		break;
-
-	case NOWDB_OFF_TMSTMP:
+	case NOWDB_OFF_STAMP:
 		if (val->type == NOWDB_TYP_TEXT) {
 			val->type = NOWDB_TYP_TIME; break;
 		}
@@ -526,44 +527,20 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		}
 		break;
 
-	/*
-	case NOWDB_OFF_WEIGHT:
- 		if (dml->e->weight == NOWDB_TYP_INT &&
-		    val->type == NOWDB_TYP_UINT) {
- 			val->type = NOWDB_TYP_INT;
- 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
- 		          (val->type == NOWDB_TYP_UINT      ||
- 		           val->type == NOWDB_TYP_INT)) {
- 			break;
- 		} else if (dml->e->weight == NOWDB_TYP_TIME &&
-		           val->type == NOWDB_TYP_TEXT) {
- 			val->type = NOWDB_TYP_TIME;
-		} else if (dml->e->weight != val->type) {
-			INVALID("wrong type in weight");
-		}
-		break;
-		
-
-	case NOWDB_OFF_WEIGHT2:
-		if (dml->e->weight2 == NOWDB_TYP_INT &&
-		    val->type == NOWDB_TYP_UINT) {
-			val->type = NOWDB_TYP_INT;
- 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
-		          (val->type == NOWDB_TYP_UINT       ||
-		           val->type == NOWDB_TYP_INT)) {
- 			break;
- 		} else if (dml->e->weight2 == NOWDB_TYP_TIME &&
- 		           val->type == NOWDB_TYP_TEXT) {
- 			val->type = NOWDB_TYP_TIME;
-		} else if (dml->e->weight2 != val->type) {
-			INVALID("wrong type in weight");
-		}
-		break;
-	*/
-
 	default:
-		break;
-		// INVALID("unknown type");
+		if (fname == NULL) {
+			pe = dml->pe[i];
+		} else {
+			err = nowdb_model_getPedgeByName(dml->scope->model,
+			                                 dml->e->edgeid,
+			                                 fname, &pe);
+			if (err != NOWDB_OK) return err;
+		}
+		if (nowdb_correctType(pe->value,
+		                    &val->type,
+		                     val->value) != 0) {
+			INVALID("invalid type");
+		}
 
 	}
 	return NOWDB_OK;
@@ -623,17 +600,17 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		memset(target, 0, sizeof(nowdb_key_t)); break;
 
 	case NOWDB_TYP_TEXT:
-		fprintf(stderr, "TEXT: %s\n", (char*)val->value);
+		// fprintf(stderr, "TEXT: %s\n", (char*)val->value);
 		return getKey(dml, val->value, target);
 
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
-		fprintf(stderr, "TIME: %s\n", (char*)val->value);
+		// fprintf(stderr, "TIME: %s\n", (char*)val->value);
 		STRTOTIME();
 		break;
 
 	case NOWDB_TYP_FLOAT:
-		fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
+		// fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
 		STROD();
 		break;
 
@@ -642,7 +619,7 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		break;
 
 	case NOWDB_TYP_UINT:
-		fprintf(stderr, "UINT: %s\n", (char*)val->value);
+		// fprintf(stderr, "UINT: %s\n", (char*)val->value);
 		STROX(uint64_t, strtoul);
 		break;
 
@@ -665,7 +642,7 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	err = getValueAsType(dml, val, edge+off);
 	if (err != NOWDB_OK) return err;
 
-	fprintf(stderr, "writing %s offset %u\n", (char*)val->value, off);
+	// fprintf(stderr, "writing %s offset %u\n", (char*)val->value, off);
 
 	if (off < NOWDB_OFF_USER) return NOWDB_OK;
 
@@ -673,9 +650,6 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	uint16_t byte;
 
 	nowdb_edge_getCtrl(dml->e->num, off, &bit, &byte);
-
-	fprintf(stderr, "setting bit %u in byte %hu at offset %u\n",
-	                              bit, byte, NOWDB_OFF_USER);
 
 	char *xbyte = edge+NOWDB_OFF_USER+byte;
 	(*xbyte) |= 1<<bit;
@@ -727,11 +701,13 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		frun = fields->head;
 	}
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
+		char *nm=NULL;
 
 		// get offset from name
 		if (fields != NULL) {
 			err = getEdgeOffByName(dml, frun->cont, &off);
 			if (err != NOWDB_OK) break;
+			nm = frun->cont;
 		} else {
 			off = dml->pe[i]->off;
 		}
@@ -743,7 +719,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		}
 
 		// check and correct value type
-		err = checkEdgeValue(dml, off, val);
+		err = checkEdgeValue(dml, off, i, nm, val);
 		if (err != NOWDB_OK) break;
 		
 		// write to edge (get edge model like in row)
@@ -757,11 +733,12 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		}
 
 	}
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		free(edge); return err;
+	}
 	if (fields == NULL && i < dml->pedgen) {
-		fprintf(stderr, "have: %d, need: %u\n", i, dml->pedgen);
 		INVALIDVAL("not enough fields");
-		return err;
+		free(edge); return err;
 	}
 
 	/*
@@ -771,7 +748,8 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	                 edge.timestamp);
 	*/
 
-	return nowdb_store_insert(dml->store, edge);
+	err = nowdb_store_insert(dml->store, edge);
+	free(edge); return err;
 }
 
 /* ------------------------------------------------------------------------

@@ -1329,6 +1329,8 @@ unlock:
 	return err;
 }
 
+#define REMAINDER (NOWDB_IDX_PAGE - (pos%NOWDB_IDX_PAGE))
+
 /* ------------------------------------------------------------------------
  * Insert one record
  * ------------------------------------------------------------------------
@@ -1354,15 +1356,21 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 
 	store->writer->size += store->recsize;
 	pos+=store->recsize; store->writer->pos+=store->recsize;
-	if (pos == store->writer->bufsize) {
+
+	if (REMAINDER < store->recsize) {
+		// uint32_t d = store->recsize - REMAINDER;
+		pos+=REMAINDER;
+		store->writer->size += REMAINDER;
+		store->writer->pos+=REMAINDER;
+		fprintf(stderr, "adjusted pos: %d\n", (pos%NOWDB_IDX_PAGE));
+	}
+	if (pos >= store->writer->bufsize) {
 		err = remapWriter(store);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "remap error!\n");
 			goto unlock;
 		}
 	}
-
-	/* insert into indices ? */
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);

@@ -16,16 +16,23 @@ if __name__ == '__main__':
         (products, clients, stores, edges) = db.addRandomData(c, nump, numc, nums, nume)
 
         cnt = 0
+        cnt2 = 0
         sm = 0
+        sm2 = 0
         avg = 0.0
+        avg2 = 0.0
         for e in edges:
-           sm += e.weight
+           sm += e.quantity
            cnt += 1
 
         avg = float(sm)/float(cnt)
 
-        with c.execute("select count(*), sum(weight), avg(weight) \
-                          from sales") as cur:
+        """
+        with c.execute("select count(*), sum(quantity), avg(quantity) \
+                          from buys") as cur:
+        """
+        with c.execute("select 1, origin, destin \
+                          from buys") as cur:
             if not cur.ok():
               print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
@@ -33,15 +40,15 @@ if __name__ == '__main__':
                if r.count() != 3:
                   print "ERROR: wrong number of fields: %d != %ds" % (r.count(), 3)
                   exit(1)
-               else:
-                  print "fields: %d" % r.count()
 
-               cnt2 = r.field(0)
-               sm2 = r.field(1)
-               avg2 = r.field(2)
+               print "%d %d" % (r.field(1), r.field(2))
+
+               cnt2 += r.field(0)
+               #sm2 += r.field(1)
+               #avg2 = r.field(2)
 
         if cnt != cnt2:
-           print "count differs: %d -- %d" % (cnt, cnt2)
+           print "count differs: %d -- %s" % (cnt, cnt2)
            exit(1)
 
         if sm  != sm2:
@@ -52,23 +59,7 @@ if __name__ == '__main__':
            print "avg differs: %.4f -- %.4f" % (avg, avg2)
            exit(1)
 
-        """ nice demonstration
-        with c.execute("select origin, destin, timestamp, weight, weight2 \
-                          from sales") as cur:
-            if not cur.ok():
-              print "ERROR: %s" % cur.details()
-              exit(1)
-            for r in cur:
-               o = r.field(0)
-               d = r.field(1)
-               t = now.now2dt(r.field(2)).strftime(now.TIMEFORMAT)
-               w = r.field(3)
-               w2 = r.field(4)
-
-               print "%d/%d @%s: %d / %.4f" % (o, d, t, w, w2)
-        """
-
-        with c.execute("select count(*) from sales") as cur:
+        with c.execute("select count(*) from buys") as cur:
            if not cur.ok():
               print "ERROR: %s" % cur.details()
               exit(1)

@@ -23,6 +23,8 @@ typedef struct {
 	uint64_t reg5;
 } myedge_t;
 
+#define RECSIZE sizeof(myedge_t)
+
 nowdb_bool_t createStore() {
 	nowdb_store_t store;
 	nowdb_err_t     err;
@@ -34,7 +36,7 @@ nowdb_bool_t createStore() {
 	}
 	*/
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -57,7 +59,7 @@ nowdb_bool_t dropStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -80,7 +82,7 @@ nowdb_bool_t testInitDestroyStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -96,7 +98,7 @@ nowdb_bool_t testNewDestroyStore() {
 	nowdb_err_t      err;
 
 	err = nowdb_store_new(&store, "rsc/teststore", NULL, 1,
-	                                   NOWDB_CONT_EDGE, 64,
+	                              NOWDB_CONT_EDGE, RECSIZE,
 	                              NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -112,7 +114,7 @@ nowdb_bool_t testOpenStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -134,7 +136,7 @@ nowdb_bool_t testOpenCloseStore() {
 	nowdb_err_t     err;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -164,7 +166,7 @@ nowdb_bool_t testInsert() {
 	int rc;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                                    NOWDB_CONT_EDGE, 64,
+	                               NOWDB_CONT_EDGE, RECSIZE,
 	                               NOWDB_MEGA, NOWDB_MEGA,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
@@ -215,17 +217,17 @@ nowdb_bool_t testInsert() {
 		return FALSE;
 	}
 
-	memcpy(&k, store.writer->mptr, 64);
+	memcpy(&k, store.writer->mptr, RECSIZE);
 	if (k.reg2 != e.reg2-2) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;
 	}
-	memcpy(&k, store.writer->mptr+64, 64);
+	memcpy(&k, store.writer->mptr+RECSIZE, RECSIZE);
 	if (k.reg2 != e.reg2-1) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;
 	}
-	memcpy(&k, store.writer->mptr+128, 64);
+	memcpy(&k, store.writer->mptr+2*RECSIZE, RECSIZE);
 	if (k.reg2 != e.reg2) {
 		fprintf(stderr, "edges differ\n");
 		return FALSE;

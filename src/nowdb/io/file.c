@@ -932,6 +932,7 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t plainmove(nowdb_file_t *file) {
+	fprintf(stderr, "MOVE: %zu / %u\n", lseek(file->fd, 0, SEEK_CUR), file->pos);
 	nowdb_err_t err = plainload(file);
 	if (err != NOWDB_OK) return err;
 	file->pos += file->bufsize;

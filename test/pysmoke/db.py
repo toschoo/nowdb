@@ -42,18 +42,6 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot use %s" % db)
 
-    with c.execute("create table sales") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create table sales")
-
-    with c.execute("create index idx_sales_ed on sales (edge,destin)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index idx_sales_ed")
-
-    with c.execute("create index idx_sales_eo on sales (edge,origin)") as r:
-        if not r.ok():
-            raise FailedCreation("cannot create index idx_sales_eo")
-
     with c.execute("create type product ( \
                       prod_key uint primary key, \
                       prod_desc    text, \
@@ -78,21 +66,22 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create type client")
    
-    with c.execute("create edge buys ( \
+    with c.execute("create stamped edge buys ( \
                       origin client, \
-                      destination product, \
-                      weight uint, \
-                      weight2 float)") as r:
+                      destin product, \
+                      quantity uint, \
+                      price float)") as r:
         if not r.ok():
-            raise FailedCreation("cannot create edge buys")
+            raise FailedCreation("cannot create edge buys: %s (%d)" % \
+                                            (r.details(), r.code()))
    
-    with c.execute("create edge visits ( \
+    with c.execute("create stamped edge visits ( \
                       origin client, \
-                      destination store, \
-                      weight uint, \
-                      weight2 float)") as r:
+                      destin store, \
+                      quantity uint, \
+                      price float)") as r:
         if not r.ok():
-            raise FailedCreation("cannot create edge buys")
+            raise FailedCreation("cannot create edge vists")
 
 def addRandomData(c, ps, cs, ss, es):
     products = createProducts(ps)
@@ -146,14 +135,13 @@ def loadStores(c):
 
 def loadEdges(c):
     es = []
-    with c.execute("select edge, origin, destin, timestamp, weight, weight2 from sales") as cur:
+    with c.execute("select origin, destin, timestamp, quantity, price from buys") as cur:
         for row in cur:
-           es.append(SalesEdge(row.field(0),
-                               row.field(1),
-                               row.field(2),
-                               now.now2dt(row.field(3)),
-                               row.field(4),
-                               row.field(5)))
+           es.append(BuysEdge(row.field(0),
+                              row.field(1),
+                              now.now2dt(row.field(2)),
+                              row.field(3),
+                              row.field(4)))
     return es
 
 def loadFromCsv():
@@ -289,31 +277,26 @@ class Store:
         line += self.size + "\n"
         csv.write(line)
 
-class SalesEdge:
-    def __init__(self, e, o, d, t, w, w2):
-       self.edge    = e
+class BuysEdge:
+    def __init__(self, o, d, t, q, p):
        self.origin  = o
        self.destin  = d
        self.tp      = t
-       self.weight  = w
-       self.weight2 = w2
+       self.quantity = q
+       self.price = p
 
     def store(self, c):
-       stmt = "insert into sales "
-       stmt += "(edge, origin, destin, timestamp, weight, weight2) ("
-       stmt += "'" + self.edge + "',"
+       stmt = "insert into buys "
+       stmt += "(origin, destin, timestamp, quantity, price) ("
        stmt += str(self.origin.key) + ", "
-       if self.edge == 'buys':
-           stmt += str(self.destin.key) + ", "
-       else:
-           stmt += "'" + self.destin.name + "', "
+       stmt += str(self.destin.key) + ", "
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
-       stmt += str(self.weight) + ", "
-       stmt += str(self.weight2) + ")"
-       # print "executing %s" % stmt
+       stmt += str(self.quantity) + ", "
+       stmt += str(self.price) + ")"
+       print "executing %s" % stmt
        with c.execute(stmt) as r:
             if not r.ok():
-               raise FailedCreation("cannot insert sales -- %s" % r.details())
+               raise FailedCreation("cannot insert buys -- %s" % r.details())
 
     def tocsv(self, csv):
         line = ""
@@ -371,8 +354,8 @@ def createEdges(no, c, p, s):
             microseconds=random.randint(0,96*3600000000))
         w = random.randint(1,100)
         w2 = w * p[pdx].price
-        e.append(SalesEdge('buys', c[cdx], p[pdx], tp, w, w2))
-        e.append(SalesEdge('visits', c[cdx], s[sdx], tp, w, w2))
+        e.append(BuysEdge(c[cdx], p[pdx], tp, w, w2))
+        # e.append(SalesEdge('visits', c[cdx], s[sdx], tp, w, w2))
     return e
 
 def randomString(l):

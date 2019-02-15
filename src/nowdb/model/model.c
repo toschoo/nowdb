@@ -1478,7 +1478,7 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 
 		// get propid
 	}
-	(*size)+=off;
+	(*size)=off;
 	return NOWDB_OK;
 }
 
