@@ -839,7 +839,7 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 	err = getKey(txt, str, s, key, &x, TRUE);
 	if (err != NOWDB_OK) goto unlock;
 	if (!x) err = nowdb_err_get(nowdb_err_key_not_found,
-	                                FALSE, OBJECT, NULL);
+	                                 FALSE, OBJECT, str);
 unlock:
 	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {
@@ -877,8 +877,15 @@ nowdb_err_t nowdb_text_getText(nowdb_text_t *txt,
 
 	err = getString(txt, key, str, TRUE);
 	if (err != NOWDB_OK) goto unlock;
-	if (*str == NULL) err = nowdb_err_get(nowdb_err_key_not_found,
-	                                         FALSE, OBJECT, NULL);
+	if (*str == NULL) {
+		/* DEBUG!
+		int *p = NULL;
+		fprintf(stderr, "%d\n", *p);
+		fprintf(stderr, "KEY NOT FOUND for %lu\n", key);
+		*/
+		err = nowdb_err_get(nowdb_err_key_not_found,
+	                    FALSE, OBJECT, "searching text");
+	}
 unlock:
 	err2 = nowdb_unlock_write(&txt->lock);
 	if (err2 != NOWDB_OK) {

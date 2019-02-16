@@ -331,7 +331,7 @@ class VisitsEdge:
        stmt = "insert into visits "
        stmt += "(origin, destin, timestamp, quantity, price) ("
        stmt += str(self.origin.key) + ", "
-       stmt += "'" + str(self.destin.name) + "', "
+       stmt += "'" + self.destin.name + "', "
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
        stmt += str(self.quantity) + ", "
        stmt += str(self.price) + ")"

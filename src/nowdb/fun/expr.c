@@ -1126,6 +1126,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	// HANDLE NULL!
 	default:
+		fprintf(stderr, "OFF: %u\n", field->off);
 		HANDLENULL(src,field);
 		
 		u = src+field->off;
