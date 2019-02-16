@@ -10,10 +10,11 @@ if __name__ == '__main__':
 	numc = 50
 	nums = 25
 	nume = 1000
+	numv = 100
 
         db.createDB(c, "db100")
 
-        (products, clients, stores, edges) = db.addRandomData(c, nump, numc, nums, nume)
+        (products, clients, stores, buys, visits) = db.addRandomData(c, nump, numc, nums, nume, numv)
 
         cnt = 0
         cnt2 = 0
@@ -21,17 +22,13 @@ if __name__ == '__main__':
         sm2 = 0
         avg = 0.0
         avg2 = 0.0
-        for e in edges:
-           sm += e.quantity
+        for b in buys:
+           sm += b.quantity
            cnt += 1
 
         avg = float(sm)/float(cnt)
 
-        """
         with c.execute("select count(*), sum(quantity), avg(quantity) \
-                          from buys") as cur:
-        """
-        with c.execute("select 1, origin, destin \
                           from buys") as cur:
             if not cur.ok():
               print "ERROR %d: %s" % (cur.code(), cur.details())
@@ -41,11 +38,11 @@ if __name__ == '__main__':
                   print "ERROR: wrong number of fields: %d != %ds" % (r.count(), 3)
                   exit(1)
 
-               print "%d %d" % (r.field(1), r.field(2))
+               # print "%d|%d|%.2f" % (r.field(0), r.field(1), r.field(2))
 
                cnt2 += r.field(0)
-               #sm2 += r.field(1)
-               #avg2 = r.field(2)
+               sm2 += r.field(1)
+               avg2 = r.field(2)
 
         if cnt != cnt2:
            print "count differs: %d -- %s" % (cnt, cnt2)
@@ -65,8 +62,8 @@ if __name__ == '__main__':
               exit(1)
            for r in cur:
               cnt = r.field(0)
-           print "we have %d edges" % cnt
-           if cnt != 2*nume:
+           print "we have %d buy-edges" % cnt
+           if cnt != nume:
               print "we need to have %d" % nume
               exit(1)
 	
@@ -109,13 +106,15 @@ if __name__ == '__main__':
               print "we need to have %d" % nums
               exit(1)
 
-        (p2,c2,s2,e2) = db.loadDB(c,"db100")
+        (p2,c2,s2,b2,v2) = db.loadDB(c,"db100")
         if len(p2) != len(products):
             print "loaded products differ from original: %d != %d" % (len(p2), len(products))
         if len(c2) != len(clients):
             print "loaded clients differ from original: %d != %d" % (len(c2), len(clients))
         if len(s2) != len(stores):
             print "loaded stores differ from original: %d != %d" % (len(s2), len(stores))
-        if len(e2) != len(edges):
-            print "loaded edges differ from original: %d != %d" % (len(e2), len(edges))
-        print "LOADED: %d %d %d %d" % (len(p2), len(c2), len(s2), len(e2))
+        if len(b2) != len(buys):
+            print "loaded buys differ from original: %d != %d" % (len(b2), len(buys))
+        if len(v2) != len(vists):
+            print "loaded vists differ from original: %d != %d" % (len(v2), len(vists))
+        print "LOADED: %d %d %d %d %d" % (len(p2), len(c2), len(s2), len(b2), len(v2))

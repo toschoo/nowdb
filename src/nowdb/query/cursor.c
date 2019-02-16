@@ -1433,8 +1433,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	recsz = cur->recsz; \
 	mx = cur->rdr->ko?recsz:(NOWDB_IDX_PAGE/recsz)*recsz; \
 	filter = cur->rdr->filter; \
-	ctype = cur->rdr->content; \
-	fprintf(stderr, "AFTERMOVE: %u / %u\n", recsz, mx);
+	ctype = cur->rdr->content;
 
 #define CHECKEOF() \
 	if (cur->eof) { \
@@ -1623,8 +1622,6 @@ grouping:
 		}
 projection:
 		if (cur->group == NULL) {
-			fprintf(stderr, "%lu - %lu\n", *(uint64_t*)realsrc,
-			                               *(uint64_t*)(realsrc+8));
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
 			                   pmap, buf, sz,

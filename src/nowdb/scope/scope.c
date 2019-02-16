@@ -636,8 +636,6 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		                     "allocating context/name path");
 	}
 
-	fprintf(stderr, "RECORDSIZE: %u\n", e->size);
-
 	err = nowdb_context_err(*ctx,
 	      nowdb_store_init(&(*ctx)->store, p,
 	                         NULL, ver,

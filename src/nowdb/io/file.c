@@ -108,6 +108,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->hdrsize = NOWDB_HDR_BASE_SIZE + file->setsize;
 
 	/*
+	fprintf(stderr, "CONTENT: %u\n", file->cont);
 	fprintf(stderr, "HEADERSIZE: %u\n", file->hdrsize);
 	fprintf(stderr, "   SETSIZE: %u\n", file->setsize);
 	*/
@@ -932,7 +933,6 @@ static inline nowdb_err_t compmove(nowdb_file_t *file,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t plainmove(nowdb_file_t *file) {
-	fprintf(stderr, "MOVE: %zu / %u\n", lseek(file->fd, 0, SEEK_CUR), file->pos);
 	nowdb_err_t err = plainload(file);
 	if (err != NOWDB_OK) return err;
 	file->pos += file->bufsize;

@@ -772,6 +772,7 @@ static inline nowdb_err_t writeCatalogLine(char *buf, int *off,
 	memcpy(buf+*off, &file->size, 4); *off += 4;
 	memcpy(buf+*off, &file->recordsize, 4); *off += 4;
 	memcpy(buf+*off, &file->blocksize, 4); *off += 4;
+	memcpy(buf+*off, &file->cont, 1); *off += 1;
 	memcpy(buf+*off, &file->ctrl, 1); *off += 1;
 	memcpy(buf+*off, &file->comp, 4); *off += 4;
 	memcpy(buf+*off, &file->encp, 4); *off += 4;
@@ -815,6 +816,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	memcpy(&tmp.size, buf+*off, 4); *off += 4;
 	memcpy(&tmp.recordsize, buf+*off, 4); *off += 4;
 	memcpy(&tmp.blocksize, buf+*off, 4); *off += 4;
+	memcpy(&tmp.cont, buf+*off, 1); *off+=1;
 	memcpy(&tmp.ctrl, buf+*off, 1); *off += 1;
 	memcpy(&tmp.comp, buf+*off, 4); *off += 4;
 	memcpy(&tmp.encp, buf+*off, 4); *off += 4;
@@ -1011,6 +1013,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	 * size,             4
 	 * recsize,          4
 	 * blocksize,        4
+	 * cont,             1
 	 * ctrl,             1
 	 * compression,      4 
 	 * encryption,       4
@@ -1020,7 +1023,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	 * file name        32
 	 */
 	uint32_t once = 8;
-	uint32_t perline = 92;
+	uint32_t perline = 93;
 	uint32_t nfiles = 1;
 
 	nfiles += store->spares.len;
@@ -1349,7 +1352,6 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	/* optimisation: pos & (bufsize - 1) */
 	pos = store->writer->pos%store->writer->bufsize;
 	memcpy(store->writer->mptr+pos, data, store->recsize);
 	if (!store->writer->dirty) store->writer->dirty = TRUE;
@@ -1358,11 +1360,10 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	pos+=store->recsize; store->writer->pos+=store->recsize;
 
 	if (REMAINDER < store->recsize) {
-		// uint32_t d = store->recsize - REMAINDER;
-		pos+=REMAINDER;
-		store->writer->size += REMAINDER;
-		store->writer->pos+=REMAINDER;
-		fprintf(stderr, "adjusted pos: %d\n", (pos%NOWDB_IDX_PAGE));
+		uint32_t d = REMAINDER;
+		pos+=d;
+		store->writer->size += d;
+		store->writer->pos += d;
 	}
 	if (pos >= store->writer->bufsize) {
 		err = remapWriter(store);

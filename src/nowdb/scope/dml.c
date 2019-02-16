@@ -510,10 +510,18 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		}
 		if  (pe->value == NOWDB_TYP_TEXT &&
 		     val->type != NOWDB_TYP_TEXT) {
-			INVALID("origin must be text");
+			if (off == NOWDB_OFF_ORIGIN) {
+				INVALID("origin must be text");
+			} else {
+				INVALID("destin must be text");
+			}
 		} else if (pe->value != NOWDB_MODEL_TEXT &&
 		           val->type != NOWDB_TYP_UINT) {
-			INVALID("origin must be unsigned integer");
+			if (off == NOWDB_OFF_ORIGIN) {
+				INVALID("origin must be unsigned integer");
+			} else {
+				INVALID("destin must be unsigned integer");
+			}
 		}
 		break;
 

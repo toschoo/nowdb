@@ -83,23 +83,25 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create edge vists")
 
-def addRandomData(c, ps, cs, ss, es):
+def addRandomData(c, ps, cs, ss, bs, vs):
     products = createProducts(ps)
     clients = createClients(cs)
     stores = createStores(ss)
-    edges = createEdges(es, clients, products, stores)
+    (buys, visits) = createEdges(bs, vs, clients, products, stores)
 
     storeProducts(c, products)
     storeClients(c, clients)
     storeStores(c, stores)
-    storeEdges(c, edges)
+    storeEdges(c, buys)
+    storeEdges(c, visits)
 
-    return (products, clients, stores, edges)
+    return (products, clients, stores, buys, visits)
 
 def db2csv(p,c,e):
     products2csv("rsc/products.csv", p)
     clients2csv("rsc/clients.csv", c)
-    edges2csv("rsc/edges.csv", e)
+    edges2csv("rsc/buys.csv", e)
+    edges2csv("rsc/visits.csv", e)
     # missing:
     # stores and visits
 
@@ -134,15 +136,23 @@ def loadStores(c):
     return vs
 
 def loadEdges(c):
-    es = []
+    bs = []
     with c.execute("select origin, destin, timestamp, quantity, price from buys") as cur:
         for row in cur:
-           es.append(BuysEdge(row.field(0),
+           bs.append(BuysEdge(row.field(0),
                               row.field(1),
                               now.now2dt(row.field(2)),
                               row.field(3),
                               row.field(4)))
-    return es
+    vs = []
+    with c.execute("select origin, destin, timestamp, quantity, price from visits") as cur:
+        for row in cur:
+           vs.append(VisitsEdge(row.field(0),
+                                row.field(1),
+                                now.now2dt(row.field(2)),
+                                row.field(3),
+                                row.field(4)))
+    return (bs, vs)
 
 def loadFromCsv():
     with c.execute("load 'rsc/products.csv' into vertex use header as product") as r:
@@ -264,6 +274,7 @@ class Store:
         stmt += "'" + self.city + "', "
         stmt += "'" + self.address + "', "
         stmt += str(self.size) + ")"
+	print stmt
         with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert client -- %s" 
@@ -293,20 +304,50 @@ class BuysEdge:
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
        stmt += str(self.quantity) + ", "
        stmt += str(self.price) + ")"
-       print "executing %s" % stmt
+       # print "executing %s" % stmt
        with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert buys -- %s" % r.details())
 
     def tocsv(self, csv):
         line = ""
-        line += self.edge + ";"
         line += str(self.origin) + ";"
         line += str(self.destin) + ";"
         line += ";"
         line += self.tp.strftime(now.TIMEFORMAT) + ";"
-        line += str(self.weight) + ";"
-        line += str(self.weight2) + "\n"
+        line += str(self.quantity) + ";"
+        line += str(self.price) + "\n"
+        csv.write(line)
+
+class VisitsEdge:
+    def __init__(self, o, d, t, q, p):
+       self.origin  = o
+       self.destin  = d
+       self.tp      = t
+       self.quantity = q
+       self.price = p
+
+    def store(self, c):
+       stmt = "insert into visits "
+       stmt += "(origin, destin, timestamp, quantity, price) ("
+       stmt += str(self.origin.key) + ", "
+       stmt += "'" + str(self.destin.name) + "', "
+       stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
+       stmt += str(self.quantity) + ", "
+       stmt += str(self.price) + ")"
+       print "executing %s" % stmt
+       with c.execute(stmt) as r:
+            if not r.ok():
+               raise FailedCreation("cannot insert visits -- %s" % r.details())
+
+    def tocsv(self, csv):
+        line = ""
+        line += str(self.origin) + ";"
+        line += str(self.destin) + ";"
+        line += ";"
+        line += self.tp.strftime(now.TIMEFORMAT) + ";"
+        line += str(self.quantity) + ";"
+        line += str(self.price) + "\n"
         csv.write(line)
 
 def createProducts(no):
@@ -343,20 +384,30 @@ def createStores(no):
                        float(random.randint(500,10000)/float(random.randint(1,5)))))
     return s
 
-def createEdges(no, c, p, s):
-    e = []
+def createEdges(bs, vs, c, p, s):
+    b = []
     t = datetime.datetime.utcnow()
-    for i in range(no):
+    for i in range(bs):
         cdx = random.randint(0,len(c)-1)
         pdx = random.randint(0,len(p)-1)
+        tp = t + datetime.timedelta(
+            microseconds=random.randint(0,96*3600000000))
+        w = random.randint(1,100)
+        w2 = w * p[pdx].price
+        b.append(BuysEdge(c[cdx], p[pdx], tp, w, w2))
+
+    v = []
+    t = datetime.datetime.utcnow()
+    for i in range(vs):
+        cdx = random.randint(0,len(c)-1)
         sdx = random.randint(0,len(s)-1)
         tp = t + datetime.timedelta(
             microseconds=random.randint(0,96*3600000000))
         w = random.randint(1,100)
         w2 = w * p[pdx].price
-        e.append(BuysEdge(c[cdx], p[pdx], tp, w, w2))
-        # e.append(SalesEdge('visits', c[cdx], s[sdx], tp, w, w2))
-    return e
+        v.append(VisitsEdge(c[cdx], s[sdx], tp, w, w2))
+
+    return (b,v)
 
 def randomString(l):
     s = ""
