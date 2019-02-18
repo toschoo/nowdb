@@ -696,9 +696,9 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	err = nowdb_expr_newVertexField(exp, field->value,
 	                             v->roleid, p->propid);
 	if (err != NOWDB_OK) return err;
-	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
+	FIELD(*exp)->type = p->value;
 	if (p->pk) {
-		NOWDB_EXPR_TOFIELD(*exp)->off = NOWDB_OFF_VERTEX;
+		FIELD(*exp)->off = NOWDB_OFF_VERTEX;
 	}
 	return NOWDB_OK;
 }
@@ -725,11 +725,11 @@ static inline nowdb_err_t getEdgeField(nowdb_scope_t  *scope,
 	err = nowdb_expr_newEdgeField(exp, field->value,
 	                             e->edgeid, p->off);
 	if (err != NOWDB_OK) return err;
-	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
+	FIELD(*exp)->type = p->value;
 	if (p->off > NOWDB_OFF_USER) {
 		nowdb_edge_getCtrl(e->num, p->off,
-		    &NOWDB_EXPR_TOFIELD(*exp)->ctrlbit,
-		    &NOWDB_EXPR_TOFIELD(*exp)->ctrlbyte);
+		            &FIELD(*exp)->ctrlbit,
+		            &FIELD(*exp)->ctrlbyte);
 	}
 	return NOWDB_OK;
 }
@@ -1180,6 +1180,8 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 	char agg;
 	char dagg=0;
 
+	// fprintf(stderr, "target: %s (%d)\n", (char*)trg->value, trg->stype);
+
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
 		err = nowdb_model_getVertexByName(scope->model,
@@ -1189,7 +1191,6 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 
 	// get edge type
 	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
-		fprintf(stderr, "EDGE %s\n", (char*)trg->value);
 		err = nowdb_model_getEdgeByName(scope->model,
 		                             trg->value, &e);
 		if (err != NOWDB_OK) return err;
@@ -1205,7 +1206,9 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		// fprintf(stderr, "%s\n", (char*)field->value);
+		/*
+		fprintf(stderr, "FIELD: %s\n", (char*)field->value);
+		*/
 
 		agg = 0;
 		err = getExpr(scope, v, e, needtxt, trg, field, &exp, &agg);
@@ -1285,8 +1288,8 @@ static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
  */
 static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
                                        nowdb_ast_t   *trg) {
-	nowdb_err_t  err;
-	nowdb_target_t t;
+	nowdb_err_t   err;
+	nowdb_content_t t;
 
 	err = nowdb_model_whatIs(scope->model, trg->value, &t);
 	if (err != NOWDB_OK) {
@@ -1298,8 +1301,8 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
 		return err;
 	}
 
-	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
-	                                 NOWDB_AST_CONTEXT;
+	trg->stype = t==NOWDB_CONT_VERTEX?NOWDB_AST_TYPE:
+	                               NOWDB_AST_CONTEXT;
 	return NOWDB_OK;
 }
 
@@ -1329,6 +1332,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
 
+	// what is this???
 	err = adjustTarget(scope, trg);
 	if (err != NOWDB_OK) return err;
 

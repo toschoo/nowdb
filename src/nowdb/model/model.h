@@ -254,7 +254,7 @@ nowdb_err_t nowdb_model_getPedgeByName(nowdb_model_t        *model,
  * What is by name
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
-                               char           *name,
-                               nowdb_target_t *trg);
+nowdb_err_t nowdb_model_whatIs(nowdb_model_t  *model,
+                               char            *name,
+                               nowdb_content_t *trg);
 #endif

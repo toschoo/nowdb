@@ -2335,8 +2335,8 @@ nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
-                               char          *name,
-                               nowdb_target_t *trg) {
+                               char           *name,
+                               nowdb_content_t *trg) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_err_t err2;
 	thing_t pattern, *thing;
@@ -2355,8 +2355,8 @@ nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
 		err = nowdb_err_get(nowdb_err_key_not_found,
 	                               FALSE, OBJECT, name);
 	} else {
-		*trg = thing->t==E?NOWDB_TARGET_EDGE:
-		                   NOWDB_TARGET_VERTEX;
+		*trg = thing->t==E?NOWDB_CONT_EDGE:
+		                   NOWDB_CONT_VERTEX;
 	}
 
 	err2 = nowdb_unlock_read(&model->lock);

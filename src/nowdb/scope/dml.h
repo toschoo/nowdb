@@ -24,7 +24,7 @@
 typedef struct {
 	char            *trgname; /* name of least recently used target */
         nowdb_scope_t     *scope; /* current scope                      */
-	nowdb_target_t    target; /* least recently used target         */
+	nowdb_content_t  content; /* least recently used content        */
 	nowdb_store_t     *store; /* least recently used store          */
 	nowdb_pklru_t      *tlru; /* private text cache                 */
 	nowdb_model_vertex_t  *v; /* least recently used vertex model   */
@@ -61,7 +61,7 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 void nowdb_dml_destroy(nowdb_dml_t *dml);
 
 /* ------------------------------------------------------------------------
- * Set target according to target name
+ * Set content according to target name
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,

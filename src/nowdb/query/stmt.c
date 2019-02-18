@@ -677,10 +677,10 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 				INVALIDAST("no offset in decl");
 			}
 			if (f->stype == NOWDB_OFF_ORIGIN) {
-				fprintf(stderr, "ORIGIN\n");
+				// fprintf(stderr, "ORIGIN\n");
 				origin = d->value;
 			} else {
-				fprintf(stderr, "DESTIN\n");
+				// fprintf(stderr, "DESTIN\n");
 				destin = d->value;
 			}
 		} else {
@@ -701,7 +701,7 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 				NOMEM("allocating property name");
 				return err;
 			}
-			fprintf(stderr, "%s\n", p->name);
+			// fprintf(stderr, "%s\n", p->name);
 	
 			p->value = nowdb_ast_type(d->stype);
 			p->edgeid = 0;
@@ -859,7 +859,7 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 		p = nowdb_ast_declare(p);
 	}
 
-	fprintf(stderr, "parameters: %u\n", pd->argn);
+	// fprintf(stderr, "parameters: %u\n", pd->argn);
 
 	if (pd->argn > 0) {
 		pd->args = calloc(pd->argn, sizeof(nowdb_proc_arg_t));
@@ -871,8 +871,10 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 	
 		p = nowdb_ast_declare(op); i=0;
 		while(p!=NULL) {
+			/*
 			fprintf(stderr, "parameter %s (%d)\n",
 			            (char*)p->value, p->stype);
+			*/
 	
 			pd->args[i].name = strdup(p->value);
 			if (pd->args[i].name == NULL) {
@@ -964,8 +966,10 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	/* create vertex loader */
 	case NOWDB_AST_VERTEX:
 	case NOWDB_AST_TYPE:
+		/*
 		fprintf(stderr, "loading '%s' into vertex as type '%s'\n",
 		                path, type);
+		*/
 
 		flg |= NOWDB_CSV_VERTEX;
 		err = nowdb_loader_init(&ldr, stream, estream,
@@ -1506,7 +1510,7 @@ static nowdb_err_t describeThing(nowdb_scope_t      *scope,
 	char *row=NULL;
 	char *tmp;
 	nowdb_qry_row_t *r;
-	char what;
+	nowdb_content_t what;
 	char *name;
 
 	if (ast->value == NULL) INVALIDAST("no target in ast");
@@ -1514,14 +1518,14 @@ static nowdb_err_t describeThing(nowdb_scope_t      *scope,
 	if (err != NOWDB_OK) return err;
 
 	ts_algo_list_init(&list);
-	if (what == NOWDB_TARGET_EDGE) {
+	if (what == NOWDB_CONT_EDGE) {
 		err = getPedges(scope, ast->value, &list);
-	} else if (what == NOWDB_TARGET_VERTEX) {
+	} else if (what == NOWDB_CONT_VERTEX) {
 		err = getProps(scope, ast->value, &list);
 	} else INVALIDAST("unknown target in ast");
 
 	for(run=list.head; run!=NULL; run=run->nxt) {
-		if (what == NOWDB_TARGET_EDGE) {
+		if (what == NOWDB_CONT_EDGE) {
 			name = ((nowdb_model_pedge_t*)run->cont)->name;
 			typ  = ((nowdb_model_pedge_t*)run->cont)->value;
 		} else {
@@ -1743,8 +1747,8 @@ static nowdb_err_t handleLoad(nowdb_ast_t *op,
  */
 static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
                                        nowdb_ast_t   *trg) {
-	nowdb_err_t  err;
-	nowdb_target_t t;
+	nowdb_err_t   err;
+	nowdb_content_t t;
 
 	if (trg->value == NULL) return NOWDB_OK;
 
@@ -1758,8 +1762,8 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
 		return err;
 	}
 
-	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
-	                                 NOWDB_AST_CONTEXT;
+	trg->stype = t==NOWDB_CONT_VERTEX?NOWDB_AST_TYPE:
+	                               NOWDB_AST_CONTEXT;
 	return NOWDB_OK;
 }
 

@@ -110,7 +110,8 @@ def loadDB(c, db):
     with c.execute(stmt) as r:
         if not r.ok():
             raise FailedLoading("cannot use %s" % db)
-    return (loadProducts(c), loadClients(c), loadStores(c), loadEdges(c))
+    (bs, vs) = loadEdges(c)
+    return (loadProducts(c), loadClients(c), loadStores(c), bs, vs)
 
 def loadProducts(c):
     ps = []
@@ -274,7 +275,7 @@ class Store:
         stmt += "'" + self.city + "', "
         stmt += "'" + self.address + "', "
         stmt += str(self.size) + ")"
-	print stmt
+	# print stmt
         with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert client -- %s" 
@@ -335,7 +336,7 @@ class VisitsEdge:
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
        stmt += str(self.quantity) + ", "
        stmt += str(self.price) + ")"
-       print "executing %s" % stmt
+       # print "executing %s" % stmt
        with c.execute(stmt) as r:
             if not r.ok():
                raise FailedCreation("cannot insert visits -- %s" % r.details())

@@ -1499,7 +1499,7 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	nowdb_context_t *ctx;
-	char t;
+	nowdb_content_t t;
 
 	SCOPENULL();
 
@@ -1533,7 +1533,7 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 	// there is an edge, but not a type with that name
 	err = nowdb_model_whatIs(scope->model, name, &t);
 	if (err == NOWDB_OK) {
-		if (t == NOWDB_TARGET_VERTEX) {
+		if (t == NOWDB_CONT_VERTEX) {
 			// dup key is not good here
 			// better: wrong type or something
 			err = nowdb_err_get(nowdb_err_dup_key,

@@ -95,10 +95,8 @@ static inline nowdb_err_t getEdge(nowdb_dml_t *dml,
 			return NOWDB_OK;
 		}
 	}
-	dml->target = NOWDB_TARGET_EDGE;
+	dml->content = NOWDB_CONT_EDGE;
 	dml->store = &ctx->store;
-
-	fprintf(stderr, "RECSIZE: %u\n", dml->store->recsize);
 
 	err = nowdb_model_getEdgeByName(dml->scope->model,
 	                                 trgname, &dml->e);
@@ -125,7 +123,7 @@ static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
 	err = nowdb_model_getVertexByName(dml->scope->model,trgname,&dml->v);
 	if (err != NOWDB_OK) return err;
 
-	dml->target = NOWDB_TARGET_VERTEX;
+	dml->content = NOWDB_CONT_VERTEX;
 	dml->store = &dml->scope->vertices;
 
 	return NOWDB_OK;
@@ -332,7 +330,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
-	// fprintf(stderr, "SETTING TARGET %s\n", trgname);
+	// fprintf(stderr, "SETTING CONTENT %s\n", trgname);
 
 	// check fields == values
 	if (fields != NULL && values != NULL) {
@@ -343,7 +341,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->trgname != NULL) {
 		if (strcasecmp(dml->trgname,
 	                            trgname) == 0) {
-			if (dml->target == NOWDB_TARGET_EDGE) {
+			if (dml->content == NOWDB_CONT_EDGE) {
 				if (edgeComplete(dml, fields, values)) {
 					return NOWDB_OK;
 				} else {
@@ -372,7 +370,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	err = getContextOrVertex(dml, trgname);
 	if (err != NOWDB_OK) return err;
 
-	if (dml->target == NOWDB_TARGET_EDGE) {
+	if (dml->content == NOWDB_CONT_EDGE) {
 		return getEdgeProperties(dml,fields);
 	} else {
 		return getVertexProperties(dml, fields);
@@ -623,6 +621,7 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 		break;
 
 	case NOWDB_TYP_INT:
+		// fprintf(stderr, "INT: %s\n", (char*)val->value);
 		STROX(int64_t, strtol);
 		break;
 
@@ -649,8 +648,6 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	nowdb_err_t err;
 	err = getValueAsType(dml, val, edge+off);
 	if (err != NOWDB_OK) return err;
-
-	// fprintf(stderr, "writing %s offset %u\n", (char*)val->value, off);
 
 	if (off < NOWDB_OFF_USER) return NOWDB_OK;
 
@@ -884,7 +881,7 @@ nowdb_err_t nowdb_dml_insertFields(nowdb_dml_t *dml,
                              ts_algo_list_t *fields,
                              ts_algo_list_t *values) 
 {
-	if (dml->target == NOWDB_TARGET_EDGE) {
+	if (dml->content == NOWDB_CONT_EDGE) {
 		return insertEdgeFields(dml, fields, values);
 	} else {
 		return insertVertexFields(dml, fields, values);

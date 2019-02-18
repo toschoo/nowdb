@@ -115,6 +115,6 @@ if __name__ == '__main__':
             print "loaded stores differ from original: %d != %d" % (len(s2), len(stores))
         if len(b2) != len(buys):
             print "loaded buys differ from original: %d != %d" % (len(b2), len(buys))
-        if len(v2) != len(vists):
+        if len(v2) != len(visits):
             print "loaded vists differ from original: %d != %d" % (len(v2), len(vists))
         print "LOADED: %d %d %d %d %d" % (len(p2), len(c2), len(s2), len(b2), len(v2))

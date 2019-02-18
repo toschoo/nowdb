@@ -191,7 +191,7 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
 
 	FIELD(*expr)->name = NULL;
 	FIELD(*expr)->text = NULL;
-	FIELD(*expr)->target = NOWDB_TARGET_EDGE;
+	FIELD(*expr)->content = NOWDB_CONT_EDGE;
 	FIELD(*expr)->off = (int)off;
 
 	if (propname != NULL) {
@@ -222,7 +222,7 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off) {
 
 	FIELD(*expr)->name = NULL;
 	FIELD(*expr)->text = NULL;
-	FIELD(*expr)->target = NOWDB_TARGET_VERTEX;
+	FIELD(*expr)->content = NOWDB_CONT_VERTEX;
 	FIELD(*expr)->off = (int)off;
 	FIELD(*expr)->type = off==NOWDB_OFF_ROLE?
 	                          NOWDB_TYP_SHORT:
@@ -250,7 +250,7 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 	FIELD(*expr)->etype = NOWDB_EXPR_FIELD;
 
 	FIELD(*expr)->text = NULL;
-	FIELD(*expr)->target = NOWDB_TARGET_VERTEX;
+	FIELD(*expr)->content = NOWDB_CONT_VERTEX;
 	FIELD(*expr)->off = NOWDB_OFF_VALUE;
 	FIELD(*expr)->role = role;
 	FIELD(*expr)->propid = propid;
@@ -698,7 +698,7 @@ static nowdb_err_t copyField(nowdb_field_t *src,
                              nowdb_expr_t  *trg)  {
 	nowdb_err_t err;
 
-	if (src->target == NOWDB_TARGET_EDGE) {
+	if (src->content == NOWDB_CONT_EDGE) {
 		err = nowdb_expr_newEdgeField(trg, src->name,
 		                      src->edgeid, src->off);
 		
@@ -872,10 +872,10 @@ nowdb_err_t nowdb_expr_copy(nowdb_expr_t  src,
 static inline char fieldEqual(nowdb_field_t *one,
                               nowdb_field_t *two) 
 {
-	if (one->target != two->target) return 0;
+	if (one->content != two->content) return 0;
 
 	// different edges???
-	if (one->target == NOWDB_TARGET_EDGE) {
+	if (one->content == NOWDB_CONT_EDGE) {
 		return (one->off  == two->off);
 	}
 	if (one->role != two->role) return 0;
@@ -1072,7 +1072,7 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 #define HANDLETEXT(what) \
 	if (( !field->usekey) && what != NULL) { \
 		*t = (char)NOWDB_TYP_TEXT; \
-		err = getText(hlp, *(uint64_t*)what, &field->text); \
+		err = getText(hlp, *(nowdb_key_t*)what, &field->text); \
 		if (err != NOWDB_OK) return err; \
 		*res = field->text; \
 	} else { \
@@ -1103,7 +1103,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 	switch(field->off) {
 	case NOWDB_OFF_ORIGIN:
 		if (field->type == NOWDB_TYP_TEXT) {
-			HANDLETEXT(src+NOWDB_OFF_ORIGIN);
+			HANDLETEXT((src+NOWDB_OFF_ORIGIN));
 		} else {
 			*t = NOWDB_TYP_UINT; // why uint?
 			*res = src+NOWDB_OFF_ORIGIN;
@@ -1112,7 +1112,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 
 	case NOWDB_OFF_DESTIN:
 		if (field->type == NOWDB_TYP_TEXT) {
-			HANDLETEXT(src+NOWDB_OFF_DESTIN);
+			HANDLETEXT((src+NOWDB_OFF_DESTIN));
 		} else {
 			*t = NOWDB_TYP_UINT; // why uint?
 			*res = src+NOWDB_OFF_DESTIN;
@@ -1124,9 +1124,7 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		*res = src+NOWDB_OFF_STAMP;
 		break;
 
-	// HANDLE NULL!
 	default:
-		fprintf(stderr, "OFF: %u\n", field->off);
 		HANDLENULL(src,field);
 		
 		u = src+field->off;
@@ -1224,7 +1222,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 
 	if (field->off < 0) INVALID("uninitialised expression");
 
-	if (field->target == NOWDB_TARGET_EDGE) {
+	if (field->content == NOWDB_CONT_EDGE) {
 		err = getEdgeValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	} else {
@@ -1687,7 +1685,7 @@ static void showValue(void *value, nowdb_type_t t, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 static void showField(nowdb_field_t *f, FILE *stream) {
-	if (f->target == NOWDB_TARGET_EDGE) {
+	if (f->content == NOWDB_CONT_EDGE) {
 		fprintf(stream, "%d", f->off); // off to name
 
 	} else if (f->name != NULL) {

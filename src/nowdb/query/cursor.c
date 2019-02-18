@@ -336,11 +336,11 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	/* target is vertex */
 	if (rplan->helper == NOWDB_AST_VERTEX ||
 	    rplan->helper == NOWDB_AST_TYPE) {
-		cur->target = NOWDB_TARGET_VERTEX;
+		cur->content = NOWDB_CONT_VERTEX;
 		cur->recsz = 32;
 		store = &scope->vertices;
 
-		// fprintf(stderr, "TARGET NAME: %s\n", rplan->name);
+		// fprintf(stderr, "CONTENT NAME: %s\n", rplan->name);
 
 		if (rplan->name != NULL) {
 			err = nowdb_model_getVertexByName(scope->model,
@@ -349,9 +349,9 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 			if (err != NOWDB_OK) return err;
 		}
 
-	/* target is a context */
+	/* content is edge */
 	} else {
-		cur->target = NOWDB_TARGET_EDGE;
+		cur->content = NOWDB_CONT_EDGE;
 		err = nowdb_scope_getContext(scope, rplan->name, &ctx);
 		if (err != NOWDB_OK) return err;
 		store = &ctx->store;
@@ -836,7 +836,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	}
 
 	// we could just memcpy the whole thing
-	cur->target = mom->target;
+	cur->content = mom->content;
 	cur->rdr = mom->rdr;
 	memcpy(&cur->stf, &mom->stf, sizeof(nowdb_storefile_t));
 	cur->model = mom->model;
@@ -1169,7 +1169,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	// if it is on vertex and the projection
 	// contains things beyond the primary key,
 	// we are not yet done.
-	if ((*cur)->target == NOWDB_TARGET_VERTEX) {
+	if ((*cur)->content == NOWDB_CONT_VERTEX) {
 		char ok;
 
 		/*

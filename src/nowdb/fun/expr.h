@@ -61,19 +61,19 @@ char nowdb_expr_compare(nowdb_expr_t expr);
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t        etype; /* expression type (field) */
-	nowdb_target_t target; /* vertex or edge?         */
-	int               off; /* offset into data source */
-	nowdb_type_t     type; /* Type of field           */
-	char            *text; /* string if off is text   */
-	char            *name; /* property name if vertex */
-	nowdb_roleid_t   role; /* vertex type if vertex   */
-	nowdb_key_t    edgeid; /* edge   type if edge     */
-	nowdb_key_t    propid; /* propid if vertex        */
-	uint8_t       ctrlbit; /* control bit  for edge   */
-	uint16_t     ctrlbyte; /* control byte for edge   */
-	char               pk; /* primary key if vertex   */
-	char           usekey; /* use key instead of text */
+	uint32_t          etype; /* expression type (field) */
+	nowdb_content_t content; /* vertex or edge?         */
+	int                 off; /* offset into data source */
+	nowdb_type_t       type; /* Type of field           */
+	char              *text; /* string if off is text   */
+	char              *name; /* property name if vertex */
+	nowdb_roleid_t     role; /* vertex type if vertex   */
+	nowdb_key_t      edgeid; /* edge   type if edge     */
+	nowdb_key_t      propid; /* propid if vertex        */
+	uint8_t         ctrlbit; /* control bit  for edge   */
+	uint16_t       ctrlbyte; /* control byte for edge   */
+	char                 pk; /* primary key if vertex   */
+	char             usekey; /* use key instead of text */
 } nowdb_field_t;
 
 /* ------------------------------------------------------------------------
