@@ -27,7 +27,7 @@ typedef struct {
  */
 typedef struct {
 	char     *keys;
-	uint64_t *map;
+	uint8_t  *map;
 } xnode_t;
 
 #define XHLP(x) ((xhelper_t*)x)
@@ -71,10 +71,10 @@ void xerdestroy(void *x, void **n) {
  * ------------------------------------------------------------------------
  */
 ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
-	uint64_t k=1;
-	uint64_t d = (*XHLPT(x)->off)/64;
+	uint8_t k=1;
+	int d = (*XHLPT(x)->off)/8;
 
-	k <<= ((*XHLPT(x)->off) - d*64);
+	k <<= ((*XHLPT(x)->off)%8);
 	XNODE(o)->map[d] |= k;
 
 	xerdestroy(x, &n);
@@ -248,6 +248,7 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 			ts_algo_tree_delete(xers[i].tree, runner->cont);
 		}
 		ts_algo_list_destroy(recs); free(recs);
+		// ts_algo_tree_destroy(xers[i].tree); // , runner->cont);
 	}
 	return NOWDB_OK;
 }

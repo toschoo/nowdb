@@ -45,11 +45,11 @@
 		return BEET_CMP_GREATER;
 
 #define EDGECMP(left, right, k) \
-	if (KEYS(keys)->off[i] <= NOWDB_OFF_LABEL) \
+	if (KEYS(keys)->off[i] < NOWDB_OFF_STAMP) \
 		KEYCMP(left, right, k) \
-	else if (KEYS(keys)->off[i] == NOWDB_OFF_TMSTMP) \
+	else if (KEYS(keys)->off[i] == NOWDB_OFF_STAMP) \
 		TMSTMPCMP(left, right, k) \
-	else if (KEYS(keys)->off[i] <= NOWDB_OFF_WEIGHT2) \
+	else \
 		WEIGHTCMP(left, right, k) \
 	k+=8;
 
@@ -101,14 +101,11 @@ char nowdb_index_vertex_compare(const void *left,
 	return BEET_CMP_EQUAL;
 }
 
-// REVIEW:
-// adapt sz to size of edges + type
 void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
                               const char      *edge,
                               char            *keys) {
-	int off=0, sz;
+	int off=0, sz=8;
 	for(int i=0; i<k->sz; i++) {
-		if (k->off[i] < NOWDB_OFF_WTYPE) sz=8; else sz=4;
 		memcpy(keys+off, edge+k->off[i], sz); off+=sz;
 	}
 }

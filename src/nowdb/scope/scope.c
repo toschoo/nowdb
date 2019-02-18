@@ -26,6 +26,9 @@ static char *OBJECT = "scope";
 #define NOMEM(x) \
 	err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT, x);
 
+#define INVALID(x) \
+	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, x);
+
 #define SCOPENOTOPEN() \
 	if (scope->state != NOWDB_SCOPE_OPEN) { \
 		err = nowdb_err_get(nowdb_err_invalid, \
@@ -1253,7 +1256,67 @@ static inline nowdb_err_t createVIndex(nowdb_scope_t *scope) {
 	                         "cannot create index on vertices");
 
 	return NOWDB_OK;
-	
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: make standard edge index name
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t mkEIndexName(char *ctx, char *kname, char **iname) {
+	nowdb_err_t err;
+
+	*iname = malloc(strlen(ctx) + strlen(kname) + 6 + 1);
+	if (*iname == NULL) {
+		NOMEM("allocating index name");
+		return err;
+	}
+	sprintf(*iname, "_idx_%s_%s", ctx, kname);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: create internal edge index
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t createEIndices(nowdb_scope_t *scope, char *ctx) {
+	nowdb_err_t err;
+	nowdb_index_keys_t *keys;
+	char *iname;
+
+	if (ctx == NULL) {
+		INVALID("no context name");
+	}
+
+	// index on origin
+	err = mkEIndexName(ctx, "origin", &iname);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_index_keys_create(&keys, 1, NOWDB_OFF_ORIGIN);
+	if (err != NOWDB_OK) {
+		free(iname);
+		return err;
+	}
+
+	// index size according to tablespace
+	err = createIndex(scope, iname, ctx, keys,
+	                  NOWDB_CONFIG_SIZE_TINY);
+	nowdb_index_keys_destroy(keys); free(iname);
+	if (err != NOWDB_OK) return err;
+
+	// index on destin
+	err = mkEIndexName(ctx, "destin", &iname);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_index_keys_create(&keys, 1, NOWDB_OFF_DESTIN);
+	if (err != NOWDB_OK) return err;
+
+	// index size according to tablespace
+	err = createIndex(scope, iname, ctx, keys,
+	                  NOWDB_CONFIG_SIZE_TINY);
+	nowdb_index_keys_destroy(keys); free(iname);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -1556,6 +1619,9 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 	if (err != NOWDB_OK) goto unlock;
 
 	err = storeCatalog(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = createEIndices(scope, name);
 	if (err != NOWDB_OK) goto unlock;
 
 unlock:
@@ -2044,9 +2110,6 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
 	err = nowdb_model_addEdgeType(scope->model, name, stamped,
 	                                 edgeid, oid, did, props);
 	if (err != NOWDB_OK) goto unlock;
-
-	// create index on origin
-	// create index on destin
 
 unlock:
 	err2 = nowdb_unlock_write(&scope->lock);

@@ -731,7 +731,8 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 	}
 	err = nowdb_scope_createEdge(scope, name, origin, destin, &props);
 	if (err != NOWDB_OK) {
-		destroyPedges(&props);
+		destroyPedges(&props); // MEMORY: if part of props were inserted
+		                       //         WE WILL FREE TWICE!!!
 		// what if dup key because of other object, i.e. type
 		if (nowdb_err_contains(err, nowdb_err_dup_key)) {
 			o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);

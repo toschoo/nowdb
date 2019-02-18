@@ -693,10 +693,9 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	                            field->value, &p);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_expr_newVertexField(exp, field->value,
-	                             v->roleid, p->propid);
+	err = nowdb_expr_newVertexField(exp, field->value, v->roleid,
+	                                         p->propid, p->value);
 	if (err != NOWDB_OK) return err;
-	FIELD(*exp)->type = p->value;
 	if (p->pk) {
 		FIELD(*exp)->off = NOWDB_OFF_VERTEX;
 	}
@@ -723,14 +722,8 @@ static inline nowdb_err_t getEdgeField(nowdb_scope_t  *scope,
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_expr_newEdgeField(exp, field->value,
-	                             e->edgeid, p->off);
+	                       p->off, p->value, e->num);
 	if (err != NOWDB_OK) return err;
-	FIELD(*exp)->type = p->value;
-	if (p->off > NOWDB_OFF_USER) {
-		nowdb_edge_getCtrl(e->num, p->off,
-		            &FIELD(*exp)->ctrlbit,
-		            &FIELD(*exp)->ctrlbyte);
-	}
 	return NOWDB_OK;
 }
 

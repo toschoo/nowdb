@@ -322,11 +322,15 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 	}
 
-	cfg->leafNodeSize = (targetsz-12)/(EMBKSZ+EMBDSZ);
+	cfg->leafNodeSize = (targetsz-12)/(EMBKSZ+cfg->dataSize);
 	cfg->intNodeSize = (targetsz-8)/(EMBKSZ+INTDSZ);
 
-	cfg->leafPageSize = cfg->leafNodeSize * (EMBKSZ + EMBDSZ) + 12;
+	cfg->leafPageSize = cfg->leafNodeSize * (EMBKSZ + cfg->dataSize) + 12;
 	cfg->intPageSize = cfg->intNodeSize * (EMBKSZ + INTDSZ) + 8;
+
+	fprintf(stderr, "CREATING EMB  IDX with size: %d/%u/%u/%u/%u/%u\n",
+	                cfg->keySize, cfg->dataSize, cfg->leafNodeSize, cfg->intNodeSize,
+	                                             cfg->leafPageSize, cfg->intPageSize);
 }
 
 /* ------------------------------------------------------------------------
@@ -388,6 +392,10 @@ static void computeHostSize(nowdb_index_desc_t *desc,
 
 	cfg->leafPageSize = (cfg->keySize+HOSTDSZ)*cfg->leafNodeSize+12;
 	cfg->intPageSize = (cfg->keySize+INTDSZ)*cfg->intNodeSize+8;
+
+	fprintf(stderr, "CREATING HOST IDX with size: %d/%lu/%u/%u/%u/%u\n",
+	                cfg->keySize, HOSTDSZ, cfg->leafNodeSize, cfg->intNodeSize,
+	                                       cfg->leafPageSize, cfg->intPageSize);
 }
 
 /* ------------------------------------------------------------------------
@@ -644,7 +652,7 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
                                char            *keys,
                                nowdb_pageid_t    pge,
-                               nowdb_bitmap64_t *map) {
+                               nowdb_bitmap8_t  *map) {
 	beet_err_t  ber;
 	beet_pair_t pair;
 

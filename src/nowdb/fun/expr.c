@@ -177,8 +177,9 @@ static void valdestroy(void *ignore, void **n) {
  */
 nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
                                     char     *propname,
-                                    nowdb_key_t edgeid,
-                                    uint32_t       off) {
+                                    uint32_t       off,
+                                    nowdb_type_t  type,
+                                    uint16_t       num) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_field_t));
@@ -193,7 +194,14 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->content = NOWDB_CONT_EDGE;
 	FIELD(*expr)->off = (int)off;
+	FIELD(*expr)->type = type;
+	FIELD(*expr)->num = num;
 
+	if (off > NOWDB_OFF_USER) {
+		nowdb_edge_getCtrl(num, off,
+		     &FIELD(*expr)->ctrlbit,
+		     &FIELD(*expr)->ctrlbyte);
+	}
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
 		if (FIELD(*expr)->name == NULL) {
@@ -238,7 +246,8 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off) {
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
-                                      nowdb_key_t propid) {
+                                      nowdb_key_t  propid,
+                                      nowdb_type_t   type) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_field_t));
@@ -256,6 +265,7 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 	FIELD(*expr)->propid = propid;
 	FIELD(*expr)->pk = 0;
 	FIELD(*expr)->name = NULL;
+	FIELD(*expr)->type = type;
 
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
@@ -699,18 +709,18 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 	nowdb_err_t err;
 
 	if (src->content == NOWDB_CONT_EDGE) {
-		err = nowdb_expr_newEdgeField(trg, src->name,
-		                      src->edgeid, src->off);
+		err = nowdb_expr_newEdgeField(trg, src->name, src->off,
+		                                   src->type, src->num);
 		
 	} else {
 		err = src->name == NULL?
 		      nowdb_expr_newVertexOffField(trg, src->off):
 		      nowdb_expr_newVertexField(trg, src->name,
 		                                     src->role,
-		                                     src->propid);
+		                                     src->propid,
+		                                     src->type);
 	}
 	if (err != NOWDB_OK) return err;
-	FIELD(*trg)->type = src->type;
 	FIELD(*trg)->usekey = src->usekey;
 	return NOWDB_OK;
 }
@@ -1063,10 +1073,6 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 
 /* ------------------------------------------------------------------------
  * save a lot of code
- * THIS IS STILL TOO SIMPLE:
- * WE USE TEXT:
- * if needtxt or !usekey
- *  
  * ------------------------------------------------------------------------
  */
 #define HANDLETEXT(what) \

@@ -183,10 +183,10 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx);
  * Insert into index 
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
-                               char             *keys,
-                               nowdb_pageid_t    pge,
-                               nowdb_bitmap64_t *map);
+nowdb_err_t nowdb_index_insert(nowdb_index_t   *idx,
+                               char            *keys,
+                               nowdb_pageid_t   pge,
+                               nowdb_bitmap8_t *map);
 
 /* ------------------------------------------------------------------------
  * Get index 'compare' method

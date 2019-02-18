@@ -436,8 +436,9 @@ static inline void deltas(char *buf,
 	nowdb_time_t to   = NOWDB_TIME_DAWN;
 	nowdb_time_t from = NOWDB_TIME_DUSK;
 	nowdb_time_t *tmp;
+	uint32_t mx = (size/recsize)*recsize;
 
-	for(int i=0; i<size; i+=recsize) {
+	for(int i=0; i<mx; i+=recsize) {
 		tmp = (nowdb_time_t*)(buf+i+NOWDB_OFF_TMSTMP);
 		if (*tmp > to) to = *tmp;
 		if (*tmp < from) from = *tmp;

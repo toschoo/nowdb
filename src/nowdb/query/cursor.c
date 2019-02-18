@@ -456,7 +456,7 @@ static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_expr_newVertexField(&px, p->name,
-	                  cur->v->roleid, p->propid);
+	         cur->v->roleid, p->propid, p->value);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_vrow_addExpr(cur->prow, px);

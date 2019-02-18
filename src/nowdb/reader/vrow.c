@@ -288,19 +288,19 @@ static inline nowdb_err_t addKey(nowdb_expr_t       *x,
 
 	err = nowdb_expr_newVertexField(&f1, p->name,
 	                                     p->roleid,
-	                                     p->propid);
+	                                     p->propid,
+	                                     p->value);
 	if (err != NOWDB_OK) return err;
-	FIELD(f1)->type = p->value;
 	nowdb_expr_usekey(f1);
 
 	err = nowdb_expr_newVertexField(&f2, p->name,
 	                                     p->roleid,
-	                                     p->propid);
+	                                     p->propid,
+	                                     p->value);
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(f1); free(f1);
 		return err;
 	}
-	FIELD(f2)->type = p->value;
 	nowdb_expr_usekey(f2);
 
         err = nowdb_expr_newOp(&eq, NOWDB_EXPR_OP_EQ, f1, f2);

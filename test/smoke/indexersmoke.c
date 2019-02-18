@@ -15,16 +15,30 @@
 #define ONE    16384
 #define DELAY  10000000
 
+#define EDGE_OFF  32
+#define LABEL_OFF 40
+
+typedef struct {
+	uint64_t origin;
+	uint64_t destin;
+	int64_t  timestamp;
+	char     byte; // control byte
+	char     pad[7];
+	uint64_t edge;
+	uint64_t label;
+	uint64_t weight;
+} myedge_t;
+
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
-	nowdb_edge_t e;
+	myedge_t e;
 	int rc;
 
 	fprintf(stderr, "inserting %u random edges\n", count);
 
 	for(uint32_t i=0; i<count; i++) {
 
-		memset(&e,0,64);
+		memset(&e,0,sizeof(myedge_t));
 
 		do e.origin = rand()%100; while(e.origin == 0);
 		do e.destin = rand()%100; while(e.destin == 0);
@@ -37,9 +51,6 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 		}
 
 		e.weight = (uint64_t)i;
-		e.weight2  = 0;
-		e.wtype[0] = NOWDB_TYP_UINT;
-		e.wtype[1] = NOWDB_TYP_NOTHING;
 
 		err = nowdb_store_insert(store, &e);
 		if (err != NOWDB_OK) {
@@ -182,6 +193,197 @@ int createContext(nowdb_scope_t *scope, char *name) {
 	return 1;
 }
 
+#define PROPSDESTROY() \
+	nowdb_model_prop_t *p; \
+	ts_algo_list_node_t *run; \
+	for(run=props.head;run!=NULL;run=run->nxt){ \
+		p=run->cont; \
+		free(p->name); free(p); \
+	} \
+	ts_algo_list_destroy(&props);
+
+int createType(nowdb_scope_t *scope, char *name) {
+	nowdb_err_t err;
+	ts_algo_list_t props;
+	nowdb_model_prop_t *p;
+
+	fprintf(stderr, "creating %s\n", name);
+
+	ts_algo_list_init(&props);
+
+	p = calloc(1, sizeof(nowdb_model_prop_t));
+	if (p == NULL) return 0;
+
+	p->name = strdup("id");
+	p->pk = 1;
+	p->value = NOWDB_TYP_UINT;
+
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		fprintf(stderr, "cannot add to list\n");
+		free(p);
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_prop_t));
+	if (p == NULL) return 0;
+
+	p->name = strdup("name");
+	p->pk = 0;
+	p->value = NOWDB_TYP_TEXT;
+
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		fprintf(stderr, "cannot add to list\n");
+		free(p); PROPSDESTROY();
+		return 0;
+	}
+	err = nowdb_scope_createType(scope, name, &props);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot add type: ");
+		nowdb_err_print(err); nowdb_err_release(err);
+		ts_algo_list_destroy(&props);
+		return 0;
+	}
+	ts_algo_list_destroy(&props);
+	return 1;
+}
+
+#define PEDGEDESTROY() \
+	nowdb_model_pedge_t *p; \
+	ts_algo_list_node_t *run; \
+	for(run=props.head;run!=NULL;run=run->nxt){ \
+		p=run->cont; \
+		free(p->name); free(p); \
+	} \
+
+int createEdge(nowdb_scope_t *scope, char *name) {
+	nowdb_err_t err;
+	nowdb_model_pedge_t *p;
+	ts_algo_list_t props;
+
+	if (!createType(scope, "client")) {
+		fprintf(stderr, "create type failed\n");
+		return 0;
+	}
+	if (!createType(scope, "product")) {
+		fprintf(stderr, "create type failed\n");
+		return 0;
+	}
+
+	fprintf(stderr, "creating edge %s\n", name);
+
+	ts_algo_list_init(&props);
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->name = strdup("edge");
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->off = 24;
+	p->value = NOWDB_TYP_UINT;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		PEDGEDESTROY();
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->name = strdup("label");
+	if (p->name == NULL) {
+		free(p->name); free(p); PEDGEDESTROY();
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->off = 32;
+	p->value = NOWDB_TYP_UINT;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p); PEDGEDESTROY();
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		PEDGEDESTROY();
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->name = strdup("weight");
+	if (p->name == NULL) {
+		free(p->name); free(p); PEDGEDESTROY();
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->off = 40;
+	p->value = NOWDB_TYP_UINT;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p); PEDGEDESTROY();
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	err = nowdb_scope_createEdge(scope, name, "client", "product", &props);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "create edge failed\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		// ts_algo_list_destroy(&props);
+		// PEDGEDESTROY();
+		return 0;
+	}
+	ts_algo_list_destroy(&props);
+	return 1;
+}
+
 int dropContext(nowdb_scope_t *scope, char *name) {
 	nowdb_err_t err;
 
@@ -203,25 +405,25 @@ nowdb_index_keys_t *createKeys(char *ctx, uint16_t sz) {
 		switch(sz) {
 		case 1:
 		err = nowdb_index_keys_create(&keys, 1,
-		                       NOWDB_OFF_LABEL);
+		                            LABEL_OFF);
 		break;
 		case 2:
 		err = nowdb_index_keys_create(&keys, 2,
-		                        NOWDB_OFF_EDGE,
+		                              EDGE_OFF,
 		                      NOWDB_OFF_DESTIN);
 		break;
 		case 3:
 		err = nowdb_index_keys_create(&keys, 3,
-		                        NOWDB_OFF_EDGE,
+		                              EDGE_OFF,
 		                      NOWDB_OFF_ORIGIN,
 		                      NOWDB_OFF_DESTIN);
 		break;
 		case 4:
 		err = nowdb_index_keys_create(&keys, 4,
-		                        NOWDB_OFF_EDGE,
+		                              EDGE_OFF,
 		                      NOWDB_OFF_ORIGIN,
 		                      NOWDB_OFF_DESTIN,
-		                      NOWDB_OFF_LABEL);
+		                            LABEL_OFF);
 		break;
 		default: 
 			fprintf(stderr, "too many offsets\n");
@@ -329,7 +531,7 @@ nowdb_context_t *getContext(nowdb_scope_t *scope,
 	nowdb_err_t      err;
 	nowdb_context_t *ctx;
 
-	err = nowdb_scope_getContext(scope, "CTX_ONE", &ctx);
+	err = nowdb_scope_getContext(scope, "MYEDGE", &ctx);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -366,15 +568,20 @@ int main() {
 		fprintf(stderr, "cannot open scope\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!createContext(scope, "CTX_ONE")) {
+	if (!createEdge(scope, "MYEDGE")) {
+		fprintf(stderr, "cannot create edge one\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, "MYEDGE")) {
 		fprintf(stderr, "cannot create context one\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!createIndex(scope, "IDX_ONE", "CTX_ONE",1)) {
+	/*
+	if (!createIndex(scope, "IDX_ONE", "MYEDGE",1)) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!createIndex(scope, "IDX_TWO", "CTX_ONE",2)) {
+	if (!createIndex(scope, "IDX_TWO", "MYEDGE",2)) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -382,7 +589,7 @@ int main() {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testGetIdx(scope, "IDX_ONE", "CTX_ONE", 1)) {
+	if (!testGetIdx(scope, "IDX_ONE", "MYEDGE", 1)) {
 		fprintf(stderr, "testGetIdx failed for IDX_ONE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -390,21 +597,22 @@ int main() {
 		fprintf(stderr, "createIndex failed for IDX_VIER\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	ctx = getContext(scope, "CTX_ONE");
+	*/
+	ctx = getContext(scope, "MYEDGE");
 	if (ctx == NULL) {
-		fprintf(stderr, "cannot get context CTX_ONE\n");
+		fprintf(stderr, "cannot get context MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!insertEdges(&ctx->store, ONE)) {
-		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!insertEdges(&ctx->store, 2*ONE)) {
-		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!waitForSort(&ctx->store)) {
-		fprintf(stderr, "CTX_ONE does not get sorted\n");
+		fprintf(stderr, "MYEDGE does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!closeScope(scope)) {
@@ -415,17 +623,17 @@ int main() {
 		fprintf(stderr, "cannot close scope\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	ctx = getContext(scope, "CTX_ONE");
+	ctx = getContext(scope, "MYEDGE");
 	if (ctx == NULL) {
-		fprintf(stderr, "cannot get context CTX_ONE\n");
+		fprintf(stderr, "cannot get context MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!insertEdges(&ctx->store, 3*ONE)) {
-		fprintf(stderr, "cannot insert into CTX_ONE\n");
+		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!waitForSort(&ctx->store)) {
-		fprintf(stderr, "CTX_ONE does not get sorted\n");
+		fprintf(stderr, "MYEDGE does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
