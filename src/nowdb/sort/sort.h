@@ -129,15 +129,36 @@ void nowdb_mem_sort(char *buf, uint32_t size, uint32_t recsize,
                            nowdb_comprsc_t compare, void *args);
 
 /* ------------------------------------------------------------------------
- * Sorting edges
+ * Generic merging for recsize that does not divide bufsize
+ * ---------------
+ * - ASSUMPTION: bufsize | size
+ * - sorts the single buffers
+ * - merges then the buffers respecting the remainder resulting from
+ *   bufsize/recsize
+ * - returns 0 on success and -1 on error
+ *   error: not enough memory
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_edge(nowdb_edge_t *buf,
-                         uint32_t      num,
-                         nowdb_ord_t   ord);
+int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
+                                              uint32_t recsize,
+                           nowdb_comprsc_t compare, void *args);
+
+/* ------------------------------------------------------------------------
+ * Sorting edges
+ * -------------
+ * - size is the size of the buffer in bytes
+ * - recsz is the size of the edge
+ * ------------------------------------------------------------------------
+ */
+void nowdb_mem_sort_edge(char        *buf,
+                         uint32_t    size,
+                         uint32_t   recsz,
+                         nowdb_ord_t  ord);
 
 /* ------------------------------------------------------------------------
  * Sorting vertices
+ * ----------------
+ * - num is the number of vertices
  * ------------------------------------------------------------------------
  */
 void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,

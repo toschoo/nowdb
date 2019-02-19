@@ -343,7 +343,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->ts = ts;
 	store->cont = cont;
 
-	store->setsize = nowdb_edge_pagectrlSize(recsize);
+	store->setsize = nowdb_pagectrlSize(recsize);
 
 	/* lists of files */
 	err = initAllFiles(store);

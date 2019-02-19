@@ -448,22 +448,22 @@ uint32_t nowdb_edge_recSize(char stamped, uint16_t atts) {
 	return edgeRecSize(stamped, atts);
 }
 
-static inline uint32_t edgePerPage(uint32_t recsz) {
+static inline uint32_t recordsPerPage(uint32_t recsz) {
 	return (NOWDB_IDX_PAGE/recsz);
 }
 
-uint32_t nowdb_edge_perPage(uint32_t recsize) {
-	return edgePerPage(recsize);
+uint32_t nowdb_recordsPerPage(uint32_t recsize) {
+	return recordsPerPage(recsize);
 }
 
-static inline uint32_t edgePagectrlSize(uint32_t recsz) {
+static inline uint32_t pagectrlSize(uint32_t recsz) {
 	if (recsz <= 24) return 0;
-	uint32_t rp = edgePerPage(recsz);
+	uint32_t rp = recordsPerPage(recsz);
 	return (rp%8==0?rp/8:rp/8+1);
 }
 
-uint32_t nowdb_edge_pagectrlSize(uint32_t recsz) {
-	return edgePagectrlSize(recsz);
+uint32_t nowdb_pagectrlSize(uint32_t recsz) {
+	return pagectrlSize(recsz);
 }
 
 uint32_t nowdb_edge_attctrlSize(uint16_t atts) {

@@ -1216,11 +1216,8 @@ static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
 	void *tmp;
 	thing_t pattern, *thing=NULL;
 
-	fprintf(stderr, "adding %d\n", what);
-
 	tmp = ts_algo_tree_find(byId, entity);
 	if (tmp != NULL) {
-		fprintf(stderr, "pedge exists\n");
 		return nowdb_err_get(nowdb_err_dup_key,
 		                   FALSE, OBJECT, "id");
 	}
@@ -1229,7 +1226,6 @@ static inline nowdb_err_t addNL(ts_algo_tree_t *byId,
 		                       VRTX(entity)->name;
 		thing = ts_algo_tree_find(three, &pattern);
 		if (thing != NULL) {
-			fprintf(stderr, "THING exist\n");
 			return nowdb_err_get(nowdb_err_dup_key,
 			          FALSE, OBJECT, pattern.name);
 		}
@@ -1672,16 +1668,16 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		goto unlock;
 	}
 	if (props != NULL) {
-		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
-			fprintf(stderr, "adding %s (%lu.%lu)\n", 
-			       ((nowdb_model_pedge_t*)(runner->cont))->name,
-			       ((nowdb_model_pedge_t*)(runner->cont))->edgeid,
-			       ((nowdb_model_pedge_t*)(runner->cont))->propid);
+		for(runner=props->head; runner!=NULL;) {
 			err = addNL(model->pedgeById,
 			            model->pedgeByName, NULL,
 			            runner->cont, A);
 			if (err != NOWDB_OK) break;
+			ts_algo_list_node_t *tmp = runner->nxt;
+			ts_algo_list_remove(props,runner);
+			free(runner); runner=tmp;
 		}
+		// on error remove edge!
 		if (err != NOWDB_OK) goto unlock;
 	
 		err = storeModel(model, A);

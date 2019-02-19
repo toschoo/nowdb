@@ -104,7 +104,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 	file->state    = nowdb_file_state_closed;
 	file->order    = 0;
 
-	file->setsize = nowdb_edge_pagectrlSize(recordsize);
+	file->setsize = nowdb_pagectrlSize(recordsize);
 	file->hdrsize = NOWDB_HDR_BASE_SIZE + file->setsize;
 
 	/*

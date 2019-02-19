@@ -15,44 +15,58 @@
 #define ONE    16384
 #define DELAY  10000000
 
-#define EDGE_OFF  32
-#define LABEL_OFF 40
+#define EDGE_OFF  25
+#define LABEL_OFF 33
+#define WEIGHT_OFF 41
 
-typedef struct {
-	uint64_t origin;
-	uint64_t destin;
-	int64_t  timestamp;
-	char     byte; // control byte
-	char     pad[7];
-	uint64_t edge;
-	uint64_t label;
-	uint64_t weight;
-} myedge_t;
+/*
+uint64_t origin;
+uint64_t destin;
+int64_t  timestamp;
+char     byte; // control byte
+uint64_t edge;
+uint64_t label;
+uint64_t weight;
+*/
+
+void setRandomValue(char *e, uint32_t off) {
+	uint64_t x;
+	do x = rand()%100; while(x == 0);
+	memcpy(e+off, &x, 8);
+}
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
-	myedge_t e;
+	char *e;
+	uint32_t sz;
 	int rc;
 
 	fprintf(stderr, "inserting %u random edges\n", count);
 
+	sz = nowdb_edge_recSize(1, 3);
+	fprintf(stderr, "allocating %u bytes\n", sz);
+	e = calloc(1, sz);
+	if (e == NULL) {
+		fprintf(stderr, "out-of-mem\n"); return 0;
+	}
 	for(uint32_t i=0; i<count; i++) {
 
-		memset(&e,0,sizeof(myedge_t));
+		memset(e,0,sz);
 
-		do e.origin = rand()%100; while(e.origin == 0);
-		do e.destin = rand()%100; while(e.destin == 0);
-		do e.edge   = rand()%10; while(e.edge == 0);
-		do e.label  = rand()%10; while(e.label == 0);
-		rc = nowdb_time_now(&e.timestamp);
+		setRandomValue(e, NOWDB_OFF_ORIGIN);
+		setRandomValue(e, NOWDB_OFF_DESTIN);
+		setRandomValue(e, EDGE_OFF);
+		setRandomValue(e, LABEL_OFF);
+		rc = nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
 		if (rc != 0) {
-			fprintf(stderr, "insert error: %d\n", rc);
+			fprintf(stderr, "time error: %d\n", rc);
 			return FALSE;
 		}
 
-		e.weight = (uint64_t)i;
+		uint64_t w = (uint64_t)i;
+		memcpy(e+WEIGHT_OFF, &w, sizeof(uint64_t));
 
-		err = nowdb_store_insert(store, &e);
+		err = nowdb_store_insert(store, e);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "insert error\n");
 			nowdb_err_print(err);
@@ -60,10 +74,8 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 			return FALSE;
 		}
 	}
-	/*
-	fprintf(stderr, "inserted %u (last: %lu)\n",
-	                           count, e.weight);
-	*/
+	free(e);
+	fprintf(stderr, "inserted...\n");
 	return TRUE;
 }
 
@@ -294,7 +306,7 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 24;
+	p->off = 25;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,
@@ -324,7 +336,7 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 32;
+	p->off = 33;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,
@@ -354,7 +366,7 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 40;
+	p->off = 41;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,

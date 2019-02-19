@@ -223,13 +223,13 @@ int nowdb_edge_offByName(char *field);
 // if n > 0, the edge is always stamped
 uint32_t nowdb_edge_recSize(char stamped, uint16_t atts);
 
-// edges per page for a given edge size
-uint32_t nowdb_edge_perPage(uint32_t recsz);
+// records per page for a given record size
+uint32_t nowdb_recordsPerPage(uint32_t recsz);
 
 // compute the size of the page control block
 // which registers records in a page
 // which are to be considered / to be ignored
-uint32_t nowdb_edge_pagectrlSize(uint32_t recsz);
+uint32_t nowdb_pagectrlSize(uint32_t recsz);
 
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL

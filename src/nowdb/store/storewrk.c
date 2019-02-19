@@ -35,6 +35,9 @@
 #define SORTPERIOD     500000000l
 #define SORTTIMEOUT 300000000000l
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store", x);
+
 /* ------------------------------------------------------------------------
  * Syncjob predeclaration
  * ------------------------------------------------------------------------
@@ -495,9 +498,21 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 
 	/* sort buf -- if compare is not NULL! */
 	if (store->compare != NULL) {
-		nowdb_mem_sort(buf, src->size/store->recsize,
-		                    store->recsize,
-		                    store->compare, NULL);
+		if (NOWDB_IDX_PAGE % store->recsize == 0) {
+			nowdb_mem_sort(buf, src->size,
+			                    store->recsize,
+			                    store->compare, NULL);
+		} else {
+			if (nowdb_mem_merge(buf, src->size, NOWDB_IDX_PAGE,
+			                         store->recsize,
+			                         store->compare, NULL) != 0)
+			{
+				NOMEM("mergesort");
+				nowdb_store_releaseWaiting(store, src);
+				nowdb_file_destroy(src); free(src);
+				free(buf); return err;
+			}
+		}
 	}
 
 	/* prepare compression */
