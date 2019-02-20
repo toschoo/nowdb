@@ -1500,6 +1500,27 @@ static nowdb_roleid_t getNextRoleid(nowdb_model_t *model) {
 }
 
 /* ------------------------------------------------------------------------
+ * undo type
+ * ------------------------------------------------------------------------
+ */
+#define UNDOTYPE() \
+	{ \
+	err2 = removeType(model, name);  \
+	if (err2 != NOWDB_OK) {  \
+		nowdb_err_release(err);  \
+		err=err2; err2=NOWDB_OK;  \
+		goto unlock;  \
+	} \
+	}
+
+/* ------------------------------------------------------------------------
+ * Predeclaration
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t removeType(nowdb_model_t  *model,
+                                     char           *name);
+
+/* ------------------------------------------------------------------------
  * add type
  * ------------------------------------------------------------------------
  */
@@ -1572,20 +1593,32 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		goto unlock;
 	}
 	if (props != NULL) {
-		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		// note that we remove the props from the list
+		// so that the caller can destroy everything in
+		// the list wether there was an error or not
+		for(runner=props->head; runner!=NULL;) {
 			err = addNL(model->propById,
 			            model->propByName, NULL,
 			            runner->cont, P);
 			if (err != NOWDB_OK) break;
+			ts_algo_list_node_t *tmp = runner->nxt;
+			ts_algo_list_remove(props, runner);
+			free(runner); runner=tmp;
 		}
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOTYPE();
+		}
 	
 		err = storeModel(model, P);
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOTYPE();
+		}
 	}
 
 	err = storeModel(model, V);
-	if (err != NOWDB_OK) goto unlock;
+	if (err != NOWDB_OK) {
+		UNDOTYPE();
+	}
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -1595,6 +1628,25 @@ unlock:
 	}
 	return err;
 }
+
+/* ------------------------------------------------------------------------
+ * undo edge
+ * ------------------------------------------------------------------------
+ */
+#define UNDOEDGE() \
+	err2 = removeEdgeType(model, name);  \
+	if (err2 != NOWDB_OK) {  \
+		nowdb_err_release(err);  \
+		err=err2; err2=NOWDB_OK;  \
+		goto unlock;  \
+	}
+
+/* ------------------------------------------------------------------------
+ * predeclaration
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t removeEdgeType(nowdb_model_t *model,
+                                         char          *name);
 
 /* ------------------------------------------------------------------------
  * add edge
@@ -1668,6 +1720,9 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		goto unlock;
 	}
 	if (props != NULL) {
+		// note that we remove the props from the list
+		// so that the caller can destroy everything in
+		// the list wether there was an error or not
 		for(runner=props->head; runner!=NULL;) {
 			err = addNL(model->pedgeById,
 			            model->pedgeByName, NULL,
@@ -1677,15 +1732,20 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 			ts_algo_list_remove(props,runner);
 			free(runner); runner=tmp;
 		}
-		// on error remove edge!
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOEDGE();
+		}
 	
 		err = storeModel(model, A);
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOEDGE();
+		}
 	}
 
 	err = storeModel(model, E);
-	if (err != NOWDB_OK) goto unlock;
+	if (err != NOWDB_OK) {
+		UNDOEDGE();
+	}
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -1858,34 +1918,24 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
- * Remove type in one go
+ * Helper: remove type in one go
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
-                                   char           *name) {
+static inline nowdb_err_t removeType(nowdb_model_t  *model,
+                                     char           *name) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2 = NOWDB_OK;
 	nowdb_model_prop_t ptmp;
 	nowdb_model_vertex_t *vrtx, vtmp;
 	ts_algo_list_t props;
 	ts_algo_list_node_t *runner;
 	thing_t pattern;
 
-	MODELNULL();
-
-	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                           FALSE, OBJECT, "name is NULL");
-
-	err = nowdb_lock_write(&model->lock);
-	if (err != NOWDB_OK) return err;
-
 	vtmp.name = name;
 
 	vrtx = ts_algo_tree_find(model->vrtxByName, &vtmp);
 	if (vrtx == NULL) {
-		err = nowdb_err_get(nowdb_err_key_not_found,
+		return nowdb_err_get(nowdb_err_key_not_found,
 		                        FALSE, OBJECT, name);
-		goto unlock;
 	}
 
 	// get all properties
@@ -1895,7 +1945,7 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 	if (ts_algo_tree_filter(model->propById, &props, &ptmp,
 	                          propsByRoleid) != TS_ALGO_OK) {
 		NOMEM("tree.filter");
-		goto unlock;
+		return err;
 	}
 
 	for(runner=props.head; runner!=NULL; runner=runner->nxt) {
@@ -1910,6 +1960,35 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 	ts_algo_tree_delete(model->vrtxByName, vrtx);
 	ts_algo_tree_delete(model->vrtxById, vrtx);
 
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove type in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
+                                   char           *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+
+	MODELNULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = removeType(model, name);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, P);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, V);
+	if (err != NOWDB_OK) goto unlock;
+
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
 	if (err2 != NOWDB_OK) {
@@ -1920,34 +1999,23 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
- * Remove edge in one go
+ * Helper: remove edge in one go
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t  *model,
-                                       char           *name) {
+static inline nowdb_err_t removeEdgeType(nowdb_model_t *model,
+                                         char          *name) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2 = NOWDB_OK;
 	nowdb_model_pedge_t ptmp;
 	nowdb_model_edge_t *edge, etmp;
 	ts_algo_list_t props;
 	ts_algo_list_node_t *runner;
 	thing_t pattern;
-
-	MODELNULL();
-
-	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                           FALSE, OBJECT, "name is NULL");
-
-	err = nowdb_lock_write(&model->lock);
-	if (err != NOWDB_OK) return err;
-
 	etmp.name = name;
 
 	edge = ts_algo_tree_find(model->edgeByName, &etmp);
 	if (edge == NULL) {
-		err = nowdb_err_get(nowdb_err_key_not_found,
+		return nowdb_err_get(nowdb_err_key_not_found,
 		                        FALSE, OBJECT, name);
-		goto unlock;
 	}
 
 	// get all properties
@@ -1957,7 +2025,7 @@ nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t  *model,
 	if (ts_algo_tree_filter(model->pedgeById, &props, &ptmp,
 	                          pedgesByEdgeid) != TS_ALGO_OK) {
 		NOMEM("tree.filter");
-		goto unlock;
+		return err;
 	}
 
 	for(runner=props.head; runner!=NULL; runner=runner->nxt) {
@@ -1971,6 +2039,34 @@ nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t  *model,
 	ts_algo_tree_delete(model->thingByName, &pattern);
 	ts_algo_tree_delete(model->edgeByName, edge);
 	ts_algo_tree_delete(model->edgeById, edge);
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove edge in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t  *model,
+                                       char           *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+
+	MODELNULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = removeEdgeType(model, name);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, A);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, E);
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);

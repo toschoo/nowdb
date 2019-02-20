@@ -493,6 +493,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	struct timespec t1, t2;
 	uint32_t mx;
 	nowdb_edge_t tmp;
+	uint32_t recsz;
 
 	timestamp(&t1);
 
@@ -585,7 +586,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	fprintf(stderr, "merge created after %ldus\n",
 	                        minus(&t2, &t1)/1000);
 
-	memcpy(&tmp, nowdb_nullrec, NOWDB_EDGE_SIZE);
+	memcpy(&tmp, nowdb_nullrec, recsz);
 	for(;;) {
 		err = nowdb_reader_move(merge);
 		if (err != NOWDB_OK) break;
@@ -692,18 +693,9 @@ void initEval(nowdb_scope_t *scope) {
 	_eval.text = scope->text;
 
 	_eval.tlru = NULL;
-
-	ts_algo_list_init(&_eval.em);
-	ts_algo_list_init(&_eval.vm);
-
-	_eval.ce = NULL;
-	_eval.cv = NULL;
-
 }
 
 void destroyEval() {
-	ts_algo_list_destroy(&_eval.em);
-	ts_algo_list_destroy(&_eval.vm);
 }
 
 int main() {

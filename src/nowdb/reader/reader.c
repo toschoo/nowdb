@@ -1350,6 +1350,10 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 	char *src;
 	uint32_t x=0;
 	char more = 1;
+	uint32_t realsz, remsz;
+
+	realsz = (NOWDB_IDX_PAGE / reader->recsize) * reader->recsize;
+	remsz = NOWDB_IDX_PAGE - realsz;
 
 	err = nowdb_reader_fullscan(&full, reader->files, reader->filter);
 	if (err != NOWDB_OK) return err;
@@ -1366,7 +1370,11 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		src = nowdb_reader_page(full);
 		if (src == NULL) return nowdb_err_get(nowdb_err_panic,
 		                 FALSE, OBJECT, "reader has no page");
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		for(int i=0; i<NOWDB_IDX_PAGE; ) {
+
+			if (i%NOWDB_IDX_PAGE > realsz) {
+				i+=remsz; continue;
+			}
 
 			/* we hit the nullrecord */
 			if (memcmp(src+i, nowdb_nullrec,
@@ -1385,7 +1393,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 				if (*(nowdb_value_t*)v == 0) continue;
 			}
 			memcpy(reader->buf+x, src+i, reader->recsize);
-			x+=reader->recsize;
+			x+=reader->recsize;i+=reader->recsize;
 		}
 		if (err != NOWDB_OK) break;
 	}

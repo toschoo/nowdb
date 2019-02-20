@@ -415,9 +415,7 @@ static inline void bufMergeExhaust(char *src, char *trg,
                                   compare, args);
 			b-=2*m; off+=2*m*bufsz;
 		}
-		off=0;
- 		m<<=1;
-		tot>>=1;
+		off=0;m<<=1;tot>>=1;
 		x=s; s=t; t=x;
 	}
 	/*
