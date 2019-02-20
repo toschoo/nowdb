@@ -129,8 +129,10 @@ int testCreateSizes(char *path) {
 	uint32_t sz;
 
 	ctx.name = CTXNAME;
+	ctx.store.setsize = 0;
+
 	desc.name = IDXNAME;
-	desc.ctx  = &ctx;
+	desc.ctx = &ctx;
 
 	p = malloc(strlen(path)    +
                    strlen(IDXPATH) +
@@ -237,6 +239,7 @@ int main() {
 	}
 
 	ctx.name = CTXNAME;
+	ctx.store.setsize = 0;
 
 	desc.name = IDXNAME;
 	desc.ctx  = &ctx;

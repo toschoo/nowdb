@@ -175,25 +175,6 @@ typedef struct {
 	((nowdb_agg_t*)x)
 
 /* ------------------------------------------------------------------------
- * Edge Model Helper
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_model_edge_t   *e;
-	nowdb_model_vertex_t *o;
-	nowdb_model_vertex_t *d;
-} nowdb_edge_helper_t;
-
-/* ------------------------------------------------------------------------
- * Vertex Model Helper
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_model_vertex_t *v;
-	nowdb_model_prop_t   *p;
-} nowdb_vertex_helper_t;
-
-/* ------------------------------------------------------------------------
  * Evaluation helper
  * the models (v, p, e, o, d) shall be lists!
  * one list for edge  : e, o, d
@@ -201,13 +182,9 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_model_t      *model; /* the model to use for evaluation   */
-	nowdb_text_t        *text; /* the text  to use for evaluation   */
-	nowdb_ptlru_t       *tlru; /* private text lru cache            */
-	ts_algo_list_t         em; /* edge model helper                 */
-	ts_algo_list_t         vm; /* vertex model helper (tree???)     */
-	nowdb_edge_helper_t   *ce; /* current edge helper               */
-	nowdb_vertex_helper_t *cv; /* currrent vertext helper           */
+	nowdb_model_t  *model; /* the model to use for evaluation   */
+	nowdb_text_t   *text;  /* the text  to use for evaluation   */
+	nowdb_ptlru_t  *tlru;  /* private text lru cache            */
 } nowdb_eval_t;
 
 /* -----------------------------------------------------------------------

@@ -705,13 +705,15 @@ static inline nowdb_err_t remapWriter(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: adjust writer position to real position onn open,
+ * Helper: adjust writer position to real position on open,
  *         i.e. adjust to last written position instead of 'size'
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 	nowdb_err_t err=NOWDB_OK;
 	uint32_t pos = 0;
+	uint32_t realsz = (NOWDB_IDX_PAGE/store->recsize)*store->recsize;
+	uint32_t remsz = NOWDB_IDX_PAGE - realsz;
 
 	while (store->writer->pos < store->writer->capacity) {
 		if (pos >= store->writer->bufsize) {
@@ -730,6 +732,11 @@ static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 		*/
 		pos += store->recsize;
 		store->writer->pos+=store->recsize;
+
+		if (pos%NOWDB_IDX_PAGE >= realsz) {
+			pos+=remsz;
+			store->writer->pos+=remsz;
+		}
 	}
 	if (err == NOWDB_OK) store->writer->size = store->writer->pos;
 	return err;

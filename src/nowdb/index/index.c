@@ -27,7 +27,7 @@ static char *OBJECT = "idx";
  */
 #define HOSTDSZ sizeof(beet_pageid_t)
 #define EMBKSZ sizeof(nowdb_pageid_t)
-#define EMBDSZ 16
+#define EMBDSZ 4
 #define INTDSZ sizeof(beet_pageid_t)
 
 /* -----------------------------------------------------------------------

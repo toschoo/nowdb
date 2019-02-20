@@ -31,9 +31,6 @@ nowdb_model_vertex_t _v;
 nowdb_model_prop_t   _p01;
 nowdb_model_prop_t   _p02;
 nowdb_model_prop_t   _p03;
-nowdb_vertex_helper_t _veval01;
-nowdb_vertex_helper_t _veval02;
-nowdb_vertex_helper_t _veval03;
 nowdb_eval_t _eval;
 
 void initEval() {
@@ -63,31 +60,24 @@ void initEval() {
 	_v.roleid = ROLE;
 	_v.vid = NOWDB_TYP_UINT;
 
-	_veval01.v = &_v;
-	_veval01.p = &_p01;
-
-	_veval02.v = &_v;
-	_veval02.p = &_p02;
-
-	_veval03.v = &_v;
-	_veval03.p = &_p03;
-
-	_eval.ce = NULL;
-	_eval.cv = NULL;
 	_eval.model = NULL;
 	_eval.text = NULL;
 	_eval.tlru = NULL;
 
+	/*
 	ts_algo_list_init(&_eval.em);
 	ts_algo_list_init(&_eval.vm);
 	ts_algo_list_append(&_eval.vm, &_veval01);
 	ts_algo_list_append(&_eval.vm, &_veval02);
 	ts_algo_list_append(&_eval.vm, &_veval03);
+	*/
 }
 
 void destroyEval() {
+	/*
 	ts_algo_list_destroy(&_eval.vm);
 	ts_algo_list_destroy(&_eval.em);
+	*/
 }
 
 void initVertex() {
@@ -161,12 +151,11 @@ nowdb_expr_t mkFilter(int idx) {
 
 	// p3 = val
 	err = nowdb_expr_newVertexField(&p, _p03.name, ROLE,
-	                                    _p03.propid);
+	                            _p03.propid, _p03.value);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create prop field\n");
 		goto error;
 	}
-	NOWDB_EXPR_TOFIELD(p)->type = _p03.value;
 
 	err = nowdb_expr_newConstant(&c, &vertex[idx+2].value,
 	                                       NOWDB_TYP_UINT);
@@ -185,12 +174,11 @@ nowdb_expr_t mkFilter(int idx) {
 
 	// p2 = val
 	err = nowdb_expr_newVertexField(&p, _p02.name, ROLE,
-	                                    _p02.propid);
+	                            _p02.propid, _p02.value);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create prop field\n");
 		goto error;
 	}
-	NOWDB_EXPR_TOFIELD(p)->type = _p02.value;
 
 	err = nowdb_expr_newConstant(&c, &vertex[idx+1].value,
 	                                      NOWDB_TYP_UINT);
@@ -218,12 +206,11 @@ nowdb_expr_t mkFilter(int idx) {
 
 	// p1 = val
 	err = nowdb_expr_newVertexField(&p, _p01.name, ROLE,
-	                                    _p01.propid);
+	                            _p01.propid, _p01.value);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create prop field\n");
 		goto error;
 	}
-	NOWDB_EXPR_TOFIELD(p)->type = _p01.value;
 
 	err = nowdb_expr_newConstant(&c, &vertex[idx].value,
 	                                     NOWDB_TYP_UINT);

@@ -49,7 +49,6 @@ nowdb_roleid_t MYDST = 110;
 nowdb_model_edge_t _edge;
 nowdb_model_vertex_t _ori;
 nowdb_model_vertex_t _dst;
-nowdb_edge_helper_t  _ce;
 nowdb_eval_t        _hlp;
 
 void getValue(void *v, nowdb_type_t type) {
@@ -414,12 +413,6 @@ int initEval() {
 	_dst.name = "MYDESTIN";
 	_dst.roleid = MYDST;
 	_dst.vid = NOWDB_MODEL_NUM;
-
-	_ce.e = &_edge;
-	_ce.o = &_ori;
-	_ce.d = &_dst;
-
-	_hlp.ce = &_ce;
 
 	return 0;
 }

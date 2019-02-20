@@ -661,32 +661,6 @@ void nowdb_expr_destroy(nowdb_expr_t expr) {
 }
 
 /* -----------------------------------------------------------------------
- * Helper: destroy vertex list
- * -----------------------------------------------------------------------
- */
-static void destroyVertexList(ts_algo_list_t *vm) {
-	ts_algo_list_node_t *run;
-
-	for(run=vm->head; run!=NULL; run=run->nxt) {
-		free(run->cont);
-	}
-	ts_algo_list_destroy(vm);
-}
-
-/* -----------------------------------------------------------------------
- * Helper: destroy edge list
- * -----------------------------------------------------------------------
- */
-static void destroyEdgeList(ts_algo_list_t *em) {
-	ts_algo_list_node_t *run;
-
-	for(run=em->head; run!=NULL; run=run->nxt) {
-		free(run->cont);
-	}
-	ts_algo_list_destroy(em);
-}
-
-/* -----------------------------------------------------------------------
  * Destroy evaluation helper
  * -----------------------------------------------------------------------
  */
@@ -696,8 +670,6 @@ void nowdb_eval_destroy(nowdb_eval_t *eval) {
 		nowdb_ptlru_destroy(eval->tlru);
 		free(eval->tlru); eval->tlru = NULL;
 	}
-	destroyVertexList(&eval->vm);
-	destroyEdgeList(&eval->em);
 }
 
 /* -----------------------------------------------------------------------

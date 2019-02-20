@@ -11,6 +11,8 @@
 #include <stdarg.h>
 #include <math.h>
 
+#define OFF_USR_FIELD 25
+
 int mkConst(nowdb_expr_t *c, void *v, nowdb_type_t t) {
 	nowdb_err_t err;
 	err = nowdb_expr_newConstant(c, v, t);
@@ -1143,7 +1145,7 @@ int testInFloat() {
 	}
 
 #define FIELD(f,x) \
-	err = nowdb_expr_newEdgeField(f,x); \
+	err = nowdb_expr_newEdgeField(f,"any",x,NOWDB_TYP_UINT,2); \
 	if (err != NOWDB_OK) { \
 		fprintf(stderr, "ERROR: cannot create edge field\n"); \
 		nowdb_err_print(err); nowdb_err_release(err); \
@@ -1185,7 +1187,7 @@ int testRange() {
 	uint64_t va, vb;
 	char x, r;
 	
-	off[0] = NOWDB_OFF_EDGE;
+	off[0] = OFF_USR_FIELD;
 	off[1] = NOWDB_OFF_ORIGIN;
 	
 	for(int i=0; i<4; i++) {
@@ -1201,7 +1203,7 @@ int testRange() {
 			va = v1;
 			vb = v1;
 
-			FIELD(&f1, NOWDB_OFF_EDGE);
+			FIELD(&f1, OFF_USR_FIELD);
 			CONST(&c1, &v1, NOWDB_TYP_UINT);
 			COMPARE(&e1, NOWDB_EXPR_OP_EQ, f1, c1);
 
@@ -1218,7 +1220,7 @@ int testRange() {
 			va = v1;
 			vb = v1;
 
-			FIELD(&f1, NOWDB_OFF_EDGE);
+			FIELD(&f1, OFF_USR_FIELD);
 			CONST(&c1, &v1, NOWDB_TYP_UINT);
 			COMPARE(&e1, NOWDB_EXPR_OP_NE, f1, c1);
 
@@ -1237,7 +1239,7 @@ int testRange() {
 			va = v1;
 			vb = v2;
 
-			FIELD(&f1, NOWDB_OFF_EDGE);
+			FIELD(&f1, OFF_USR_FIELD);
 			CONST(&c1, &v1, NOWDB_TYP_UINT);
 			COMPARE(&e1, NOWDB_EXPR_OP_GE, f1, c1);
 
@@ -1247,7 +1249,7 @@ int testRange() {
 
 			BOOL(&b2, NOWDB_EXPR_OP_AND, e1, e2);
 
-			FIELD(&f3, NOWDB_OFF_EDGE);
+			FIELD(&f3, OFF_USR_FIELD);
 			CONST(&c3, &v2, NOWDB_TYP_UINT);
 			COMPARE(&e3, NOWDB_EXPR_OP_LE, f3, c3);
 
@@ -1270,7 +1272,7 @@ int testRange() {
 			va = v1;
 			vb = v2;
 
-			FIELD(&f1, NOWDB_OFF_EDGE);
+			FIELD(&f1, OFF_USR_FIELD);
 			CONST(&c1, &v1, NOWDB_TYP_UINT);
 			COMPARE(&e1, NOWDB_EXPR_OP_LE, f1, c1);
 
@@ -1280,7 +1282,7 @@ int testRange() {
 
 			BOOL(&b2, NOWDB_EXPR_OP_AND, e1, e2);
 
-			FIELD(&f3, NOWDB_OFF_EDGE);
+			FIELD(&f3, OFF_USR_FIELD);
 			CONST(&c3, &v2, NOWDB_TYP_UINT);
 			COMPARE(&e3, NOWDB_EXPR_OP_LE, f3, c3);
 

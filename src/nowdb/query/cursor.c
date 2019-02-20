@@ -1034,11 +1034,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	(*cur)->eval->model = scope->model;
 	(*cur)->eval->text = scope->text;
 	(*cur)->eval->tlru = NULL;
-	(*cur)->eval->ce = NULL;
-	(*cur)->eval->cv = NULL;
-
-	ts_algo_list_init(&(*cur)->eval->em);
-	ts_algo_list_init(&(*cur)->eval->vm);
 
 	(*cur)->eval->tlru = calloc(1, sizeof(nowdb_ptlru_t));
 	if ((*cur)->eval->tlru == NULL) {

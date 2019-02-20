@@ -184,6 +184,10 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Revoke residence for indexed records (vertex only)
+ * ------------------------------------------------------------------------
+ */
 static inline nowdb_err_t revokeResidence(nowdb_store_t *store, char *buf) {
 	nowdb_err_t err;
 
@@ -248,7 +252,6 @@ nowdb_err_t nowdb_indexer_index(nowdb_indexer_t *xers,
 			ts_algo_tree_delete(xers[i].tree, runner->cont);
 		}
 		ts_algo_list_destroy(recs); free(recs);
-		// ts_algo_tree_destroy(xers[i].tree); // , runner->cont);
 	}
 	return NOWDB_OK;
 }

@@ -167,7 +167,7 @@ int addEdge(nowdb_model_t *model,
 
 	fprintf(stderr, "adding edge %lu - %s\n", edgeid, name);
 
-	e = calloc(1,sizeof(nowdb_edge_t));
+	e = calloc(1,sizeof(nowdb_model_edge_t));
 	if (e == NULL) {
 		perror("out-of-mem");
 		return -1;
@@ -177,10 +177,6 @@ int addEdge(nowdb_model_t *model,
 	e->destin = 2;
         e->num = 6;
 	e->size = 48;
-	e->edge = NOWDB_MODEL_TEXT;
-	e->label= NOWDB_MODEL_NUM;
-	e->weight = NOWDB_TYP_UINT;
-	e->weight2 = NOWDB_TYP_NOTHING;
 	e->name = strdup(name);
 	if (e->name == NULL) {
 		perror("out-of-mem");
@@ -471,10 +467,13 @@ int addEdgeType(nowdb_model_t *model,
 	nowdb_model_pedge_t *prop;
 	nowdb_key_t eid;
 	ts_algo_list_t props;
+	nowdb_roleid_t o, d;
 
 	ts_algo_list_init(&props);
 
 	fprintf(stderr, "adding edge type '%s'\n", name);
+
+	o=1; d=2;
 
 	EID++; eid = EID;
 
@@ -509,7 +508,7 @@ int addEdgeType(nowdb_model_t *model,
 			destroyProps(&props);
 		}
 	}
-	err = nowdb_model_addEdgeType(model, name, eid, &props);
+	err = nowdb_model_addEdgeType(model, name, 1, eid, o, d, &props);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

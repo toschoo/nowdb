@@ -38,8 +38,6 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 	row->eval.model = scope->model;
 	row->eval.text  = scope->text;
 	row->eval.tlru = NULL;
-	row->eval.ce = NULL;
-	row->eval.cv = NULL;
 	row->cur = 0;
 	row->fur = 0;
 	row->dirty = 0;
@@ -48,9 +46,6 @@ nowdb_err_t nowdb_row_init(nowdb_row_t       *row,
 
 	row->sz = fields->len;
 	if (row->sz == 0) return NOWDB_OK;
-
-	ts_algo_list_init(&row->eval.em);
-	ts_algo_list_init(&row->eval.vm);
 
 	row->fields = calloc(row->sz,sizeof(nowdb_expr_t));
 	if (row->fields == NULL) {
