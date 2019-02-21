@@ -207,8 +207,16 @@ then
 	exit 1
 fi
 
+echo "running scopesmoke2" >> log/test.log
+test/smoke/scopesmoke2 >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: scopesmoke2 failed"
+	exit 1
+fi
+
 ### !!! INCOMPLETE !!! ################
-echo "PASSED (with two missing)"
+echo "PASSED (with one missing)"
 exit 0
 ### !!! INCOMPLETE !!! ################
 
@@ -217,14 +225,6 @@ test/smoke/mergesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]
 then
 	echo "FAILED: mergesmoke failed"
-	exit 1
-fi
-
-echo "running scopesmoke2" >> log/test.log
-test/smoke/scopesmoke2 >> log/test.log 2>&1
-if [ $? -ne 0 ]
-then
-	echo "FAILED: scopesmoke2 failed"
 	exit 1
 fi
 

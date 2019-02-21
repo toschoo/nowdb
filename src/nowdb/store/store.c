@@ -12,7 +12,7 @@
 
 static char *OBJECT = "store";
 
-extern char nowdb_nullrec[64];
+extern char nowdb_nullrec[1024];
 
 #define MAX_FILE_NAME 32
 

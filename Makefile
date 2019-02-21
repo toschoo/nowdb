@@ -217,15 +217,15 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/vrowsmoke               \
 	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
-	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
-	$(SMK)/mergesmoke              \
 	$(SMK)/sortsmoke               \
-	$(SMK)/msortsmoke
+	$(SMK)/msortsmoke              \
+	$(SMK)/scopesmoke2             \
+	$(SMK)/mergesmoke
 
 clientsmoke:	$(CMK)/clientsmoke
 
@@ -698,6 +698,7 @@ clean:
 	rm -f $(RSC)/*.csv
 	rm -f $(RSC)/*.csv.zip
 	rm -f $(RSC)/*.sql
+	rm -f $(RSC)/*.err
 	rm -rf $(RSC)/test
 	rm -rf $(RSC)/teststore
 	rm -rf $(RSC)/test?

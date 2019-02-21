@@ -31,7 +31,7 @@ static inline char hasId(nowdb_plan_idx_t *pidx) {
 	nowdb_index_keys_t *keys;
 	keys = nowdb_index_getResource(pidx->idx);
 	for(int i=0; i<keys->sz; i++) {
-		if (keys->off[i] == NOWDB_OFF_EDGE) return 1;
+		// if (keys->off[i] == NOWDB_OFF_EDGE) return 1;
 		if (keys->off[i] == NOWDB_OFF_VERTEX) return 1;
 	}
 	return 0;

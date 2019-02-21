@@ -214,11 +214,10 @@ static nowdb_err_t removePath(char *path) {
 static uint32_t computeKeySize(nowdb_index_desc_t *desc) {
 	uint32_t s = 0;
 
+	// better to use sizeByOff!
 	for(int i=0;i<desc->keys->sz;i++) {
-		if ((desc->ctx == NULL &&
-		     desc->keys->off[i] >= NOWDB_OFF_VTYPE) ||
-		    (desc->ctx != NULL &&
-		     desc->keys->off[i] >= NOWDB_OFF_WTYPE))
+		if (desc->ctx == NULL &&
+		    desc->keys->off[i] >= NOWDB_OFF_VTYPE)
 			s+=4;
 		else s+=8;
 	}

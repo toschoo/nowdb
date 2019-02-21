@@ -142,8 +142,6 @@ nowdb_err_t nowdb_loader_run(nowdb_loader_t *ldr);
  * with and without model
  * ------------------------------------------------------------------------
  */
-void nowdb_csv_field_context(void *data, size_t len, void *rsc);
-void nowdb_csv_field_vertex(void *data, size_t len, void *rsc);
 void nowdb_csv_field_edge(void *data, size_t len, void *rsc);
 void nowdb_csv_field_type(void *data, size_t len, void *rsc);
 

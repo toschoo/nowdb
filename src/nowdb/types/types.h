@@ -127,9 +127,9 @@ typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
 
-extern char nowdb_nullrec[64];
+extern char nowdb_nullrec[1024];
 
-int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
+int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 
 #define NOWDB_VERTEX_SIZE 32
 
@@ -174,51 +174,13 @@ int nowdb_vertex_offByName(char *field);
 #define NOWDB_OFF_USER    24
 
 // TO BE REMOVED!!!
+/*
 #define NOWDB_OFF_EDGE    32
 #define NOWDB_OFF_LABEL   24
 #define NOWDB_OFF_WEIGHT  40
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56
 #define NOWDB_OFF_WTYPE2  60
-
-/* ------------------------------------------------------------------------
- * Edge
- * ----
- * Storetype of connections bewteen vertices
- * ------------------------------------------------------------------------
- */
-/*
-typedef struct {
-	nowdb_key_t        edge; // id of the edge          
-	nowdb_key_t      origin; // id of the left  vertex  
-	nowdb_key_t      destin; // id of the right vertex  
-	nowdb_key_t       label; // id of the primary label 
-	nowdb_time_t  timestamp; // timestamp               
-	nowdb_value_t    weight; // first weight component  
-	nowdb_value_t   weight2; // secnd weight component 
-	nowdb_type_t   wtype[2]; // type of the weights     
-} nowdb_edge_t;
-*/
-
-/*
-typedef struct {
-	nowdb_key_t      origin; // id of the left  vertex  
-	nowdb_key_t      destin; // id of the right vertex  
-	nowdb_time_t  timestamp; // timestamp               
-} nowdb_edge_t;
-
-typedef char[9] nowdb_efield_t;
-*/
-
-/*
-void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-
-void nowdb_edge_readWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-
-int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
-int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 */
 
 int nowdb_edge_offByName(char *field);

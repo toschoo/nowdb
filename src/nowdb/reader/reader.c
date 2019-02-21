@@ -1002,7 +1002,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
 		for(int i=0; i<reader->ikeys->sz; i++) {
-			sz = nowdb_sizeByOff(reader->recsize,
+			sz = nowdb_sizeByOff(reader->content,
 			                     reader->ikeys->off[i]);
 			memcpy(reader->buf+reader->ikeys->off[i],
 			           (char*)(reader->key)+off, sz);
