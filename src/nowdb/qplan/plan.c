@@ -279,14 +279,43 @@ static inline nowdb_err_t intersect(nowdb_scope_t  *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * get pedge or vertex prop
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getPedgeOrProp(nowdb_scope_t        *scope,
+                                         char                *target,
+                                         char                 *field,
+			                 nowdb_model_edge_t      **e,
+			                 nowdb_model_pedge_t **pedge) {
+	nowdb_err_t err;
+
+	if (*e == NULL) {
+		err = nowdb_model_getEdgeByName(scope->model,
+			                           target, e);
+		if (err != NOWDB_OK) return err;
+	}
+	err = nowdb_model_getPedgeByName(scope->model,
+                                         (*e)->edgeid,
+                                         field, pedge);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * fields to keys
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
+static inline nowdb_err_t fields2keys(nowdb_scope_t  *scope,
+                                      char           *target,
+                                      ts_algo_list_t *fields,
+                                      int                trg,
                                       nowdb_index_keys_t **keys) {
 	nowdb_err_t err;
 	nowdb_field_t *f;
-	ts_algo_list_node_t *runner;
+	ts_algo_list_node_t  *runner;
+	nowdb_model_pedge_t  *pedge;
+	nowdb_model_edge_t   *e=NULL;
 	int i=0;
 
 	if (fields->len == 0) return NOWDB_OK;
@@ -306,11 +335,17 @@ static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
 		f = runner->cont;
 		if (f->name != NULL) {
-			// for the moment no properties!
-			free((*keys)->off); free(*keys);
-			INVALIDAST("cannot handle property fields");
+			err = getPedgeOrProp(scope, target, f->name,
+			                                &e, &pedge);
+			if (err != NOWDB_OK) {
+				free((*keys)->off); free(*keys);
+				return err;
+			}
+			(*keys)->off[i] = (uint16_t)pedge->off;
+		} else {
+			(*keys)->off[i] = (uint16_t)f->off;
 		}
-		(*keys)->off[i] = (uint16_t)f->off; i++;
+		i++;
 	}
 	return NOWDB_OK;
 }
@@ -330,7 +365,8 @@ static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
 	nowdb_plan_idx_t   *idx=NULL;
 	nowdb_err_t err;
 
-	err = fields2keys(fields, &keys);
+	// we should use expressions here!
+	err = fields2keys(scope, context, fields, stype, &keys);
 	if (err != NOWDB_OK) return err;
 	if (keys == NULL) return NOWDB_OK;
 
@@ -479,7 +515,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 		err = getType(scope, trg, &t, &v);
 		if (err != NOWDB_OK) return err;
 	}
-	if (trg->stype == NOWDB_AST_EDGE && trg->value != NULL) {
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
 		err = nowdb_model_getEdgeByName(scope->model,
 		                             trg->value, &e);
 		if (err != NOWDB_OK) return err;
