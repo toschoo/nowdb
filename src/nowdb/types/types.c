@@ -34,6 +34,7 @@ void nowdb_client_close() {
 	nowdb_errman_destroy();
 }
 
+/*
 static inline void setWeight(nowdb_edge_t *e, nowdb_type_t typ,
                                        void *value, char what) 
 {
@@ -97,6 +98,7 @@ static inline void setValue(nowdb_vertex_t *v, nowdb_type_t typ,
 		v->value = 0;
 	}
 }
+*/
 
 int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
 	char *tmp;
@@ -144,6 +146,7 @@ int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
 	return 0;
 }
 
+/*
 static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
                                     char *value, char what) 
 {
@@ -203,6 +206,7 @@ static inline int strtow(nowdb_edge_t *e, nowdb_type_t typ,
 	}
 	return 0;
 }
+*/
 
 // correct Type
 // str2type
@@ -261,6 +265,7 @@ int nowdb_correctType(nowdb_type_t good,
 	return -1;
 }
 
+/*
 static inline int strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value)
 {
 	char  *tmp;
@@ -346,6 +351,7 @@ void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
 int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value) {
 	return strtov(v, typ, value);
 }
+*/
 
 int nowdb_vertex_offByName(char *fld) {
 	if (fld == NULL) return -1;

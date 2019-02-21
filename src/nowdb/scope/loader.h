@@ -45,6 +45,7 @@
  * Field numbers in edge
  * ------------------------------------------------------------------------
  */
+/*
 #define NOWDB_FIELD_EDGE      0
 #define NOWDB_FIELD_ORIGIN    1
 #define NOWDB_FIELD_DESTIN    2
@@ -54,6 +55,7 @@
 #define NOWDB_FIELD_WEIGHT2   6
 #define NOWDB_FIELD_WTYPE     7
 #define NOWDB_FIELD_WTYPE2    8
+*/
 
 /* ------------------------------------------------------------------------
  * Number of fields in vertex

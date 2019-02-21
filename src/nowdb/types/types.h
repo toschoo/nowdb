@@ -187,16 +187,18 @@ int nowdb_vertex_offByName(char *field);
  * Storetype of connections bewteen vertices
  * ------------------------------------------------------------------------
  */
+/*
 typedef struct {
-	nowdb_key_t        edge; /* id of the edge          */
-	nowdb_key_t      origin; /* id of the left  vertex  */
-	nowdb_key_t      destin; /* id of the right vertex  */
-	nowdb_key_t       label; /* id of the primary label */
-	nowdb_time_t  timestamp; /* timestamp               */
-	nowdb_value_t    weight; /* first weight component  */
-	nowdb_value_t   weight2; /* secnd weight component  */
-	nowdb_type_t   wtype[2]; /* type of the weights     */
+	nowdb_key_t        edge; // id of the edge          
+	nowdb_key_t      origin; // id of the left  vertex  
+	nowdb_key_t      destin; // id of the right vertex  
+	nowdb_key_t       label; // id of the primary label 
+	nowdb_time_t  timestamp; // timestamp               
+	nowdb_value_t    weight; // first weight component  
+	nowdb_value_t   weight2; // secnd weight component 
+	nowdb_type_t   wtype[2]; // type of the weights     
 } nowdb_edge_t;
+*/
 
 /*
 typedef struct {
@@ -208,6 +210,7 @@ typedef struct {
 typedef char[9] nowdb_efield_t;
 */
 
+/*
 void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 
@@ -216,6 +219,7 @@ void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
 
 int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
 int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+*/
 
 int nowdb_edge_offByName(char *field);
 
