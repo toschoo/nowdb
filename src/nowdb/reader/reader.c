@@ -448,8 +448,6 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 
 	getFilePos(pge, &fid, &pos);
 
-	// fprintf(stderr, "file: %u/%u (%lu)\n", fid, pos, pge);
-
 	if (reader->file != NULL) {
 		if (reader->file->id != fid) {
 			err = nowdb_file_close(reader->file);
@@ -460,7 +458,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	if (reader->file == NULL) {
 		reader->file = findfile(reader->files, fid);
 		if (reader->file == NULL) {
-			// fprintf(stderr, "file not found %u\n", fid);
+			fprintf(stderr, "file not found %u\n", fid);
 			return nowdb_err_get(nowdb_err_key_not_found,
 			                         FALSE, OBJECT, NULL);
 		}
@@ -574,6 +572,7 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	nowdb_pageid_t *pge;
 
 	if (reader->eof) {
+		fprintf(stderr, "EOF\n");
 		return nowdb_err_get(nowdb_err_eof,
 	                       FALSE, OBJECT, NULL);
 	}
@@ -598,7 +597,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
-			// fprintf(stderr, "in inner loop\n");
 			if (left == 0) {
 				ber = beet_iter_leave(reader->iter);
 				BEETERR(ber,0);
@@ -633,7 +631,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		BEETERR(ber,0);
 
 		err = getpage(reader, *pge);
-		// fprintf(stderr, "%lu: %p\n", *pge, reader->page);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_key_not_found) {
 			nowdb_err_release(err); continue;
@@ -1083,6 +1080,7 @@ nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
 	                                       FALSE, OBJECT, NULL);
 	if (files->head->cont == NULL) return nowdb_err_get(
 	     nowdb_err_invalid, FALSE, OBJECT, "empty list");
+
 	err = newReader(reader);
 	if (err != NOWDB_OK) return err;
 	(*reader)->type = NOWDB_READER_FULLSCAN;
@@ -1372,7 +1370,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		                 FALSE, OBJECT, "reader has no page");
 		for(int i=0; i<NOWDB_IDX_PAGE; ) {
 
-			if (i%NOWDB_IDX_PAGE > realsz) {
+			if (i%NOWDB_IDX_PAGE >= realsz) {
 				i+=remsz; continue;
 			}
 

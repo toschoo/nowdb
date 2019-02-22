@@ -83,7 +83,7 @@ typedef struct nowdb_reader_t {
 	nowdb_bool_t         closeit; /* close file after use          */
 	char                   *page; /* pointer to current page       */
 	int32_t                  off; /* offset into win               */
-	nowdb_bitmap64_t       *cont; /* content of current page       */
+	nowdb_bitmap8_t        *cont; /* content of current page       */
 	nowdb_index_keys_t    *ikeys; /* index keys                    */
 	ts_algo_tree_t        **maps; /* Maps of keys for MRANGE       */
 	void                    *key; /* current key                   */

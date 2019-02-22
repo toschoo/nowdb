@@ -69,6 +69,8 @@ static int writeEdges(nowdb_path_t path, int halves,
 	char *loadstr = 
 	"%d;%d;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
 
+	fprintf(stderr, "writing %d edges\n", x);
+
 	edges = calloc(x, sizeof(edge_t));
 	if (edges == NULL) {
 		fprintf(stderr, "out-of-mem\n");
@@ -261,15 +263,16 @@ int createDB(int hedges, int hprods, int hclients) {
 	}
 
 	EXECSTMT("load 'rsc/productsdb10.csv' into product use header \
-	          set error='rsc/productsdb10.err'");
+	          set errors='rsc/productsdb10.err'");
 
 	EXECSTMT("load 'rsc/clientsdb10.csv' into client use header \
-	          set error='rsc/clientsdb10.err'");
+	          set errors='rsc/clientsdb10.err'");
 
+	fprintf(stderr, "loading edges\n");
 	EXECSTMT("load 'rsc/edgedb10.csv' into buys use header \
-	          set error='rsc/edgedb10.err'");
+	          set errors='rsc/edgedb10.err'");
 
-	if (waitscope(scope, "sales") != 0) {
+	if (waitscope(scope, "buys") != 0) {
 		fprintf(stderr, "cannot wait for scope\n");
 		rc = -1; goto cleanup;
 	}

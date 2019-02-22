@@ -1269,19 +1269,19 @@ nowdb_err_t nowdb_cursor_open(nowdb_cursor_t *cur) {
 
 /* ------------------------------------------------------------------------
  * Check whether this position is "in"
- * REVIEW!!!!
+ * 1) It will be even more complicated in the future:
+ *    we will then need to combine cont with the ctrlblock in the file,
+ *    i.e. r->cont[y] & f->hdr->cont[y] & (k<<i)
+ * 2) we should encapsulate this somewhere;
  * ------------------------------------------------------------------------
  */
 static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
-	uint64_t k = 1;
+	int y,i;
+	uint8_t k = 1;
 	if (r->cont == NULL) return 1;
-	if (pos < 64) {
-		k <<= pos;
-		if (r->cont[0] & k) return 1;
-	} else  {
-		k <<= (pos-64);
-		if (r->cont[1] &k) return 1;
-	}
+	y = pos/8;
+	i = pos%8;
+	if (r->cont[y] & (k<<i)) return 1;
 	return 0;
 }
 

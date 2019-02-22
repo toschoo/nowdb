@@ -76,7 +76,7 @@ typedef struct {
 	uint32_t      capacity; /* overall capcacity                  */
 	uint32_t     blocksize; /* size of stored blocks              */
 	uint32_t    recordsize; /* size of one record                 */
-	uint32_t       hdrsize; /* headersize                         */
+	int32_t        hdrsize; /* headersize                         */
 	uint32_t       setsize; /* size of the control set            */
 	nowdb_content_t   cont; /* content type                       */
 	uint32_t         state; /* current state of the descriptor    */

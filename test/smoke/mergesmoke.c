@@ -15,9 +15,56 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#define INDEX "_idx_buys_origin"
+
 #define NEDGES   5
 #define NPRODS   2
 #define NCLIENTS 1
+
+#define EDGE_OFF  25
+#define LABEL_OFF 33
+#define WEIGHT_OFF 41
+
+#define LOOP_INIT(stm, atts) \
+	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
+	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
+
+#define LOOP_HEAD \
+	for(int i=0; i<NOWDB_IDX_PAGE;) { \
+		if (i%NOWDB_IDX_PAGE >= bufsz) { \
+			i+=remsz; continue; \
+		}
+
+#define LOOP_END \
+		i+=recsz; \
+	}
+
+void setRandomValue(char *e, uint32_t off) {
+	uint64_t x;
+	do x = rand()%100; while(x == 0);
+	memcpy(e+off, &x, 8);
+}
+
+void setValue(char *e, uint32_t off, uint64_t v) {
+	memcpy(e+off, &v, 8);
+}
+
+int edgecompare(char *one, char *two, uint32_t off) {
+	if (*(uint64_t*)(one+off) < *(uint64_t*)(two+off)) return -1;
+	if (*(uint64_t*)(one+off) > *(uint64_t*)(two+off)) return  1;
+	return 0;
+}
+
+void makeEdgePattern(char *e) {
+	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
+	setValue(e, NOWDB_OFF_DESTIN, 0xb);
+	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
+	setValue(e, NOWDB_OFF_USER, 3);
+	setValue(e, EDGE_OFF, 0xc);
+	setValue(e, LABEL_OFF, 0xd);
+	setValue(e, WEIGHT_OFF, 0);
+}
 
 nowdb_eval_t _eval;
 
@@ -29,13 +76,15 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	ts_algo_list_t  files;
 	nowdb_context_t *ctx;
 	nowdb_reader_t *reader;
-	nowdb_edge_t   *last, *cur;
+	char *last, *cur;
 	struct timespec t1, t2;
+
+	LOOP_INIT(1,2)
 
 	timestamp(&t1);
 
 	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	err = nowdb_scope_getContext(scope, "buys", &ctx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "context not found\n");
 		nowdb_err_print(err);
@@ -44,7 +93,7 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	}
 
 	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	err = nowdb_scope_getIndexByName(scope, INDEX, &idx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "index not found\n");
 		nowdb_err_print(err);
@@ -81,28 +130,35 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	                          minus(&t2, &t1)/1000);
 
 	// reader size
-	fprintf(stderr, "bufreader has: %u\n",
-	        reader->size/reader->recsize);
+	fprintf(stderr, "bufreader has: %u (%u)\n",
+	        reader->size/reader->recsize, reader->size);
 
 	if (reader->size/reader->recsize != h*HALFEDGE) {
-		fprintf(stderr, "wrong size in bufreader: %u\n", reader->size);
+		fprintf(stderr, "wrong size in bufreader: %u/%u=%u (%u)\n",
+		                reader->size, reader->recsize,
+		                reader->size/reader->recsize,
+		                h*HALFEDGE);
 		rc = -1; goto cleanup;
 	}
 
 	last = NULL;
-	for(int i=0; i<reader->size; i+=reader->recsize) {
+
+	LOOP_HEAD
+	// for(int i=0; i<reader->size; i+=reader->recsize) {
+	
 		if (last == NULL) {
-			last = (nowdb_edge_t*)(reader->buf+i);
-			cur = (nowdb_edge_t*)(reader->buf+i);
+			last = reader->buf+i;
+			cur  = last;
 		} else {
-			cur = (nowdb_edge_t*)(reader->buf+i);
-			if (cur->origin < last->origin) {
+			cur = reader->buf+i;
+			if (edgecompare(cur, last, NOWDB_OFF_ORIGIN) == -1) {
 				fprintf(stderr, "buffer is not ordered\n");
 				rc = -1; break;
 			}
 		}
 		// fprintf(stderr, "%lu\n", cur->origin);
-	}
+	// }
+	LOOP_END
 	if (rc != 0) goto cleanup;
 
 	c=0;
@@ -115,11 +171,13 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 			fprintf(stderr, "page is NULL\n");
 			rc = -1; goto cleanup;
 		}
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		LOOP_HEAD
+		// for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
 			if (memcmp(src+i, nowdb_nullrec,
 			          reader->recsize) == 0) break;
 			c++;
-		}
+		// }
+		LOOP_END
 	}
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
@@ -150,13 +208,14 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	ts_algo_list_t  files;
 	nowdb_context_t *ctx;
 	nowdb_reader_t *reader;
-	nowdb_edge_t   *last, *cur;
+	char           *last, *cur;
 	struct timespec t1, t2;
+	LOOP_INIT(1,2)
 
 	timestamp(&t1);
 
 	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	err = nowdb_scope_getContext(scope, "buys", &ctx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "context not found\n");
 		nowdb_err_print(err);
@@ -165,7 +224,7 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	}
 
 	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	err = nowdb_scope_getIndexByName(scope, INDEX, &idx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "index not found\n");
 		nowdb_err_print(err);
@@ -211,19 +270,19 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	}
 
 	last = NULL;
-	for(int i=0; i<reader->size; i+=reader->recsize) {
+	LOOP_HEAD
 		if (last == NULL) {
-			last = (nowdb_edge_t*)(reader->buf+i);
-			cur = (nowdb_edge_t*)(reader->buf+i);
+			last = reader->buf+i;
+			cur = reader->buf+i;
 		} else {
-			cur = (nowdb_edge_t*)(reader->buf+i);
-			if (cur->origin < last->origin) {
+			cur = reader->buf+i;
+			if (edgecompare(cur, last, NOWDB_OFF_ORIGIN) == -1) {
 				fprintf(stderr, "buffer is not ordered\n");
 				rc = -1; break;
 			}
 		}
 		// fprintf(stderr, "%lu\n", cur->origin);
-	}
+	LOOP_END
 	if (rc != 0) goto cleanup;
 
 	c=0;
@@ -271,13 +330,14 @@ int testRange(nowdb_scope_t *scope, int h) {
 	ts_algo_list_t  rfiles;
 	nowdb_context_t *ctx;
 	nowdb_reader_t *range=NULL;
-	// nowdb_edge_t   *last, *cur;
 	struct timespec t1, t2;
+
+	LOOP_INIT(1,2)
 
 	timestamp(&t1);
 
 	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	err = nowdb_scope_getContext(scope, "buys", &ctx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "context not found\n");
 		nowdb_err_print(err);
@@ -286,7 +346,7 @@ int testRange(nowdb_scope_t *scope, int h) {
 	}
 
 	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	err = nowdb_scope_getIndexByName(scope, INDEX, &idx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "index not found\n");
 		nowdb_err_print(err);
@@ -331,27 +391,20 @@ int testRange(nowdb_scope_t *scope, int h) {
 			fprintf(stderr, "page is NULL\n");
 			rc = -1; goto cleanup;
 		}
-		// fprintf(stderr, "%p\n", src);
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=range->recsize) {
+		LOOP_HEAD
+			// fprintf(stderr, "in loop\n");
 
 			if (memcmp(src+i, nowdb_nullrec,
 			    range->recsize) == 0) break;
 
 			/* check cont */
 			if (range->cont != NULL) {
-				int n = i/range->recsize;
-				if (range->cont[0] == 0 &&
-				    range->cont[1] == 0) break;
-				if (n < 64) {
-					uint64_t k = (1lu << n);
-					if (!(range->cont[0] & k)) continue;
-				} else  {
-					uint64_t k = (1lu << (n-64));
-					if (!(range->cont[1] & k)) continue;
-				}
+				int n = (i/range->recsize)/8; // range->recsize;
+				int b = (i/range->recsize)%8; // range->recsize;
+				uint8_t k=1;
+				if (range->cont[n] & (k<<b)) c++;
 			}
-			c++;
-		}
+		LOOP_END
 	}
 	if (err != NOWDB_OK) {
 		if (err->errcode == nowdb_err_eof) {
@@ -387,13 +440,12 @@ int testKRange(nowdb_scope_t *scope, int h) {
 	ts_algo_list_t  rfiles;
 	nowdb_context_t *ctx;
 	nowdb_reader_t *range=NULL;
-	// nowdb_edge_t   *last, *cur;
 	struct timespec t1, t2;
 
 	timestamp(&t1);
 
 	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	err = nowdb_scope_getContext(scope, "buys", &ctx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "context not found\n");
 		nowdb_err_print(err);
@@ -402,7 +454,7 @@ int testKRange(nowdb_scope_t *scope, int h) {
 	}
 
 	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	err = nowdb_scope_getIndexByName(scope, INDEX, &idx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "index not found\n");
 		nowdb_err_print(err);
@@ -489,29 +541,37 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	nowdb_reader_t *buffer=NULL;
 	nowdb_reader_t *range=NULL;
 	nowdb_reader_t *merge=NULL;
-	// nowdb_edge_t   *last, *cur;
 	struct timespec t1, t2;
 	uint32_t mx;
-	nowdb_edge_t tmp;
-	uint32_t recsz;
+	char *tmp=NULL;
+
+	LOOP_INIT(1,2)
+
+	tmp = calloc(1,recsz);
+	if (tmp == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return -1;
+	}
 
 	timestamp(&t1);
 
 	// get context
-	err = nowdb_scope_getContext(scope, "sales", &ctx);
+	err = nowdb_scope_getContext(scope, "buys", &ctx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "context not found\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		free(tmp);
 		return -1;
 	}
 
 	// get index
-	err = nowdb_scope_getIndexByName(scope, "cidx_ctx_oe", &idx);
+	err = nowdb_scope_getIndexByName(scope, INDEX, &idx);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "index not found\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		free(tmp);
 		return -1;
 	}
 
@@ -522,6 +582,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 		fprintf(stderr, "get waiting failed\n");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		free(tmp);
 		return -1;
 	}
 
@@ -586,8 +647,8 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	fprintf(stderr, "merge created after %ldus\n",
 	                        minus(&t2, &t1)/1000);
 
-	memcpy(&tmp, nowdb_nullrec, recsz);
 	for(;;) {
+		memset(tmp, 0, recsz);
 		err = nowdb_reader_move(merge);
 		if (err != NOWDB_OK) break;
 
@@ -598,7 +659,11 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 		}
 		// fprintf(stderr, "%p\n", src);
 		mx = type == 'k'?merge->recsize:NOWDB_IDX_PAGE;
-		for(int i=0; i<mx; i+=merge->recsize) {
+		for(int i=0; i<mx;) {
+
+			if (type == 'k' && i%NOWDB_IDX_PAGE >= bufsz) {
+				i+=remsz; continue;
+			}
 
 			if (memcmp(src+i, nowdb_nullrec,
 			    merge->recsize) == 0) break;
@@ -606,37 +671,35 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 			/* check cont */
 			if (merge->cont != NULL) {
 				int n = i/merge->recsize;
+				int b = i%merge->recsize;
+				uint8_t k = 1;
 				if (merge->cont[0] == 0 &&
 				    merge->cont[1] == 0) break;
-				if (n < 64) {
-					uint64_t k = (1lu << n);
-					if (!(merge->cont[0] & k)) continue;
-				} else  {
-					uint64_t k = (1lu << (n-64));
-					if (!(merge->cont[1] & k)) continue;
-				}
+				if (!(merge->cont[n] & (k<<b))) continue;
 			}
 
 			/* krange */
-			if (memcmp(&tmp, nowdb_nullrec,
+			if (memcmp(tmp, nowdb_nullrec,
 			          merge->recsize) == 0) 
 			{
-				memcpy(&tmp, src+i, merge->recsize);
+				memcpy(tmp, src+i, merge->recsize);
 				if (type == 'k') c++;
 
 			} else {
-				if (tmp.origin < *(uint64_t*)(src+i+
-						   NOWDB_OFF_ORIGIN)) 
+				if (edgecompare(tmp, src+i,
+				    NOWDB_OFF_ORIGIN) == -1)
 				{
-					memcpy(&tmp, src+i, merge->recsize);
+					memcpy(tmp, src+i, merge->recsize);
 					if (type == 'k') c++;
 
-				} else if (tmp.origin > *(uint64_t*)(src+i+
-						         NOWDB_OFF_ORIGIN)) {
+				} else if (edgecompare(tmp, src+i,  
+					   NOWDB_OFF_ORIGIN) == 1) {
 					fprintf(stderr,
 						"not in order: %lu > %lu\n",
-						tmp.origin, *(uint64_t*)(src+i+
-						            NOWDB_OFF_ORIGIN)); 
+						*(uint64_t*)(tmp+
+					         NOWDB_OFF_ORIGIN),
+					        *(uint64_t*)(src+i+
+						 NOWDB_OFF_ORIGIN)); 
 					return -1;
 				}
 			} 
@@ -649,7 +712,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 			fprintf(stderr, "%cMERGE [%05d]: %lu (%d)\n", type, c,
 			 *(uint64_t*)(src+i+8), merge->cur);
 			*/
-
+			i+=merge->recsize;
 		}
 	}
 	if (err != NOWDB_OK) {
@@ -673,6 +736,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	}
 
 cleanup:
+	if (tmp != NULL) free(tmp);
 	if (merge != NULL) {
 		nowdb_reader_destroy(merge); free(merge);
 	} else {
