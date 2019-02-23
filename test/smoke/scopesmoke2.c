@@ -582,8 +582,8 @@ int main() {
 		CHECKRESULT(5, o, d, tp);
 	}
 
-	// test order
 	/*
+	// test order
 	fprintf(stderr, "ORDER\n");
 	for(int i=0; i<ITER; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); // res += HALFEDGE;

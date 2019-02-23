@@ -215,11 +215,6 @@ then
 	exit 1
 fi
 
-### !!! INCOMPLETE !!! ################
-echo "PASSED (with one missing)"
-exit 0
-### !!! INCOMPLETE !!! ################
-
 echo "running mergesmoke" >> log/test.log
 test/smoke/mergesmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]

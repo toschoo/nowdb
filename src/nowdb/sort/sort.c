@@ -441,6 +441,8 @@ int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
 
 	// comppute items per buffer,
 	// remainder and number of buffers
+	// CAREFUL: the buffers are not necessarily full
+	//          (we may have delete items!)
 	nitems = bufsize/recsize;
 	rm = bufsize - nitems*recsize;
 	n  = size/bufsize; // we assume bufsize | size

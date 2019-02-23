@@ -78,6 +78,7 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	nowdb_reader_t *reader;
 	char *last, *cur;
 	struct timespec t1, t2;
+	int have;
 
 	LOOP_INIT(1,2)
 
@@ -130,10 +131,13 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	                          minus(&t2, &t1)/1000);
 
 	// reader size
-	fprintf(stderr, "bufreader has: %u (%u)\n",
-	        reader->size/reader->recsize, reader->size);
+	int pgs = reader->size/NOWDB_IDX_PAGE;
+	int rpp = NOWDB_IDX_PAGE/reader->recsize;
+	have = rpp*pgs+(reader->size-pgs*NOWDB_IDX_PAGE)/reader->recsize;
 
-	if (reader->size/reader->recsize != h*HALFEDGE) {
+	fprintf(stderr, "bufreader has: %u\n", have);
+
+	if (have != h*HALFEDGE) {
 		fprintf(stderr, "wrong size in bufreader: %u/%u=%u (%u)\n",
 		                reader->size, reader->recsize,
 		                reader->size/reader->recsize,
@@ -143,22 +147,28 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 
 	last = NULL;
 
-	LOOP_HEAD
-	// for(int i=0; i<reader->size; i+=reader->recsize) {
-	
+	char x;
+	for(int i=0; i<reader->size;) {
+		if (i%NOWDB_IDX_PAGE >= bufsz) {
+			i+=remsz; continue;
+		}
 		if (last == NULL) {
 			last = reader->buf+i;
 			cur  = last;
 		} else {
 			cur = reader->buf+i;
-			if (edgecompare(cur, last, NOWDB_OFF_ORIGIN) == -1) {
+			x = edgecompare(cur, last, NOWDB_OFF_ORIGIN);
+			if (x == -1) {
 				fprintf(stderr, "buffer is not ordered\n");
 				rc = -1; break;
 			}
+			if (x != 0) {
+				last = cur;
+			}
 		}
 		// fprintf(stderr, "%lu\n", cur->origin);
-	// }
-	LOOP_END
+		i+=reader->recsize;
+	}
 	if (rc != 0) goto cleanup;
 
 	c=0;
@@ -172,11 +182,9 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 			rc = -1; goto cleanup;
 		}
 		LOOP_HEAD
-		// for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
 			if (memcmp(src+i, nowdb_nullrec,
 			          reader->recsize) == 0) break;
 			c++;
-		// }
 		LOOP_END
 	}
 	if (err != NOWDB_OK) {
@@ -188,9 +196,8 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 			rc = -1; goto cleanup;
 		}
 	}
-	if (c != reader->size/reader->recsize) {
-		fprintf(stderr, "counted: %d, expected: %u\n",
-		                              c, reader->size);
+	if (c != have) {
+		fprintf(stderr, "counted: %d, expected: %u\n", c, have);
 		rc = -1; goto cleanup;
 	}
 
@@ -261,29 +268,46 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	                          minus(&t2, &t1)/1000);
 
 	// reader size
-	fprintf(stderr, "bkrange has: %u\n",
-	        reader->size/reader->recsize);
+	int pgs = reader->size/NOWDB_IDX_PAGE;
+	int rpp = NOWDB_IDX_PAGE/reader->recsize;
+	int have = rpp*pgs+(reader->size-pgs*NOWDB_IDX_PAGE)/reader->recsize;
 
-	if (reader->size/reader->recsize != h*HALFEDGE) {
+	fprintf(stderr, "bkrange has: %d\n", have);
+
+	if (have != h*HALFEDGE) {
 		fprintf(stderr, "wrong size in bufreader: %u\n", reader->size);
 		rc = -1; goto cleanup;
 	}
 
 	last = NULL;
-	LOOP_HEAD
+	int ukeys=0;
+	char x;
+	for(int i=0; i<reader->size;) {
+		if (i%NOWDB_IDX_PAGE >= bufsz) {
+			i+=remsz; continue;
+		}
 		if (last == NULL) {
 			last = reader->buf+i;
-			cur = reader->buf+i;
+			cur  = last;
+			ukeys++;
 		} else {
 			cur = reader->buf+i;
-			if (edgecompare(cur, last, NOWDB_OFF_ORIGIN) == -1) {
+			x = edgecompare(cur, last, NOWDB_OFF_ORIGIN);
+			if (x == -1) {
 				fprintf(stderr, "buffer is not ordered\n");
 				rc = -1; break;
 			}
+			if (x != 0) {
+				last = cur;
+				ukeys++;
+			}
 		}
 		// fprintf(stderr, "%lu\n", cur->origin);
-	LOOP_END
+		i+=reader->recsize;
+	}
 	if (rc != 0) goto cleanup;
+
+	fprintf(stderr, "uniqe keys: %d\n", ukeys);
 
 	c=0;
 	for(;;) {
@@ -295,6 +319,7 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 			fprintf(stderr, "page is NULL\n");
 			rc = -1; goto cleanup;
 		}
+		// fprintf(stdout, "%lu\n", *(uint64_t*)src);
 		c++;
 	}
 	if (err != NOWDB_OK) {
@@ -308,13 +333,11 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	}
 	fprintf(stderr, "counted: %d\n", c);
 
-	/*
-	if (c != reader->size/reader->recsize) {
-		fprintf(stderr, "counted: %d, expected: %u\n",
-		                              c, reader->size);
+	if (c != ukeys) {
+		fprintf(stderr, "counted: %d, expected: %d\n",
+		                                     c, ukeys);
 		rc = -1; goto cleanup;
 	}
-	*/
 
 cleanup:
 	nowdb_reader_destroy(reader); free(reader);
@@ -490,6 +513,36 @@ int testKRange(nowdb_scope_t *scope, int h) {
 	fprintf(stderr, "krange created after %ldus\n",
 	                         minus(&t2, &t1)/1000);
 
+	/*
+	last = NULL;
+	int ukeys=0;
+	char x;
+	for(int i=0; i<reader->size;) {
+		if (i%NOWDB_IDX_PAGE >= bufsz) {
+			i+=remsz; continue;
+		}
+		if (last == NULL) {
+			last = reader->buf+i;
+			cur  = last;
+			ukeys++;
+		} else {
+			cur = reader->buf+i;
+			x = edgecompare(cur, last, NOWDB_OFF_ORIGIN);
+			if (x == -1) {
+				fprintf(stderr, "buffer is not ordered\n");
+				rc = -1; break;
+			}
+			if (x != 0) {
+				last = cur;
+				ukeys++;
+			}
+		}
+		// fprintf(stderr, "%lu\n", cur->origin);
+		i+=reader->recsize;
+	}
+	if (rc != 0) goto cleanup;
+	*/
+
 	for(;;) {
 		err = nowdb_reader_move(range);
 		if (err != NOWDB_OK) break;
@@ -514,9 +567,10 @@ int testKRange(nowdb_scope_t *scope, int h) {
 	}
 
 	fprintf(stderr, "we counted: %d\n", c);
+	// count unique keys!
 	/*
-	if (c != h * HALFEDGE) {
-		fprintf(stderr, "expected: %d\n", h*HALFEDGE);
+	if (c != ukeys) {
+		fprintf(stderr, "expected: %d\n", ukeys);
 		rc = -1; goto cleanup;
 	}
 	*/
@@ -528,6 +582,8 @@ cleanup:
 	nowdb_store_destroyFiles(&ctx->store, &rfiles);
 	return rc;
 }
+
+int uniqueKey = 0;
 
 int testMerge(nowdb_scope_t *scope, char type, int h) {
 	int rc = 0;
@@ -647,8 +703,12 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	fprintf(stderr, "merge created after %ldus\n",
 	                        minus(&t2, &t1)/1000);
 
+	if (type != 'k') uniqueKey = 0;
+
+	// check order and count
+	fprintf(stderr, "BUFISZE: %u\n", type=='k'?merge->recsize:
+	                                           NOWDB_IDX_PAGE);
 	for(;;) {
-		memset(tmp, 0, recsz);
 		err = nowdb_reader_move(merge);
 		if (err != NOWDB_OK) break;
 
@@ -657,11 +717,10 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 			fprintf(stderr, "page is NULL\n");
 			rc = -1; goto cleanup;
 		}
-		// fprintf(stderr, "%p\n", src);
 		mx = type == 'k'?merge->recsize:NOWDB_IDX_PAGE;
 		for(int i=0; i<mx;) {
 
-			if (type == 'k' && i%NOWDB_IDX_PAGE >= bufsz) {
+			if (type != 'k' && i%NOWDB_IDX_PAGE >= bufsz) {
 				i+=remsz; continue;
 			}
 
@@ -670,27 +729,39 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 
 			/* check cont */
 			if (merge->cont != NULL) {
-				int n = i/merge->recsize;
-				int b = i%merge->recsize;
+				int n = (i/merge->recsize)/8;
+				int b = (i/merge->recsize)%8;
 				uint8_t k = 1;
-				if (merge->cont[0] == 0 &&
-				    merge->cont[1] == 0) break;
-				if (!(merge->cont[n] & (k<<b))) continue;
+				if (!(merge->cont[n] & (k<<b))) {
+					i+=merge->recsize;
+					continue;
+				}
 			}
 
-			/* krange */
 			if (memcmp(tmp, nowdb_nullrec,
 			          merge->recsize) == 0) 
 			{
 				memcpy(tmp, src+i, merge->recsize);
-				if (type == 'k') c++;
+				if (type == 'k') {
+					c++;
+					if (merge->cur == 0) c0++;
+					if (merge->cur == 1) c1++;
+				} else {
+					uniqueKey++;
+				}
 
 			} else {
 				if (edgecompare(tmp, src+i,
 				    NOWDB_OFF_ORIGIN) == -1)
 				{
 					memcpy(tmp, src+i, merge->recsize);
-					if (type == 'k') c++;
+					if (type == 'k') {
+						c++;
+						if (merge->cur == 0) c0++;
+						if (merge->cur == 1) c1++;
+					} else {
+						uniqueKey++;
+					}
 
 				} else if (edgecompare(tmp, src+i,  
 					   NOWDB_OFF_ORIGIN) == 1) {
@@ -703,10 +774,11 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 					return -1;
 				}
 			} 
-			if (type != 'k') c++;
-
-			if (merge->cur == 0) c0++;
-			if (merge->cur == 1) c1++;
+			if (type != 'k') {
+				c++;
+				if (merge->cur == 0) c0++;
+				if (merge->cur == 1) c1++;
+			}
 
 			/*
 			fprintf(stderr, "%cMERGE [%05d]: %lu (%d)\n", type, c,
@@ -728,9 +800,12 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	}
 
 	fprintf(stderr, "we counted: %d = %d + %d\n", c, c0, c1);
-	if (type == 'k') {
-		// edgecount
-	} else if (c != h * HALFEDGE) {
+	fprintf(stderr, "unique keys: %d\n", uniqueKey);
+	if (type == 'k' && c != uniqueKey) {
+		fprintf(stderr, "expected: %d\n", uniqueKey);
+		rc = -1; goto cleanup;
+
+	} else if (type != 'k' && c != h * HALFEDGE) {
 		fprintf(stderr, "expected: %d\n", h*HALFEDGE);
 		rc = -1; goto cleanup;
 	}
@@ -800,6 +875,7 @@ int main() {
 		fprintf(stderr, "testBuffer failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	
 	// range
 	fprintf(stderr, "RANGE\n");
 	if (testRange(scope, NEDGES-1) != 0) {
