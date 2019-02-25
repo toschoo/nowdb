@@ -10,6 +10,8 @@
 
 // static char *OBJECT = "sort";
 
+extern char nowdb_nullrec[1024];
+
 /* ------------------------------------------------------------------------
  * Generic sorting
  * ------------------------------------------------------------------------
@@ -358,7 +360,9 @@ static inline int crounds(int n) {
  * Helper: merging buffers with remainder
  * ------------------------------------------------------------------------
  */
-static inline void bufMergeN(char *src, char *trg, int n,
+static inline void bufMergeN(char *src, char *trg,
+                             int off, int *toff, int n,
+                             uint32_t size,
                              uint32_t bufsz,
                              uint32_t remsz,
                              uint32_t recsz,
@@ -367,10 +371,31 @@ static inline void bufMergeN(char *src, char *trg, int n,
 {
 	uint32_t stp = bufsz-remsz;
 	nowdb_cmp_t x=NOWDB_SORT_EQUAL;
-	int off1=0, off2=n*bufsz, off3=0;
-	int m1=n*bufsz-remsz, m2=2*off2-remsz;
+	int off1=off, off2=off+n*bufsz;
+	int m1=off+n*bufsz-remsz, m2=off2+n*bufsz-remsz;
 
+	while(m1>size) m1-=bufsz;
+	while(m2>size) m2-=bufsz;
+	/*
+	fprintf(stderr, "merging %d to %d with %d to %d (%d)\n",
+	                               off1, m1, off2, m2, size);
+	*/
 	while(off1 < m1 || off2 < m2) {
+		if (off1 < m1) {
+			if (memcmp(src+off1,
+			    nowdb_nullrec,
+			    recsz) == 0) {
+				off1+=bufsz-(off1%bufsz);
+			}
+		}
+		if (off2 < m2) {
+			if (memcmp(src+off2,
+			    nowdb_nullrec,
+			    recsz) == 0) {
+				off2+=bufsz-(off2%bufsz);
+			}
+		}
+		if (off1 >= m1 && off2 >= m2) break;
 		if (off1 < m1 && off2 < m2) {
 			x = compare(src+off1, src+off2, args);
 
@@ -381,20 +406,20 @@ static inline void bufMergeN(char *src, char *trg, int n,
 			x = NOWDB_SORT_LESS;
 		}
 		if (x != NOWDB_SORT_GREATER) {
-			COPY(off1, off3); ADV(off1);
+			COPY(off1, *toff); ADV(off1);
 		} else {
-			COPY(off2, off3); ADV(off2);
+			COPY(off2, *toff); ADV(off2);
 		}
 	}
-	// fprintf(stderr, "%d, %d, %d\n", off1, off2, off3);
 }
 
 /* ------------------------------------------------------------------------
  * Helper: merging buffers with remainder
  * ------------------------------------------------------------------------
  */
-static inline void bufMergeExhaust(char *src, char *trg,
+static inline char bufMergeExhaust(char *src, char *trg,
                                    int    buffers,
+                                   uint32_t    sz,
                                    uint32_t bufsz,
                                    uint32_t recsz,
                                    uint32_t remsz,
@@ -404,25 +429,36 @@ static inline void bufMergeExhaust(char *src, char *trg,
 	int tot=buffers;
 	int b;
 	int off=0;
+	int toff=0;
 	int m=1;
-	int sz=buffers*bufsz;
 
 	while(tot > 1) {
-		// fprintf(stderr, "%d/%d\n", tot, m);
+		memset(t, 0, sz);
+		fprintf(stderr, "%d/%d\n", tot, m);
 		while(off < sz) {
-			bufMergeN(s+off, t+off, m,
+			bufMergeN(s, t, off, &toff, m, sz,
                                   bufsz, remsz, recsz,
                                   compare, args);
 			b-=2*m; off+=2*m*bufsz;
 		}
-		off=0;m<<=1;tot>>=1;
+		off=0;m<<=1;tot-=tot/2;toff=0;
 		x=s; s=t; t=x;
 	}
-	/*
-	fprintf(stderr, "%d/%d\n", tot, m);
-	if (s==trg) fprintf(stderr, "last was target\n");
-	else fprintf(stderr, "last was source\n");
-	*/
+	return (s==trg);
+}
+
+/* ------------------------------------------------------------------------
+ * Count effective size of items in buffer,
+ * i.e. discard null records
+ * ------------------------------------------------------------------------
+ */
+static inline uint32_t countItems(char *buf, uint32_t recsz, uint32_t sz) {
+	uint32_t x=0;
+	for(uint32_t i=0; i<sz; i+=recsz) {
+		if (memcmp(buf+i, nowdb_nullrec, recsz) == 0) break;
+		x++;
+	}
+	return x;
 }
 
 /* ------------------------------------------------------------------------
@@ -435,28 +471,35 @@ int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
 	char *trg;
 	uint32_t rm, n;
 	uint32_t nitems;
+	uint32_t bsz,sz;
 
-	trg = calloc(1, size);
+	// compute items per buffer,
+	// remainder and number of buffers
+	nitems = bufsize/recsize;
+	bsz = nitems*recsize;
+	rm = bufsize - bsz;
+	n  = size/bufsize;
+
+	if (n*bufsize<size) n++;
+	sz=n*bufsize;
+
+	if (sz != size) return -2;
+
+	trg = calloc(1, sz);
 	if (trg == NULL) return -1;
 
-	// comppute items per buffer,
-	// remainder and number of buffers
-	// CAREFUL: the buffers are not necessarily full
-	//          (we may have delete items!)
-	nitems = bufsize/recsize;
-	rm = bufsize - nitems*recsize;
-	n  = size/bufsize; // we assume bufsize | size
-
 	for(uint32_t i=0; i<n; i++) {
+		nitems = countItems(buf+i*bufsize, recsize, bsz);
 		qsort_r(buf+i*bufsize, (size_t)nitems,
 		                       (size_t)recsize,
 		                       compare, args);
 	}
 
-	bufMergeExhaust(buf, trg, n, bufsize, recsize, rm, compare, args);
-
-	if (crounds(n)%2 != 0) {
-		memcpy(buf, trg, size);
+	if (bufMergeExhaust(buf, trg, n, sz, bufsize,
+	                                     recsize,
+	                          rm, compare, args)) {
+		memset(buf, 0, sz);
+		memcpy(buf, trg, sz);
 	}
 	free(trg);
 	return 0;

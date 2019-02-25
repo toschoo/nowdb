@@ -782,8 +782,9 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 
 			/*
 			fprintf(stderr, "%cMERGE [%05d]: %lu (%d)\n", type, c,
-			 *(uint64_t*)(src+i+8), merge->cur);
+			 *(uint64_t*)(src+i), merge->cur);
 			*/
+
 			i+=merge->recsize;
 		}
 	}

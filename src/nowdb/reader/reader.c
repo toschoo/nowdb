@@ -1439,6 +1439,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		                             "too many pending files");
 	} else if (sz == 0) {
 		sz = NOWDB_IDX_PAGE;
+
 	} else {
 		uint32_t tmp = sz / NOWDB_IDX_PAGE;
 		tmp *= NOWDB_IDX_PAGE;
