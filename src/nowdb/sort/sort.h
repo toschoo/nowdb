@@ -122,7 +122,7 @@ nowdb_cmp_t nowdb_sort_wrapBeet(const void *left,
                                 void      *ignore);
 
 /* ------------------------------------------------------------------------
- * Generic sorting
+ * Generic sorting (=qsort_r)
  * ------------------------------------------------------------------------
  */
 void nowdb_mem_sort(char *buf, uint32_t size, uint32_t recsize,
@@ -131,12 +131,17 @@ void nowdb_mem_sort(char *buf, uint32_t size, uint32_t recsize,
 /* ------------------------------------------------------------------------
  * Generic merging for recsize that does not divide bufsize
  * ---------------
- * - ASSUMPTION: bufsize | size
  * - sorts the single buffers
- * - merges then the buffers respecting the remainder resulting from
- *   bufsize/recsize
- * - returns 0 on success and -1 on error
- *   error: not enough memory
+ * - merges the sorted buffers respecting the remainders
+ *   + resulting from bufsize/recsize and
+ *   + from buffers that are not completely filled
+ * - parameter 'size' must be given in multiple of page (=bufsize)
+ *   (this is check and if size is not a multiple of page,
+ *    and error is returned, namely -2)
+ *     
+ * - returns 0 on success and a negative value on error, namely
+ *   -1:  not enough memory
+ *   -2:  size is not a multiple of page
  * ------------------------------------------------------------------------
  */
 int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,

@@ -434,7 +434,7 @@ static inline char bufMergeExhaust(char *src, char *trg,
 
 	while(tot > 1) {
 		memset(t, 0, sz);
-		fprintf(stderr, "%d/%d\n", tot, m);
+		// fprintf(stderr, "%d/%d\n", tot, m);
 		while(off < sz) {
 			bufMergeN(s, t, off, &toff, m, sz,
                                   bufsz, remsz, recsz,
@@ -483,7 +483,10 @@ int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
 	if (n*bufsize<size) n++;
 	sz=n*bufsize;
 
-	if (sz != size) return -2;
+	if (sz != size) {
+		fprintf(stderr, "size differs: %u - %u\n", sz, size);
+		return -2;
+	}
 
 	trg = calloc(1, sz);
 	if (trg == NULL) return -1;

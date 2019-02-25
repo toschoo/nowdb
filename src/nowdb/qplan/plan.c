@@ -1235,9 +1235,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		/*
-		fprintf(stderr, "FIELD: %s\n", (char*)field->value);
-		*/
+		// fprintf(stderr, "FIELD: %s\n", (char*)field->value);
 
 		agg = 0;
 		err = getExpr(scope, v, e, needtxt, trg, field, &exp, &agg);

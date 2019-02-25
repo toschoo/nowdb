@@ -572,7 +572,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 	nowdb_pageid_t *pge;
 
 	if (reader->eof) {
-		fprintf(stderr, "EOF\n");
 		return nowdb_err_get(nowdb_err_eof,
 	                       FALSE, OBJECT, NULL);
 	}
@@ -1407,7 +1406,7 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		}
 		if (err != NOWDB_OK) break;
 	}
-	reader->size = x;
+	// reader->size = x;
 	nowdb_reader_destroy(full); free(full);
 	return err;
 }
@@ -1464,6 +1463,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		NOMEM("allocating buffer");
 		return err;
 	}
+	(*reader)->size = sz;
 
 	/* fullscan files according to filter */
 	err = fillbuf(*reader);
@@ -1520,13 +1520,32 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 		return err;
 	}
 	
-	nowdb_mem_merge((*reader)->buf,
-		       (*reader)->size, NOWDB_IDX_PAGE,
-		       (*reader)->recsize,
-		       (*reader)->content == NOWDB_CONT_EDGE ?
-		               &nowdb_sort_edge_keys_compare :
-		               &nowdb_sort_vertex_keys_compare,
-		       (*reader)->ikeys);
+	if (nowdb_mem_merge((*reader)->buf,
+		            (*reader)->size, NOWDB_IDX_PAGE,
+		            (*reader)->recsize,
+		            (*reader)->content == NOWDB_CONT_EDGE ?
+		                    &nowdb_sort_edge_keys_compare :
+		                    &nowdb_sort_vertex_keys_compare,
+		            (*reader)->ikeys) != 0) {
+		fprintf(stderr, "CANNOT SORT\n");
+		nowdb_reader_destroy(*reader); free(*reader);
+		NOMEM("merge sort");
+		return err;
+	}
+
+	/*
+	int pgsz = (NOWDB_IDX_PAGE/(*reader)->recsize)*(*reader)->recsize;
+	int remsz = NOWDB_IDX_PAGE - pgsz;
+	for(int i=0; i<(*reader)->size;) {
+		if (i%NOWDB_IDX_PAGE >= pgsz) {
+			i+=remsz; continue;
+		}
+		if (memcmp((*reader)->buf+i,
+		    nowdb_nullrec, (*reader)->recsize) == 0) break;
+		fprintf(stderr, "%lu\n", *(uint64_t*)((*reader)->buf+i));
+		i+=(*reader)->recsize;
+	}
+	*/
 
 	return nowdb_reader_rewind(*reader);
 }

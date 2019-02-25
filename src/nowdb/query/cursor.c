@@ -1319,11 +1319,6 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 
 	*x = 1;
 
-	/*
-	fprintf(stderr, "groupswitch on %p+%u %u bytes to %p\n",
-	                 src, cur->off, cur->recsz, cur->tmp);
-	*/
-
 	/* group not yet initialised */
 	if (memcmp(cur->tmp, nowdb_nullrec, cur->recsz) == 0) {
 		memcpy(cur->tmp, src, cur->recsz);

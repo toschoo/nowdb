@@ -256,8 +256,6 @@ int64_t countResult(nowdb_scope_t *scope,
 			} else break;
 			more = 0;
 		}
-		// fprintf(stderr, "count: %u\n", osz);
-		fprintf(stderr, "%lu\n", *(uint64_t*)(buf+1));
 		res += (int64_t)cnt;
 		// nowdb_row_write(buf, osz, stderr);
 	}
@@ -287,6 +285,8 @@ int64_t readResult(nowdb_scope_t *scope,
 	uint32_t cnt = 0;
 	char more = 1;
 
+	fprintf(stderr, "executing '%s'\n", stmt);
+
 	timestamp(&t1);
 	cur = openCursor(scope, stmt);
 	if (cur == NULL) {
@@ -304,7 +304,6 @@ int64_t readResult(nowdb_scope_t *scope,
 	while(more) {
 		osz=0; cnt=0;
 		err = nowdb_cursor_fetch(cur, buf, 2*8192, &osz, &cnt);
-		fprintf(stderr, "FETCH: %u/%u\n", osz, cnt);
 		if (err != NOWDB_OK) {
 			if (err->errcode == nowdb_err_eof) {
 				nowdb_err_release(err); err = NOWDB_OK;
@@ -329,7 +328,6 @@ int64_t readResult(nowdb_scope_t *scope,
 				more=0;
 				break;
 			}
-			fprintf(stderr, "%lu: %lu\n", *(uint64_t*)(buf+i), *(uint64_t*)(buf+i+f));
 			res += (int64_t)*(uint64_t*)(buf+i+f);
 		}
 		// nowdb_row_write(buf, osz, stderr);
@@ -563,7 +561,6 @@ int main() {
 	COUNTRESULT("select origin from buys");
 	CHECKRESULT(5, 0, 0, 0);
 
-	/*
 	// test fullscan
 	fprintf(stderr, "FULLSCAN\n");
 	for(int i=0; i<ITER; i++) {
@@ -586,16 +583,13 @@ int main() {
 		COUNTRESULT(sql);
 		CHECKRESULT(5, o, d, tp);
 	}
-	*/
 
 	// test order
-	/*
 	fprintf(stderr, "ORDER\n");
 	for(int i=0; i<ITER; i++) {    // RANGE SCAN
 		COUNTRESULT(SQLORD); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
-	*/
 
 	// test count with group
 	fprintf(stderr, "COUNT with GROUP\n");
@@ -604,7 +598,6 @@ int main() {
 		CHECKRESULT(5, 0, 0, 0);
 	}
 
-	/*
 	// test count without group
 	fprintf(stderr, "COUNT W/O GROUP\n");
 	for(int i=0; i<ITER; i++) {
@@ -617,7 +610,6 @@ int main() {
 	fprintf(stderr, "KRANGE\n");
 	COUNTRESULT(SQLGRP);
 	COUNTDISTINCT(5);
-	*/
 
 cleanup:
 	if (sql != NULL) free(sql);
