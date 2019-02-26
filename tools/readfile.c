@@ -16,6 +16,11 @@ void helptxt(char *program) {
 	fprintf(stderr, "%s <path-to-file>\n", program);
 }
 
+#define LOOP_INIT(stm, atts) \
+	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
+	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
+
 char buf[8192];
 
 ssize_t filesize(char *path) {
@@ -33,7 +38,9 @@ int readfile(char *path) {
 	ssize_t s;
 	int x = 0;
 	FILE *f;
-	nowdb_edge_t *e;
+
+	int recsz = nowdb_edge_recSize(1,3);
+	int bufsz = (8192/recsz)*recsz;
 
 	s = filesize(path);
 
@@ -43,7 +50,7 @@ int readfile(char *path) {
 		return -1;
 	}
 
-	for(ssize_t i = 0; i<s; i+=8192) {
+	for(int i = 0; i<s; i+=8192) {
 		x = fread(buf, 1, 8192, f);
 		if (x != 8192) {
 			if (x <= 0) {
@@ -52,26 +59,15 @@ int readfile(char *path) {
 			}
 			fprintf(stderr, "incomplete read: %d\n", x);
 		}
-		for(int z=0;z<8192;z+=64) {
-			e = (nowdb_edge_t*)(buf+z);
-			fprintf(stdout, "%lu.%lu-->%lu #%lu @%ld: ",
-			  e->origin, e->edge, e->destin,
-			  e->label, e->timestamp);
-			switch(e->wtype[0]) {
-			case NOWDB_TYP_FLOAT:
-				fprintf(stdout, "%f\n",
-				       (double)e->weight); break;
-			case NOWDB_TYP_INT:
-			case NOWDB_TYP_TIME:
-			case NOWDB_TYP_DATE:
-				fprintf(stdout, "%ld\n",
-				       (int64_t)e->weight); break;
-			case NOWDB_TYP_UINT:
-			case NOWDB_TYP_TEXT:
-				fprintf(stdout, "%lu\n",
-				       (uint64_t)e->weight); break;
-			default: fprintf(stdout, "\n");
-			}
+		for(int z=0;z<8192;z+=recsz) {
+			if (z%8192 >= bufsz) break;
+
+			char *e = buf+z;
+
+			fprintf(stdout, "%lu-->%lu @%ld\n",
+			  *(uint64_t*)(e+NOWDB_OFF_ORIGIN),
+			  *(uint64_t*)(e+NOWDB_OFF_DESTIN),
+			  *(int64_t*)(e+NOWDB_OFF_STAMP));
 		}
 	}
 	fclose(f);

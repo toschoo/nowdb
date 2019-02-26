@@ -50,6 +50,16 @@ def createDB(c, db):
                       prod_price float)") as r:
         if not r.ok():
             raise FailedCreation("cannot create type product")
+
+    # this one is for insert tests
+    with c.execute("create type product2 ( \
+                      prod_key uint primary key, \
+                      prod_desc    text, \
+                      prod_cat     uint, \
+                      prod_packing uint, \
+                      prod_price float)") as r:
+        if not r.ok():
+            raise FailedCreation("cannot create type product")
    
     with c.execute("create type client ( \
                       client_key uint primary key, \

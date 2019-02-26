@@ -162,7 +162,8 @@ IFC = include/nowdb/nowdb.h \
 
 default:	lib 
 
-all:	default tools tests bench server client
+#all:	default tools tests bench server client
+all:	default tools tests server client
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
@@ -187,10 +188,11 @@ tools:	bin/randomfile    \
 	bin/keepstoreopen \
 	bin/waitstore     \
 	bin/waitscope     \
-	bin/writecsv      \
 	bin/sqltool       \
-	bin/plantool      \
-	bin/scopetool
+	bin/plantool
+
+#	bin/writecsv      \
+#	bin/scopetool
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
