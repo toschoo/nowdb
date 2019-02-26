@@ -765,7 +765,9 @@ static nowdb_err_t dropEdge(nowdb_ast_t  *op,
 	nowdb_ast_t  *o;
 
 	err = nowdb_scope_dropEdge(scope, name);
-	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err == NOWDB_OK) {
+		err = nowdb_scope_dropContext(scope, name);
+	}
 	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
