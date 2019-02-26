@@ -586,15 +586,14 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into sales (edge, origin, destin, stamp, weight, weight2) \
-                              ('buys', %d, %d, '%s', 1, 1.49)" % (k, p, s)
+    stmt = "insert into buys (origin, destin, stamp, quantity, price) \
+                             (%d, %d, '%s', 1, 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if not r.ok():
           raise db.TestFailed("cannot insert edge: %d -- %s" % (r.code(),r.details()))
 
-    stmt = "select origin, destin, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
+    stmt = "select origin, destin, stamp from buys \
+             where origin = %d \
                and destin = %d \
                and stamp  = '%s'" % (k, p, s)
     with c.execute(stmt) as cur:
@@ -615,15 +614,14 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into sales (edge, origin, destin, label, stamp, weight, weight2) \
-                              ('buys', %d, %d, 0, '%s', 1, 1.49)" % (k, p, s)
+    stmt = "insert into buys (origin, destin, stamp, quantity, price) \
+                              (%d, %d, '%s', 1, 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if not r.ok():
           raise db.TestFailed("cannot insert edge: %d -- %s" % (r.code(),r.details()))
 
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
+    stmt = "select origin, destin, stamp from buys \
+             where origin = %d \
                and destin = %d \
                and stamp  = '%s'" % (k, p, s)
     with c.execute(stmt) as cur:
@@ -632,11 +630,11 @@ def insertalledge(c,ps,cs):
         n=0
         for row in cur:
             n+=1
-            if row.field(0) != k or row.field(1) != p or row.field(2) != 0 or row.field(3) != t:
+            if row.field(0) != k or row.field(1) != p or row.field(2) != t:
                raise db.TestFailed("wrong edge %d/%d/%s (%d) -- %d/%d/%s (%d)" % \
                                   (k,p,s,t,row.field(0),row.field(1),\
-                                   now.now2dt(row.field(3)).strftime(now.TIMEFORMAT),
-                                   row.field(3)))
+                                   now.now2dt(row.field(2)).strftime(now.TIMEFORMAT),
+                                   row.field(2)))
 
     # insert without field list (complete)
     p = getProduct(ps).key
@@ -644,14 +642,13 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into sales ('buys', %d, %d, 0, '%s', 1, 1.49)" % (k, p, s)
+    stmt = "insert into buys (%d, %d, '%s', 1, 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if not r.ok():
           raise db.TestFailed("cannot insert edge: %d -- %s" % (r.code(),r.details()))
 
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
+    stmt = "select origin, destin, stamp from buys \
+             where origin = %d \
                and destin = %d \
                and stamp  = '%s'" % (k, p, s)
     with c.execute(stmt) as cur:
@@ -660,11 +657,11 @@ def insertalledge(c,ps,cs):
         n=0
         for row in cur:
             n+=1
-            if row.field(0) != k or row.field(1) != p or row.field(2) != 0 or row.field(3) != t:
+            if row.field(0) != k or row.field(1) != p or row.field(2) != t:
                raise db.TestFailed("wrong edge %d/%d/%s (%d) -- %d/%d/%s (%d)" % \
                                   (k,p,s,t,row.field(0),row.field(1),\
-                                   now.now2dt(row.field(3)).strftime(now.TIMEFORMAT),
-                                   row.field(3)))
+                                   now.now2dt(row.field(2)).strftime(now.TIMEFORMAT),
+                                   row.field(2)))
 
     # insert without field list (incomplete)
     p = getProduct(ps).key
@@ -672,15 +669,14 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into sales ('buys', %d, %d, '%s', 1, 1.49)" % (k, p, s)
+    stmt = "insert into buys (%d, %d, '%s', 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert incomplete edge")
        print "%d: %s" % (r.code(), r.details())
 
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
+    stmt = "select origin, destin, stamp from buys \
+             where origin = %d \
                and destin = %d \
                and stamp  = '%s'" % (k, p, s)
     with c.execute(stmt) as cur:
@@ -695,61 +691,14 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into sales ('buys', %d, 'my product', 0, '%s', 1, 1.49)" % (k, s)
+    stmt = "insert into buys (%d, 'my product', '%s', 1, 1.49)" % (k, s)
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert edge with wrong type!")
        print "%d: %s" % (r.code(), r.details())
 
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
-               and destin = %d \
-               and stamp  = '%s'" % (k, p, s)
-    with c.execute(stmt) as cur:
-        if cur.ok():
-          raise db.TestFailed("%d inserted in spite of error" % k)
-        if cur.code() != now.EOF:
-          raise db.TestFailed("Expecting EOF, but have %d: %s" % (cur.code(),cur.details()))
-
-    # insert without field list (wrong type in edge)
-    p = getProduct(ps).key
-    k = getClient(cs).key
-    dt = datetime.datetime.utcnow()
-    s = dt.strftime(now.TIMEFORMAT)
-    t = now.dt2now(dt)
-    stmt = "insert into sales (1, %d, %d, 0, '%s', 1, 1.49)" % (k, p, s)
-    with c.execute(stmt) as r:
-       if r.ok():
-          raise db.TestFailed("can insert edge with wrong edge type!")
-       print "%d: %s" % (r.code(), r.details())
-
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
-               and destin = %d \
-               and stamp  = '%s'" % (k, p, s)
-    with c.execute(stmt) as cur:
-        if cur.ok():
-          raise db.TestFailed("%d inserted in spite of error" % k)
-        if cur.code() != now.EOF:
-          raise db.TestFailed("Expecting EOF, but have %d: %s" % (cur.code(),cur.details()))
-
-    # insert without field list (wrong edge)
-    p = getProduct(ps).key
-    k = getClient(cs).key
-    dt = datetime.datetime.utcnow()
-    s = dt.strftime(now.TIMEFORMAT)
-    t = now.dt2now(dt)
-    stmt = "insert into sales ('doesnotexist', %d, %d, 0, '%s', 1, 1.49)" % (k, p, s)
-    with c.execute(stmt) as r:
-       if r.ok():
-          raise db.TestFailed("can insert edge with non-existing edge!")
-       print "%d: %s" % (r.code(), r.details())
-
-    stmt = "select origin, destin, label, stamp from sales \
-             where edge = 'buys' \
-               and origin = %d \
+    stmt = "select origin, destin, stamp from buys \
+             where origin = %d \
                and destin = %d \
                and stamp  = '%s'" % (k, p, s)
     with c.execute(stmt) as cur:
@@ -763,7 +712,7 @@ def insertalledge(c,ps,cs):
 ###########################################################################
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, ss, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
         dupkeyvertex(c)
         failedinsert(c)

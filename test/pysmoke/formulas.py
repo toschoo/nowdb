@@ -88,18 +88,15 @@ def simpleedge(c):
     print "RUNNING TEST 'simpleedge'"
 
     idx = random.randint(1,len(es)-1)
-    if es[idx].edge == 'visits':
-       idx-=1
 
     o = es[idx].origin
     d = es[idx].destin
-    w1 = es[idx].weight
-    w2 = es[idx].weight2
+    w1 = es[idx].quantity
+    w2 = es[idx].price
 
     # very simple
-    stmt = "select 1 from sales  \
-             where edge = 'buys' \
-               and origin = %d   \
+    stmt = "select 1 from buys  \
+             where origin = %d   \
                and destin = %d" % (o, d)
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -118,11 +115,10 @@ def simpleedge(c):
     b = float(random.randint(1,1000))
     if random.randint(0,2) == 0:
        a *= -1
-    stmt = "select weight, \
-                 ((weight + %f)/%f)^2 \
-              from sales \
-             where edge ='buys' \
-               and origin = %d" % (a,b,o)
+    stmt = "select quantity, \
+                 ((quantity + %f)/%f)^2 \
+              from buys \
+             where origin = %d" % (a,b,o)
              #  and destin = %d" % (a,b,o,d)
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -136,14 +132,13 @@ def simpleedge(c):
             if row.field(1) != r:
                raise db.TestFailed("wrong value %f: %f" % (r, row.field(1)))
 
-    # round up weight2 to 1 digit
-    stmt = "select weight2, \
-                   ceil(weight2 * 10)/10, \
-                   floor(weight2 * 10)/10, \
-                   round(weight2 * 10)/10 \
-              from sales \
-             where edge = 'buys' \
-               and origin=%d" % o
+    # round up price to 1 digit
+    stmt = "select price, \
+                   ceil(price * 10)/10, \
+                   floor(price * 10)/10, \
+                   round(price * 10)/10 \
+              from buys \
+             where origin=%d" % o
                # and destin=%d" % (o,d)
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -361,7 +356,7 @@ def aggedge(c):
 
     print "RUNNING TEST 'aggedge'"
 
-    stmt = "select sum(1), count(*) from sales"
+    stmt = "select sum(1), count(*) from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -378,10 +373,10 @@ def aggedge(c):
     # average
     s = 0.0
     for e in es:
-        s += e.weight2
+        s += e.price
     a = s/len(es)
 
-    stmt = "select avg(weight2), sum(weight2)/count(*) from sales"
+    stmt = "select avg(price), sum(price)/count(*) from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
@@ -396,21 +391,21 @@ def aggedge(c):
            raise db.TestFailed("wrong number of rows: %d" % (n))
 
     # median
-    se = sorted(es, key=lambda e: e.weight2)
+    se = sorted(es, key=lambda e: e.price)
     l = len(es) - 1
     if l%2 != 0: # length is even
-       m = (se[l/2].weight2 + se[l/2+1].weight2)/2
+       m = (se[l/2].price + se[l/2+1].price)/2
     else: # length is odd
-       m = se[(l+1)/2].weight2
+       m = se[(l+1)/2].price
 
-    stmt = "select median(weight2) from sales"
+    stmt = "select median(price) from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
         for row in cur:
             n+=1
-            print "median weight: %f" % row.field(0)
+            print "median quantity: %f" % row.field(0)
             if row.field(0) != m:
                raise db.TestFailed("expected median: %f, but have %f" % (m, row.field(0)))
         if n != 1:
@@ -421,62 +416,62 @@ def grpedge(c):
 
     print "RUNNING TEST 'grpedge'"
 
-    stmt = "select edge, origin, sum(1), count(*) \
-              from sales where edge='buys' \
-             group by edge, origin"
+    stmt = "select origin, sum(1), count(*) \
+              from buys \
+             group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(2) != row.field(3):
+            if row.field(1) != row.field(2):
                raise db.TestFailed("sum(1) != count(*): %d: %d" % (row.field(0), row.field(1)))
 
-            stmt = "select count(*) from sales \
-                     where edge='%s' and origin=%d" % (row.field(0), row.field(1))
+            stmt = "select count(*) from buys \
+                     where origin=%d" % (row.field(0))
             print "executing %s" % stmt
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
                 for rr in cur2:
-                    if rr.field(0) != row.field(2):
-                       raise db.TestFailed("expected count: %d, but have %d" % (rr.field(0), row.field(2)))
+                    if rr.field(0) != row.field(1):
+                       raise db.TestFailed("expected count: %d, but have %d" % (rr.field(0), row.field(1)))
 
-    stmt = "select edge, origin, avg(weight), sum(tofloat(weight))/count(*) \
-              from sales where edge='buys' \
-             group by edge, origin"
+    stmt = "select origin, avg(quantity), sum(tofloat(quantity))/count(*) \
+              from buys \
+             group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(2) != row.field(3):
-               raise db.TestFailed("avg(w) != sum(w)/count(*): %f: %f" % (row.field(2), row.field(3)))
+            if row.field(1) != row.field(2):
+               raise db.TestFailed("avg(w) != sum(w)/count(*): %f: %f" % (row.field(1), row.field(2)))
 
-            stmt = "select avg(weight) from sales \
-                     where edge='%s' and origin=%d" % (row.field(0), row.field(1))
+            stmt = "select avg(quantity) from buys \
+                     where origin=%d" % (row.field(0))
             print "executing %s" % stmt
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
                 for rr in cur2:
                     if rr.field(0) != row.field(2):
-                       raise db.TestFailed("expected avg: %f, but have %f" % (rr.field(0), row.field(2)))
+                       raise db.TestFailed("expected avg: %f, but have %f" % (rr.field(0), row.field(1)))
 
-    stmt = "select edge, origin, median(weight) \
-              from sales where edge='buys' \
-             group by edge, origin" 
+    stmt = "select origin, median(quantity) \
+              from buys \
+             group by origin" 
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         for row in cur:
-            stmt = "select median(weight) from sales \
-                     where edge='%s' and origin=%d" % (row.field(0), row.field(1))
+            stmt = "select median(quantity) from buys \
+                     where origin=%d" % (row.field(0))
             print "executing %s" % stmt
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
                 for rr in cur2:
-                    if rr.field(0) != row.field(2):
-                       raise db.TestFailed("expected median: %f, but have %f" % (rr.field(0), row.field(2)))
+                    if rr.field(0) != row.field(1):
+                       raise db.TestFailed("expected median: %f, but have %f" % (rr.field(0), row.field(1)))
 
 # Beloved fibonacci
 def fibonacci(c,one,two,x):
@@ -1208,7 +1203,7 @@ def casefun(c):
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, ss, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
         constvalues(c)
         timefun(c)

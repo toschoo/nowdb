@@ -66,6 +66,8 @@ then
 	exit 1
 fi
 
+if [ 0 ]
+then
 
 echo "RUNNING bugs.py" >> log/pysmoke.log
 test/pysmoke/bugs.py >> log/pysmoke.log 2>&1
@@ -83,6 +85,7 @@ then
 	echo "FAILED: insert.py failed"
 	kill -2 $p
 	exit 1
+fi
 fi
 
 kill -2 $p

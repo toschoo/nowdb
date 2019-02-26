@@ -1136,7 +1136,7 @@ def whereinatts(c):
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, ss, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
         vidwherevid(c)
         attswherevid(c)

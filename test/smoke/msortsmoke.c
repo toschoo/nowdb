@@ -202,7 +202,7 @@ int main() {
 		fprintf(stderr, "cannot init environment\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	for(int i=0; i<25; i++) {
+	for(int i=0; i<100; i++) {
 		/*
 		int k = 1<<i;
 		int sz = k*BUFSZ;
