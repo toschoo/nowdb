@@ -380,7 +380,7 @@ static inline void bufMergeN(char *src, char *trg,
 	fprintf(stderr, "merging %d to %d with %d to %d (%d)\n",
 	                               off1, m1, off2, m2, size);
 	*/
-	while(off1 < m1 || off2 < m2) {
+	for(;;) {
 		if (off1 < m1) {
 			if (memcmp(src+off1,
 			    nowdb_nullrec,
@@ -433,7 +433,6 @@ static inline char bufMergeExhaust(char *src, char *trg,
 	int m=1;
 
 	while(tot > 1) {
-		memset(t, 0, sz);
 		// fprintf(stderr, "%d/%d\n", tot, m);
 		while(off < sz) {
 			bufMergeN(s, t, off, &toff, m, sz,
@@ -497,11 +496,9 @@ int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
 		                       (size_t)recsize,
 		                       compare, args);
 	}
-
 	if (bufMergeExhaust(buf, trg, n, sz, bufsize,
 	                                     recsize,
 	                          rm, compare, args)) {
-		memset(buf, 0, sz);
 		memcpy(buf, trg, sz);
 	}
 	free(trg);

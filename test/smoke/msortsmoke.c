@@ -90,7 +90,6 @@ char *createBuf(int items, uint32_t size) {
 }
 
 int checkSorted(char *e, int items, uint32_t size) {
-	int rc=0;
 	char *p=NULL;
 	int sz, rm;
 	int cnt;
@@ -150,10 +149,6 @@ int checkSorted(char *e, int items, uint32_t size) {
 		}
 		p=e+i;i+=sz;cnt++;
 	}
-	if (rc != 0) {
-		fprintf(stderr, "invalid value (%d. item)\n", cnt);
-		return -1;
-	}
 	if (sd > 0) {
 		fprintf(stderr,
 		"NOT SORTED for %u buffers: %d stepdowns (edges: %d)\n",
@@ -161,7 +156,7 @@ int checkSorted(char *e, int items, uint32_t size) {
 		return -1;
 	}
 	if (cnt != items) {
-		fprintf(stderr, "number of edges do not match: %d / %d\n",
+		fprintf(stderr, "number of edges does not match: %d / %d\n",
 		                items, cnt);
 		return -1;
 	}
@@ -203,12 +198,6 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	for(int i=0; i<100; i++) {
-		/*
-		int k = 1<<i;
-		int sz = k*BUFSZ;
-		int x = rand()%6;
-		if (x > 1) sz += rand()%(BUFSZ/x);
-		*/
 		int k=0, r;
 		while(k==0) k=rand()%10;
 		r=rand()%10;

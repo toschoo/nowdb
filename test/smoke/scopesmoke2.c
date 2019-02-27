@@ -479,7 +479,7 @@ int main() {
 	char *sql=NULL;
 	char exists = 0;
 
-	int ITER = 10;
+	int ITER = 100;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
 
