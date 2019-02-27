@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
 		for(int i=1;i<len;i++) {
-			err = nowdb_store_sortNow(&store.sortwrk);
+			err = nowdb_store_sortNow(&store.sortwrk, &store);
 			if (err != NOWDB_OK) {
 				fprintf(stderr,
 				"\ncannot send sort message\n");

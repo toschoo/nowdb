@@ -61,12 +61,6 @@ static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
 static void nodrain(void **ignore) {}
 
 /* ------------------------------------------------------------------------
- * Sorter message
- * ------------------------------------------------------------------------
- */
-static nowdb_wrk_message_t sortmsg = {11,NULL};
-
-/* ------------------------------------------------------------------------
  * Start Sync Worker
  * ------------------------------------------------------------------------
  */
@@ -121,8 +115,8 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
  * Do your job, sorter!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk) {
-	return nowdb_worker_do(wrk, &sortmsg);
+nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk, void *store) {
+	return nowdb_worker_do(wrk, &((nowdb_store_t*)store)->srtmsg);
 }
 
 /* ------------------------------------------------------------------------

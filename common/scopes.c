@@ -273,7 +273,8 @@ int waitscope(nowdb_scope_t *scope, char *context) {
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
 		for(int i=1;i<len;i+=2) {
-			err = nowdb_store_sortNow(&ctx->store.sortwrk);
+			err = nowdb_store_sortNow(&ctx->store.sortwrk,
+			                          &ctx->store);
 			if (err != NOWDB_OK) {
 				fprintf(stderr,
 				"\ncannot send sort message\n");

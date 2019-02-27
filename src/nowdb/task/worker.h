@@ -24,8 +24,9 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t       type;
-	void          *cont;
+	uint32_t       type; // message type
+	void        *stcont; // static content (never freed)
+	void          *cont; // dynamic content
 } nowdb_wrk_message_t;
 
 #define NOWDB_WRK_STOP  0

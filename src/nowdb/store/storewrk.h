@@ -43,7 +43,7 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk);
  * Sorter, sort now!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk);
+nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk, void *store);
 
 #endif
 

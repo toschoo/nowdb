@@ -86,12 +86,6 @@ typedef struct {
 	uint16_t             num; /* number of attributes  */
 	uint32_t            ctrl; /* size of control block */
 	uint32_t            size; /* size of edge          */
-	
-	nowdb_type_t      weight; // to be removed
-	nowdb_type_t     weight2; // to be removed
-	nowdb_model_type_t  edge; // to be removed
-	nowdb_model_type_t label; // to be removed
-	
 } nowdb_model_edge_t;
 
 #endif

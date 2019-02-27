@@ -38,6 +38,12 @@ extern char nowdb_nullrec[1024];
 	}
 
 /* ------------------------------------------------------------------------
+ * Sorter message
+ * ------------------------------------------------------------------------
+ */
+static nowdb_wrk_message_t sortmsg = {11,NULL,NULL};
+
+/* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
  */
@@ -342,6 +348,10 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->tasknum = 1;
 	store->ts = ts;
 	store->cont = cont;
+
+	// prepare sort message
+	memcpy(&store->srtmsg, &sortmsg, sizeof(nowdb_wrk_message_t));
+	store->srtmsg.stcont = store;
 
 	store->setsize = nowdb_pagectrlSize(recsize);
 
@@ -666,7 +676,7 @@ static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
 	if (err != NOWDB_OK) return err;
 
 	if (store->starting) return NOWDB_OK;
-	return nowdb_store_sortNow(&store->sortwrk);
+	return nowdb_store_sortNow(&store->sortwrk, store);
 }
 
 /* ------------------------------------------------------------------------

@@ -16,7 +16,7 @@
 #define DELAY 25000000
 #define MINOR 10000000
 
-static nowdb_wrk_message_t stopmsg = {0,NULL};
+static nowdb_wrk_message_t stopmsg = {0,NULL,NULL};
 
 /* ------------------------------------------------------------------------
  * Report errors

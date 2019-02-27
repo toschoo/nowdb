@@ -343,8 +343,6 @@ int testFun(uint32_t ftype,
 	nowdb_expr_t expr;
 	int mx;
 
-	_edge.weight = dtype;
-
 	err = nowdb_expr_newEdgeField(&expr, "field", off, dtype, 4);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot create edge field\n");

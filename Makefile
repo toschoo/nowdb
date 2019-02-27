@@ -70,6 +70,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
+      $(SRC)/store/storage.o  \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
       $(SRC)/store/storewrk.o \
@@ -122,6 +123,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
+      $(SRC)/store/storage.h  \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
       $(SRC)/store/storewrk.h \

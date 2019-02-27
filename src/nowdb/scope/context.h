@@ -52,7 +52,7 @@ nowdb_err_t nowdb_context_insertBulk(nowdb_context_t *ctx,
                                      uint32_t      count);
 
 /* -----------------------------------------------------------------------
- * Context configurator
+ * To be removed: it's storage_config now
  * -----------------------------------------------------------------------
  */
 typedef struct {
