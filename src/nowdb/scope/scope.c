@@ -73,6 +73,30 @@ static void ctxdestroy(void *ignore, void **n) {
 }
 
 /* ------------------------------------------------------------------------
+ * Tree callbacks for contexts: compare
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t strgcompare(void *ignore, void *left, void *right) {
+	int cmp = strcmp(((nowdb_storage_t*)left)->name,
+	                 ((nowdb_storage_t*)right)->name);
+	if (cmp < 0) return ts_algo_cmp_less;
+	if (cmp > 0) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
+ * Tree callbacks for contexts: delete and destroy
+ * ------------------------------------------------------------------------
+ */
+static void strgdestroy(void *ignore, void **n) {
+	if (*n != NULL) {
+		nowdb_storage_destroy((nowdb_storage_t*)(*n));
+		free(*n); *n = NULL;
+	}
+}
+
+
+/* ------------------------------------------------------------------------
  * Helper: make beet error
  * ------------------------------------------------------------------------
  */
@@ -370,10 +394,19 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	}
 	strcpy(scope->path, path);
 
-	/* catalog */
+	/* storage catalog */
+	scope->strgpath = nowdb_path_append(scope->path, "cstore");
+	if (scope->strgpath == NULL) {
+		free(scope->path); scope->path = NULL;
+		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                    "allocating scope catalog path");
+	}
+
+	/* context catalog */
 	scope->catalog = nowdb_path_append(scope->path, "catalog");
 	if (scope->catalog == NULL) {
 		free(scope->path); scope->path = NULL;
+		free(scope->strgpath); scope->strgpath = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                    "allocating scope catalog path");
 	}
@@ -381,6 +414,22 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	/* lock */
 	err = nowdb_rwlock_init(&scope->lock);
 	if (err != NOWDB_OK) return err;
+	
+	/* storage tree */
+	if (ts_algo_tree_init(&scope->storage,
+ 	                      &strgcompare, NULL,
+	                      &noupdate,
+	                      &strgdestroy,
+	                      &strgdestroy) != TS_ALGO_OK)
+	{
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                       "initialising storage tree");
+		free(scope->path); scope->path = NULL;
+		free(scope->catalog); scope->catalog = NULL;
+		free(scope->strgpath); scope->strgpath = NULL;
+		nowdb_rwlock_destroy(&scope->lock);
+		return err;
+	}
 	
 	/* context tree */
 	if (ts_algo_tree_init(&scope->contexts,
@@ -393,6 +442,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		                       "initialising context tree");
 		free(scope->path); scope->path = NULL;
 		free(scope->catalog); scope->catalog = NULL;
+		free(scope->strgpath); scope->strgpath = NULL;
 		nowdb_rwlock_destroy(&scope->lock);
 		return err;
 	}
@@ -402,6 +452,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	if (err != NOWDB_OK) {
 		free(scope->path); scope->path = NULL;
 		free(scope->catalog); scope->catalog = NULL;
+		free(scope->strgpath); scope->strgpath = NULL;
 		nowdb_rwlock_destroy(&scope->lock);
 		ts_algo_tree_destroy(&scope->contexts);
 		return err;
@@ -483,6 +534,10 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope->path != NULL) {
 		free(scope->path); scope->path = NULL;
 	}
+	if (scope->strgpath != NULL) {
+		free(scope->strgpath);
+		scope->strgpath = NULL;
+	}
 	if (scope->catalog != NULL) {
 		free(scope->catalog); scope->catalog = NULL;
 	}
@@ -501,13 +556,16 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	nowdb_rwlock_destroy(&scope->lock);
 	nowdb_store_destroy(&scope->vertices);
 	ts_algo_tree_destroy(&scope->contexts);
+
+	// not enough, we need to stop the workers
+	ts_algo_tree_destroy(&scope->storage);
 }
 
 /* ------------------------------------------------------------------------
  * Helper: compute catalog size
  * ------------------------------------------------------------------------
  */
-static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
+static inline uint32_t computeStorageSize(nowdb_scope_t *scope) {
 	/* once:
 	 * MAGIC + version
 	 *
@@ -518,35 +576,52 @@ static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
 	 * nm sorters        4 
 	 * compression       4 
 	 * encryption        4 
-	 * context name    255
+	 * storage name    255
 	 */
 	uint32_t once = 8;
 	uint32_t perline = 275;
-	uint32_t nCtx   = 0;
+	uint32_t n      = 0;
 
-	nCtx += scope->contexts.count;
-	return once + nCtx * perline + 1;
+	n += scope->storage.count;
+	return once + n * perline + 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: compute catalog size
+ * ------------------------------------------------------------------------
+ */
+static inline uint32_t computecatalogSize(nowdb_scope_t *scope) {
+	/* once:
+	 * MAGIC + version
+	 *
+	 * per line:
+	 * ---------
+	 * context name    255 + 1
+	 * storage name    255 + 1
+	 */
+	uint32_t once = 8;
+	uint32_t perline = 512;
+	uint32_t n      = 0;
+
+	n += scope->storage.count;
+	return once + n * perline;
 }
 
 /* ------------------------------------------------------------------------
  * Helper: write one line into the catalog
  * ------------------------------------------------------------------------
  */
-static inline void writeCatalogLine(nowdb_context_t *ctx,
-                                char *buf, uint32_t *off) {
+static inline void writeStorageLine(nowdb_storage_t *strg,
+                                 char *buf, uint32_t *off) {
 
-	uint32_t s = strlen(ctx->name)+1;
+	uint32_t s = strlen(strg->name)+1;
 
-	/*
-	if (ctx->store.filesize == 0) *((char*)0x0) = 1;
-	*/
-
-	memcpy(buf+*off, &ctx->store.filesize, 4); *off += 4;
-	memcpy(buf+*off, &ctx->store.largesize, 4); *off += 4;
-	memcpy(buf+*off, &ctx->store.tasknum, 4); *off += 4;
-	memcpy(buf+*off, &ctx->store.comp, 4); *off += 4;
-	memset(buf+*off, 0, 4); *off += 4;
-	memcpy(buf+*off, ctx->name, s); *off += s;
+	memcpy(buf+*off, &strg->filesize, 4); *off += 4;
+	memcpy(buf+*off, &strg->largesize, 4); *off += 4;
+	memcpy(buf+*off, &strg->tasknum, 4); *off += 4;
+	memcpy(buf+*off, &strg->comp, 4); *off += 4;
+	memcpy(buf+*off, &strg->encp, 4); *off += 4;
+	memcpy(buf+*off, strg->name, s); *off += s;
 }
 
 /* ------------------------------------------------------------------------
@@ -554,17 +629,16 @@ static inline void writeCatalogLine(nowdb_context_t *ctx,
  *         write files to buffer and write buffers to disk
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
+static inline nowdb_err_t storeStorage(nowdb_scope_t *scope) {
 	nowdb_err_t err;
 	uint32_t magic = NOWDB_MAGIC;
 	char *buf = NULL;
 	uint32_t off=8;
 	ts_algo_list_node_t *runner;
 	ts_algo_list_t *tmp;
-	nowdb_context_t *ctx;
 	uint32_t sz;
 
-	sz = computeCatalogSize(scope);
+	sz = computeStorageSize(scope);
 	buf = malloc(sz);
 	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                   FALSE, OBJECT, "allocating buffer");
@@ -572,6 +646,20 @@ static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
 	memcpy(buf, &magic, 4);
 	memcpy(buf+4, &scope->ver, 4);
 
+	if (scope->storage.count > 0) {
+		tmp = ts_algo_tree_toList(&scope->storage);
+		if (tmp == NULL) {
+			NOMEM("tree.toList");
+			free(buf); return err;
+		}
+		for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
+			nowdb_storage_t *strg = runner->cont;
+			writeStorageLine(strg, buf, &off);
+		}
+		ts_algo_list_destroy(tmp); free(tmp);
+	}
+
+	/* goes to store contexts
 	if (scope->contexts.count > 0) {
 		tmp = ts_algo_tree_toList(&scope->contexts);
 		if (tmp == NULL) {
@@ -585,7 +673,8 @@ static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
 		}
 		ts_algo_list_destroy(tmp); free(tmp);
 	}
-	err = nowdb_writeFileWithBkp(scope->path, scope->catalog, buf, off);
+	*/
+	err = nowdb_writeFileWithBkp(scope->path, scope->strgpath, buf, off);
 	free(buf); return err;
 }
 
@@ -595,11 +684,13 @@ static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
  */
 static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
                                       char              *name,
-                                      nowdb_ctx_config_t *cfg,
+                                      char          *strgname,
                                       nowdb_version_t     ver,
                                       nowdb_context_t   **ctx) {
 	nowdb_path_t tmp,p;
 	nowdb_model_edge_t *e;
+	nowdb_storage_t *strg, pattern;
+	char *strgnm;
 	nowdb_err_t err;
 	uint32_t s;
 
@@ -608,6 +699,12 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		fprintf(stderr, "NO MODEL!!!\n");
 		return err;
 	}
+
+	strgnm = strgname==NULL?"_cdefault":strgname;
+	pattern.name = strgnm;
+
+	strg = ts_algo_tree_find(&scope->storage, &pattern);
+	if (strg == NULL) INVALID("storage not found");
 
 	s = strnlen(name, NOWDB_MAX_NAME+1);
 	if (s >= NOWDB_MAX_NAME) return nowdb_err_get(nowdb_err_invalid,
@@ -644,8 +741,8 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	                         NULL, ver,
 	                         NOWDB_CONT_EDGE,
 	                         e->size,
-	                         cfg->allocsize,
-	                         cfg->largesize, 1));
+	                         strg->filesize,
+	                         strg->largesize, 1));
 	free(p);
 	if (err != NOWDB_OK) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -657,7 +754,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		free((*ctx)->name); free(*ctx);
 		return err;
 	}
-	err = nowdb_store_configCompression(&(*ctx)->store, cfg->comp);
+	err = nowdb_store_configCompression(&(*ctx)->store, strg->comp);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -669,7 +766,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
-	err = nowdb_store_configWorkers(&(*ctx)->store, cfg->sorters);
+	err = nowdb_store_configWorkers(&(*ctx)->store, strg->tasknum);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -751,30 +848,41 @@ static inline nowdb_err_t findContext(nowdb_scope_t  *scope,
  * Helper: read one line from the catalog
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
+static inline nowdb_err_t readStorageLine(nowdb_scope_t *scope,
                                           char *buf, uint32_t *off,
                                           nowdb_version_t ver) {
-	nowdb_err_t        err;
-	nowdb_context_t   *ctx;
-	nowdb_ctx_config_t cfg;
+	nowdb_err_t err;
+	nowdb_storage_config_t cfg;
+	nowdb_storage_t *strg;
 	uint32_t i;
 
 	cfg.sort = 1;
 	cfg.encp = NOWDB_ENCP_NONE;
 
-	memcpy(&cfg.allocsize, buf+*off, 4); *off += 4;
+	memcpy(&cfg.filesize, buf+*off, 4); *off += 4;
 	memcpy(&cfg.largesize, buf+*off, 4); *off += 4;
 	memcpy(&cfg.sorters, buf+*off, 4); *off += 4;
 	memcpy(&cfg.comp, buf+*off, 4); *off += 4; *off += 4;
 
-	for(i=0;i<255;i++) {
+	for(i=0;i<=255;i++) {
 		if (buf[*off+i] == 0) break;
 	}
 	if (i > 255) return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
-	                                                "no context name");
+	                                                "no storage name");
 
-	err = initContext(scope, buf+*off, &cfg, ver, &ctx);
+	err = nowdb_storage_new(&strg, buf+*off, &cfg);
 	if (err != NOWDB_OK) return err;
+
+	err = nowdb_storage_start(strg);
+	if (err != NOWDB_OK) {
+		nowdb_storage_destroy(strg); free(strg);
+		return err;
+	}
+
+	if (ts_algo_tree_insert(&scope->storage, strg) != TS_ALGO_OK) {
+		nowdb_storage_destroy(strg); free(strg);	
+		NOMEM("tree.insert"); return err;
+	}
 
 	*off += i + 1;
 
@@ -785,7 +893,78 @@ static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
  * Helper: read catalog
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t readCatalog(nowdb_scope_t *scope) {
+static inline nowdb_err_t readStorageCatalog(nowdb_scope_t *scope) {
+	nowdb_err_t     err;
+	uint32_t      magic;
+	nowdb_version_t ver;
+	char           *buf;
+	uint32_t         sz;
+	uint32_t      off=0;
+
+	sz = nowdb_path_filesize(scope->strgpath);
+	if (sz == 0) return nowdb_err_get(nowdb_err_stat, FALSE, OBJECT,
+	                                                scope->catalog); 
+	buf = malloc(sz);
+	if (buf == NULL) return nowdb_err_get(nowdb_err_stat, FALSE, OBJECT,
+	                                               "allocating buffer");
+	err = nowdb_readFile(scope->strgpath, buf, sz);
+	if (err != NOWDB_OK) {
+		free(buf); return err;
+	}
+	memcpy(&magic, buf, 4); off+=4;
+	if (magic != NOWDB_MAGIC) return nowdb_err_get(nowdb_err_magic,
+	                                FALSE, OBJECT, scope->catalog);
+	memcpy(&ver, buf+off, 4); off+=4;
+
+	while(off < sz) {
+		err = readStorageLine(scope, buf, &off, ver);
+		if (err != NOWDB_OK) break;
+	}
+	free(buf);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_destroy(&scope->storage);
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: read one line from the catalog
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t readContextLine(nowdb_scope_t *scope,
+                                          char *buf, uint32_t *off,
+                                          nowdb_version_t ver) {
+	nowdb_err_t err;
+	char  *name, *strgname;
+	nowdb_context_t *ctx;
+	uint32_t i;
+
+	for(i=0;i<=255;i++) {
+		if (buf[*off+i] == 0) break;
+	}
+	if (i > 255) return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
+	                                                "no context name");
+	name = buf+*off; *off += i + 1;
+
+	for(i=0;i<=255;i++) {
+		if (buf[*off+i] == 0) break;
+	}
+	if (i > 255) return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
+	                                                "no context name");
+
+	strgname = buf+*off; *off += i + 1;
+
+	err = initContext(scope, name, strgname, ver, &ctx);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: read catalog
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t readContextCatalog(nowdb_scope_t *scope) {
 	nowdb_err_t     err;
 	uint32_t      magic;
 	nowdb_version_t ver;
@@ -809,12 +988,12 @@ static inline nowdb_err_t readCatalog(nowdb_scope_t *scope) {
 	memcpy(&ver, buf+off, 4); off+=4;
 
 	while(off < sz) {
-		err = readCatalogLine(scope, buf, &off, ver);
+		err = readContextLine(scope, buf, &off, ver);
 		if (err != NOWDB_OK) break;
 	}
 	free(buf);
 	if (err != NOWDB_OK) {
-		ts_algo_tree_destroy(&scope->contexts);
+		ts_algo_tree_destroy(&scope->storage);
 	}
 	return err;
 }
@@ -910,8 +1089,10 @@ static inline nowdb_err_t dropAllContexts(nowdb_scope_t *scope) {
 		err = openModel(scope);
 		if (err != NOWDB_OK) return err;
 		
-		err = readCatalog(scope);
+		err = readStorageCatalog(scope);
 		if (err != NOWDB_OK) return err;
+
+		// open contexts!
 	}
 	if (scope->contexts.count == 0) return NOWDB_OK;
 
@@ -1414,12 +1595,14 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 	err = openModel(scope);
 	if (err != NOWDB_OK) goto unlock;
 
-	err = readCatalog(scope);
+	err = readStorageCatalog(scope);
 	if (err != NOWDB_OK) {
 		nowdb_model_destroy(scope->model);
 		free(scope->model); scope->model = NULL;
 		goto unlock;
 	}
+
+	// open contexts!
 
 	err = initIndexMan(scope);
 	if (err != NOWDB_OK) {
@@ -1557,7 +1740,7 @@ unlock:
  */
 nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
                                       char              *name,
-                                      nowdb_ctx_config_t *cfg) 
+                                      char          *strgname)
 {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
@@ -1568,8 +1751,6 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 
 	if (name  == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                           FALSE, OBJECT, "name is NULL");
-	if (cfg == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                 FALSE, OBJECT, "configurator is NULL");
 
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
@@ -1607,7 +1788,7 @@ nowdb_err_t nowdb_scope_createContext(nowdb_scope_t    *scope,
 		goto unlock;
 	}
 
-	err = initContext(scope, name, cfg, scope->ver, &ctx);
+	err = initContext(scope, name, strgname, scope->ver, &ctx);
 	if (err != NOWDB_OK) goto unlock;
 
 	err = nowdb_context_err(ctx, nowdb_store_create(&ctx->store));

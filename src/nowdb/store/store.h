@@ -55,10 +55,6 @@ typedef struct {
 	nowdb_storage_t   *storage; /* where it belongs to         */
 	char                 state; /* open or closed              */
 	char                    ts; /* stores a timeseries         */
-
-	uint32_t           tasknum; /* to be removed               */
-	nowdb_worker_t     syncwrk; /* to be removed               */
-	nowdb_worker_t     sortwrk; /* to be removed               */
 } nowdb_store_t;
 
 /* ------------------------------------------------------------------------

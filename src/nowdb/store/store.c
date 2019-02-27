@@ -345,7 +345,6 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->comp = NOWDB_COMP_FLAT;
 	store->ctx  = NULL;
 	store->nextid = 1;
-	store->tasknum = 1;
 	store->ts = ts;
 	store->cont = cont;
 
@@ -416,6 +415,7 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  * Configure worker
  * ------------------------------------------------------------------------
  */
+/*
 nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
                                       uint32_t    tasknum) {
 	STORENULL();
@@ -425,6 +425,7 @@ nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
 	store->tasknum = tasknum;
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Configure indexing
@@ -676,7 +677,7 @@ static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
 	if (err != NOWDB_OK) return err;
 
 	if (store->starting) return NOWDB_OK;
-	return nowdb_store_sortNow(&store->sortwrk, store);
+	return nowdb_store_sortNow(store->storage, store);
 }
 
 /* ------------------------------------------------------------------------
@@ -1123,39 +1124,6 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: start workers
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
-	nowdb_err_t err = NOWDB_OK;
-
-	err = nowdb_store_startSync(&store->syncwrk, store, NULL);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_store_startSorter(&store->sortwrk, store, NULL);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_stopSync(&store->syncwrk));
-		return err;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: stop workers
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t stopWorkers(nowdb_store_t *store) {
-	nowdb_err_t err = NOWDB_OK;
-
-	err = nowdb_store_stopSorter(&store->sortwrk);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_store_stopSync(&store->syncwrk);
-	if (err != NOWDB_OK) return err;
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
  * Open store
  * ------------------------------------------------------------------------
  */
@@ -1190,12 +1158,6 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 		destroyAllFiles(store); goto unlock;
 	}
 
-	/* start workers */
-	err = startWorkers(store);
-	if (err != NOWDB_OK) {
-		destroyAllFiles(store); goto unlock;
-	}
-
 	store->state = NOWDB_STORE_OPEN;
 
 unlock:
@@ -1225,11 +1187,6 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 
 	/* close store is NOT THREADSAFE */
 	err = nowdb_unlock_write(&store->lock);
-	if (err != NOWDB_OK) return err;
-
-	/* stop workers: IS NOT THREADSAFE!!!
-	 * DONT LOCK the store when stopping workers! */
-	err = stopWorkers(store);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_lock_write(&store->lock);

@@ -20,8 +20,9 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	char          *name;
-	nowdb_store_t store;
+	char          *name; // context name
+        char      *strgname; // storage name
+	nowdb_store_t store; // 
 } nowdb_context_t;
 
 /* ------------------------------------------------------------------------

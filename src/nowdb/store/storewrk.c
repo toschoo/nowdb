@@ -7,6 +7,7 @@
 #include <nowdb/io/file.h>
 #include <nowdb/store/storewrk.h>
 #include <nowdb/store/store.h>
+#include <nowdb/store/storage.h>
 #include <nowdb/store/comp.h>
 #include <nowdb/store/indexer.h>
 #include <nowdb/index/man.h>
@@ -65,16 +66,16 @@ static void nodrain(void **ignore) {}
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
-                                  void         *store,
+                                  void          *strg,
                                   nowdb_queue_t *errq) 
 {
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                "store", "store object is NULL");
+	if (strg == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                              "store", "storage object is NULL");
 
 	return nowdb_worker_init(wrk, "sync", 1, SYNCPERIOD, &syncjob,
-	                                       errq, &nodrain, store);
+	                                         errq, &nodrain, strg);
 }
 
 /* ------------------------------------------------------------------------
@@ -90,17 +91,17 @@ nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
-                                    void        *pstore,
+                                    void         *pstrg,
                                     nowdb_queue_t *errq) {
-	nowdb_store_t *store = pstore;
+	nowdb_storage_t *strg = pstrg;
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                "store", "store object is NULL");
+	if (strg == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                           "storeage", "storage object is NULL");
 	return nowdb_worker_init(wrk, "sorter",
-	                         store->tasknum,
+	                         strg->tasknum,
 	                         SORTPERIOD, &sortjob,
-	                         errq, &nodrain, store);
+	                         errq, &nodrain, strg);
 }
 
 /* ------------------------------------------------------------------------
@@ -115,8 +116,9 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
  * Do your job, sorter!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk, void *store) {
-	return nowdb_worker_do(wrk, &((nowdb_store_t*)store)->srtmsg);
+nowdb_err_t nowdb_store_sortNow(nowdb_storage_t *strg, void *store) {
+	return nowdb_worker_do(&strg->sortwrk,
+	     &((nowdb_store_t*)store)->srtmsg);
 }
 
 /* ------------------------------------------------------------------------
@@ -127,22 +129,37 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
                            nowdb_wrk_message_t *msg) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2;
-	nowdb_store_t *store = wrk->rsc;
-	
-	err = nowdb_lock_write(&store->lock);
+	nowdb_err_t err2 = NOWDB_OK;
+	nowdb_err_t err3 = NOWDB_OK;
+	nowdb_storage_t *strg = wrk->rsc;
+	nowdb_store_t *store;
+	ts_algo_list_node_t *runner;
+
+	err = nowdb_lock(&strg->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (store->writer->dirty) {
-		err = nowdb_file_sync(store->writer);
-		store->writer->dirty = FALSE;
+	for(runner=strg->stores.head; runner!=NULL; runner=runner->nxt) {
+		store = runner->cont;
 
-		/* write catalog ? */
+		err = nowdb_lock_write(&store->lock);
+		if (err != NOWDB_OK) return err;
+
+		if (store->writer->dirty) {
+			err2 = nowdb_file_sync(store->writer);
+			store->writer->dirty = FALSE;
+		}
+		err = nowdb_unlock_write(&store->lock);
+		if (err != NOWDB_OK) {
+			err->cause = err2; break;
+		}
+		if (err2 != NOWDB_OK) {
+			err=err2; break;
+		}
 	}
 
-	err2 = nowdb_unlock_write(&store->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err; return err2;
+	err3 = nowdb_unlock(&strg->lock);
+	if (err3 != NOWDB_OK) {
+		err3->cause = err; return err3;
 	}
 	return err;
 }
@@ -590,5 +607,5 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
                            nowdb_wrk_message_t *msg) {
-	return compsort(wrk, id, wrk->rsc);
+	return compsort(wrk, id, msg->stcont);
 }

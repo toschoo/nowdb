@@ -13,6 +13,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/task/lock.h>
 #include <nowdb/io/dir.h>
+#include <nowdb/store/storage.h>
 #include <nowdb/store/store.h>
 #include <nowdb/scope/context.h>
 #include <nowdb/scope/loader.h>
@@ -29,20 +30,22 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     lock; /* read/write lock       */
-	uint32_t          state; /* open or closed        */
-	nowdb_path_t       path; /* base path             */
-	nowdb_path_t    catalog; /* catalog path          */
-	nowdb_version_t     ver; /* db version            */
-	nowdb_store_t  vertices; /* vertices              */
-	nowdb_index_t   *vindex; /* index on vertices     */
-	nowdb_plru12_t  *evache; /* external vertex cache */
-	nowdb_plru12_t  *ivache; /* internal vertex cache */
-	ts_algo_tree_t contexts; /* contexts              */
-	nowdb_index_man_t *iman; /* index manager         */
-	nowdb_model_t    *model; /* model                 */
-	nowdb_text_t      *text; /* strings               */
-	nowdb_procman_t   *pman; /* stored procedures     */
+	nowdb_rwlock_t       lock; /* read/write lock       */
+	uint32_t            state; /* open or closed        */
+	nowdb_path_t         path; /* base path             */
+	nowdb_path_t     strgpath; /* catalog path          */
+	nowdb_path_t      catalog; /* ctx catalog path      */
+	nowdb_version_t       ver; /* db version            */
+	nowdb_store_t    vertices; /* vertices              */
+	nowdb_index_t     *vindex; /* index on vertices     */
+	nowdb_plru12_t    *evache; /* external vertex cache */
+	nowdb_plru12_t    *ivache; /* internal vertex cache */
+	ts_algo_tree_t    storage; /* tree of storage cfgs */
+	ts_algo_tree_t   contexts; /* contexts              */
+	nowdb_index_man_t   *iman; /* index manager         */
+	nowdb_model_t      *model; /* model                 */
+	nowdb_text_t        *text; /* strings               */
+	nowdb_procman_t     *pman; /* stored procedures     */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -102,9 +105,9 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope);
  * Create a context within that scope
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_createContext(nowdb_scope_t     *scope,
-                                      char               *name,
-                                      nowdb_ctx_config_t *cfg);
+nowdb_err_t nowdb_scope_createContext(nowdb_scope_t *scope,
+                                      char           *name,
+                                      char       *strgname);
 
 /* -----------------------------------------------------------------------
  * Drop a context within that scope
