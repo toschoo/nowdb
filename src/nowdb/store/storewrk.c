@@ -117,6 +117,7 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_sortNow(nowdb_storage_t *strg, void *store) {
+	if (!strg->started) return NOWDB_OK;
 	return nowdb_worker_do(&strg->sortwrk,
 	     &((nowdb_store_t*)store)->srtmsg);
 }
@@ -279,7 +280,7 @@ static inline void releaseReader(nowdb_store_t *store, nowdb_file_t *file) {
 	}
 	file->cctx  = NULL;
 	file->cdict = NULL;
-	nowdb_store_releaseReader(store, file);
+	NOWDB_IGNORE(nowdb_store_releaseReader(store, file));
 }
 
 /* ------------------------------------------------------------------------
@@ -561,7 +562,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	if (err != NOWDB_OK) {
 		releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader); free(buf);
-		nowdb_store_releaseWaiting(store, src);
+		NOWDB_IGNORE(nowdb_store_releaseWaiting(store, src));
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
@@ -581,9 +582,9 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
-		nowdb_store_releaseReader(store, reader);
+		NOWDB_IGNORE(nowdb_store_releaseReader(store, reader));
 		nowdb_file_destroy(reader); free(reader);
-		nowdb_store_releaseWaiting(store, src);
+		NOWDB_IGNORE(nowdb_store_releaseWaiting(store, src));
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
@@ -607,5 +608,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
                            nowdb_wrk_message_t *msg) {
+	if (msg == NULL) return NOWDB_OK;
 	return compsort(wrk, id, msg->stcont);
 }

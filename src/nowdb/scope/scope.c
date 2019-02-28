@@ -14,6 +14,9 @@
 static char *OBJECT = "scope";
 
 #define VINDEX "_vindex"
+#define ESTORE "_estore"
+#define VSTORE "_vstore"
+#define STORECAT "store"
 
 /* ------------------------------------------------------------------------
  * Macro: scope NULL
@@ -28,6 +31,9 @@ static char *OBJECT = "scope";
 
 #define INVALID(x) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, x);
+
+#define INCONSISTENT(x) \
+	return nowdb_err_get(nowdb_err_panic, FALSE, OBJECT, x);
 
 #define SCOPENOTOPEN() \
 	if (scope->state != NOWDB_SCOPE_OPEN) { \
@@ -287,20 +293,25 @@ static nowdb_err_t openModel(nowdb_scope_t *scope) {
  * Helper: initialise vertex
  * -----------------------------------------------------------------------
  */
-static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
-                                     nowdb_version_t  ver) {
+static inline nowdb_err_t initVertex(nowdb_scope_t *scope) {
 	nowdb_path_t p;
 	nowdb_err_t err;
+	nowdb_storage_t *strg, pattern;
+
+	if (scope->vinit) return NOWDB_OK;
 
 	err = mkvtxpath(scope, &p);
 	if (err != NOWDB_OK) return err;
 
+	pattern.name = VSTORE;
+	strg = ts_algo_tree_find(&scope->storage, &pattern);
+	if (strg == NULL) {
+		INCONSISTENT("no default storage for vertices");
+	}
+
 	err = nowdb_store_init(&scope->vertices, p,
-	                       scope->evache, ver,
-	                       NOWDB_CONT_VERTEX,
-	                       sizeof(nowdb_vertex_t),
-	                       NOWDB_FILE_MAPSIZE,
-	                       NOWDB_MEGA *
+	                       scope->evache, scope->ver,
+	                       NOWDB_CONT_VERTEX, strg,
 	                       sizeof(nowdb_vertex_t),0);
 	free(p);
 	if (err != NOWDB_OK) return NOWDB_OK;
@@ -319,15 +330,16 @@ static inline nowdb_err_t initVertex(nowdb_scope_t *scope,
 	}
 	*/
 	err = nowdb_store_configIndexing(&scope->vertices, scope->iman, NULL);
-	if (err != NOWDB_OK) {
-		nowdb_store_destroy(&scope->vertices);
-		return err;
-	}
+	if (err != NOWDB_OK) return err;
+
+	/*
 	err = nowdb_store_configWorkers(&scope->vertices, 2);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&scope->vertices);
 		return err;
 	}
+	*/
+	scope->vinit = 1;
 	return NOWDB_OK;
 }
 
@@ -374,6 +386,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->iman = NULL;
 	scope->model = NULL;
 	scope->vindex = NULL;
+	scope->vinit  = 0;
 	scope->evache = NULL;
 	scope->ivache = NULL;
 	scope->text = NULL;
@@ -395,7 +408,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	strcpy(scope->path, path);
 
 	/* storage catalog */
-	scope->strgpath = nowdb_path_append(scope->path, "cstore");
+	scope->strgpath = nowdb_path_append(scope->path, STORECAT);
 	if (scope->strgpath == NULL) {
 		free(scope->path); scope->path = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
@@ -444,17 +457,6 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		free(scope->catalog); scope->catalog = NULL;
 		free(scope->strgpath); scope->strgpath = NULL;
 		nowdb_rwlock_destroy(&scope->lock);
-		return err;
-	}
-
-	/* vertex store */
-	err = initVertex(scope, ver);
-	if (err != NOWDB_OK) {
-		free(scope->path); scope->path = NULL;
-		free(scope->catalog); scope->catalog = NULL;
-		free(scope->strgpath); scope->strgpath = NULL;
-		nowdb_rwlock_destroy(&scope->lock);
-		ts_algo_tree_destroy(&scope->contexts);
 		return err;
 	}
 
@@ -553,16 +555,16 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 		nowdb_procman_destroy(scope->pman);
 		free(scope->pman); scope->pman = NULL;
 	}
+	if (scope->vinit) {
+		nowdb_store_destroy(&scope->vertices);
+	}
 	nowdb_rwlock_destroy(&scope->lock);
-	nowdb_store_destroy(&scope->vertices);
 	ts_algo_tree_destroy(&scope->contexts);
-
-	// not enough, we need to stop the workers
 	ts_algo_tree_destroy(&scope->storage);
 }
 
 /* ------------------------------------------------------------------------
- * Helper: compute catalog size
+ * Helper: compute storage size
  * ------------------------------------------------------------------------
  */
 static inline uint32_t computeStorageSize(nowdb_scope_t *scope) {
@@ -590,7 +592,7 @@ static inline uint32_t computeStorageSize(nowdb_scope_t *scope) {
  * Helper: compute catalog size
  * ------------------------------------------------------------------------
  */
-static inline uint32_t computecatalogSize(nowdb_scope_t *scope) {
+static inline uint32_t computeCatalogSize(nowdb_scope_t *scope) {
 	/* once:
 	 * MAGIC + version
 	 *
@@ -629,7 +631,7 @@ static inline void writeStorageLine(nowdb_storage_t *strg,
  *         write files to buffer and write buffers to disk
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t storeStorage(nowdb_scope_t *scope) {
+static inline nowdb_err_t writeStorage(nowdb_scope_t *scope) {
 	nowdb_err_t err;
 	uint32_t magic = NOWDB_MAGIC;
 	char *buf = NULL;
@@ -659,7 +661,46 @@ static inline nowdb_err_t storeStorage(nowdb_scope_t *scope) {
 		ts_algo_list_destroy(tmp); free(tmp);
 	}
 
-	/* goes to store contexts
+	err = nowdb_writeFileWithBkp(scope->path, scope->strgpath, buf, off);
+	free(buf); return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: write one line into the storage catalog
+ * ------------------------------------------------------------------------
+ */
+static inline void writeCatalogLine(nowdb_context_t *ctx,
+                                char *buf, uint32_t *off) {
+
+	uint32_t s = strlen(ctx->name)+1;
+
+	memcpy(buf+*off, ctx->name, s); *off += s;
+	s = strlen(ctx->strgname)+1;
+	memcpy(buf+*off, ctx->strgname, s); *off += s;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: compute catalog size and alloc buf
+ *         write files to buffer and write buffers to disk
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	uint32_t magic = NOWDB_MAGIC;
+	char *buf = NULL;
+	uint32_t off=8;
+	ts_algo_list_node_t *runner;
+	ts_algo_list_t *tmp;
+	uint32_t sz;
+
+	sz = computeCatalogSize(scope);
+	buf = malloc(sz);
+	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                   FALSE, OBJECT, "allocating buffer");
+
+	memcpy(buf, &magic, 4);
+	memcpy(buf+4, &scope->ver, 4);
+
 	if (scope->contexts.count > 0) {
 		tmp = ts_algo_tree_toList(&scope->contexts);
 		if (tmp == NULL) {
@@ -668,13 +709,12 @@ static inline nowdb_err_t storeStorage(nowdb_scope_t *scope) {
 			free(buf); return err;
 		}
 		for(runner=tmp->head; runner!=NULL; runner=runner->nxt) {
-			ctx = runner->cont;
+			nowdb_context_t *ctx = runner->cont;
 			writeCatalogLine(ctx, buf, &off);
 		}
 		ts_algo_list_destroy(tmp); free(tmp);
 	}
-	*/
-	err = nowdb_writeFileWithBkp(scope->path, scope->strgpath, buf, off);
+	err = nowdb_writeFileWithBkp(scope->path, scope->catalog, buf, off);
 	free(buf); return err;
 }
 
@@ -700,7 +740,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		return err;
 	}
 
-	strgnm = strgname==NULL?"_cdefault":strgname;
+	strgnm = strgname==NULL?ESTORE:strgname;
 	pattern.name = strgnm;
 
 	strg = ts_algo_tree_find(&scope->storage, &pattern);
@@ -723,6 +763,14 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	}
 	strcpy((*ctx)->name, name);
 
+	(*ctx)->strgname = strdup(strgnm);
+	if ((*ctx)->strgname == NULL) {
+		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+		                          "allocating name string");
+		free((*ctx)->name); (*ctx)->name = NULL;
+		free(*ctx); *ctx = NULL; return err;
+	}
+
 	tmp = nowdb_path_append(scope->path, "context");
 	if (tmp == NULL) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -740,15 +788,15 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	      nowdb_store_init(&(*ctx)->store, p,
 	                         NULL, ver,
 	                         NOWDB_CONT_EDGE,
-	                         e->size,
-	                         strg->filesize,
-	                         strg->largesize, 1));
+	                         strg,
+	                         e->size, 1));
 	free(p);
 	if (err != NOWDB_OK) {
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
-	err = nowdb_store_configSort(&(*ctx)->store, &nowdb_sort_edge_compare);
+	err = nowdb_store_configSort(&(*ctx)->store,
+	                   &nowdb_sort_edge_compare);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx);
@@ -766,12 +814,14 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
+	/*
 	err = nowdb_store_configWorkers(&(*ctx)->store, strg->tasknum);
 	if (err != NOWDB_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
 		return err;
 	}
+	*/
 	if (ts_algo_tree_insert(&scope->contexts, *ctx) != TS_ALGO_OK) {
 		nowdb_store_destroy(&(*ctx)->store);
 		free((*ctx)->name); free(*ctx); *ctx = NULL;
@@ -779,6 +829,62 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		                                      "tree.insert");
 	}
 	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: start storage 
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t startStorage(nowdb_scope_t *scope) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t *list;
+	ts_algo_list_node_t *runner;
+	nowdb_storage_t *strg;
+
+	if (scope->storage.count == 0) return NOWDB_OK;
+
+	list = ts_algo_tree_toList(&scope->storage);
+	if (list == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                          FALSE, OBJECT, "tree.toList");
+
+	for(runner=list->head; runner != NULL; runner=runner->nxt) {
+		strg = runner->cont;
+
+		fprintf(stderr, "starting %s\n", strg->name);
+
+		err = nowdb_storage_start(strg);
+		if (err != NOWDB_OK) break;
+	}
+	ts_algo_list_destroy(list); free(list);
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: stop storage 
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t stopStorage(nowdb_scope_t *scope) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t *list;
+	ts_algo_list_node_t *runner;
+	nowdb_storage_t *strg;
+
+	if (scope->storage.count == 0) return NOWDB_OK;
+
+	list = ts_algo_tree_toList(&scope->storage);
+	if (list == NULL) return nowdb_err_get(nowdb_err_no_mem,
+	                          FALSE, OBJECT, "tree.toList");
+
+	for(runner=list->head; runner != NULL; runner=runner->nxt) {
+		strg = runner->cont;
+
+		fprintf(stderr, "stopping %s\n", strg->name);
+
+		err = nowdb_storage_stop(strg);
+		if (err != NOWDB_OK) break;
+	}
+	ts_algo_list_destroy(list); free(list);
+	return err;
 }
 
 /* -----------------------------------------------------------------------
@@ -790,6 +896,9 @@ static nowdb_err_t openAllContexts(nowdb_scope_t *scope) {
 	ts_algo_list_t *list;
 	ts_algo_list_node_t *runner;
 	nowdb_context_t *ctx;
+
+	err = startStorage(scope);
+	if (err != NOWDB_OK) return err;
 
 	if (scope->contexts.count == 0) return NOWDB_OK;
 
@@ -873,12 +982,6 @@ static inline nowdb_err_t readStorageLine(nowdb_scope_t *scope,
 	err = nowdb_storage_new(&strg, buf+*off, &cfg);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_storage_start(strg);
-	if (err != NOWDB_OK) {
-		nowdb_storage_destroy(strg); free(strg);
-		return err;
-	}
-
 	if (ts_algo_tree_insert(&scope->storage, strg) != TS_ALGO_OK) {
 		nowdb_storage_destroy(strg); free(strg);	
 		NOMEM("tree.insert"); return err;
@@ -900,6 +1003,8 @@ static inline nowdb_err_t readStorageCatalog(nowdb_scope_t *scope) {
 	char           *buf;
 	uint32_t         sz;
 	uint32_t      off=0;
+
+	if (scope->storage.count > 0) return NOWDB_OK;
 
 	sz = nowdb_path_filesize(scope->strgpath);
 	if (sz == 0) return nowdb_err_get(nowdb_err_stat, FALSE, OBJECT,
@@ -931,7 +1036,7 @@ static inline nowdb_err_t readStorageCatalog(nowdb_scope_t *scope) {
  * Helper: read one line from the catalog
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t readContextLine(nowdb_scope_t *scope,
+static inline nowdb_err_t readCatalogLine(nowdb_scope_t *scope,
                                           char *buf, uint32_t *off,
                                           nowdb_version_t ver) {
 	nowdb_err_t err;
@@ -964,7 +1069,7 @@ static inline nowdb_err_t readContextLine(nowdb_scope_t *scope,
  * Helper: read catalog
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t readContextCatalog(nowdb_scope_t *scope) {
+static inline nowdb_err_t readCatalog(nowdb_scope_t *scope) {
 	nowdb_err_t     err;
 	uint32_t      magic;
 	nowdb_version_t ver;
@@ -988,7 +1093,7 @@ static inline nowdb_err_t readContextCatalog(nowdb_scope_t *scope) {
 	memcpy(&ver, buf+off, 4); off+=4;
 
 	while(off < sz) {
-		err = readContextLine(scope, buf, &off, ver);
+		err = readCatalogLine(scope, buf, &off, ver);
 		if (err != NOWDB_OK) break;
 	}
 	free(buf);
@@ -996,6 +1101,56 @@ static inline nowdb_err_t readContextCatalog(nowdb_scope_t *scope) {
 		ts_algo_tree_destroy(&scope->storage);
 	}
 	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Helper: create default storage
+ * -----------------------------------------------------------------------
+ */
+static nowdb_err_t createDefaultStorage(nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_storage_config_t  cfg;
+	nowdb_storage_t *estrg, *vstrg;
+	nowdb_bitmap64_t os;
+
+	// edge storage
+	os = NOWDB_CONFIG_SIZE_MEDIUM     |
+	     NOWDB_CONFIG_INSERT_CONSTANT | 
+	     NOWDB_CONFIG_DISK_HDD;
+
+	nowdb_storage_config(&cfg, os);
+
+	fprintf(stderr, "creating storage %s\n", ESTORE);
+
+	err = nowdb_storage_new(&estrg, ESTORE, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	if (ts_algo_tree_insert(&scope->storage, estrg) != TS_ALGO_OK) {
+		nowdb_storage_destroy(estrg); free(estrg);
+		return err;
+	}
+
+	// vertex storage
+	os = NOWDB_CONFIG_SIZE_SMALL      |
+	     NOWDB_CONFIG_INSERT_MODERATE | 
+	     NOWDB_CONFIG_DISK_HDD;
+
+	nowdb_storage_config(&cfg, os);
+
+	fprintf(stderr, "creating storage %s\n", VSTORE);
+
+	err = nowdb_storage_new(&vstrg, VSTORE, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	if (ts_algo_tree_insert(&scope->storage, vstrg) != TS_ALGO_OK) {
+		nowdb_storage_destroy(vstrg); free(vstrg);
+		return err;
+	}
+
+	err = writeStorage(scope);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------
@@ -1091,8 +1246,9 @@ static inline nowdb_err_t dropAllContexts(nowdb_scope_t *scope) {
 		
 		err = readStorageCatalog(scope);
 		if (err != NOWDB_OK) return err;
-
-		// open contexts!
+		
+		err = readCatalog(scope);
+		if (err != NOWDB_OK) return err;
 	}
 	if (scope->contexts.count == 0) return NOWDB_OK;
 
@@ -1131,6 +1287,9 @@ static inline nowdb_err_t closeAllContexts(nowdb_scope_t *scope) {
 	ts_algo_list_node_t *runner;
 	nowdb_context_t   *ctx;
 
+	err = stopStorage(scope);
+	if (err != NOWDB_OK) return err;
+
 	if (scope->contexts.count == 0) return NOWDB_OK;
 
 	tmp = ts_algo_tree_toList(&scope->contexts);
@@ -1165,7 +1324,10 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	err = nowdb_lock_write(&scope->lock);
 	if (err != NOWDB_OK) return err;
 
+	fprintf(stderr, "CREATE SCOPE\n");
+
 	if (nowdb_path_exists(scope->path, NOWDB_DIR_TYPE_ANY)) {
+		fprintf(stderr, "path exists...\n");
 		err = nowdb_err_get(nowdb_err_create, FALSE, OBJECT,
 		                                       scope->path);
 		goto unlock;
@@ -1174,6 +1336,8 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	/* create base path */
 	err = nowdb_dir_create(scope->path);
 	if (err != NOWDB_OK) goto unlock;
+
+	fprintf(stderr, "creating base path %s\n", scope->path);
 
 	/* create model dir */
 	p = nowdb_path_append(scope->path, "model");
@@ -1195,12 +1359,20 @@ nowdb_err_t nowdb_scope_create(nowdb_scope_t *scope) {
 	err = nowdb_dir_create(p); free(p);
 	if (err != NOWDB_OK) goto unlock;
 
-	/* create vertex store */
-	err = nowdb_store_create(&scope->vertices);
+	/* create default Storage */
+	err = createDefaultStorage(scope);
 	if (err != NOWDB_OK) goto unlock;
 
 	/* write catalog */
 	err = storeCatalog(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* create vertex store */
+	fprintf(stderr, "creating vertex store\n");
+	err = initVertex(scope); // we have to destroy it!
+	if (err != NOWDB_OK) goto unlock;
+	
+	err = nowdb_store_create(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
 
 	/* text */
@@ -1290,6 +1462,9 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	if (err != NOWDB_OK) goto unlock;
 
 	/* drop vertex store */
+	err = initVertex(scope);
+	if (err != NOWDB_OK) goto unlock;
+
 	err = nowdb_store_drop(&scope->vertices);
 	if (err != NOWDB_OK) goto unlock;
 
@@ -1311,6 +1486,10 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 
 	/* remove catalog */
 	err = nowdb_path_remove(scope->catalog);
+	if (err != NOWDB_OK) goto unlock;
+
+	/* remove storage catalog */
+	err = nowdb_path_remove(scope->strgpath);
 	if (err != NOWDB_OK) goto unlock;
 
 	/* remove base */
@@ -1602,7 +1781,21 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
-	// open contexts!
+	err = readCatalog(scope);
+	if (err != NOWDB_OK) {
+		// destroy storage?
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
+
+	/* vertex store */
+	err = initVertex(scope);
+	if (err != NOWDB_OK) {
+		nowdb_model_destroy(scope->model);
+		free(scope->model); scope->model = NULL;
+		goto unlock;
+	}
 
 	err = initIndexMan(scope);
 	if (err != NOWDB_OK) {
@@ -1704,6 +1897,9 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 	if (scope->state == NOWDB_SCOPE_CLOSED) {
 		return nowdb_unlock_write(&scope->lock);
 	}
+
+	err = writeStorage(scope);
+	if (err != NOWDB_OK) goto unlock;
 
 	err = storeCatalog(scope);
 	if (err != NOWDB_OK) goto unlock;

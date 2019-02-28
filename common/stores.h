@@ -6,6 +6,7 @@ nowdb_store_t *mkStoreBlock(nowdb_path_t path,
                             uint32_t block,
                             uint32_t large);
 nowdb_bool_t createStore(nowdb_store_t *store);
+void destroyStore(nowdb_store_t *store);
 nowdb_bool_t dropStore(nowdb_store_t *store);
 nowdb_bool_t openStore(nowdb_store_t *store);
 nowdb_bool_t closeStore(nowdb_store_t *store);

@@ -503,7 +503,7 @@ static nowdb_err_t dropType(nowdb_ast_t  *op,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
-                                nowdb_ctx_config_t *cfg) {
+                            nowdb_storage_config_t *cfg) {
 	nowdb_ast_t *o;
 	uint64_t cfgopts = 0;
 	uint64_t utmp;
@@ -513,7 +513,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 		cfgopts = NOWDB_CONFIG_SIZE_BIG        |
 		          NOWDB_CONFIG_INSERT_CONSTANT | 
 		          NOWDB_CONFIG_DISK_HDD;
-		nowdb_ctx_config(cfg, cfgopts);
+		nowdb_storage_config(cfg, cfgopts);
 		return NOWDB_OK;
 	}
 
@@ -553,7 +553,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
 	if (o != NULL) cfgopts |= NOWDB_CONFIG_NOSORT;
 
 	/* apply the options */
-	nowdb_ctx_config(cfg, cfgopts);
+	nowdb_storage_config(cfg, cfgopts);
 
 	return NOWDB_OK;
 }
@@ -563,7 +563,7 @@ static nowdb_err_t applyCreateOptions(nowdb_ast_t *opts,
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
-                                 nowdb_ctx_config_t *cfg) {
+                             nowdb_storage_config_t *cfg) {
 
 	nowdb_ast_t *o;
 	uint64_t utmp;
@@ -580,7 +580,7 @@ static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
 	if (o != NULL) {
 		if (nowdb_ast_getUInt(o, &utmp) != 0)
 			INVALIDAST("invalid ast: invalid alloc size");
-		cfg->allocsize = (uint32_t)utmp;
+		cfg->filesize = (uint32_t)utmp;
 	}
 	o = nowdb_ast_option(opts, NOWDB_AST_LARGESZ);
 	if (o != NULL) {
@@ -623,7 +623,7 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
                              nowdb_scope_t *scope) {
 	nowdb_err_t err;
 	nowdb_ast_t *opts, *o;
-	nowdb_ctx_config_t cfg;
+	nowdb_storage_config_t cfg;
 
 	/* get options and, if 'ifexists' is given,
 	 * check if the context exists */
@@ -647,7 +647,7 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
 	if (err != NOWDB_OK) return err;
 
 	/* create the context */
-	return nowdb_scope_createContext(scope, name, &cfg);
+	return nowdb_scope_createContext(scope, name, NULL);
 }
 
 /* -------------------------------------------------------------------------

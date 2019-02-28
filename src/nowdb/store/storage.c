@@ -72,6 +72,7 @@ nowdb_err_t nowdb_storage_init(nowdb_storage_t *strg,
 	strg->sort = cfg->sort;
 	strg->comp = cfg->comp;
 	strg->encp = cfg->encp;
+	strg->started = 0;
 
 	return NOWDB_OK;
 }
@@ -82,7 +83,6 @@ void nowdb_storage_destroy(nowdb_storage_t *strg) {
 	}
 	ts_algo_list_destroy(&strg->stores);
 	nowdb_lock_destroy(&strg->lock);
-	free(strg);
 }
 
 nowdb_err_t nowdb_storage_addStore(nowdb_storage_t *strg,
@@ -141,10 +141,98 @@ static inline nowdb_err_t stopWorkers(nowdb_storage_t *strg) {
 }
 
 nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg) {
-	return startWorkers(strg);
+	nowdb_err_t err;
+	err = startWorkers(strg);
+	if (err != NOWDB_OK) return err;
+	strg->started = 1;
+	return NOWDB_OK;
 }
 
 nowdb_err_t nowdb_storage_stop(nowdb_storage_t *strg) {
+	if (strg->started == 0) return NOWDB_OK;
+	strg->started = 0;
 	return stopWorkers(strg);
+}
+
+/* -----------------------------------------------------------------------
+ * Predefine configurations
+ * -----------------------------------------------------------------------
+ */
+void nowdb_storage_config(nowdb_storage_config_t *cfg,
+                          nowdb_bitmap64_t    options) {
+
+	if (cfg == NULL) return;
+
+	cfg->sort = 1;
+	cfg->encp = NOWDB_ENCP_NONE;
+
+	if (options & NOWDB_CONFIG_SIZE_TINY) {
+
+		cfg->filesize  = NOWDB_MEGA;
+		cfg->largesize = NOWDB_MEGA;
+		cfg->sorters   = 1;
+		cfg->comp      = NOWDB_COMP_FLAT;
+
+	} else if (options & NOWDB_CONFIG_SIZE_SMALL) {
+
+		cfg->filesize  = NOWDB_MEGA;
+		cfg->largesize = 8 * NOWDB_MEGA;
+		cfg->sorters   = 2;
+		cfg->comp      = NOWDB_COMP_ZSTD;
+
+	} else if (options & NOWDB_CONFIG_SIZE_MEDIUM) {
+
+		cfg->filesize  = 8 * NOWDB_MEGA;
+		cfg->largesize = 64 * NOWDB_MEGA;
+		cfg->sorters   = 4;
+		cfg->comp      = NOWDB_COMP_ZSTD;
+
+	} else if (options & NOWDB_CONFIG_SIZE_BIG) {
+
+		cfg->filesize  = 8 * NOWDB_MEGA;
+		cfg->largesize = 128 * NOWDB_MEGA;
+		cfg->sorters   = 6;
+		cfg->comp      = NOWDB_COMP_ZSTD;
+
+	} else if (options & NOWDB_CONFIG_SIZE_LARGE) {
+
+		cfg->filesize  = 8 * NOWDB_MEGA;
+		cfg->largesize = 256 * NOWDB_MEGA;
+		cfg->sorters   = 8;
+		cfg->comp      = NOWDB_COMP_ZSTD;
+
+	} else if (options & NOWDB_CONFIG_SIZE_HUGE) {
+
+		cfg->filesize  = 8 * NOWDB_MEGA;
+		cfg->largesize = 1024 * NOWDB_MEGA;
+		cfg->sorters   = 10;
+		cfg->comp      = NOWDB_COMP_ZSTD;
+	}
+	if (options & NOWDB_CONFIG_INSERT_MODERATE) {
+
+		if (cfg->sorters < 2) cfg->sorters = 2;
+
+	} else if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
+
+		cfg->sorters += 4;
+
+	} else if (options & NOWDB_CONFIG_INSERT_INSANE) {
+
+		cfg->sorters *= 2;
+		if (cfg->sorters > 32) cfg->sorters = 32;
+		if (cfg->filesize  < 8) cfg->filesize  = 8;
+		cfg->largesize = 1024;
+	}
+	if (options & NOWDB_CONFIG_DISK_HDD) {
+		if (cfg->largesize < 128 * NOWDB_MEGA) {
+			cfg->largesize = 128 * NOWDB_MEGA;
+		}
+	}
+	if (options & NOWDB_CONFIG_NOCOMP) {
+		cfg->comp = NOWDB_COMP_FLAT;
+	}
+	if (options & NOWDB_CONFIG_NOSORT) {
+		cfg->sort = 0;
+	}
 }
 

@@ -52,9 +52,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
                             nowdb_content_t  cont,
+                            nowdb_storage_t *strg,
                             uint32_t      recsize,
-                            uint32_t     filesize,
-                            uint32_t    largesize,
                             char               ts)
 {
 	nowdb_err_t err = NOWDB_OK;
@@ -66,8 +65,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating store object");
 	}
-	err = nowdb_store_init(*store, base, lru, ver, cont,
-                           recsize, filesize, largesize, ts);
+	err = nowdb_store_init(*store, base, lru, ver,
+                              cont, strg, recsize, ts);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -318,9 +317,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
                              nowdb_content_t  cont,
+                             nowdb_storage_t *strg,
                              uint32_t      recsize,
-                             uint32_t     filesize,
-                             uint32_t    largesize,
                              char               ts)
 {
 	nowdb_err_t err;
@@ -331,8 +329,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	/* defaults */
 	store->version = ver;
 	store->recsize = recsize;
-	store->filesize = filesize;
-	store->largesize = largesize;
+	store->filesize = strg->filesize;
+	store->largesize = strg->largesize;
 	store->starting = FALSE;
 	store->state = NOWDB_STORE_CLOSED;
 	store->path = NULL;
@@ -347,6 +345,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->nextid = 1;
 	store->ts = ts;
 	store->cont = cont;
+	store->storage = strg;
 
 	// prepare sort message
 	memcpy(&store->srtmsg, &sortmsg, sizeof(nowdb_wrk_message_t));
@@ -397,6 +396,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                    "allocating store catalog path");
 	}
+	fprintf(stderr, "store catalog: %s\n", store->catalog);
 	return NOWDB_OK;
 }
 

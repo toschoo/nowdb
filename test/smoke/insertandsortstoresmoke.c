@@ -279,7 +279,7 @@ cleanup:
 		if (!closeStore(store)) {
 			fprintf(stderr, "cannot close store\n");
 		}
-		nowdb_store_destroy(store);
+		destroyStore(store);
 		free(store);
 	}
 	nowdb_err_destroy();

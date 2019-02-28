@@ -360,7 +360,7 @@ cleanup:
 		fprintf(stderr, "closing took %luus\n",
 		                 minus(&t2, &t1)/1000);
 		if (x) {
-			nowdb_store_destroy(store);
+			destroyStore(store);
 			free(store);
 		}
 	}

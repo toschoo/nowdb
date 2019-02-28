@@ -36,6 +36,7 @@ typedef struct {
 	nowdb_path_t     strgpath; /* catalog path          */
 	nowdb_path_t      catalog; /* ctx catalog path      */
 	nowdb_version_t       ver; /* db version            */
+	char                vinit; /* vertices initialised  */
 	nowdb_store_t    vertices; /* vertices              */
 	nowdb_index_t     *vindex; /* index on vertices     */
 	nowdb_plru12_t    *evache; /* external vertex cache */

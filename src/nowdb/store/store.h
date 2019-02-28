@@ -73,9 +73,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
                             nowdb_content_t  cont,
+                            nowdb_storage_t *strg,
                             uint32_t      recsize,
-                            uint32_t     filesize,
-                            uint32_t    largesize,
                             char               ts);
 
 /* ------------------------------------------------------------------------
@@ -87,9 +86,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
                              nowdb_content_t  cont,
+                             nowdb_storage_t *strg,
                              uint32_t      recsize,
-                             uint32_t     filesize,
-                             uint32_t    largesize,
                              char               ts);
 
 /* ------------------------------------------------------------------------

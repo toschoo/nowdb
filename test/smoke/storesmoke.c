@@ -25,9 +25,32 @@ typedef struct {
 
 #define RECSIZE sizeof(myedge_t)
 
+nowdb_storage_t *createStorage() {
+	nowdb_storage_config_t cfg;
+	nowdb_storage_t *strg;
+	nowdb_err_t       err;
+	nowdb_bitmap64_t   os;
+
+	os = NOWDB_CONFIG_SIZE_TINY       |
+	     NOWDB_CONFIG_INSERT_MODERATE |
+	     NOWDB_CONFIG_DISK_HDD;
+	nowdb_storage_config(&cfg, os);
+
+	err = nowdb_storage_new(&strg, "default", &cfg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot create default storage\n");
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return NULL;
+	}
+
+	return strg;
+}
+
 nowdb_bool_t createStore() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
 
 	/*
 	if (mkdir("rsc/teststore", NOWDB_FILE_MODE) != 0) {
@@ -35,12 +58,16 @@ nowdb_bool_t createStore() {
 		return FALSE;
 	}
 	*/
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
+
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                               NOWDB_CONT_EDGE, strg,
+                                       RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	err = nowdb_store_create(&store);
@@ -48,22 +75,29 @@ nowdb_bool_t createStore() {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		nowdb_store_destroy(&store);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	nowdb_store_destroy(&store);
+	nowdb_storage_destroy(strg); free(strg);
 	return TRUE;
 }
 
 nowdb_bool_t dropStore() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
+
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                               NOWDB_CONT_EDGE, strg,
+                                       RECSIZE,1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	err = nowdb_store_drop(&store);
@@ -71,112 +105,181 @@ nowdb_bool_t dropStore() {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		nowdb_store_destroy(&store);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	nowdb_store_destroy(&store);
+	nowdb_storage_destroy(strg); free(strg);
 	return TRUE;
 }
 
 nowdb_bool_t testInitDestroyStore() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
+
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                      NOWDB_CONT_EDGE, strg, RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	nowdb_store_destroy(&store);
+	nowdb_storage_destroy(strg); free(strg);
 	return TRUE;
 }
 
 nowdb_bool_t testNewDestroyStore() {
-	nowdb_store_t *store;
-	nowdb_err_t      err;
+	nowdb_storage_t *strg;
+	nowdb_store_t  *store;
+	nowdb_err_t       err;
+
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
 
 	err = nowdb_store_new(&store, "rsc/teststore", NULL, 1,
-	                              NOWDB_CONT_EDGE, RECSIZE,
-	                              NOWDB_MEGA, NOWDB_MEGA,1);
+	                     NOWDB_CONT_EDGE, strg, RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	nowdb_store_destroy(store); free(store);
+	nowdb_storage_destroy(strg); free(strg);
 	return TRUE;
 }
 
 nowdb_bool_t testOpenStore() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
+
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
+
+	err = nowdb_storage_start(strg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot start storage\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
+		return FALSE;
+	}
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                      NOWDB_CONT_EDGE, strg, RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_stop(strg);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	err = nowdb_store_open(&store);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_stop(strg);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	nowdb_store_destroy(&store);
+	nowdb_storage_stop(strg);
+	nowdb_storage_destroy(strg); free(strg);
 	return TRUE;
 }
 
 nowdb_bool_t testOpenCloseStore() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
+
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
+
+	err = nowdb_storage_start(strg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot start storage\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
+		return FALSE;
+	}
 
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                      NOWDB_CONT_EDGE, strg, RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_storage_stop(strg));
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	err = nowdb_store_open(&store);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_storage_stop(strg));
+		nowdb_storage_destroy(strg); free(strg);
+		return FALSE;
+	}
+	err = nowdb_storage_stop(strg);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 	err = nowdb_store_close(&store);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
+	nowdb_storage_destroy(strg); free(strg);
 	nowdb_store_destroy(&store);
 	return TRUE;
 }
 
 nowdb_bool_t testInsert() {
-	nowdb_store_t store;
-	nowdb_err_t     err;
-	myedge_t        e,k;
+	nowdb_storage_t *strg;
+	nowdb_store_t   store;
+	nowdb_err_t       err;
+	myedge_t          e,k;
 	int rc;
 
+	strg = createStorage();
+	if (strg == NULL) return FALSE;
+
+	err = nowdb_storage_start(strg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "cannot start storage\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		nowdb_storage_destroy(strg); free(strg);
+		return FALSE;
+	}
+
 	err = nowdb_store_init(&store, "rsc/teststore", NULL, 1,
-	                               NOWDB_CONT_EDGE, RECSIZE,
-	                               NOWDB_MEGA, NOWDB_MEGA,1);
+	                      NOWDB_CONT_EDGE, strg, RECSIZE, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_storage_stop(strg));
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
+
 	err = nowdb_store_open(&store);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		NOWDB_IGNORE(nowdb_storage_stop(strg));
+		nowdb_storage_destroy(strg); free(strg);
 		return FALSE;
 	}
 
@@ -233,12 +336,19 @@ nowdb_bool_t testInsert() {
 		return FALSE;
 	}
 	
+	err = nowdb_storage_stop(strg);
+	if (err != NOWDB_OK) {
+		nowdb_err_print(err);
+		nowdb_err_release(err);
+		return FALSE;
+	}
 	err = nowdb_store_close(&store);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		return FALSE;
 	}
+	nowdb_storage_destroy(strg); free(strg);
 	nowdb_store_destroy(&store);
 	return TRUE;
 }
