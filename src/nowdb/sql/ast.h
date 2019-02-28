@@ -146,14 +146,15 @@
  */
 #define NOWDB_AST_TARGET   10100
 #define NOWDB_AST_SCOPE    10101
-#define NOWDB_AST_CONTEXT  10102
-#define NOWDB_AST_VERTEX   10103
-#define NOWDB_AST_INDEX    10104
-#define NOWDB_AST_ON       10105
-#define NOWDB_AST_TYPE     10106
-#define NOWDB_AST_EDGE     10107
-#define NOWDB_AST_PROC     10108
-#define NOWDB_AST_MODULE   10109
+#define NOWDB_AST_STORAGE  10102
+#define NOWDB_AST_CONTEXT  10105
+#define NOWDB_AST_VERTEX   10106
+#define NOWDB_AST_INDEX    10107
+#define NOWDB_AST_ON       10108
+#define NOWDB_AST_TYPE     10109
+#define NOWDB_AST_EDGE     10110
+#define NOWDB_AST_PROC     10111
+#define NOWDB_AST_MODULE   10112
 
 /* -----------------------------------------------------------------------
  * Options

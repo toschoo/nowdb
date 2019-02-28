@@ -213,6 +213,7 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_TARGET:
 		switch(stype) {
 		case NOWDB_AST_SCOPE: return "scope";
+		case NOWDB_AST_STORAGE: return "storage";
 		case NOWDB_AST_VERTEX: return "vertex";
 		case NOWDB_AST_CONTEXT: return "context";
 		case NOWDB_AST_INDEX: return "index";

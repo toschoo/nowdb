@@ -63,14 +63,14 @@
 %type condition {nowdb_ast_t*}
 %destructor condition {nowdb_ast_destroyAndFree($$);}
 
-%type context_option {nowdb_ast_t*}
-%destructor context_option {nowdb_ast_destroyAndFree($$);}
+%type storage_option {nowdb_ast_t*}
+%destructor storage_option {nowdb_ast_destroyAndFree($$);}
 
 %type comparison {nowdb_ast_t*}
 %destructor comparison {nowdb_ast_destroyAndFree($$);}
 
-%type context_options {nowdb_ast_t*}
-%destructor context_options {nowdb_ast_destroyAndFree($$);}
+%type storage_options {nowdb_ast_t*}
+%destructor storage_options {nowdb_ast_destroyAndFree($$);}
 
 %type load_options {nowdb_ast_t*}
 %destructor load_options {nowdb_ast_destroyAndFree($$);}
@@ -349,22 +349,22 @@ misc ::= EXECUTE IDENTIFIER(I) LPAR val_list(V) RPAR. {
  *  Create Clause
  * ------------------------------------------------------------------------
  */
-create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 }
 
-create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I) SET context_options(O). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE STORAGE IDENTIFIER(I) SET storage_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(C, O)
 }
 
-create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE sizing(S) STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(C, S)
 }
 
-create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I) SET context_options(O). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE sizing(S) STORAGE IDENTIFIER(I) SET storage_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(O, S)
 	NOWDB_SQL_ADDKID(C, O)
 }
@@ -493,8 +493,8 @@ type ::= LONGTEXT.
  *  Drop Clause
  * ------------------------------------------------------------------------
  */
-drop_clause(C) ::= DROP CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_CONTEXT,I,NULL);
+drop_clause(C) ::= DROP STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_STORAGE,I,NULL);
 }
 
 drop_clause(C) ::= DROP SCOPE IDENTIFIER(I). {
@@ -518,57 +518,57 @@ drop_clause(C) ::= DROP PROCEDURE IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * Context Options
+ * Storage Options
  * ------------------------------------------------------------------------
  */
-context_options(O) ::= context_option(C). {
+storage_options(O) ::= storage_option(C). {
 	NOWDB_SQL_CHECKSTATE();
 	O = C;
 }
 
-context_options(O) ::= context_option(O1) COMMA context_options(O2). {
+storage_options(O) ::= storage_option(O1) COMMA storage_options(O2). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADDKID(O1,O2);
 	O = O1;
 }
 
-context_option(O) ::= ALLOCSIZE EQ UINTEGER(I). {
+storage_option(O) ::= ALLOCSIZE EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ALLOCSZ);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= LARGESIZE EQ UINTEGER(I). {
+storage_option(O) ::= LARGESIZE EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_LARGESZ);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= SORTERS EQ UINTEGER(I). {
+storage_option(O) ::= SORTERS EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_SORTERS);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= COMPRESSION EQ STRING(I). {
+storage_option(O) ::= COMPRESSION EQ STRING(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_COMP);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= ENCRYPTION EQ STRING(I). {
+storage_option(O) ::= ENCRYPTION EQ STRING(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ENCP);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
 
-context_option(O) ::= STRESS EQ stress_spec(S). {
+storage_option(O) ::= STRESS EQ stress_spec(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }
 
-context_option(O) ::= SIZE EQ sizing(S). {
+storage_option(O) ::= SIZE EQ sizing(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }
 
-context_option(O) ::= DISK EQ disk_spec(S). {
+storage_option(O) ::= DISK EQ disk_spec(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }

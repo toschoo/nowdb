@@ -103,6 +103,28 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope);
 nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope);
 
 /* -----------------------------------------------------------------------
+ * Create storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createStorage(nowdb_scope_t *scope, char *name,
+                                      nowdb_storage_config_t     *cfg);
+
+/* -----------------------------------------------------------------------
+ * Drop storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropStorage(nowdb_scope_t *scope,
+                                    char          *name);
+
+/* -----------------------------------------------------------------------
+ * Get storage from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getStorage(nowdb_scope_t   *scope,
+                                   char             *name,
+                                   nowdb_storage_t **strg);
+
+/* -----------------------------------------------------------------------
  * Create a context within that scope
  * -----------------------------------------------------------------------
  */

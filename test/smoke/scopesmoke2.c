@@ -536,12 +536,15 @@ int main() {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 
+		fprintf(stderr, "loading products\n");
 		EXECSTMT("load 'rsc/products100.csv' into product use header \
 		           set errors='rsc/products100.err'");
 
+		fprintf(stderr, "loading clients\n");
 		EXECSTMT("load 'rsc/clients100.csv' into client use header \
 		           set errors='rsc/clients100.err'");
 
+		fprintf(stderr, "loading edges\n");
 		EXECSTMT("load 'rsc/edge100.csv' into buys use header \
 		           set errors='rsc/edge100.err'");
 

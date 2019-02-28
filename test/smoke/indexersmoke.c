@@ -186,19 +186,24 @@ int closeScope(nowdb_scope_t *scope) {
 
 int createContext(nowdb_scope_t *scope, char *name) {
 	nowdb_err_t err;
-
-	/*
 	nowdb_storage_config_t cfg;
+
 	cfg.filesize  = NOWDB_MEGA;
 	cfg.largesize = NOWDB_MEGA;
 	cfg.sorters   = 1;
 	cfg.sort      = 1;
 	cfg.comp      = NOWDB_COMP_ZSTD;
 	cfg.encp      = NOWDB_ENCP_NONE;
-	*/
+
+	err = nowdb_scope_createStorage(scope, "test", &cfg);
+	if (err != NOWDB_OK) {
+		fprintf(stderr, "create storage failed\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
 
 	fprintf(stderr, "creating context %s\n", name);
-	err = nowdb_scope_createContext(scope, name, NULL);
+	err = nowdb_scope_createContext(scope, name, "test");
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "create context failed\n");
 		nowdb_err_print(err); nowdb_err_release(err);

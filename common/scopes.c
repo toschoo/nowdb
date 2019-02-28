@@ -272,6 +272,7 @@ int waitscope(nowdb_scope_t *scope, char *context) {
 		fprintf(stdout, "\b\b\b\b\b\b\b\b");
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
+		/*
 		for(int i=1;i<len;i+=2) {
 			err = nowdb_store_sortNow(&ctx->store.sortwrk,
 			                          &ctx->store);
@@ -283,6 +284,7 @@ int waitscope(nowdb_scope_t *scope, char *context) {
 				rc = -1; break;
 			}
 		}
+		*/
 		err = nowdb_task_sleep(DELAY);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "\ncannot sleep\n");

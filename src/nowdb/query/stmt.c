@@ -593,8 +593,6 @@ static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
 
 /* -------------------------------------------------------------------------
  * Check whether the context exists or not
- * TODO:
- * - we should use "nosuch context" instead of "key not found".
  * -------------------------------------------------------------------------
  */
 static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
@@ -615,7 +613,64 @@ static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
 }
 
 /* -------------------------------------------------------------------------
- * Create context
+ * Check whether the storage exists or not
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t checkStorageExists(nowdb_scope_t *scope,
+                                             char          *name,
+                                             nowdb_bool_t  *b) {
+	nowdb_err_t err;
+	nowdb_storage_t *strg;
+
+	err = nowdb_scope_getStorage(scope, name, &strg);
+	if (err == NOWDB_OK) {
+		*b = TRUE; return NOWDB_OK;
+	}
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		nowdb_err_release(err);
+		*b = FALSE; return NOWDB_OK;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Create storage
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createStorage(nowdb_ast_t  *op,
+                                 char       *name,
+                             nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_ast_t *opts, *o;
+	nowdb_storage_config_t cfg;
+
+	/* get options and, if 'ifexists' is given,
+	 * check if the context exists */
+	opts = nowdb_ast_option(op, 0);
+	if (opts != NULL) {
+		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_bool_t x = FALSE;
+			err = checkStorageExists(scope, name, &x);
+			if (err != NOWDB_OK) return err;
+			if (x) return NOWDB_OK;
+		}
+	}
+
+	/* apply implicit options */
+	err = applyCreateOptions(opts, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	/* apply explicit options */
+	err = applyGenericOptions(opts, &cfg);
+	if (err != NOWDB_OK) return err;
+
+	/* create the context */
+	return nowdb_scope_createStorage(scope, name, &cfg);
+}
+
+/* -------------------------------------------------------------------------
+ * Create table
  * -------------------------------------------------------------------------
  */
 static nowdb_err_t createContext(nowdb_ast_t  *op,
@@ -1042,16 +1097,16 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 }
 
 /* -------------------------------------------------------------------------
- * Drop context
+ * Drop Storage
  * -------------------------------------------------------------------------
  */
-static nowdb_err_t dropContext(nowdb_ast_t  *op,
+static nowdb_err_t dropStorage(nowdb_ast_t  *op,
                               char          *name,
                               nowdb_scope_t *scope) {
 	nowdb_ast_t *o;
 	nowdb_err_t err;
 
-	err = nowdb_scope_dropContext(scope, name);
+	err = nowdb_scope_dropStorage(scope, name);
 	if (err == NOWDB_OK) return NOWDB_OK;
 	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
@@ -1615,8 +1670,12 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
 			return createScope(op, base, trg->value);
+		/* to be removed...
 		case NOWDB_AST_CONTEXT:
 			return createContext(op, trg->value, scope);
+		*/
+		case NOWDB_AST_STORAGE:
+			return createStorage(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
 			return createIndex(op, trg->value, scope);
 		case NOWDB_AST_TYPE:
@@ -1634,8 +1693,13 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
 			return dropScope(op, rsc, base, trg->value);
+		case NOWDB_AST_STORAGE:
+			return dropStorage(op, trg->value, scope);
+		/*
 		case NOWDB_AST_CONTEXT:
 			return dropContext(op, trg->value, scope);
+		*/
+
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
 		case NOWDB_AST_TYPE:

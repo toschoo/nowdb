@@ -2049,6 +2049,145 @@ unlock:
 }
 
 /* -----------------------------------------------------------------------
+ * Create storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createStorage(nowdb_scope_t *scope, char *name,
+                                      nowdb_storage_config_t     *cfg) {
+	nowdb_storage_t *strg, pattern;
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (name  == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+	if (cfg   == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                         FALSE, OBJECT, "config is NULL");
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (scope->state == NOWDB_SCOPE_CLOSED) {
+		err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+		                                "scope is not open");
+		goto unlock;
+	}
+
+	// storage does not yet exist
+	pattern.name = name;
+	strg = ts_algo_tree_find(&scope->storage, &pattern);
+	if (strg != NULL) {
+		err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+		goto unlock;
+	}
+
+	err = nowdb_storage_new(&strg, name, cfg);
+	if (err != NOWDB_OK) goto unlock;
+
+	if (ts_algo_tree_insert(&scope->storage, strg) != TS_ALGO_OK) {
+		nowdb_storage_destroy(strg); goto unlock;
+	}
+
+	err = writeStorage(scope);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_delete(&scope->storage, strg);
+		goto unlock;
+	}
+
+	err = nowdb_storage_start(strg);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_delete(&scope->storage, strg);
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropStorage(nowdb_scope_t *scope,
+                                    char          *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_storage_t *strg, pattern;
+
+	SCOPENULL();
+	if (name  == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) goto unlock;
+
+	SCOPENOTOPEN();
+
+	pattern.name = name;
+	strg = ts_algo_tree_find(&scope->storage, &pattern);
+	if (strg == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found,
+		                        FALSE, OBJECT, name);
+		goto unlock;
+	}
+
+	err = nowdb_storage_stop(strg);
+	if (err != NOWDB_OK) goto unlock;
+
+	ts_algo_tree_delete(&scope->storage, strg);
+
+	err = writeStorage(scope);
+	if (err != NOWDB_OK) goto unlock;
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Get Storage from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getStorage(nowdb_scope_t   *scope,
+                                   char             *name,
+                                   nowdb_storage_t **strg) {
+	nowdb_storage_t pattern; 
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+	if (name  == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) goto unlock;
+
+	SCOPENOTOPEN();
+
+	pattern.name = name;
+	*strg = ts_algo_tree_find(&scope->storage, &pattern);
+	if (*strg == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found,
+		                        FALSE, OBJECT, name);
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Get context within that scope
  * -----------------------------------------------------------------------
  */

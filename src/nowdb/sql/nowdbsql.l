@@ -71,8 +71,12 @@
 (?i:SCOPE)		return NOWDB_SQL_SCOPE;
 (?i:SCHEMA)		return NOWDB_SQL_SCOPE;
 (?i:DATABASE)		return NOWDB_SQL_SCOPE;
+
+	/*
 (?i:CONTEXT)		return NOWDB_SQL_CONTEXT;
 (?i:TABLE)		return NOWDB_SQL_CONTEXT;
+	*/
+(?i:STORAGE)		return NOWDB_SQL_STORAGE;
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
 (?i:PROCEDURE)		return NOWDB_SQL_PROCEDURE;
