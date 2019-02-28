@@ -3,8 +3,6 @@
  * ========================================================================
  * Storage: storage parameters and store workers
  * ========================================================================
- *
- * ========================================================================
  */
 #ifndef nowdb_storage_decl
 #define nowdb_storage_decl
@@ -15,6 +13,10 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/task/worker.h>
 
+/* -----------------------------------------------------------------------
+ * Storage
+ * -----------------------------------------------------------------------
+ */
 typedef struct {
 	nowdb_lock_t          lock; // protect storage resources
 	char                 *name; // storage name
@@ -43,20 +45,56 @@ typedef struct {
 	nowdb_encp_t  encp;
 } nowdb_storage_config_t;
 
+/* -----------------------------------------------------------------------
+ * Allocate a new storage object in memory
+ * -----------------------------
+ * using the configurator to define storage properties
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_new(nowdb_storage_t **strg,
                               char             *name,
                               nowdb_storage_config_t *cfg);
 
+/* -----------------------------------------------------------------------
+ * Initialise an already allocated storage object
+ * ----------------------------------------------
+ * using the configurator to define storage properties
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_init(nowdb_storage_t *strg,
                                char            *name,
                                nowdb_storage_config_t *cfg);
 
+/* -----------------------------------------------------------------------
+ * Destroy the storage object
+ * -----------------------------------------------------------------------
+ */
 void nowdb_storage_destroy(nowdb_storage_t *strg);
 
+/* -----------------------------------------------------------------------
+ * Add a store to the storage
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_addStore(nowdb_storage_t *s,
                                    void        *store);
 
+/* -----------------------------------------------------------------------
+ * Remove a store from the storage
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_storage_removeStore(nowdb_storage_t *s,
+                                      void        *store);
+
+/* -----------------------------------------------------------------------
+ * Start workers on this storage
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg);
+
+/* -----------------------------------------------------------------------
+ * Stop workers on this storage
+ * -----------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_stop(nowdb_storage_t *strg);
 
 /* -----------------------------------------------------------------------

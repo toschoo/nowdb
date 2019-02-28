@@ -28,6 +28,10 @@ static char *OBJECT = "storage";
 #define INVALID(x) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, x);
 
+/* ------------------------------------------------------------------------
+ * Allocate new storage object
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_new(nowdb_storage_t **strg,
                               char             *name,
                               nowdb_storage_config_t *cfg) {
@@ -48,6 +52,10 @@ nowdb_err_t nowdb_storage_new(nowdb_storage_t **strg,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Initialise already allocated storage object
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_init(nowdb_storage_t *strg,
                                char            *name,
                                nowdb_storage_config_t *cfg) {
@@ -77,6 +85,10 @@ nowdb_err_t nowdb_storage_init(nowdb_storage_t *strg,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Destroy storage object
+ * ------------------------------------------------------------------------
+ */
 void nowdb_storage_destroy(nowdb_storage_t *strg) {
 	if (strg->name != NULL) {
 		free(strg->name); strg->name = NULL;
@@ -85,6 +97,10 @@ void nowdb_storage_destroy(nowdb_storage_t *strg) {
 	nowdb_lock_destroy(&strg->lock);
 }
 
+/* ------------------------------------------------------------------------
+ * Add store to storage
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_addStore(nowdb_storage_t *strg,
                                    void           *store) {
 	nowdb_err_t err = NOWDB_OK;
@@ -98,6 +114,35 @@ nowdb_err_t nowdb_storage_addStore(nowdb_storage_t *strg,
 	if (ts_algo_list_append(&strg->stores, store)
 	                               != TS_ALGO_OK) {
 		NOMEM("list.append");
+	}
+
+	err2 = nowdb_unlock(&strg->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Remove a store from the storage
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_storage_removeStore(nowdb_storage_t *strg,
+                                      void           *store) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_node_t *runner;
+	nowdb_err_t err2;
+
+	STORAGENULL();
+
+	err = nowdb_lock(&strg->lock);
+	if (err != NOWDB_OK) return err;
+
+	for(runner=strg->stores.head; runner!=NULL; runner=runner->nxt) {
+		if (runner->cont == store) {
+			ts_algo_list_remove(&strg->stores, runner);
+			free(runner); break;
+		}
 	}
 
 	err2 = nowdb_unlock(&strg->lock);
@@ -140,6 +185,10 @@ static inline nowdb_err_t stopWorkers(nowdb_storage_t *strg) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Start workers
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg) {
 	nowdb_err_t err;
 	err = startWorkers(strg);
@@ -148,6 +197,10 @@ nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg) {
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Stop workers
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_storage_stop(nowdb_storage_t *strg) {
 	if (strg->started == 0) return NOWDB_OK;
 	strg->started = 0;
