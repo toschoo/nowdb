@@ -11,6 +11,7 @@
 #include <nowdb/task/worker.h>
 #include <nowdb/store/storage.h>
 #include <nowdb/store/storewrk.h>
+#include <nowdb/store/store.h>
 
 static char *OBJECT = "storage";
 
@@ -95,6 +96,7 @@ void nowdb_storage_destroy(nowdb_storage_t *strg) {
 	}
 	ts_algo_list_destroy(&strg->stores);
 	nowdb_lock_destroy(&strg->lock);
+	strg->started = 0;
 }
 
 /* ------------------------------------------------------------------------
@@ -128,9 +130,10 @@ nowdb_err_t nowdb_storage_addStore(nowdb_storage_t *strg,
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_storage_removeStore(nowdb_storage_t *strg,
-                                      void           *store) {
+                                      void          *pstore) {
 	nowdb_err_t err = NOWDB_OK;
 	ts_algo_list_node_t *runner;
+	nowdb_store_t *store=pstore;
 	nowdb_err_t err2;
 
 	STORAGENULL();
@@ -182,6 +185,7 @@ static inline nowdb_err_t stopWorkers(nowdb_storage_t *strg) {
 
 	err = nowdb_store_stopSync(&strg->syncwrk);
 	if (err != NOWDB_OK) return err;
+
 	return NOWDB_OK;
 }
 
@@ -190,11 +194,24 @@ static inline nowdb_err_t stopWorkers(nowdb_storage_t *strg) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg) {
-	nowdb_err_t err;
-	err = startWorkers(strg);
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	err = nowdb_lock(&strg->lock);
 	if (err != NOWDB_OK) return err;
+
+	err = startWorkers(strg);
+	if (err != NOWDB_OK) goto unlock;
+
 	strg->started = 1;
-	return NOWDB_OK;
+
+unlock:
+	err2 = nowdb_unlock(&strg->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -202,9 +219,31 @@ nowdb_err_t nowdb_storage_start(nowdb_storage_t *strg) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_storage_stop(nowdb_storage_t *strg) {
-	if (strg->started == 0) return NOWDB_OK;
+	char started;
+	nowdb_err_t err=NOWDB_OK;
+
+	err = nowdb_lock(&strg->lock);
+	if (err != NOWDB_OK) return err;
+
+	started = strg->started;
+
+	err = nowdb_unlock(&strg->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (started == 0) return NOWDB_OK;
+
+	err = stopWorkers(strg);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_lock(&strg->lock);
+	if (err != NOWDB_OK) return err;
+
 	strg->started = 0;
-	return stopWorkers(strg);
+
+	err = nowdb_unlock(&strg->lock);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
 }
 
 /* -----------------------------------------------------------------------

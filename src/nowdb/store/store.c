@@ -396,7 +396,6 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                    "allocating store catalog path");
 	}
-	fprintf(stderr, "store catalog: %s\n", store->catalog);
 	return NOWDB_OK;
 }
 

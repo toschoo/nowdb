@@ -143,9 +143,12 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 		store = runner->cont;
 
 		err = nowdb_lock_write(&store->lock);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) break;
 
-		if (store->writer->dirty) {
+		if (store->state == NOWDB_STORE_OPEN &&
+		    store->writer != NULL            &&
+		    store->writer->dirty)
+		{
 			err2 = nowdb_file_sync(store->writer);
 			store->writer->dirty = FALSE;
 		}

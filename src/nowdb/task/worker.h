@@ -71,6 +71,7 @@ typedef struct {
 	nowdb_queue_t    jobqueue; /* queue where jobs arrive        */
 	nowdb_queue_t   *errqueue; /* queue where to write errors    */
 	void                 *rsc; /* additional resources           */
+	char                 stop; /* set when stopping              */
 	uint32_t          running; /* how many tasks are running     */
 } nowdb_worker_t;
 

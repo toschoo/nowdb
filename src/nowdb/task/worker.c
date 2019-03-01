@@ -40,6 +40,24 @@ static inline void reportError(nowdb_worker_t *wrk,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: check if we are stopping
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t stopping(nowdb_worker_t *wrk, char *x) {
+	nowdb_err_t err;
+
+	err = nowdb_lock(&wrk->lock);
+	if (err != NOWDB_OK) return err;
+
+	*x=wrk->stop;
+
+	err = nowdb_unlock(&wrk->lock);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Life of a worker
  * ------------------------------------------------------------------------
  */
@@ -48,6 +66,7 @@ static void *wrkentry(void *p) {
 	nowdb_wrk_message_t *msg=NULL;
 	nowdb_err_t     err;
 	nowdb_job_t job;
+	char stop;
 	uint32_t idx;
 
 	job = wrk->job;
@@ -67,11 +86,19 @@ static void *wrkentry(void *p) {
 	/* unlock worker */
 	err = nowdb_unlock(&wrk->lock);
 	if (err != NOWDB_OK) {
-		reportError(wrk, err); return NULL;
+		reportError(wrk, err); 
+		wrk->running--;
+		return NULL;
 	}
 
 	/* now we run forever (or until we receive a stop message */
 	for(;;) {
+		err = stopping(wrk, &stop);
+		if (err != NOWDB_OK) {
+			reportError(wrk, err); break;
+		}
+		if (stop) break;
+
 		/* dequeue */
 		err = nowdb_queue_dequeue(&wrk->jobqueue,
 		                           wrk->period,   /* wait for   */
@@ -80,12 +107,14 @@ static void *wrkentry(void *p) {
 			/* on timeout: perform the job without message */
 			if (err->errcode == nowdb_err_timeout) {
 				nowdb_err_release(err);
-				err = job(wrk, idx, NULL);
-				if (err != NOWDB_OK) reportError(wrk, err);
+				if (msg == NULL) {
+					err = job(wrk, idx, NULL);
+					if (err != NOWDB_OK)
+						reportError(wrk, err);
+				}
 			} else {
 				reportError(wrk, err);
 			}
-			continue;
 		}
 
 		/* aperiodic event.
@@ -157,8 +186,8 @@ static inline nowdb_err_t waitFor(nowdb_worker_t *wrk,
 		}
 		
 		/*
-		fprintf(stderr, "%s waiting for %u, having %u\n",
-		        wrk->name, expected, wrk->running);
+		fprintf(stderr, "%s waiting for %u, having %u (stop: %d)\n",
+		        wrk->name, expected, wrk->running, wrk->stop);
 		*/
 		
 		err = nowdb_unlock(&wrk->lock);
@@ -201,6 +230,7 @@ nowdb_err_t nowdb_worker_init(nowdb_worker_t       *wrk,
 	wrk->rsc = rsc;
 	wrk->period = period>0?period:-1;
 	wrk->running = 0;
+	wrk->stop    = 0;
 
 	err = nowdb_lock_init(&wrk->lock);
 	if (err != NOWDB_OK) return err;
@@ -289,6 +319,8 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	/* lock to check if we are already stopped */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
+
+	wrk->stop = 1;
 
 	/* if the worker is already stopped,
 	 * there is nothing to do */
