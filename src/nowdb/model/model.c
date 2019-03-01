@@ -1703,7 +1703,7 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		goto unlock;
 	}
 
-	if (props != NULL) {
+	if (stamped && props != NULL) {
 		err = pedgesUnique(model, edge->edgeid, props,
 		        &edge->num, &edge->size, &edge->ctrl);
 		if (err != NOWDB_OK) {
@@ -1719,7 +1719,7 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		free(edge->name); free(edge);
 		goto unlock;
 	}
-	if (props != NULL) {
+	if (stamped && props != NULL) {
 		// note that we remove the props from the list
 		// so that the caller can destroy everything in
 		// the list wether there was an error or not
@@ -2347,6 +2347,8 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
 		NOMEM("tree.filter");
 		return err;
 	}
+
+	if (unsorted.len == 0) return NOWDB_OK;
 
 	// sort properties by pos
 	sorted = ts_algo_list_sort(&unsorted, sortByPos);

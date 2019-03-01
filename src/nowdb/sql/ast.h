@@ -369,6 +369,12 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *node, int option);
 nowdb_ast_t *nowdb_ast_declare(nowdb_ast_t *node);
 
 /* -----------------------------------------------------------------------
+ * Get storage option from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_storage(nowdb_ast_t *node);
+
+/* -----------------------------------------------------------------------
  * Get offset from field declaration
  * -----------------------------------------------------------------------
  */

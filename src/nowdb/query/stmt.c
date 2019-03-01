@@ -678,7 +678,8 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
                              nowdb_scope_t *scope) {
 	nowdb_err_t err;
 	nowdb_ast_t *opts, *o;
-	nowdb_storage_config_t cfg;
+	nowdb_ast_t *strg;
+	char *strgname = NULL;
 
 	/* get options and, if 'ifexists' is given,
 	 * check if the context exists */
@@ -693,16 +694,11 @@ static nowdb_err_t createContext(nowdb_ast_t  *op,
 		}
 	}
 
-	/* apply implicit options */
-	err = applyCreateOptions(opts, &cfg);
-	if (err != NOWDB_OK) return err;
-
-	/* apply explicit options */
-	err = applyGenericOptions(opts, &cfg);
-	if (err != NOWDB_OK) return err;
+	strg = nowdb_ast_storage(op);
+	if (strg != NULL) strgname = strg->value;
 
 	/* create the context */
-	return nowdb_scope_createContext(scope, name, NULL);
+	return nowdb_scope_createContext(scope, name, strgname);
 }
 
 /* -------------------------------------------------------------------------
@@ -1670,10 +1666,6 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		switch(trg->stype) {
 		case NOWDB_AST_SCOPE:
 			return createScope(op, base, trg->value);
-		/* to be removed...
-		case NOWDB_AST_CONTEXT:
-			return createContext(op, trg->value, scope);
-		*/
 		case NOWDB_AST_STORAGE:
 			return createStorage(op, trg->value, scope);
 		case NOWDB_AST_INDEX:
@@ -1695,11 +1687,6 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropScope(op, rsc, base, trg->value);
 		case NOWDB_AST_STORAGE:
 			return dropStorage(op, trg->value, scope);
-		/*
-		case NOWDB_AST_CONTEXT:
-			return dropContext(op, trg->value, scope);
-		*/
-
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
 		case NOWDB_AST_TYPE:
