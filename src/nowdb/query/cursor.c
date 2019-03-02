@@ -333,7 +333,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 	nowdb_context_t *ctx;
 	nowdb_plan_idx_t *pidx;
 
-	/* target is vertex */
+	/* content is vertex */
 	if (rplan->helper == NOWDB_AST_VERTEX ||
 	    rplan->helper == NOWDB_AST_TYPE) {
 		cur->content = NOWDB_CONT_VERTEX;

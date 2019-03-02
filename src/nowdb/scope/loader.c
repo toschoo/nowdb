@@ -455,7 +455,7 @@ static inline void rowEdgeHeader(nowdb_loader_t *ldr) {
 	if (ldr->csv->atts > 0) {
 		ldr->csv->ctlSize = nowdb_edge_attctrlSize(e->num);
 
-		ldr->csv->xb = malloc(ldr->csv->ctlSize);
+		ldr->csv->xb = calloc(1,ldr->csv->ctlSize);
 		if (ldr->csv->xb == NULL) {
 			ldr->err = nowdb_err_get(nowdb_err_no_mem,
 			                            FALSE, OBJECT,
@@ -605,6 +605,7 @@ void nowdb_csv_row(int c, void *ldr) {
 		       NOWDB_OFF_USER,
 		       LDR(ldr)->csv->xb,
 		       LDR(ldr)->csv->ctlSize);
+		memset(LDR(ldr)->csv->xb, 0, LDR(ldr)->csv->ctlSize);
 	}
 
 	/* finally: the normal processing */
@@ -1011,31 +1012,28 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 	int i = LDR(ldr)->csv->cur;
 	int off = LDR(ldr)->csv->pedge[i].off;
 
-	if (i == 0) {
-		memset(LDR(ldr)->csv->xb, 0xff,
-		       LDR(ldr)->csv->ctlSize);
-	}
 	if (len == 0) {
 		// what if off is origin or destin or stamp?
 
 		memset(LDR(ldr)->csv->buf + 
 		       LDR(ldr)->csv->pos + off, 0, 8);
 
+	} else {
+		if (getValueAsType(ldr, data, len,
+	            LDR(ldr)->csv->pedge[i].value,
+	            LDR(ldr)->csv->buf  +
+	            LDR(ldr)->csv->pos  + off) != 0) 
+		{
+			REJECT(LDR(ldr)->csv->pedge[i].name, "invalid value");
+			return;
+		}
 		if (off > NOWDB_OFF_USER) {
 			uint8_t  k;
 			uint16_t d;
 			nowdb_edge_getCtrl(LDR(ldr)->csv->atts,
 			                          off, &k, &d);
-			LDR(ldr)->csv->xb[d] ^= 1<<k;
+			LDR(ldr)->csv->xb[d] |= 1<<k;
 		}
-
-	} else if (getValueAsType(ldr, data, len,
-	           LDR(ldr)->csv->pedge[i].value,
-	           LDR(ldr)->csv->buf  +
-	           LDR(ldr)->csv->pos  + off) != 0) 
-	{
-		REJECT(LDR(ldr)->csv->pedge[i].name, "invalid value");
-		return;
 	}
 
 	LDR(ldr)->csv->cur++;

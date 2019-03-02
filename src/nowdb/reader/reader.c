@@ -1398,7 +1398,10 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
                                                       NOWDB_BITMAP64_ALL,
                                                       src+i, &t, &v);
 				if (err != NOWDB_OK) break;
-				if (*(nowdb_value_t*)v == 0) continue;
+				if (*(nowdb_value_t*)v == 0) {
+					i+=reader->recsize;
+					continue;
+				}
 			}
 			memcpy(reader->buf+x, src+i, reader->recsize);
 			x+=reader->recsize;i+=reader->recsize;
@@ -1527,26 +1530,10 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 		                    &nowdb_sort_edge_keys_compare :
 		                    &nowdb_sort_vertex_keys_compare,
 		            (*reader)->ikeys) != 0) {
-		fprintf(stderr, "CANNOT SORT\n");
 		nowdb_reader_destroy(*reader); free(*reader);
 		NOMEM("merge sort");
 		return err;
 	}
-
-	/*
-	int pgsz = (NOWDB_IDX_PAGE/(*reader)->recsize)*(*reader)->recsize;
-	int remsz = NOWDB_IDX_PAGE - pgsz;
-	for(int i=0; i<(*reader)->size;) {
-		if (i%NOWDB_IDX_PAGE >= pgsz) {
-			i+=remsz; continue;
-		}
-		if (memcmp((*reader)->buf+i,
-		    nowdb_nullrec, (*reader)->recsize) == 0) break;
-		fprintf(stderr, "%lu\n", *(uint64_t*)((*reader)->buf+i));
-		i+=(*reader)->recsize;
-	}
-	*/
-
 	return nowdb_reader_rewind(*reader);
 }
 

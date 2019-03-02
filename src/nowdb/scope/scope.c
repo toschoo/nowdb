@@ -2698,7 +2698,6 @@ unlock:
 nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
                                  char          *name) {
 	nowdb_err_t err2,err=NOWDB_OK;
-	nowdb_model_edge_t *e;
 
 	SCOPENULL();
 
@@ -2710,10 +2709,7 @@ nowdb_err_t nowdb_scope_dropEdge(nowdb_scope_t *scope,
 
 	SCOPENOTOPEN();
 
-	err = nowdb_model_getEdgeByName(scope->model, name, &e);
-	if (err != NOWDB_OK) goto unlock;
-
-	err = nowdb_model_removeEdge(scope->model, e->edgeid);
+	err = nowdb_model_removeEdgeType(scope->model, name);
 	if (err != NOWDB_OK) goto unlock;
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);

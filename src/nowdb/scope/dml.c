@@ -308,7 +308,7 @@ static char edgeComplete(nowdb_dml_t *dml,
 	if (dml->pedgen != fields->len) return 0;
 	// origin / destin / timestamp
 	for(run=fields->head; run!=NULL; run=run->nxt) {
-		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
+		if (strcasecmp(dml->pe[i]->name, (char*)run->cont) != 0) {
 			return 0;
 		}
 		i++;
