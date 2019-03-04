@@ -410,7 +410,6 @@ class Result:
             return True
 
         else:
-            print("type is %d" % t.value)
             return None
 
 class DBError(Exception):
