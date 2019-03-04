@@ -276,28 +276,28 @@ void nowdb_storage_config(nowdb_storage_config_t *cfg,
 
 		cfg->filesize  = 8 * NOWDB_MEGA;
 		cfg->largesize = 64 * NOWDB_MEGA;
-		cfg->sorters   = 4;
+		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_BIG) {
 
 		cfg->filesize  = 8 * NOWDB_MEGA;
 		cfg->largesize = 128 * NOWDB_MEGA;
-		cfg->sorters   = 6;
+		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_LARGE) {
 
 		cfg->filesize  = 8 * NOWDB_MEGA;
 		cfg->largesize = 256 * NOWDB_MEGA;
-		cfg->sorters   = 8;
+		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 
 	} else if (options & NOWDB_CONFIG_SIZE_HUGE) {
 
 		cfg->filesize  = 8 * NOWDB_MEGA;
 		cfg->largesize = 1024 * NOWDB_MEGA;
-		cfg->sorters   = 10;
+		cfg->sorters   = 2;
 		cfg->comp      = NOWDB_COMP_ZSTD;
 	}
 	if (options & NOWDB_CONFIG_INSERT_MODERATE) {
@@ -306,12 +306,11 @@ void nowdb_storage_config(nowdb_storage_config_t *cfg,
 
 	} else if (options & NOWDB_CONFIG_INSERT_CONSTANT) {
 
-		cfg->sorters += 4;
+		cfg->sorters += 2;
 
 	} else if (options & NOWDB_CONFIG_INSERT_INSANE) {
 
-		cfg->sorters *= 2;
-		if (cfg->sorters > 32) cfg->sorters = 32;
+		cfg->sorters = 8;
 		if (cfg->filesize  < 8) cfg->filesize  = 8;
 		cfg->largesize = 1024;
 	}
