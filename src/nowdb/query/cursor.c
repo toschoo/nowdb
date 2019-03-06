@@ -1563,12 +1563,18 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 			}
 
 		} else if (filter != NULL) {
-			void *v;
+			void *v=NULL;
 			nowdb_type_t  t;
 			err = nowdb_expr_eval(filter, cur->eval, fullmap,
 			                           src+cur->off, &t, &v);
 			if (err != NOWDB_OK) return err;
-			if (!(*(nowdb_value_t*)v)) {
+			if (t == NOWDB_TYP_NOTHING) {
+				cur->off += recsz; continue;
+			} else if (t == NOWDB_TYP_TEXT) {
+				if (v == NULL || strlen(v) == 0) {
+					cur->off += recsz; continue;
+				}
+			} else if (!(*(nowdb_value_t*)v)) {
 				cur->off += recsz; continue;
 			}
 		}

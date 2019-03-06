@@ -695,8 +695,11 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	nowdb_simple_value_t *val;
 	char *edge;
 	uint32_t off=0;
+	char stamped;
+	char o=0,d=0,t=0;
 	int i=0;
 
+	stamped = dml->e->size > NOWDB_OFF_STAMP;
 	edge = calloc(1, dml->e->size);
 	if (edge == NULL) {
 		NOMEM("allocating edge");
@@ -715,6 +718,16 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 			nm = frun->cont;
 		} else {
 			off = dml->pe[i]->off;
+		}
+
+		if (off >= dml->e->size) {
+			INVALIDVAL("unknown field"); break;
+		}
+
+		switch(off) {
+		case NOWDB_OFF_ORIGIN: o++; break;
+		case NOWDB_OFF_DESTIN: d++; break;
+		case NOWDB_OFF_STAMP:  t++; break;
 		}
 
 		val = vrun->cont;
@@ -743,6 +756,26 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	}
 	if (fields == NULL && i < dml->pedgen) {
 		INVALIDVAL("not enough fields");
+		free(edge); return err;
+	}
+	if (o < 1) {
+		INVALIDVAL("no origin in edge");
+	} else if (o > 1) {
+		INVALIDVAL("multiple values for origin");
+	} else if (d < 1) {
+		INVALIDVAL("no destin in edge");
+	} else if (d > 1) {
+		INVALIDVAL("multiple values for destin");
+	} else if (stamped) {
+		if (t < 1) {
+			INVALIDVAL("no timestamp in stamped edge");
+		} else if (t > 1) {
+			INVALIDVAL("multiple value for timestamp");
+		}
+	} else {
+		if (t != 0) INVALIDVAL("timestamp in unstamped edge");
+	}
+	if (err != NOWDB_OK) {
 		free(edge); return err;
 	}
 

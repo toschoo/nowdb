@@ -1077,16 +1077,18 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	fclose(stream); 
 	if (epath != NULL) fclose(estream);
 
-	/* create a report */
-	rep = calloc(1, sizeof(nowdb_qry_report_t));
-	if (rep == NULL) {
-		err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                               "allocating report");
-	} else {
-		rep->affected = ldr.loaded;
-		rep->errors = ldr.errors;
-		rep->runtime = ldr.runtime;
-		res->result = rep;
+	if (err == NOWDB_OK) {
+		/* create a report */
+		rep = calloc(1, sizeof(nowdb_qry_report_t));
+		if (rep == NULL) {
+			err = nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
+			                               "allocating report");
+		} else {
+			rep->affected = ldr.loaded;
+			rep->errors = ldr.errors;
+			rep->runtime = ldr.runtime;
+			res->result = rep;
+		}
 	}
 	nowdb_loader_destroy(&ldr);
 	return err;

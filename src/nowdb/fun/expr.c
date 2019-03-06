@@ -1078,6 +1078,8 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 	void *u=NULL;
 	nowdb_err_t  err;
 
+	*res = src+field->off;
+
 	switch(field->off) {
 	case NOWDB_OFF_ORIGIN:
 		if (field->type == NOWDB_TYP_TEXT) {
@@ -1174,6 +1176,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
 	if ((rmap & 1<<i) == 0) {
 		// fprintf(stderr, "%s evaluates to NULL\n", field->name);
+		*res = src+field->off;
 		*t = NOWDB_TYP_NOTHING; return NOWDB_OK;
 	}
 
@@ -1982,7 +1985,13 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PERFBOOL(o) \
-	o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+	if (types[0] == NOWDB_TYP_TEXT) { \
+		o(*(int64_t*)res, (int64_t)argv[0], *(uint64_t*)argv[1]); \
+	} else if (types[1] == NOWDB_TYP_TEXT) { \
+		o(*(int64_t*)res, *(int64_t*)argv[0], (uint64_t)argv[1]); \
+	} else { \
+		o(*(int64_t*)res, *(int64_t*)argv[0], *(int64_t*)argv[1]); \
+	} \
 	return NOWDB_OK;
 
 /* -----------------------------------------------------------------------
@@ -1990,7 +1999,11 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 #define PER1BOOL(o) \
-	o(*(int64_t*)res, *(int64_t*)argv[0]); \
+	if (types[0] == NOWDB_TYP_TEXT) { \
+		o(*(int64_t*)res, (int64_t)argv[0]); \
+	} else { \
+		o(*(int64_t*)res, *(int64_t*)argv[0]); \
+	} \
 	return NOWDB_OK;
 
 /* -----------------------------------------------------------------------
@@ -2353,6 +2366,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_ELSE:
 		if (argv[0] == NULL) {
 			*t = NOWDB_TYP_NOTHING;
+			// set res
 		} else if (types[0] == NOWDB_TYP_TEXT) {
 			COPYADDR(res, &argv[0]); *t = types[0];
 		} else {
@@ -2367,6 +2381,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 		if (*(int64_t*)argv[0]) {
 			if (argv[1] == NULL) {
 				*t = NOWDB_TYP_NOTHING;
+				// set res
 			} else if (types[1] == NOWDB_TYP_TEXT) {
 				COPYADDR(res, &argv[1]); *t = types[1];
 			} else {
@@ -2375,6 +2390,7 @@ static nowdb_err_t evalFun(uint32_t       fun,
 		} else {
 			if (argv[2] == NULL) {
 				*t = NOWDB_TYP_NOTHING;
+				// set res
 			} else if (types[2] == NOWDB_TYP_TEXT) {
 				COPYADDR(res, &argv[2]); *t = types[2];
 			} else {

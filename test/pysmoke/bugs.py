@@ -181,19 +181,73 @@ def createInvalidEdge(c):
          else:
             print "%d: %s" % (r.code(), r.details())
 
+    with c.execute("create edge unstamped (origin client, destin product)") as r:
+         if not r.ok():
+            raise db.TestFailed("ERROR creating unstamed edge: %d: %s" % (r.code(), r.details()))
+
 # insert into edge must contain edge and timestamp
 def invalidEdgeInserts(c):
 
     print "RUNNING TEST 'invalidEdgeInserts'"
 
-    """
     with c.execute("insert into buys (origin, destin, price) \
-                                      (9999999, 9999, 0.99)") as r:
+                                     (9999999, 9999, 0.99)") as r:
          if r.ok():
             raise db.TestFailed("I can insert an edge without timestamp :-(")
          else:
             print "%d: %s" % (r.code(), r.details())
-    """
+
+    with c.execute("insert into buys (destin, stamp, price) \
+                                     (9999, '2018-10-10', 0.99)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an edge without origin :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into buys (origin, stamp, price) \
+                                     (9999999, '2018-10-10', 0.99)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an edge without destin :-(")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into unstamped (origin, destin) \
+                                          (9999999, 9999)") as r:
+         if not r.ok():
+            raise db.TestFailed("I cannot insert an unstamped edge %d: %s" % (r.code(), r.details()))
+
+    with c.execute("insert into unstamped (origin, destin, stamp) \
+                                          (9999999, 9999, '2018-10-10')") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an unstamped edge with stamp")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into unstamped (origin, stamp) \
+                                          (9999999, '2018-10-10')") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an unstamped edge without destin")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into unstamped (destin, stamp) \
+                                          (9999999, '2018-10-10')") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an unstamped edge without origin")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into unstamped (origin) (9999999)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an unstamped edge without origin")
+         else:
+            print "%d: %s" % (r.code(), r.details())
+
+    with c.execute("insert into unstamped (destin) (9999999)") as r:
+         if r.ok():
+            raise db.TestFailed("I can insert an unstamped edge without origin")
+         else:
+            print "%d: %s" % (r.code(), r.details())
 
 # it shall not be possible to create an edge and a type of the same name
 # it shall not be possible to create a context and a type of the same name
@@ -291,6 +345,6 @@ if __name__ == '__main__':
         keyzero(c)
         createInvalidEdge(c)
         invalidEdgeInserts(c)
-        doublenaming(c)
+        #doublenaming(c)
 
         print "PASSED"

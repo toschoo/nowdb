@@ -886,6 +886,11 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
+	if (LDR(ldr)->csv->props == NULL) {
+		LDR(ldr)->err = nowdb_err_get(nowdb_err_loader,
+		                    FALSE, OBJECT, "no model");
+		return;
+	}
 
 	int i = LDR(ldr)->csv->cur;
 
@@ -1006,6 +1011,11 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 	}
 	if (len >= 255) {
 		REJECT("EDGE", "value too big");
+		return;
+	}
+	if (LDR(ldr)->csv->pedge == NULL) {
+		LDR(ldr)->err = nowdb_err_get(nowdb_err_loader,
+		                    FALSE, OBJECT, "no model");
 		return;
 	}
 
