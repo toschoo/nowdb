@@ -36,17 +36,14 @@ typedef struct {
 	nowdb_path_t     strgpath; /* catalog path          */
 	nowdb_path_t      catalog; /* ctx catalog path      */
 	nowdb_version_t       ver; /* db version            */
-	char                vinit; /* vertices initialised  */
-	nowdb_store_t    vertices; /* vertices              */
-	nowdb_index_t     *vindex; /* index on vertices     */
-	nowdb_plru12_t    *evache; /* external vertex cache */
-	nowdb_plru12_t    *ivache; /* internal vertex cache */
 	ts_algo_tree_t    storage; /* tree of storage cfgs */
 	ts_algo_tree_t   contexts; /* contexts              */
 	nowdb_index_man_t   *iman; /* index manager         */
 	nowdb_model_t      *model; /* model                 */
 	nowdb_text_t        *text; /* strings               */
 	nowdb_procman_t     *pman; /* stored procedures     */
+	nowdb_plru12_t    *evache; /* goes to context       */
+	nowdb_plru12_t    *ivache; /* goes to context       */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -182,6 +179,14 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
                                  nowdb_index_t    **idx);
 
 /* -----------------------------------------------------------------------
+ * Get built-in index on vertex
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getVidx(nowdb_scope_t *scope,
+                                nowdb_context_t *ctx,
+                                nowdb_index_t  **idx);
+
+/* -----------------------------------------------------------------------
  * Create new stored procedure/function
  * -----------------------------------------------------------------------
  */
@@ -248,6 +253,7 @@ nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
+                                       nowdb_context_t *ctx,
                                        nowdb_roleid_t  role,
                                        nowdb_key_t      vid);
 

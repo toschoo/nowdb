@@ -21,8 +21,6 @@ static char *OBJECT = "cursor";
 
 static uint64_t fullmap = NOWDB_BITMAP64_ALL;
 
-#define VINDEX "_vindex"
-
 /* ------------------------------------------------------------------------
  * Helper: Index contains model identifier
  * ------------------------------------------------------------------------
@@ -324,21 +322,22 @@ static inline nowdb_err_t createMerge(nowdb_cursor_t    *cur,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t initReader(nowdb_scope_t *scope,
+                                     nowdb_context_t *ctx,
                                      nowdb_cursor_t  *cur,
                                      nowdb_time_t   start,
                                      nowdb_time_t     end,
                                      nowdb_plan_t  *rplan) {
 	nowdb_err_t      err;
 	nowdb_store_t *store;
-	nowdb_context_t *ctx;
 	nowdb_plan_idx_t *pidx;
+
+	store = &ctx->store;
+	cur->recsz = store->recsize;
+	cur->content = store->cont;
 
 	/* content is vertex */
 	if (rplan->helper == NOWDB_AST_VERTEX ||
 	    rplan->helper == NOWDB_AST_TYPE) {
-		cur->content = NOWDB_CONT_VERTEX;
-		cur->recsz = 32;
-		store = &scope->vertices;
 
 		// fprintf(stderr, "CONTENT NAME: %s\n", rplan->name);
 
@@ -348,14 +347,6 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 			                                  &cur->v);
 			if (err != NOWDB_OK) return err;
 		}
-
-	/* content is edge */
-	} else {
-		cur->content = NOWDB_CONT_EDGE;
-		err = nowdb_scope_getContext(scope, rplan->name, &ctx);
-		if (err != NOWDB_OK) return err;
-		store = &ctx->store;
-		cur->recsz = store->recsize;
 	}
 
 	cur->hasid = TRUE;
@@ -627,31 +618,31 @@ static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
-                                       nowdb_cursor_t *cur,
+                                       nowdb_context_t  *ctx,
+                                       nowdb_cursor_t   *cur,
                                        ts_algo_tree_t *vtree) {
 	nowdb_err_t err;
 	nowdb_plan_idx_t *pidx;
-	nowdb_index_desc_t *desc;
+	nowdb_index_t *idx;
 
 	// get the internal index on vertex
-	err = nowdb_index_man_getByName(scope->iman,
-	                              VINDEX, &desc);
+	err = nowdb_scope_getVidx(scope, ctx, &idx);
 	if (err != NOWDB_OK) return err;
 
 	// one plan index per vid
 	pidx = calloc(1, sizeof(nowdb_plan_idx_t));
 	if (pidx == NULL) {
 		NOMEM("allocating plan index");
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		return err;
 	}
 
 	// create index keys
-	pidx->idx = desc->idx;
+	pidx->idx = idx;
 	pidx->keys = malloc(12);
 	if (pidx->keys == NULL) {
 		NOMEM("allocating keys");
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		DESTROYPIDX(0,pidx);
 		return err;
 	}
@@ -661,7 +652,7 @@ static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
 	pidx->maps = calloc(2, sizeof(ts_algo_tree_t*));
 	if (pidx->maps == NULL) {
 		NOMEM("allocating keys");
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		DESTROYPIDX(1,pidx);
 		return err;
 	}
@@ -673,7 +664,7 @@ static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
 	pidx->maps = NULL;
 	DESTROYPIDX(1,pidx);
 	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		return err;
 	}
 	return NOWDB_OK;
@@ -684,34 +675,34 @@ static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
-                                        nowdb_cursor_t *cur,
-                                        ts_algo_list_t *vlst) {
+                                        nowdb_context_t  *ctx,
+                                        nowdb_cursor_t   *cur,
+                                        ts_algo_list_t  *vlst) {
 	nowdb_err_t err;
 	nowdb_plan_idx_t *pidx;
-	nowdb_index_desc_t *desc;
+	nowdb_index_t    *idx;
 	ts_algo_list_node_t *run;
 	int i=0;
 
 	// get the internal index on vertex
-	err = nowdb_index_man_getByName(scope->iman,
-	                              VINDEX, &desc);
+	err = nowdb_scope_getVidx(scope, ctx, &idx);
 	if (err != NOWDB_OK) return err;
 
 	// one plan index per vid
 	pidx = calloc(vlst->len, sizeof(nowdb_plan_idx_t));
 	if (pidx == NULL) {
 		NOMEM("allocating plan index");
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		return err;
 	}
 
 	// create index keys
 	for(run=vlst->head;run!=NULL;run=run->nxt) {
-		pidx[i].idx = desc->idx;
+		pidx[i].idx = idx;
 		pidx[i].keys = malloc(12);
 		if (pidx[i].keys == NULL) {
 			NOMEM("allocating keys");
-			NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+			NOWDB_IGNORE(nowdb_index_enduse(idx));
 			DESTROYPIDX(i,pidx);
 			return err;
 		}
@@ -723,7 +714,7 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
 	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, vlst->len);
 	DESTROYPIDX(vlst->len,pidx);
 	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_index_enduse(desc->idx));
+		NOWDB_IGNORE(nowdb_index_enduse(idx));
 		return err;
 	}
 	return NOWDB_OK;
@@ -734,9 +725,10 @@ static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
-                                 nowdb_cursor_t *cur,
-                                 ts_algo_list_t *vlst,
-                                 ts_algo_tree_t *vids) {
+                                 nowdb_context_t  *ctx,
+                                 nowdb_cursor_t   *cur,
+                                 ts_algo_list_t  *vlst,
+                                 ts_algo_tree_t  *vids) {
 	nowdb_err_t err;
 
 	// first destroy existing reader
@@ -755,7 +747,7 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 	}
 	
 	// get the relevant files 
-	cur->stf.store = &scope->vertices;
+	cur->stf.store = &ctx->store;
 	err = nowdb_store_getFiles(cur->stf.store, &cur->stf.files,
 	                          NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
 	if (err != NOWDB_OK) return err;
@@ -763,10 +755,10 @@ static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
 	// this magical number is not based on any benchmarks!
 	if (vlst->len > 31) {
 		// fprintf(stderr, "MRANGE\n");
-		err = makeVidRange(scope, cur, vids);
+		err = makeVidRange(scope, ctx, cur, vids);
 	} else {
 		// fprintf(stderr, "SEARCH: %d\n", vlst->len);
-		err = makeVidSearch(scope, cur, vlst);
+		err = makeVidSearch(scope, ctx, cur, vlst);
 	}
 	if (err != NOWDB_OK) {
 		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
@@ -818,6 +810,7 @@ static void videstroy(void *ignore, void **n) {
  */
 #define BUFSIZE 8192
 static nowdb_err_t getVids(nowdb_scope_t *scope,
+                           nowdb_context_t *ctx,
                            nowdb_cursor_t  *mom) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_cursor_t *cur;
@@ -938,7 +931,7 @@ static nowdb_err_t getVids(nowdb_scope_t *scope,
 	if (err != NOWDB_OK) goto cleanup;
 
 	// make reader (using the built-in index if possible)
-	err = makeVidReader(scope, mom, vlst, vids);
+	err = makeVidReader(scope, ctx, mom, vlst, vids);
 	if (err != NOWDB_OK) goto cleanup;
 
 cleanup:
@@ -966,6 +959,7 @@ cleanup:
 nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
                              ts_algo_list_t  *plan,
                              nowdb_cursor_t  **cur) {
+	nowdb_context_t *ctx;
 	ts_algo_list_node_t *runner;
 	nowdb_plan_t *stp=NULL, *rstp=NULL;
 	nowdb_err_t   err;
@@ -989,6 +983,9 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 	if (rstp->ntype != NOWDB_PLAN_READER) {
 		INVALIDPLAN("reader expected in plan");
 	}
+
+	err = nowdb_scope_getContext(scope, rstp->name, &ctx);
+	if (err != NOWDB_OK) return err;
 
 	/* allocate the cursor */
 	*cur = calloc(1, sizeof(nowdb_cursor_t));
@@ -1051,7 +1048,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		return err;
 	}
 
-	err = initReader(scope, *cur, start, end, rstp);
+	err = initReader(scope, ctx, *cur, start, end, rstp);
 	if (err != NOWDB_OK) {
 		free((*cur)->rdr); (*cur)->rdr = NULL;
 		nowdb_cursor_destroy(*cur);
@@ -1187,7 +1184,7 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 		if (ok) return NOWDB_OK;
 
 		// get vids
-		err = getVids(scope, *cur);
+		err = getVids(scope, ctx, *cur);
 		if (err != NOWDB_OK) {
 			nowdb_cursor_destroy(*cur);
 			free(*cur); return err;

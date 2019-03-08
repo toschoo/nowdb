@@ -77,7 +77,7 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
                               FILE           *stream,
                               FILE          *ostream,
                               void            *scope,
-                              nowdb_store_t   *store,
+                              nowdb_context_t   *ctx,
                               nowdb_model_t   *model,
                               nowdb_text_t     *text,
                               char             *type,
@@ -89,7 +89,7 @@ nowdb_err_t nowdb_loader_init(nowdb_loader_t    *ldr,
 	ldr->stream = stream==NULL?stdin:stream;
 	ldr->ostream = ostream==NULL?stderr:ostream;
 	ldr->scope  = scope;
-	ldr->store  = store;
+	ldr->ctx = ctx;
 	ldr->model  = model;
 	ldr->text   = text;
 	ldr->type   = type;
@@ -272,7 +272,8 @@ static inline void insertBuf(nowdb_loader_t *ldr) {
 	/* consider insertBulk! */
 	for(int i=0; i<ldr->csv->pos; i+=ldr->csv->recsize) {
 		/* fprintf(stderr, "inserting %d\n", i/64); */
-		ldr->err = nowdb_store_insert(ldr->store, ldr->csv->buf+i);
+		ldr->err = nowdb_store_insert(&ldr->ctx->store,
+		                               ldr->csv->buf+i);
 		if (ldr->err != NOWDB_OK) return;
 	}
 }
@@ -977,6 +978,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 
 		nowdb_err_t err =
 		nowdb_scope_registerVertex(LDR(ldr)->scope,
+		                           LDR(ldr)->ctx,
 		                           LDR(ldr)->csv->props[0].roleid,
 		                           LDR(ldr)->csv->vid);
 		if (err != NOWDB_OK) {

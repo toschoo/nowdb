@@ -358,6 +358,59 @@ static nowdb_err_t dropIndex(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Check whether the context exists or not
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
+                                             char          *name,
+                                             nowdb_bool_t  *b) {
+	nowdb_err_t err;
+	nowdb_context_t *ctx;
+
+	err = nowdb_scope_getContext(scope, name, &ctx);
+	if (err == NOWDB_OK) {
+		*b = TRUE; return NOWDB_OK;
+	}
+	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+		nowdb_err_release(err);
+		*b = FALSE; return NOWDB_OK;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Create table
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createContext(nowdb_ast_t  *op,
+                                 char       *name,
+                             nowdb_scope_t *scope) {
+	nowdb_err_t err;
+	nowdb_ast_t *opts, *o;
+	nowdb_ast_t *strg;
+	char *strgname = NULL;
+
+	/* get options and, if 'ifexists' is given,
+	 * check if the context exists */
+	opts = nowdb_ast_option(op, 0);
+	if (opts != NULL) {
+		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_bool_t x = FALSE;
+			err = checkContextExists(scope, name, &x);
+			if (err != NOWDB_OK) return err;
+			if (x) return NOWDB_OK;
+		}
+	}
+
+	strg = nowdb_ast_storage(op);
+	if (strg != NULL) strgname = strg->value;
+
+	/* create the context */
+	return nowdb_scope_createContext(scope, name, strgname);
+}
+
+/* -------------------------------------------------------------------------
  * Helper: destroy list of properties
  * -------------------------------------------------------------------------
  */
@@ -471,7 +524,15 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		return err;
 	}
 	ts_algo_list_destroy(&props);
-	
+	err = createContext(op, name, scope);
+	if (err != NOWDB_OK) {
+		nowdb_err_t err2;
+		err2 = nowdb_model_removeType(scope->model, name);
+		if (err2 != NOWDB_OK) {
+			nowdb_err_cascade(err2, err);
+			return err2;
+		}
+	}
 	return NOWDB_OK;
 }
 
@@ -486,7 +547,9 @@ static nowdb_err_t dropType(nowdb_ast_t  *op,
 	nowdb_ast_t  *o;
 
 	err = nowdb_scope_dropType(scope, name);
-	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err == NOWDB_OK) {
+		err = nowdb_scope_dropContext(scope, name);
+	}
 	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
 		o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
 		if (o != NULL) {
@@ -592,27 +655,6 @@ static nowdb_err_t applyGenericOptions(nowdb_ast_t *opts,
 }
 
 /* -------------------------------------------------------------------------
- * Check whether the context exists or not
- * -------------------------------------------------------------------------
- */
-static inline nowdb_err_t checkContextExists(nowdb_scope_t *scope,
-                                             char          *name,
-                                             nowdb_bool_t  *b) {
-	nowdb_err_t err;
-	nowdb_context_t *ctx;
-
-	err = nowdb_scope_getContext(scope, name, &ctx);
-	if (err == NOWDB_OK) {
-		*b = TRUE; return NOWDB_OK;
-	}
-	if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
-		nowdb_err_release(err);
-		*b = FALSE; return NOWDB_OK;
-	}
-	return err;
-}
-
-/* -------------------------------------------------------------------------
  * Check whether the storage exists or not
  * -------------------------------------------------------------------------
  */
@@ -667,38 +709,6 @@ static nowdb_err_t createStorage(nowdb_ast_t  *op,
 
 	/* create the context */
 	return nowdb_scope_createStorage(scope, name, &cfg);
-}
-
-/* -------------------------------------------------------------------------
- * Create table
- * -------------------------------------------------------------------------
- */
-static nowdb_err_t createContext(nowdb_ast_t  *op,
-                                 char       *name,
-                             nowdb_scope_t *scope) {
-	nowdb_err_t err;
-	nowdb_ast_t *opts, *o;
-	nowdb_ast_t *strg;
-	char *strgname = NULL;
-
-	/* get options and, if 'ifexists' is given,
-	 * check if the context exists */
-	opts = nowdb_ast_option(op, 0);
-	if (opts != NULL) {
-		o = nowdb_ast_option(opts, NOWDB_AST_IFEXISTS);
-		if (o != NULL) {
-			nowdb_bool_t x = FALSE;
-			err = checkContextExists(scope, name, &x);
-			if (err != NOWDB_OK) return err;
-			if (x) return NOWDB_OK;
-		}
-	}
-
-	strg = nowdb_ast_storage(op);
-	if (strg != NULL) strgname = strg->value;
-
-	/* create the context */
-	return nowdb_scope_createContext(scope, name, strgname);
 }
 
 /* -------------------------------------------------------------------------
@@ -1001,10 +1011,19 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 	nowdb_loader_t   ldr;
 	nowdb_qry_report_t *rep;
 
+	if (trg->value == NULL) {
+		INVALIDAST("no target name in AST");
+	}
+
 	/* open stream from path */
 	stream = fopen(path, "rb");
 	if (stream == NULL) return nowdb_err_get(nowdb_err_open,
 		                            TRUE, OBJECT, path);
+
+	err = nowdb_scope_getContext(scope, trg->value, &ctx);
+	if (err != NOWDB_OK) {
+		fclose(stream);return err;
+	}
 
 	/* open error stream from epath */
 	if (epath != NULL) {
@@ -1025,8 +1044,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 
 		flg |= NOWDB_CSV_VERTEX;
 		err = nowdb_loader_init(&ldr, stream, estream,
-		                        scope,
-		                        &scope->vertices,
+		                        scope, ctx,
 		                        scope->model,
 		                        scope->text,
 		                        type,  flg);
@@ -1036,14 +1054,8 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		}
 		break;
 
-	/* create context loader */
+	/* create edge loader */
 	case NOWDB_AST_CONTEXT:
-		if (trg->value == NULL) INVALIDAST("no target name in AST");
-		err = nowdb_scope_getContext(scope, trg->value, &ctx);
-		if (err != NOWDB_OK) {
-			if (epath != NULL) fclose(estream);
-			fclose(stream);return err;
-		}
 
 		if (type != NULL) {
 			fprintf(stderr, "loading '%s' into '%s' as edge\n",
@@ -1054,8 +1066,7 @@ static nowdb_err_t load(nowdb_scope_t    *scope,
 		}
 
 		err = nowdb_loader_init(&ldr, stream, estream,
-		                        scope,
-		                        &ctx->store,
+		                        scope, ctx,
 		                        scope->model,
 		                        scope->text,
 		                        type,  flg);

@@ -10,6 +10,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/store/store.h>
+#include <nowdb/scope/context.h>
 #include <nowdb/model/model.h>
 #include <nowdb/text/text.h>
 #include <nowdb/mem/pklru.h>
@@ -25,7 +26,7 @@ typedef struct {
 	char            *trgname; /* name of least recently used target */
         nowdb_scope_t     *scope; /* current scope                      */
 	nowdb_content_t  content; /* least recently used content        */
-	nowdb_store_t     *store; /* least recently used store          */
+	nowdb_context_t     *ctx; /* least recently used context        */
 	nowdb_pklru_t      *tlru; /* private text cache                 */
 	nowdb_model_vertex_t  *v; /* least recently used vertex model   */
 	nowdb_model_prop_t   **p; /* least recently used prop model     */

@@ -439,11 +439,7 @@ int createIndex(nowdb_scope_t *scope,
 	nowdb_err_t err;
 	nowdb_index_keys_t *keys;
 
-	if (ctxname != NULL) {
-		fprintf(stderr, "creating index %s.%s\n", ctxname, idxname);
-	} else {
-		fprintf(stderr, "creating index VERTEX.%s\n", idxname);
-	}
+	fprintf(stderr, "creating index %s.%s\n", ctxname, idxname);
 
 	keys = createKeys(ctxname, sz);
 	if (keys == NULL) return 0;
@@ -684,7 +680,7 @@ int main() {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!createIndex(scope, "IDX_VIER", NULL,2)) {
+	if (!createIndex(scope, "IDX_VIER", "CTX_THREE",2)) {
 		fprintf(stderr, "createIndex failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -700,7 +696,7 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for IDX_THREE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testGetIdx(scope, "IDX_VIER", NULL, 2)) {
+	if (!testGetIdx(scope, "IDX_VIER", "CTX_THREE", 2)) {
 		fprintf(stderr, "createIndex failed for IDX_VIER\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -734,7 +730,7 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for IDX_THREE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!testGetIdx(scope, "IDX_VIER", NULL, 2)) {
+	if (!testGetIdx(scope, "IDX_VIER", "CTX_THREE", 2)) {
 		fprintf(stderr, "createIndex failed for IDX_VIER\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

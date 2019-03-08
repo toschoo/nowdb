@@ -265,26 +265,12 @@ int initMan(nowdb_index_man_t *iman,
             void            *handle,
             ts_algo_tree_t     *ctx) {
 	nowdb_err_t err;
-	char *cp, *vp;
-
-	cp = nowdb_path_append(BASE, CTXPATH);
-	if (cp == NULL) {
-		fprintf(stderr, "out-of-mem\n");
-		return -1;
-	}
-	vp = nowdb_path_append(BASE, VXPATH);
-	if (vp == NULL) {
-		fprintf(stderr, "out-of-mem\n");
-		free(cp); return -1;
-	}
 
 	err = nowdb_index_man_init(iman,
 	                           ctx,
 	                           handle,
 	                           BASE,
-	                           IMNPATH,
-	                           cp, vp);
-	free(vp); free(cp);
+	                           IMNPATH);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init iman\n");
 		nowdb_err_print(err);

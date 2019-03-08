@@ -28,8 +28,6 @@ typedef struct {
 	FILE              *file; /* where we store metadata     */
 	char              *base; /* base path                   */
 	char              *path; /* path to metadata file       */
-	char           *ctxpath; /* path to the contexts        */
-	char            *vxpath; /* path to vertex              */
 	void            *handle; /* handle to compare lib       */
 	ts_algo_tree_t *context; /* context for name resolution */
 	ts_algo_tree_t  *byname; /* map storing indices by name */
@@ -44,9 +42,7 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t *iman,
                                  ts_algo_tree_t *context,
                                             void *handle, 
                                               char *base,
-                                              char *path,
-                                           char *ctxpath,
-                                            char *vxpath);
+                                              char *path);
 
 /* ------------------------------------------------------------------------
  * Destroy index manager

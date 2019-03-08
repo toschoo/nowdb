@@ -30,7 +30,7 @@ nowdb_err_t nowdb_dml_init(nowdb_dml_t   *dml,
 
 	dml->trgname = NULL;
 	dml->scope = scope;
-	dml->store = NULL;
+	dml->ctx = NULL;
 	dml->tlru  = NULL;
 	dml->v = NULL;
 	dml->p = NULL;
@@ -79,53 +79,30 @@ void nowdb_dml_destroy(nowdb_dml_t *dml) {
 }
 
 /* ------------------------------------------------------------------------
- * Get context and edge
+ * Are we context or vertex?
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t getEdge(nowdb_dml_t *dml,
-                                  char    *trgname,
-                                  char      *found) {
+static nowdb_err_t getEdgeOrVertex(nowdb_dml_t *dml,
+                                   char    *trgname) {
 	nowdb_err_t err;
 	nowdb_context_t *ctx;
 
 	err = nowdb_scope_getContext(dml->scope, trgname, &ctx);
-	if (err != NOWDB_OK) {
-		if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
-			nowdb_err_release(err);
-			return NOWDB_OK;
-		}
+	if (err != NOWDB_OK) return NOWDB_OK;
+
+	dml->ctx     = ctx;
+
+	if (ctx->store.cont == NOWDB_CONT_EDGE) {
+		err = nowdb_model_getEdgeByName(dml->scope->model,
+		                                 trgname,&dml->e);
+		dml->content = NOWDB_CONT_EDGE;
+		if (err != NOWDB_OK) return err;
+	} else {
+		dml->content = NOWDB_CONT_VERTEX;
+		err = nowdb_model_getVertexByName(dml->scope->model,
+		                                   trgname,&dml->v);
 	}
-	dml->content = NOWDB_CONT_EDGE;
-	dml->store = &ctx->store;
-
-	err = nowdb_model_getEdgeByName(dml->scope->model,
-	                                 trgname, &dml->e);
 	if (err != NOWDB_OK) return err;
-
-	*found=1;
-
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Are we context or vertex?
- * ------------------------------------------------------------------------
- */
-static nowdb_err_t getContextOrVertex(nowdb_dml_t *dml,
-                                      char    *trgname) {
-	nowdb_err_t err;
-	char x=0;
-
-	err = getEdge(dml, trgname, &x);
-	if (err != NOWDB_OK) return err;
-	if (x) return NOWDB_OK;
-
-	err = nowdb_model_getVertexByName(dml->scope->model,trgname,&dml->v);
-	if (err != NOWDB_OK) return err;
-
-	dml->content = NOWDB_CONT_VERTEX;
-	dml->store = &dml->scope->vertices;
-
 	return NOWDB_OK;
 }
 
@@ -366,8 +343,8 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 		return err;
 	}
 
-	// get context or vertex
-	err = getContextOrVertex(dml, trgname);
+	// get edge or vertex
+	err = getEdgeOrVertex(dml, trgname);
 	if (err != NOWDB_OK) return err;
 
 	if (dml->content == NOWDB_CONT_EDGE) {
@@ -786,7 +763,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	                 edge.timestamp);
 	*/
 
-	err = nowdb_store_insert(dml->store, edge);
+	err = nowdb_store_insert(&dml->ctx->store, edge);
 	free(edge); return err;
 }
 
@@ -871,6 +848,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	// now register the vertex...
 	// (we should lock here and keep the lock)
 	err = nowdb_scope_registerVertex(dml->scope,
+	                                 dml->ctx,
 	                                 vrtx.role,
 	                                 vrtx.vertex);
 	if (err != NOWDB_OK) return err;
@@ -891,7 +869,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		                 vrtx.property, vrtx.vtype);
 		*/
 
-		err = nowdb_store_insert(dml->store, &vrtx);
+		err = nowdb_store_insert(&dml->ctx->store, &vrtx);
 		if (err != NOWDB_OK) break;
 		i++;
 	}
