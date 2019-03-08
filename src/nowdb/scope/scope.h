@@ -42,8 +42,6 @@ typedef struct {
 	nowdb_model_t      *model; /* model                 */
 	nowdb_text_t        *text; /* strings               */
 	nowdb_procman_t     *pman; /* stored procedures     */
-	nowdb_plru12_t    *evache; /* goes to context       */
-	nowdb_plru12_t    *ivache; /* goes to context       */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------

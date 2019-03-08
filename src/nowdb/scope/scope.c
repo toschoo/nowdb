@@ -260,64 +260,6 @@ static nowdb_err_t openModel(nowdb_scope_t *scope) {
 }
 
 /* -----------------------------------------------------------------------
- * Helper: initialise vertex
- * -----------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t initVertex(nowdb_scope_t *scope) {
-	nowdb_path_t p;
-	nowdb_err_t err;
-	nowdb_storage_t *strg, pattern;
-
-	if (scope->vinit) return NOWDB_OK;
-
-	err = mkvtxpath(scope, &p);
-	if (err != NOWDB_OK) return err;
-
-	pattern.name = VSTORE;
-	strg = ts_algo_tree_find(&scope->storage, &pattern);
-	if (strg == NULL) {
-		INCONSISTENT("no default storage for vertices");
-	}
-
-	err = nowdb_store_init(&scope->vertices, p,
-	                       scope->evache, scope->ver,
-	                       NOWDB_CONT_VERTEX, strg,
-	                       sizeof(nowdb_vertex_t),0);
-	free(p);
-	if (err != NOWDB_OK) return NOWDB_OK;
-
-	err = nowdb_store_configSort(&scope->vertices,
-	                  &nowdb_sort_vertex_compare);
-	if (err != NOWDB_OK) {
-		nowdb_store_destroy(&scope->vertices);
-		return err;
-	}
-	// to be tested!
-	err = nowdb_store_configCompression(&(*ctx)->store, cfg->comp);
-	if (err != NOWDB_OK) {
-		nowdb_store_destroy(&scope->vertices);
-		return err;
-	}
-	
-	err = nowdb_store_configIndexing(&scope->vertices, scope->iman, NULL);
-	if (err != NOWDB_OK) {
-		nowdb_store_destroy(&scope->vertices);
-		return err;
-	}
-
-	err = nowdb_storage_addStore(strg, &scope->vertices);
-	if (err != NOWDB_OK) {
-		nowdb_store_destroy(&scope->vertices);
-		return err;
-	}
-
-	scope->vinit = 1;
-	return NOWDB_OK;
-}
-*/
-
-/* -----------------------------------------------------------------------
  * Allocate and initialise a new scope
  * -----------------------------------------------------------------------
  */
@@ -359,8 +301,6 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->path = NULL;
 	scope->iman = NULL;
 	scope->model = NULL;
-	scope->evache = NULL;
-	scope->ivache = NULL;
 	scope->text = NULL;
 	scope->pman = NULL;
 	scope->ver  = ver;
@@ -432,32 +372,6 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		return err;
 	}
 
-	/* external vertex cache */
-	scope->evache = calloc(1,sizeof(nowdb_plru12_t));
-	if (scope->evache == NULL) {
-		nowdb_scope_destroy(scope);
-		NOMEM("external vertex cache");
-		return err;
-	}
-	err = nowdb_plru12_init(scope->evache, 100000);
-	if (err != NOWDB_OK) {
-		nowdb_scope_destroy(scope);
-		return err;
-	}
-
-	/* internal vertex cache */
-	scope->ivache = calloc(1,sizeof(nowdb_plru12_t));
-	if (scope->ivache == NULL) {
-		nowdb_scope_destroy(scope);
-		NOMEM("internal vertex cache");
-		return err;
-	}
-	err = nowdb_plru12_init(scope->ivache, 2500000);
-	if (err != NOWDB_OK) {
-		nowdb_scope_destroy(scope);
-		return err;
-	}
-	
 	/* text */
 	p = nowdb_path_append(path, "text");
 	if (p == NULL) {
@@ -493,14 +407,6 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
  */
 void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope == NULL) return;
-	if (scope->evache != NULL) {
-		nowdb_plru12_destroy(scope->evache);
-		free(scope->evache); scope->evache = NULL;
-	}
-	if (scope->ivache != NULL) {
-		nowdb_plru12_destroy(scope->ivache);
-		free(scope->ivache); scope->ivache = NULL;
-	}
 	if (scope->iman != NULL) {
 		nowdb_index_man_destroy(scope->iman);
 		free(scope->iman); scope->iman = NULL;
@@ -687,6 +593,52 @@ static inline nowdb_err_t storeCatalog(nowdb_scope_t *scope) {
 	free(buf); return err;
 }
 
+static inline nowdb_err_t initVertexContext(nowdb_scope_t  *scope,
+                                            nowdb_context_t  *ctx,
+                                            nowdb_storage_t *strg,
+                                            char            *path) {
+	nowdb_err_t err;
+
+	// external vertex cache
+	ctx->evache = calloc(1,sizeof(nowdb_plru12_t));
+	if (ctx->evache == NULL) {
+		NOMEM("external vertex cache");
+		return err;
+	}
+	err = nowdb_plru12_init(ctx->evache, 100000);
+	if (err != NOWDB_OK) {
+		free(ctx->evache); ctx->evache = NULL;
+		return err;
+	}
+
+	// internal vertex cache
+	ctx->ivache = calloc(1,sizeof(nowdb_plru12_t));
+	if (ctx->ivache == NULL) {
+		nowdb_plru12_destroy(ctx->evache);
+		free(ctx->evache); ctx->evache = NULL;
+		NOMEM("internal vertex cache");
+		return err;
+	}
+	err = nowdb_plru12_init(ctx->ivache, 2500000);
+	if (err != NOWDB_OK) {
+		nowdb_plru12_destroy(ctx->evache);
+		free(ctx->evache); ctx->evache = NULL;
+		free(ctx->ivache); ctx->ivache = NULL;
+		return err;
+	}
+	err = nowdb_store_init(&ctx->store, path,
+	                 ctx->evache, scope->ver,
+	                 NOWDB_CONT_VERTEX, strg,
+	                sizeof(nowdb_vertex_t),0);
+	if (err != NOWDB_OK) {
+		nowdb_plru12_destroy(ctx->evache);
+		nowdb_plru12_destroy(ctx->ivache);
+		free(ctx->evache); ctx->evache = NULL;
+		free(ctx->ivache); ctx->ivache = NULL;
+	}
+	return NOWDB_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Helper: Allocate and initialise a context
  * -----------------------------------------------------------------------
@@ -710,12 +662,13 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 
 	if (cont == NOWDB_CONT_EDGE) {
 		err = nowdb_model_getEdgeByName(scope->model, name, &e);
+		strgnm = strgname==NULL?ESTORE:strgname;
 	} else {
 		err = nowdb_model_getVertexByName(scope->model, name, &v);
+		strgnm = strgname==NULL?VSTORE:strgname;
 	}
 	if (err != NOWDB_OK) return err;
 
-	strgnm = strgname==NULL?ESTORE:strgname;
 	pattern.name = strgnm;
 
 	strg = ts_algo_tree_find(&scope->storage, &pattern);
@@ -725,7 +678,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 	if (s >= NOWDB_MAX_NAME) return nowdb_err_get(nowdb_err_invalid,
 	                     FALSE, OBJECT, "name too long (max: 255)");
 
-	*ctx = malloc(sizeof(nowdb_context_t));
+	*ctx = calloc(1,sizeof(nowdb_context_t));
 	if (*ctx == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                        "allocating context object");
@@ -766,10 +719,7 @@ static inline nowdb_err_t initContext(nowdb_scope_t    *scope,
 		                       strg,
 		                       e->size, 1);
 	} else {
-		err = nowdb_store_init(&(*ctx)->store, p,
-	                               scope->evache, scope->ver, // context evache
-	                               NOWDB_CONT_VERTEX, strg,
-	                               sizeof(nowdb_vertex_t),0);
+		err = initVertexContext(scope, *ctx, strg, p);
 	}
 	free(p);
 	if (err != NOWDB_OK) {
@@ -1704,12 +1654,12 @@ static inline nowdb_err_t fillEVache(nowdb_scope_t *scope,
 			if (memcmp(page+i, nowdb_nullrec, 32) == 0) break;
 			memcpy(&vid, page+i+NOWDB_OFF_VERTEX, 8);
 			memcpy(&role, page+i+NOWDB_OFF_ROLE, 4);
-			err = nowdb_plru12_get(scope->evache, role, vid, &x);
+			err = nowdb_plru12_get(ctx->evache, role, vid, &x);
 			if (err != NOWDB_OK) break;
 			if (x == 1) continue;
 			// add as resident!
-			err = nowdb_plru12_addResident(scope->evache,
-			                                  role, vid);
+			err = nowdb_plru12_addResident(ctx->evache,
+			                                 role, vid);
 			if (err != NOWDB_OK) break;
 		}
 	}
@@ -2649,7 +2599,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	err = nowdb_lock_write(&ctx->store.lock);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_plru12_get(scope->evache, role, vid, &found); // ctx->evache
+	err = nowdb_plru12_get(ctx->evache, role, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
 		err = nowdb_err_get(nowdb_err_dup_key,
@@ -2657,7 +2607,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 		goto unlock;
 	}
 
-	err = nowdb_plru12_get(scope->ivache, role, vid, &found); // ctx->ivache
+	err = nowdb_plru12_get(ctx->ivache, role, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
 		err = nowdb_err_get(nowdb_err_dup_key,
@@ -2672,13 +2622,13 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 
 	ber = beet_index_doesExist(vindex->idx, key);
 	if (ber == BEET_ERR_KEYNOF) {
-		err = nowdb_plru12_addResident(scope->evache, role, vid);
+		err = nowdb_plru12_addResident(ctx->evache, role, vid);
 		goto unlock;
 	}
 	if (ber != BEET_OK) {
 		err = makeBeetError(ber); goto unlock;
 	}
-	err = nowdb_plru12_add(scope->ivache, role, vid); // ctx->ivache
+	err = nowdb_plru12_add(ctx->ivache, role, vid);
 	if (err != NOWDB_OK) goto unlock;
 
 	err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, "vertex");
