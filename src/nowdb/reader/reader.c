@@ -531,12 +531,7 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 		                          (void**)&reader->cont);
 		BEETERR(ber,1);
 
-		/*
-		fprintf(stderr, "content: %lu|%lu (%lu)\n",
-		                           reader->cont[0],
-		                           reader->cont[1],
-		                                     *pge);
-		*/
+		// fprintf(stderr, "content: %lu\n", *pge);
 
 		err = getpage(reader, *pge);
 		if (err == NOWDB_OK) break;
@@ -604,8 +599,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
 			BEETERR(ber,1);
-
-			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
 			if (reader->maps != NULL) {
 				if (!hasKey(reader)) {

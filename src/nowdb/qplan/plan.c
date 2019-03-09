@@ -370,7 +370,7 @@ static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
 	if (err != NOWDB_OK) return err;
 	if (keys == NULL) return NOWDB_OK;
 
-	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
+	if (context != NULL) { // we always need a context!
 		err = nowdb_scope_getContext(scope, context, &ctx);
 		if (err != NOWDB_OK) {
 			free(keys->off); free(keys);
@@ -419,7 +419,7 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 
 	if (filter == NULL) return NOWDB_OK;
 
-	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
+	if (context != NULL) { // we always need a context
 		err = nowdb_scope_getContext(scope, context, &ctx);
 		if (err != NOWDB_OK) return err;
 	}
@@ -1337,7 +1337,7 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
- *   on either vertex or context
+ *   on either vertex or edge
  * - that's it
  * -----------------------------------------------------------------------
  */

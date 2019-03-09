@@ -390,6 +390,7 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 		                               NULL, NULL); // range !
 	/* create a fullscan reader */
 	} else {
+		// fprintf(stderr, "FULLSCAN\n");
 		err = nowdb_reader_fullscan(&cur->rdr,
 		                &cur->stf.files, NULL);
 	}

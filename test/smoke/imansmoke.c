@@ -197,7 +197,7 @@ int addCtx(ts_algo_tree_t *ctx, char *name) {
 	}
 	c->name = name;
 	if (ts_algo_tree_insert(ctx, c) != TS_ALGO_OK) {
-		fprintf(stderr, "cannot not insert context\n");
+		fprintf(stderr, "cannot insert context\n");
 		return -1;
 	}
 	return 0;
@@ -470,6 +470,13 @@ int main() {
 	}
 
 	/* ----------------------------------------------------------------
+	 * Get a fake ctx
+	 * ----------------------------------------------------------------
+	 */
+	tmp.name = "CTX_TEST";
+	myctx = ts_algo_tree_find(ctx, &tmp);
+
+	/* ----------------------------------------------------------------
 	 * simple open/close test
 	 * ----------------------------------------------------------------
 	 */
@@ -501,7 +508,7 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	desc = createIndexDesc("idx0", NULL, k1, NULL);
+	desc = createIndexDesc("idx0", myctx, k1, NULL);
 	if (desc == NULL) {
 		destroyKeys(&k1);
 		fprintf(stderr, "cannot create desc for idx0\n");
@@ -517,7 +524,7 @@ int main() {
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx0", NULL, c1) != 0) {
+	if (testGetIdx(&man, "idx0", myctx, c1) != 0) {
 		fprintf(stderr, "testGetIdx failed for k1\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -536,7 +543,7 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	desc = createIndexDesc("idx1", NULL, k2, NULL);
+	desc = createIndexDesc("idx1", myctx, k2, NULL);
 	if (desc == NULL) {
 		destroyKeys(&k2);
 		fprintf(stderr, "cannot create desc for idx1\n");
@@ -552,7 +559,7 @@ int main() {
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for k2\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -573,11 +580,11 @@ int main() {
 	 * make sure it's still all there
 	 * ----------------------------------------------------------------
 	 */
-	if (testGetIdx(&man, "idx0", NULL, c1) != 0) {
+	if (testGetIdx(&man, "idx0", myctx, c1) != 0) {
 		fprintf(stderr, "testGetIdx failed for k1 (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for k2 (2)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -590,11 +597,11 @@ int main() {
 		fprintf(stderr, "testUnregister failed for idx0\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx0", NULL, c1) == 0) {
+	if (testGetIdx(&man, "idx0", myctx, c1) == 0) {
 		fprintf(stderr, "testGetIdx passed for unregistered idx0\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for idx1\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -612,9 +619,6 @@ int main() {
 		destroyKeys(&k3); 
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-
-	tmp.name = "CTX_TEST";
-	myctx = ts_algo_tree_find(ctx, &tmp);
 
 	desc = createIndexDesc("cdx1", myctx, k3, NULL);
 	if (desc == NULL) {

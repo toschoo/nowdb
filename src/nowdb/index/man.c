@@ -198,19 +198,12 @@ static nowdb_err_t openIndex(nowdb_index_man_t  *man,
 	char *path=NULL;
 	char *tmp;
 
-	if (desc->ctx == NULL) {
-		// err = getVertexPath(man, desc->name, &path);
-		path = strdup("vertex/index");
-	} else {
-		// err = getCtxPath(man, desc->name, desc->ctx->name, &path);
-		tmp = nowdb_path_append("context", desc->ctx->name);
-		if (tmp == NULL) {
-			NOMEM("allocating index path");
-			return err;
-		}
-		path = nowdb_path_append(tmp, "index"); free(tmp);
+	tmp = nowdb_path_append("context", desc->ctx->name);
+	if (tmp == NULL) {
+		NOMEM("allocating index path");
+		return err;
 	}
-	// if (err != NOWDB_OK) return err;
+	path = nowdb_path_append(tmp, "index"); free(tmp);
 	if (path == NULL) {
 		NOMEM("allocating index path");
 		return err;
@@ -331,6 +324,7 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 			                  "unknown context in index catalog");
 		}
 		free(cnm);
+		(*desc)->cont = (*desc)->ctx->store.cont;
 	}
 	return NOWDB_OK;
 }

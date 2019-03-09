@@ -158,6 +158,9 @@ nowdb_err_t nowdb_index_desc_create(char                *name,
                                     nowdb_index_t       *idx,
                                     nowdb_index_desc_t **desc) {
 
+	if (ctx == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                            FALSE, OBJECT, "no context");
+
 	*desc = calloc(1, sizeof(nowdb_index_desc_t));
 	if (*desc == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	           FALSE, OBJECT, "allocating index descriptor");
@@ -165,6 +168,7 @@ nowdb_err_t nowdb_index_desc_create(char                *name,
 	(*desc)->name = strdup(name);
 	if ((*desc)->name == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                         FALSE, OBJECT, "allocating index name");
+	(*desc)->cont = ctx->store.cont;
 	(*desc)->ctx = ctx;
 	(*desc)->keys = keys;
 	(*desc)->idx = idx;
@@ -216,7 +220,7 @@ static uint32_t computeKeySize(nowdb_index_desc_t *desc) {
 
 	// better to use sizeByOff!
 	for(int i=0;i<desc->keys->sz;i++) {
-		if (desc->ctx == NULL &&
+		if (desc->cont == NOWDB_CONT_VERTEX &&
 		    desc->keys->off[i] >= NOWDB_OFF_VTYPE)
 			s+=4;
 		else s+=8;
@@ -239,7 +243,7 @@ static void setEmbCompare(beet_config_t *cfg) {
  * ------------------------------------------------------------------------
  */
 static void setHostCompare(nowdb_index_desc_t *desc, beet_config_t *cfg) {
-	if (desc->ctx == NULL) {
+	if (desc->cont == NOWDB_CONT_VERTEX) {
 		cfg->compare = "nowdb_index_vertex_compare";
 	} else {
 		cfg->compare = "nowdb_index_edge_compare";

@@ -107,6 +107,7 @@ typedef struct {
  */
 typedef struct {
 	char              *name;
+	nowdb_content_t    cont;
 	nowdb_context_t    *ctx;
 	nowdb_index_keys_t *keys;
 	nowdb_index_t      *idx;
