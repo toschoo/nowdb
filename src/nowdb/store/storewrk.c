@@ -7,6 +7,7 @@
 #include <nowdb/io/file.h>
 #include <nowdb/store/storewrk.h>
 #include <nowdb/store/store.h>
+#include <nowdb/store/storage.h>
 #include <nowdb/store/comp.h>
 #include <nowdb/store/indexer.h>
 #include <nowdb/index/man.h>
@@ -35,6 +36,9 @@
 #define SORTPERIOD     500000000l
 #define SORTTIMEOUT 300000000000l
 
+#define NOMEM(x) \
+	err = nowdb_err_get(nowdb_err_no_mem, FALSE, "store", x);
+
 /* ------------------------------------------------------------------------
  * Syncjob predeclaration
  * ------------------------------------------------------------------------
@@ -58,26 +62,20 @@ static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
 static void nodrain(void **ignore) {}
 
 /* ------------------------------------------------------------------------
- * Sorter message
- * ------------------------------------------------------------------------
- */
-static nowdb_wrk_message_t sortmsg = {11,NULL};
-
-/* ------------------------------------------------------------------------
  * Start Sync Worker
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
-                                  void         *store,
+                                  void          *strg,
                                   nowdb_queue_t *errq) 
 {
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                "store", "store object is NULL");
+	if (strg == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                              "store", "storage object is NULL");
 
 	return nowdb_worker_init(wrk, "sync", 1, SYNCPERIOD, &syncjob,
-	                                       errq, &nodrain, store);
+	                                         errq, &nodrain, strg);
 }
 
 /* ------------------------------------------------------------------------
@@ -93,17 +91,17 @@ nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
-                                    void        *pstore,
+                                    void         *pstrg,
                                     nowdb_queue_t *errq) {
-	nowdb_store_t *store = pstore;
+	nowdb_storage_t *strg = pstrg;
 	if (wrk == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
 	                             "store", "worker object is NULL");
-	if (store == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
-	                                "store", "store object is NULL");
+	if (strg == NULL) return nowdb_err_get(nowdb_err_invalid, FALSE,
+	                           "storeage", "storage object is NULL");
 	return nowdb_worker_init(wrk, "sorter",
-	                         store->tasknum,
+	                         strg->tasknum,
 	                         SORTPERIOD, &sortjob,
-	                         errq, &nodrain, store);
+	                         errq, &nodrain, strg);
 }
 
 /* ------------------------------------------------------------------------
@@ -118,8 +116,10 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk) {
  * Do your job, sorter!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk) {
-	return nowdb_worker_do(wrk, &sortmsg);
+nowdb_err_t nowdb_store_sortNow(nowdb_storage_t *strg, void *store) {
+	if (!strg->started) return NOWDB_OK;
+	return nowdb_worker_do(&strg->sortwrk,
+	     &((nowdb_store_t*)store)->srtmsg);
 }
 
 /* ------------------------------------------------------------------------
@@ -130,38 +130,60 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
                            nowdb_wrk_message_t *msg) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2;
-	nowdb_store_t *store = wrk->rsc;
-	
-	err = nowdb_lock_write(&store->lock);
+	nowdb_err_t err2 = NOWDB_OK;
+	nowdb_err_t err3 = NOWDB_OK;
+	nowdb_storage_t *strg = wrk->rsc;
+	nowdb_store_t *store;
+	ts_algo_list_node_t *runner;
+
+	err = nowdb_lock(&strg->lock);
 	if (err != NOWDB_OK) return err;
 
-	if (store->writer->dirty) {
-		err = nowdb_file_sync(store->writer);
-		store->writer->dirty = FALSE;
+	for(runner=strg->stores.head; runner!=NULL; runner=runner->nxt) {
+		store = runner->cont;
 
-		/* write catalog ? */
+		err = nowdb_lock_write(&store->lock);
+		if (err != NOWDB_OK) break;
+
+		if (store->state == NOWDB_STORE_OPEN &&
+		    store->writer != NULL            &&
+		    store->writer->dirty)
+		{
+			err2 = nowdb_file_sync(store->writer);
+			store->writer->dirty = FALSE;
+		}
+		err = nowdb_unlock_write(&store->lock);
+		if (err != NOWDB_OK) {
+			err->cause = err2; break;
+		}
+		if (err2 != NOWDB_OK) {
+			err=err2; break;
+		}
 	}
 
-	err2 = nowdb_unlock_write(&store->lock);
-	if (err2 != NOWDB_OK) {
-		err2->cause = err; return err2;
+	err3 = nowdb_unlock(&strg->lock);
+	if (err3 != NOWDB_OK) {
+		err3->cause = err; return err3;
 	}
 	return err;
 }
 
 /* ------------------------------------------------------------------------
- * Find minmax (edges only)
+ * Find minmax (only with timestamp)
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	nowdb_time_t max = NOWDB_TIME_DAWN;
 	nowdb_time_t min = NOWDB_TIME_DUSK;
-	nowdb_edge_t *e;
+
 	for (int i=0; i<file->size; i+=file->recordsize) {
-		e = (nowdb_edge_t*)(buf+i);
-		if (e->timestamp < min) min = e->timestamp;
-		if (e->timestamp > max) max = e->timestamp;
+	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) < min)
+	        	memcpy(&min, buf+i+NOWDB_OFF_STAMP,
+			              sizeof(nowdb_time_t));
+		
+	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) > max)
+	        	memcpy(&max, buf+i+NOWDB_OFF_STAMP,
+			              sizeof(nowdb_time_t));
 	}
 	file->oldest = min;
 	file->newest = max;
@@ -169,7 +191,7 @@ static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 }
 
 /* ------------------------------------------------------------------------
- * Find set min and max (edges only)
+ * Find set min and max (only with timestamp)
  * ------------------------------------------------------------------------
  */
 static inline void setMinMax(nowdb_file_t *src, nowdb_file_t *trg) {
@@ -261,7 +283,7 @@ static inline void releaseReader(nowdb_store_t *store, nowdb_file_t *file) {
 	}
 	file->cctx  = NULL;
 	file->cdict = NULL;
-	nowdb_store_releaseReader(store, file);
+	NOWDB_IGNORE(nowdb_store_releaseReader(store, file));
 }
 
 /* ------------------------------------------------------------------------
@@ -356,7 +378,7 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 		nowdb_index_desc_t *desc= runner->cont;
 		err = nowdb_indexer_init((*xer)+(*n),
 		                         desc->idx,
-		                         store->recsize);
+		                         store->cont);
 		if (err != NOWDB_OK) break;
 		(*n)++;
 	}
@@ -479,8 +501,8 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		free(buf); return err;
 	}
 
-	/* find min/max (if this is edges) */
-	if (store->recsize == 64) { /* not too convincing */
+	/* find min/max (if this is timestamp) */
+	if (store->ts) {
 		err = findMinMax(buf, src);
 		if (err != NOWDB_OK) {
 			nowdb_store_releaseWaiting(store, src);
@@ -491,9 +513,15 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 
 	/* sort buf -- if compare is not NULL! */
 	if (store->compare != NULL) {
-		nowdb_mem_sort(buf, src->size/store->recsize,
+		if (nowdb_mem_merge(buf, src->size, NOWDB_IDX_PAGE,
 		                    store->recsize,
-		                    store->compare, NULL);
+		                    store->compare, NULL) != 0)
+		{
+			NOMEM("mergesort");
+			nowdb_store_releaseWaiting(store, src);
+			nowdb_file_destroy(src); free(src);
+			free(buf); return err;
+		}
 	}
 
 	/* prepare compression */
@@ -520,7 +548,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	}
 
 	/* set and reset min/max */
-	if (store->recsize == 64) { /* not too convincing */
+	if (store->ts) { /* not too convincing */
 		setMinMax(src, reader);
 		src->oldest = NOWDB_TIME_DAWN;
 		src->newest = NOWDB_TIME_DUSK;
@@ -531,7 +559,7 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	if (err != NOWDB_OK) {
 		releaseReader(store, reader);
 		nowdb_file_destroy(reader); free(reader); free(buf);
-		nowdb_store_releaseWaiting(store, src);
+		NOWDB_IGNORE(nowdb_store_releaseWaiting(store, src));
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
@@ -551,9 +579,9 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 	/* promote to reader */
 	err = nowdb_store_promote(store, src, reader);
 	if (err != NOWDB_OK) {
-		nowdb_store_releaseReader(store, reader);
+		NOWDB_IGNORE(nowdb_store_releaseReader(store, reader));
 		nowdb_file_destroy(reader); free(reader);
-		nowdb_store_releaseWaiting(store, src);
+		NOWDB_IGNORE(nowdb_store_releaseWaiting(store, src));
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
@@ -577,5 +605,6 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 static nowdb_err_t sortjob(nowdb_worker_t      *wrk,
                            uint32_t              id,
                            nowdb_wrk_message_t *msg) {
-	return compsort(wrk, id, wrk->rsc);
+	if (msg == NULL) return NOWDB_OK;
+	return compsort(wrk, id, msg->stcont);
 }

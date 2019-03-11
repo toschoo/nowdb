@@ -28,6 +28,15 @@ typedef uint8_t nowdb_model_type_t;
 #define NOWDB_MODEL_TEXT 1
 
 /* ------------------------------------------------------------------------
+ * Tablespace
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	char    *name;
+	uint32_t tsid;
+} nowdb_model_ts_t;
+
+/* ------------------------------------------------------------------------
  * Property Model
  * ------------------------------------------------------------------------
  */
@@ -39,6 +48,18 @@ typedef struct {
 	nowdb_type_t      value; /* type of the property value     */
 	nowdb_bool_t         pk; /* this one is PK                 */
 } nowdb_model_prop_t;
+
+/* ------------------------------------------------------------------------
+ * Edge Property Model
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	char          *name;
+	nowdb_key_t  propid;
+	nowdb_key_t  edgeid;
+	nowdb_type_t  value;
+	uint32_t        off;
+} nowdb_model_pedge_t;
 
 /* ------------------------------------------------------------------------
  * Vertex Model
@@ -59,10 +80,12 @@ typedef struct {
 	nowdb_key_t       edgeid; /* the edgeid (= edge)   */
 	nowdb_roleid_t    origin; /* roleid of the origin  */
 	nowdb_roleid_t    destin; /* roleid of the destin  */
-	nowdb_type_t      weight; /* type of the weight    */
-	nowdb_type_t     weight2; /* type of weight2       */
-	nowdb_model_type_t  edge; /* is the edge  textual? */
-	nowdb_model_type_t label; /* is the label textual? */
+	nowdb_model_pedge_t   op; /* origin pedge          */
+	nowdb_model_pedge_t   dp; /* destin pedge          */
+	nowdb_model_pedge_t   tp; /* stamp  pedge          */
+	uint16_t             num; /* number of attributes  */
+	uint32_t            ctrl; /* size of control block */
+	uint32_t            size; /* size of edge          */
 } nowdb_model_edge_t;
 
 #endif

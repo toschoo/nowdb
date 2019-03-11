@@ -20,8 +20,11 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	char          *name;
-	nowdb_store_t store;
+	char             *name; // context name
+        char         *strgname; // storage name
+	nowdb_plru12_t *evache; // external vertex cache (contains residents)
+	nowdb_plru12_t *ivache; // internal vertex cache
+	nowdb_store_t    store; // the heart of the matter
 } nowdb_context_t;
 
 /* ------------------------------------------------------------------------
@@ -50,61 +53,4 @@ nowdb_err_t nowdb_context_insert(nowdb_context_t *ctx,
 nowdb_err_t nowdb_context_insertBulk(nowdb_context_t *ctx,
                                      void           *data,
                                      uint32_t      count);
-
-/* -----------------------------------------------------------------------
- * Context configurator
- * -----------------------------------------------------------------------
- */
-typedef struct {
-	uint32_t allocsize;
-	uint32_t largesize;
-	uint32_t   sorters;
-	nowdb_bool_t  sort;
-	nowdb_comp_t  comp;
-	nowdb_encp_t  encp;
-} nowdb_ctx_config_t;
-
-/* -----------------------------------------------------------------------
- * Predefine configurations
- * ------------------------
- * as combinations of SIZE and INSERT values.
- * -----------------------------------------------------------------------
- */
-void nowdb_ctx_config(nowdb_ctx_config_t   *cfg,
-                      nowdb_bitmap64_t options);
-
-/* -----------------------------------------------------------------------
- * Context SIZE 
- * -----------------------------------------------------------------------
- */
-#define NOWDB_CONFIG_SIZE_TINY    1
-#define NOWDB_CONFIG_SIZE_SMALL   2
-#define NOWDB_CONFIG_SIZE_MEDIUM  4
-#define NOWDB_CONFIG_SIZE_BIG     8
-#define NOWDB_CONFIG_SIZE_LARGE  16
-#define NOWDB_CONFIG_SIZE_HUGE   32
-
-/* -----------------------------------------------------------------------
- * Context INSERT pattern
- * -----------------------------------------------------------------------
- */
-#define NOWDB_CONFIG_INSERT_MODERATE 128 
-#define NOWDB_CONFIG_INSERT_CONSTANT 256
-#define NOWDB_CONFIG_INSERT_INSANE   512  
-
-/* -----------------------------------------------------------------------
- * Disk Type
- * -----------------------------------------------------------------------
- */
-#define NOWDB_CONFIG_DISK_SSD  1024
-#define NOWDB_CONFIG_DISK_HDD  2048
-#define NOWDB_CONFIG_DISK_RAID 4096
-
-/* -----------------------------------------------------------------------
- * Miscellaneous options
- * -----------------------------------------------------------------------
- */
-#define NOWDB_CONFIG_NOCOMP 1048576
-#define NOWDB_CONFIG_NOSORT 2097152
-
 #endif

@@ -10,22 +10,26 @@ if __name__ == '__main__':
 	numc = 50
 	nums = 25
 	nume = 1000
+	numv = 100
 
         db.createDB(c, "db100")
 
-        (products, clients, stores, edges) = db.addRandomData(c, nump, numc, nums, nume)
+        (products, clients, stores, buys, visits) = db.addRandomData(c, nump, numc, nums, nume, numv)
 
         cnt = 0
+        cnt2 = 0
         sm = 0
+        sm2 = 0
         avg = 0.0
-        for e in edges:
-           sm += e.weight
+        avg2 = 0.0
+        for b in buys:
+           sm += b.quantity
            cnt += 1
 
         avg = float(sm)/float(cnt)
 
-        with c.execute("select count(*), sum(weight), avg(weight) \
-                          from sales") as cur:
+        with c.execute("select count(*), sum(quantity), avg(quantity) \
+                          from buys") as cur:
             if not cur.ok():
               print "ERROR %d: %s" % (cur.code(), cur.details())
               exit(1)
@@ -33,15 +37,15 @@ if __name__ == '__main__':
                if r.count() != 3:
                   print "ERROR: wrong number of fields: %d != %ds" % (r.count(), 3)
                   exit(1)
-               else:
-                  print "fields: %d" % r.count()
 
-               cnt2 = r.field(0)
-               sm2 = r.field(1)
+               # print "%d|%d|%.2f" % (r.field(0), r.field(1), r.field(2))
+
+               cnt2 += r.field(0)
+               sm2 += r.field(1)
                avg2 = r.field(2)
 
         if cnt != cnt2:
-           print "count differs: %d -- %d" % (cnt, cnt2)
+           print "count differs: %d -- %s" % (cnt, cnt2)
            exit(1)
 
         if sm  != sm2:
@@ -52,30 +56,14 @@ if __name__ == '__main__':
            print "avg differs: %.4f -- %.4f" % (avg, avg2)
            exit(1)
 
-        """ nice demonstration
-        with c.execute("select origin, destin, timestamp, weight, weight2 \
-                          from sales") as cur:
-            if not cur.ok():
-              print "ERROR: %s" % cur.details()
-              exit(1)
-            for r in cur:
-               o = r.field(0)
-               d = r.field(1)
-               t = now.now2dt(r.field(2)).strftime(now.TIMEFORMAT)
-               w = r.field(3)
-               w2 = r.field(4)
-
-               print "%d/%d @%s: %d / %.4f" % (o, d, t, w, w2)
-        """
-
-        with c.execute("select count(*) from sales") as cur:
+        with c.execute("select count(*) from buys") as cur:
            if not cur.ok():
               print "ERROR: %s" % cur.details()
               exit(1)
            for r in cur:
               cnt = r.field(0)
-           print "we have %d edges" % cnt
-           if cnt != 2*nume:
+           print "we have %d buy-edges" % cnt
+           if cnt != nume:
               print "we need to have %d" % nume
               exit(1)
 	
@@ -118,13 +106,15 @@ if __name__ == '__main__':
               print "we need to have %d" % nums
               exit(1)
 
-        (p2,c2,s2,e2) = db.loadDB(c,"db100")
+        (p2,c2,s2,b2,v2) = db.loadDB(c,"db100")
         if len(p2) != len(products):
             print "loaded products differ from original: %d != %d" % (len(p2), len(products))
         if len(c2) != len(clients):
             print "loaded clients differ from original: %d != %d" % (len(c2), len(clients))
         if len(s2) != len(stores):
             print "loaded stores differ from original: %d != %d" % (len(s2), len(stores))
-        if len(e2) != len(edges):
-            print "loaded edges differ from original: %d != %d" % (len(e2), len(edges))
-        print "LOADED: %d %d %d %d" % (len(p2), len(c2), len(s2), len(e2))
+        if len(b2) != len(buys):
+            print "loaded buys differ from original: %d != %d" % (len(b2), len(buys))
+        if len(v2) != len(visits):
+            print "loaded vists differ from original: %d != %d" % (len(v2), len(vists))
+        print "LOADED: %d %d %d %d %d" % (len(p2), len(c2), len(s2), len(b2), len(v2))

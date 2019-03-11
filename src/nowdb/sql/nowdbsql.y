@@ -63,14 +63,14 @@
 %type condition {nowdb_ast_t*}
 %destructor condition {nowdb_ast_destroyAndFree($$);}
 
-%type context_option {nowdb_ast_t*}
-%destructor context_option {nowdb_ast_destroyAndFree($$);}
+%type storage_option {nowdb_ast_t*}
+%destructor storage_option {nowdb_ast_destroyAndFree($$);}
 
 %type comparison {nowdb_ast_t*}
 %destructor comparison {nowdb_ast_destroyAndFree($$);}
 
-%type context_options {nowdb_ast_t*}
-%destructor context_options {nowdb_ast_destroyAndFree($$);}
+%type storage_options {nowdb_ast_t*}
+%destructor storage_options {nowdb_ast_destroyAndFree($$);}
 
 %type load_options {nowdb_ast_t*}
 %destructor load_options {nowdb_ast_destroyAndFree($$);}
@@ -101,6 +101,15 @@
 
 %type drop_clause {nowdb_ast_t*}
 %destructor drop_clause {nowdb_ast_destroyAndFree($$);}
+
+%type storage_clause {nowdb_ast_t*}
+%destructor storage_clause {nowdb_ast_destroyAndFree($$);}
+
+%type show_clause {nowdb_ast_t*}
+%destructor show_clause {nowdb_ast_destroyAndFree($$);}
+
+%type desc_clause {nowdb_ast_t*}
+%destructor desc_clause {nowdb_ast_destroyAndFree($$);}
 
 %type projection_clause {nowdb_ast_t*}
 %destructor projection_clause {nowdb_ast_destroyAndFree($$);}
@@ -219,6 +228,26 @@ ddl ::= drop_clause(C) IF EXISTS. {
 	NOWDB_SQL_MAKE_DDL(C);
 }
 
+ddl ::= show_clause(C). {
+	NOWDB_SQL_MAKE_DDL(C);
+}
+
+ddl ::= desc_clause(C). {
+	NOWDB_SQL_MAKE_DDL(C);
+}
+
+show_clause(C) ::= SHOW IDENTIFIER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_SHOW, 0);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
+}
+
+desc_clause(C) ::= DESC IDENTIFIER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&C, NOWDB_AST_DESC, 0);
+	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
+}
+
 /* ------------------------------------------------------------------------
  * DLL
  * ------------------------------------------------------------------------
@@ -323,22 +352,22 @@ misc ::= EXECUTE IDENTIFIER(I) LPAR val_list(V) RPAR. {
  *  Create Clause
  * ------------------------------------------------------------------------
  */
-create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 }
 
-create_clause(C) ::= CREATE CONTEXT IDENTIFIER(I) SET context_options(O). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE STORAGE IDENTIFIER(I) SET storage_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(C, O)
 }
 
-create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE sizing(S) STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(C, S)
 }
 
-create_clause(C) ::= CREATE sizing(S) CONTEXT IDENTIFIER(I) SET context_options(O). {
-	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_CONTEXT,I,NULL);
+create_clause(C) ::= CREATE sizing(S) STORAGE IDENTIFIER(I) SET storage_options(O). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_STORAGE,I,NULL);
 	NOWDB_SQL_ADDKID(O, S)
 	NOWDB_SQL_ADDKID(C, O)
 }
@@ -360,17 +389,41 @@ create_clause(C) ::= CREATE sizing(S) INDEX IDENTIFIER(I) ON index_target(T) LPA
 	NOWDB_SQL_ADDKID(C, F);
 }
 
+/* could be interesting...
 create_clause(C) ::= CREATE TYPE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
 }
+*/
 
 create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR. {
 	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,NULL);
 	NOWDB_SQL_ADDKID(C,L);
 }
 
-create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
+create_clause(C) ::= CREATE TYPE IDENTIFIER(I) LPAR field_decl_list(L) RPAR storage_clause(S). {
+	NOWDB_SQL_MAKE_CREATE(C,NOWDB_AST_TYPE,I,S);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl(O) COMMA edge_field_decl(D) RPAR. {
+	NOWDB_SQL_ADDKID(O,D);
 	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+create_clause(C) ::= CREATE EDGE IDENTIFIER(I) LPAR edge_field_decl(O) COMMA edge_field_decl(D) RPAR storage_clause(S). {
+	NOWDB_SQL_ADDKID(O,D);
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, S);
+	NOWDB_SQL_ADDKID(C,O);
+}
+
+create_clause(C) ::= CREATE STAMPED EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR. {
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, NULL);
+	NOWDB_SQL_ADDKID(C,L);
+}
+
+create_clause(C) ::= CREATE STAMPED EDGE IDENTIFIER(I) LPAR edge_field_decl_list(L) RPAR storage_clause(S). {
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_EDGE, I, S);
 	NOWDB_SQL_ADDKID(C,L);
 }
 
@@ -381,6 +434,11 @@ create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR RPAR 
 /* field_decl_list also allows PK! */
 create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR field_decl_list(P) RPAR LANGUAGE IDENTIFIER(L). {
 	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, P);
+}
+
+storage_clause(S) ::= STORAGE EQ IDENTIFIER(I). {
+	NOWDB_SQL_CREATEAST(&S, NOWDB_AST_STORAGE, 0);
+	nowdb_ast_setValue(S, NOWDB_AST_V_STRING, I);
 }
 
 index_target(T) ::= IDENTIFIER(I). {
@@ -420,21 +478,9 @@ edge_field_decl(E) ::= DESTINATION IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_EDGE_TYPE(E,NOWDB_OFF_DESTIN,I);
 }
 
-edge_field_decl(E) ::= LABEL type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	         (void*)(uint64_t)NOWDB_OFF_LABEL);
-}
-edge_field_decl(E) ::= WEIGHT type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	        (void*)(uint64_t)NOWDB_OFF_WEIGHT);
-}
-
-edge_field_decl(E) ::= WEIGHT2 type(T). {
-	NOWDB_SQL_CREATEAST(&E, NOWDB_AST_DECL, T);
-	nowdb_ast_setValue(E, NOWDB_AST_V_INTEGER,
-	        (void*)(uint64_t)NOWDB_OFF_WEIGHT2);
+edge_field_decl(F) ::= IDENTIFIER(I) type(T). {
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
 
 edge_field_decl_list(L) ::= edge_field_decl(E). {
@@ -473,8 +519,8 @@ type ::= LONGTEXT.
  *  Drop Clause
  * ------------------------------------------------------------------------
  */
-drop_clause(C) ::= DROP CONTEXT IDENTIFIER(I). {
-	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_CONTEXT,I,NULL);
+drop_clause(C) ::= DROP STORAGE IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_STORAGE,I,NULL);
 }
 
 drop_clause(C) ::= DROP SCOPE IDENTIFIER(I). {
@@ -498,57 +544,57 @@ drop_clause(C) ::= DROP PROCEDURE IDENTIFIER(I). {
 }
 
 /* ------------------------------------------------------------------------
- * Context Options
+ * Storage Options
  * ------------------------------------------------------------------------
  */
-context_options(O) ::= context_option(C). {
+storage_options(O) ::= storage_option(C). {
 	NOWDB_SQL_CHECKSTATE();
 	O = C;
 }
 
-context_options(O) ::= context_option(O1) COMMA context_options(O2). {
+storage_options(O) ::= storage_option(O1) COMMA storage_options(O2). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_ADDKID(O1,O2);
 	O = O1;
 }
 
-context_option(O) ::= ALLOCSIZE EQ UINTEGER(I). {
+storage_option(O) ::= ALLOCSIZE EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ALLOCSZ);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= LARGESIZE EQ UINTEGER(I). {
+storage_option(O) ::= LARGESIZE EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_LARGESZ);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= SORTERS EQ UINTEGER(I). {
+storage_option(O) ::= SORTERS EQ UINTEGER(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_SORTERS);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= COMPRESSION EQ STRING(I). {
+storage_option(O) ::= COMPRESSION EQ STRING(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_COMP);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
-context_option(O) ::= ENCRYPTION EQ STRING(I). {
+storage_option(O) ::= ENCRYPTION EQ STRING(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ENCP);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
 
-context_option(O) ::= STRESS EQ stress_spec(S). {
+storage_option(O) ::= STRESS EQ stress_spec(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }
 
-context_option(O) ::= SIZE EQ sizing(S). {
+storage_option(O) ::= SIZE EQ sizing(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }
 
-context_option(O) ::= DISK EQ disk_spec(S). {
+storage_option(O) ::= DISK EQ disk_spec(S). {
 	NOWDB_SQL_CHECKSTATE();
 	O=S;
 }
@@ -966,32 +1012,11 @@ field(F) ::= DESTINATION(I). {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= EDGE(I). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-}
-field(F) ::= LABEL(I). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-}
 field(F) ::= TIMESTAMP(I). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
 }
-field(F) ::= WEIGHT(I). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-}
-field(F) ::= WEIGHT2(I). {
-	NOWDB_SQL_CHECKSTATE();
-	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_FIELD, 0);
-	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
-}
-
 value(V) ::= STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&V, NOWDB_AST_VALUE, NOWDB_AST_TEXT);

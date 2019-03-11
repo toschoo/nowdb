@@ -23,8 +23,8 @@ typedef struct {
 	int origin;
 	int destin;
 	int64_t timestamp;
-	float weight;
-	float weight2;
+	float price;
+	float quantity;
 } edge_t;
 
 static edge_t *edges = NULL;
@@ -62,12 +62,14 @@ static int writeEdges(nowdb_path_t path, int halves,
 	FILE *f;
 	int x = halves * HALFEDGE;
 	int h, m, s, ns;
-	double w, w2;
+	double price, quant;
 	int c, p;
 	int mxclients = hclients * HALFVRTX;
 	int mxprods = hprods * HALFVRTX;
 	char *loadstr = 
-	"buys;%d;%d;0;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
+	"%d;%d;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
+
+	fprintf(stderr, "writing %d edges\n", x);
 
 	edges = calloc(x, sizeof(edge_t));
 	if (edges == NULL) {
@@ -88,6 +90,7 @@ static int writeEdges(nowdb_path_t path, int halves,
 		fclose(f);
 		return -1;
 	}
+	fprintf(f, "origin;destin;stamp;price;quantity\n");
 	for(int i=0; i<x; i++) {
 
 		do c = rand()%mxclients; while(c == 0);
@@ -98,18 +101,18 @@ static int writeEdges(nowdb_path_t path, int halves,
 		s = rand()%60;
 		ns = rand()%1000;
 
-		do w = (double)(rand()%50) / 7; while(w == 0);
-		do w2 = (double)(rand()%27) / 2; while(w2 == 0);
+		do price = (double)(rand()%50) / 7; while(price == 0);
+		do quant = (double)(rand()%27) / 2; while(quant == 0);
 
-		w *= w2;
+		price *= quant;
 
 		fprintf(f, loadstr,  
-		clients[c].id, products[p].id, h, m, s, ns, w, w2);
+		clients[c].id, products[p].id, h, m, s, ns, price, quant);
 
 		edges[i].origin = clients[c].id;
 		edges[i].destin = products[p].id;
-		edges[i].weight = w;
-		edges[i].weight2 = w2;
+		edges[i].price  = price;
+		edges[i].quantity = quant;
 
 		nsecs = 1000000l * (int64_t)ns +
 		        1000000000l * (int64_t)s +
@@ -122,13 +125,6 @@ static int writeEdges(nowdb_path_t path, int halves,
 	qsort(edges, x, sizeof(edge_t), &edgecompr);
 	return 0;
 }
-
-/*
-static int loadEdges(nowdb_path_t path, int halves,
-                          int hprods, int hclients) {
-	return -1;
-}
-*/
 
 static void randomString(char *str, int max) {
 	int x;
@@ -239,14 +235,6 @@ int createDB(int hedges, int hprods, int hclients) {
 		return -1;
 	}
 
-	// EXECSTMT("create tiny index vidx_rovi on vertex (role, vid)");
-	EXECSTMT("create index vidx_ropo on vertex (role, property)");
-
-	EXECSTMT("create tiny table sales set stress=constant");
-
-	EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
-	EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
-
 	EXECSTMT("create type product (\
 	            prod_key uint primary key, \
 	            prod_desc text)");
@@ -255,11 +243,11 @@ int createDB(int hedges, int hprods, int hclients) {
 	            client_id uint primary key, \
 	            client_name text)");
 
-	EXECSTMT("create edge buys (\
-	            origin client, \
+	EXECSTMT("create stamped edge buys (\
+	            origin      client, \
 	            destination product, \
-	            weight float, \
-	            weight2 float)");
+	            price       float, \
+	            quantity    float)");
 
 	if (writeVrtx(PRODS, PRODUCT, hprods) != 0) {
 		fprintf(stderr, "cannot write products\n");
@@ -274,15 +262,17 @@ int createDB(int hedges, int hprods, int hclients) {
 		rc = -1; goto cleanup;
 	}
 
-	EXECSTMT("load 'rsc/productsdb10.csv' into vertex \
-	           use header as product");
+	EXECSTMT("load 'rsc/productsdb10.csv' into product use header \
+	          set errors='rsc/productsdb10.err'");
 
-	EXECSTMT("load 'rsc/clientsdb10.csv' into vertex \
-	           use header as client");
+	EXECSTMT("load 'rsc/clientsdb10.csv' into client use header \
+	          set errors='rsc/clientsdb10.err'");
 
-	EXECSTMT("load 'rsc/edgedb10.csv' into sales as edge");
+	fprintf(stderr, "loading edges\n");
+	EXECSTMT("load 'rsc/edgedb10.csv' into buys use header \
+	          set errors='rsc/edgedb10.err'");
 
-	if (waitscope(scope, "sales") != 0) {
+	if (waitscope(scope, "buys") != 0) {
 		fprintf(stderr, "cannot wait for scope\n");
 		rc = -1; goto cleanup;
 	}

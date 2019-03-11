@@ -107,6 +107,7 @@ typedef struct {
  */
 typedef struct {
 	char              *name;
+	nowdb_content_t    cont;
 	nowdb_context_t    *ctx;
 	nowdb_index_keys_t *keys;
 	nowdb_index_t      *idx;
@@ -183,10 +184,10 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx);
  * Insert into index 
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
-                               char             *keys,
-                               nowdb_pageid_t    pge,
-                               nowdb_bitmap64_t *map);
+nowdb_err_t nowdb_index_insert(nowdb_index_t   *idx,
+                               char            *keys,
+                               nowdb_pageid_t   pge,
+                               nowdb_bitmap8_t *map);
 
 /* ------------------------------------------------------------------------
  * Get index 'compare' method

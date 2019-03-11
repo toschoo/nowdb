@@ -13,6 +13,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/task/lock.h>
 #include <nowdb/io/dir.h>
+#include <nowdb/store/storage.h>
 #include <nowdb/store/store.h>
 #include <nowdb/scope/context.h>
 #include <nowdb/scope/loader.h>
@@ -29,20 +30,18 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     lock; /* read/write lock       */
-	uint32_t          state; /* open or closed        */
-	nowdb_path_t       path; /* base path             */
-	nowdb_path_t    catalog; /* catalog path          */
-	nowdb_version_t     ver; /* db version            */
-	nowdb_store_t  vertices; /* vertices              */
-	nowdb_index_t   *vindex; /* index on vertices     */
-	nowdb_plru12_t  *evache; /* external vertex cache */
-	nowdb_plru12_t  *ivache; /* internal vertex cache */
-	ts_algo_tree_t contexts; /* contexts              */
-	nowdb_index_man_t *iman; /* index manager         */
-	nowdb_model_t    *model; /* model                 */
-	nowdb_text_t      *text; /* strings               */
-	nowdb_procman_t   *pman; /* stored procedures     */
+	nowdb_rwlock_t       lock; /* read/write lock       */
+	uint32_t            state; /* open or closed        */
+	nowdb_path_t         path; /* base path             */
+	nowdb_path_t     strgpath; /* catalog path          */
+	nowdb_path_t      catalog; /* ctx catalog path      */
+	nowdb_version_t       ver; /* db version            */
+	ts_algo_tree_t    storage; /* tree of storage cfgs */
+	ts_algo_tree_t   contexts; /* contexts              */
+	nowdb_index_man_t   *iman; /* index manager         */
+	nowdb_model_t      *model; /* model                 */
+	nowdb_text_t        *text; /* strings               */
+	nowdb_procman_t     *pman; /* stored procedures     */
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -99,12 +98,34 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope);
 nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope);
 
 /* -----------------------------------------------------------------------
+ * Create storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createStorage(nowdb_scope_t *scope, char *name,
+                                      nowdb_storage_config_t     *cfg);
+
+/* -----------------------------------------------------------------------
+ * Drop storage within that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropStorage(nowdb_scope_t *scope,
+                                    char          *name);
+
+/* -----------------------------------------------------------------------
+ * Get storage from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getStorage(nowdb_scope_t   *scope,
+                                   char             *name,
+                                   nowdb_storage_t **strg);
+
+/* -----------------------------------------------------------------------
  * Create a context within that scope
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_scope_createContext(nowdb_scope_t     *scope,
-                                      char               *name,
-                                      nowdb_ctx_config_t *cfg);
+nowdb_err_t nowdb_scope_createContext(nowdb_scope_t *scope,
+                                      char           *name,
+                                      char       *strgname);
 
 /* -----------------------------------------------------------------------
  * Drop a context within that scope
@@ -156,6 +177,14 @@ nowdb_err_t nowdb_scope_getIndex(nowdb_scope_t   *scope,
                                  nowdb_index_t    **idx);
 
 /* -----------------------------------------------------------------------
+ * Get built-in index on vertex
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_getVidx(nowdb_scope_t *scope,
+                                nowdb_context_t *ctx,
+                                nowdb_index_t  **idx);
+
+/* -----------------------------------------------------------------------
  * Create new stored procedure/function
  * -----------------------------------------------------------------------
  */
@@ -200,9 +229,7 @@ nowdb_err_t nowdb_scope_createEdge(nowdb_scope_t  *scope,
                                    char           *name,
                                    char           *origin,
                                    char           *destin,
-                                   uint32_t        label,
-                                   uint32_t        weight,
-                                   uint32_t        weight2);
+                                   ts_algo_list_t *props);
 
 /* -----------------------------------------------------------------------
  * Drop Edge
@@ -224,6 +251,7 @@ nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
+                                       nowdb_context_t *ctx,
                                        nowdb_roleid_t  role,
                                        nowdb_key_t      vid);
 

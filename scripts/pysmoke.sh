@@ -66,7 +66,6 @@ then
 	exit 1
 fi
 
-
 echo "RUNNING bugs.py" >> log/pysmoke.log
 test/pysmoke/bugs.py >> log/pysmoke.log 2>&1
 if [ $? -ne 0 ]

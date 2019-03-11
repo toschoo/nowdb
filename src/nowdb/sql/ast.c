@@ -76,9 +76,11 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_DQL: ASTCALLOC(5); 
 	case NOWDB_AST_MISC: ASTCALLOC(1); 
 
-	case NOWDB_AST_CREATE: ASTCALLOC(4);
+	case NOWDB_AST_CREATE: ASTCALLOC(5);
 	case NOWDB_AST_ALTER: ASTCALLOC(2);
 	case NOWDB_AST_DROP:  ASTCALLOC(2);
+	case NOWDB_AST_SHOW:  ASTCALLOC(0);
+	case NOWDB_AST_DESC:  ASTCALLOC(0);
 
 	case NOWDB_AST_LOAD:  ASTCALLOC(2); 
 
@@ -116,6 +118,7 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_PATH:   ASTCALLOC(0);
 	case NOWDB_AST_DATA:   ASTCALLOC(1);
 	case NOWDB_AST_ON:   ASTCALLOC(0);
+	case NOWDB_AST_STORAGE: ASTCALLOC(0);
 
 	default:
 		return -1;
@@ -139,6 +142,9 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_CREATE: return "create";
 	case NOWDB_AST_ALTER: return "alter";
 	case NOWDB_AST_DROP:  return "drop";
+
+	case NOWDB_AST_SHOW:  return "show";
+	case NOWDB_AST_DESC:  return "describe";
 
 	case NOWDB_AST_LOAD:  return "load";
 
@@ -208,6 +214,7 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_TARGET:
 		switch(stype) {
 		case NOWDB_AST_SCOPE: return "scope";
+		case NOWDB_AST_STORAGE: return "storage";
 		case NOWDB_AST_VERTEX: return "vertex";
 		case NOWDB_AST_CONTEXT: return "context";
 		case NOWDB_AST_INDEX: return "index";
@@ -217,6 +224,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_MODULE: return "module";
 		default: return "unknown target";
 		}
+
+	case NOWDB_AST_STORAGE: return "storage";
 
 	case NOWDB_AST_ON:
 		switch(stype) {
@@ -355,7 +364,9 @@ static inline int ad4l(nowdb_ast_t *n,
 	switch(k->ntype) {
 	case NOWDB_AST_CREATE:
 	case NOWDB_AST_ALTER: 
-	case NOWDB_AST_DROP: ADDKID(0);
+	case NOWDB_AST_DROP:
+	case NOWDB_AST_SHOW:
+	case NOWDB_AST_DESC: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -431,6 +442,7 @@ static inline int addcreate(nowdb_ast_t *n,
 	case NOWDB_AST_ON: ADDKID(2);
 	case NOWDB_AST_FIELD: ADDKID(3);
 	case NOWDB_AST_DECL: ADDKID(3);
+	case NOWDB_AST_STORAGE: ADDKID(4);
 	default: return -1;
 	}
 }
@@ -1177,6 +1189,19 @@ nowdb_ast_t *nowdb_ast_off(nowdb_ast_t *ast) {
 
 	switch(ast->ntype) {
 	case NOWDB_AST_DECL: return ast->kids[0];
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * Get storage from the current AST node
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_storage(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+
+	switch(ast->ntype) {
+	case NOWDB_AST_CREATE: return ast->kids[4];
 	default: return NULL;
 	}
 }

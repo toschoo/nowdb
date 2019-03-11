@@ -82,13 +82,6 @@ typedef uint8_t nowdb_content_t;
 /* polymorphic value       */
 typedef uint64_t nowdb_value_t;
 
-/* context or vertex */
-typedef char nowdb_target_t;
-
-#define NOWDB_TARGET_NULL    0
-#define NOWDB_TARGET_EDGE    1
-#define NOWDB_TARGET_VERTEX  2
-
 /* possible types of value */
 typedef uint32_t nowdb_type_t;
 
@@ -134,9 +127,9 @@ typedef uint32_t nowdb_fileid_t;
 typedef uint64_t nowdb_pageid_t;
 typedef uint64_t nowdb_rowid_t;
 
-extern char nowdb_nullrec[64];
+extern char nowdb_nullrec[1024];
 
-int nowdb_sizeByOff(uint32_t recsize, uint16_t off);
+int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 
 #define NOWDB_VERTEX_SIZE 32
 
@@ -170,49 +163,48 @@ int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 int nowdb_vertex_offByName(char *field);
 
-#define NOWDB_EDGE_SIZE 64
-
 /* ------------------------------------------------------------------------
  * Edge Offsets
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OFF_EDGE     0
-#define NOWDB_OFF_ORIGIN   8
-#define NOWDB_OFF_DESTIN  16
+#define NOWDB_OFF_ORIGIN   0
+#define NOWDB_OFF_DESTIN   8
+#define NOWDB_OFF_TMSTMP  16
+#define NOWDB_OFF_STAMP   16
+#define NOWDB_OFF_USER    24
+
+// TO BE REMOVED!!!
+/*
+#define NOWDB_OFF_EDGE    32
 #define NOWDB_OFF_LABEL   24
-#define NOWDB_OFF_TMSTMP  32
-#define NOWDB_OFF_STAMP   32
 #define NOWDB_OFF_WEIGHT  40
 #define NOWDB_OFF_WEIGHT2 48
 #define NOWDB_OFF_WTYPE   56
 #define NOWDB_OFF_WTYPE2  60
-
-/* ------------------------------------------------------------------------
- * Edge
- * ----
- * Storetype of connections bewteen vertices
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_key_t        edge; /* id of the edge          */
-	nowdb_key_t      origin; /* id of the left  vertex  */
-	nowdb_key_t      destin; /* id of the right vertex  */
-	nowdb_key_t       label; /* id of the primary label */
-	nowdb_time_t  timestamp; /* timestamp               */
-	nowdb_value_t    weight; /* first weight component  */
-	nowdb_value_t   weight2; /* secnd weight component  */
-	nowdb_type_t   wtype[2]; /* type of the weights     */
-} nowdb_edge_t;
-
-void nowdb_edge_writeWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_writeWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-
-void nowdb_edge_readWeight(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-void nowdb_edge_readWeight2(nowdb_edge_t *e, nowdb_type_t typ, void *value);
-
-int nowdb_edge_strtow(nowdb_edge_t *e, nowdb_type_t typ, char *value);
-int nowdb_edge_strtow2(nowdb_edge_t *e, nowdb_type_t typ, char *value);
+*/
 
 int nowdb_edge_offByName(char *field);
+
+// compute the recordsize of an edge with n atts
+// if n > 0, the edge is always stamped
+uint32_t nowdb_edge_recSize(char stamped, uint16_t atts);
+
+// records per page for a given record size
+uint32_t nowdb_recordsPerPage(uint32_t recsz);
+
+// compute the size of the page control block
+// which registers records in a page
+// which are to be considered / to be ignored
+uint32_t nowdb_pagectrlSize(uint32_t recsz);
+
+// compute the size of the attribute control block
+// which registers attributes that are NULL/NOT NULL
+uint32_t nowdb_edge_attctrlSize(uint16_t atts);
+
+// get attribute control bit and byte for specific offset
+void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
+                        uint8_t *bit,  uint16_t *byte);
+
+char *nowdb_typename(nowdb_type_t typ);
 
 #endif

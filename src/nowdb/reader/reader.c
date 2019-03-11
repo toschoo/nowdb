@@ -41,6 +41,7 @@ static char *OBJECT = "reader";
 static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->type = 0;
 	reader->recsize = 0;
+	reader->content = NOWDB_CONT_UNKNOWN;
 	reader->size = 0;
 	reader->off = 0;
 	reader->nodata = 0;
@@ -447,8 +448,6 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 
 	getFilePos(pge, &fid, &pos);
 
-	// fprintf(stderr, "file: %u/%u (%lu)\n", fid, pos, pge);
-
 	if (reader->file != NULL) {
 		if (reader->file->id != fid) {
 			err = nowdb_file_close(reader->file);
@@ -459,7 +458,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	if (reader->file == NULL) {
 		reader->file = findfile(reader->files, fid);
 		if (reader->file == NULL) {
-			// fprintf(stderr, "file not found %u\n", fid);
+			fprintf(stderr, "file not found %u\n", fid);
 			return nowdb_err_get(nowdb_err_key_not_found,
 			                         FALSE, OBJECT, NULL);
 		}
@@ -532,12 +531,7 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 		                          (void**)&reader->cont);
 		BEETERR(ber,1);
 
-		/*
-		fprintf(stderr, "content: %lu|%lu (%lu)\n",
-		                           reader->cont[0],
-		                           reader->cont[1],
-		                                     *pge);
-		*/
+		// fprintf(stderr, "content: %lu\n", *pge);
 
 		err = getpage(reader, *pge);
 		if (err == NOWDB_OK) break;
@@ -597,7 +591,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		ber = beet_iter_move(reader->iter, (void**)&pge,
 		                          (void**)&reader->cont);
 		while (ber == BEET_ERR_EOF) {
-			// fprintf(stderr, "in inner loop\n");
 			if (left == 0) {
 				ber = beet_iter_leave(reader->iter);
 				BEETERR(ber,0);
@@ -606,8 +599,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			ber = beet_iter_move(reader->iter,
 			               &reader->key, NULL);
 			BEETERR(ber,1);
-
-			// fprintf(stderr, "key: %lu\n", *(uint64_t*)(reader->key+8));
 
 			if (reader->maps != NULL) {
 				if (!hasKey(reader)) {
@@ -632,7 +623,6 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 		BEETERR(ber,0);
 
 		err = getpage(reader, *pge);
-		// fprintf(stderr, "%lu: %p\n", *pge, reader->page);
 		if (err == NOWDB_OK) break;
 		if (err->errcode == nowdb_err_key_not_found) {
 			nowdb_err_release(err); continue;
@@ -693,6 +683,10 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	char x;
 	char *p;
 
+	uint32_t bufsz = (NOWDB_IDX_PAGE/reader->recsize)
+	                                *reader->recsize;
+	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
+
 	if (reader->eof) {
 		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
 	}
@@ -704,13 +698,16 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 		reader->off = 0;
 	}
 	for(;;) {
+		if (reader->off%NOWDB_IDX_PAGE >= bufsz) {
+			reader->off += remsz;
+		}
 		if (reader->off >= reader->size) {
 			reader->eof = 1;
 			return nowdb_err_get(nowdb_err_eof,
 			               FALSE, OBJECT, NULL);
 		}
 		if (reader->key != NULL) {
-			if (reader->recsize == NOWDB_EDGE_SIZE) {
+			if (reader->content == NOWDB_CONT_EDGE) {
 				nowdb_index_grabEdgeKeys(reader->ikeys,
 			                       reader->buf+reader->off,
 				                         reader->tmp2);
@@ -730,7 +727,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 				             reader->ikeys->sz*8);
 			}
 		} else {
-			if (reader->recsize == NOWDB_EDGE_SIZE) {
+			if (reader->content == NOWDB_CONT_EDGE) {
 				nowdb_index_grabEdgeKeys(reader->ikeys,
 			                       reader->buf+reader->off,
 				                           reader->tmp);
@@ -751,17 +748,22 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 	}
 	p = reader->buf+reader->off;
 	memset(reader->page2, 0, NOWDB_IDX_PAGE);
-	for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+	for(int i=0; i<NOWDB_IDX_PAGE;) {
+		if (reader->off%NOWDB_IDX_PAGE >= bufsz) {
+			reader->off+=remsz; continue;
+		}
 		if (reader->off >= reader->size) break;
 		if (nowdb_sort_edge_keys_compare(p,
-		          reader->buf+reader->off,
-		          reader->ikeys) != NOWDB_SORT_EQUAL)  break;
+		           reader->buf+reader->off,
+		           reader->ikeys) != NOWDB_SORT_EQUAL)  break;
 
 		if (reader->type == NOWDB_READER_BUFIDX  ||
 		   (reader->type == NOWDB_READER_BKRANGE && i == 0)) {
 			memcpy(reader->page2+i,
 			       reader->buf+reader->off,
 			       reader->recsize);
+			i+=reader->recsize;
+			if (i%NOWDB_IDX_PAGE >= bufsz) i+=remsz;
 		}
 		reader->off += reader->recsize;
 	}
@@ -773,7 +775,7 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
  * ------------------------------------------------------------------------
  */
 #define KEYCMP(k1, k2) \
-	reader->recsize == NOWDB_EDGE_SIZE ? \
+	reader->content == NOWDB_CONT_EDGE ? \
 	                   nowdb_index_edge_compare(k1, k2, reader->ikeys): \
 	                   nowdb_index_vertex_compare(k1, k2, reader->ikeys)
 
@@ -793,8 +795,7 @@ static inline nowdb_err_t findNext(nowdb_reader_t *reader) {
 		if (reader->sub[i]->eof) continue;
 		found = 1;
 		if (reader->key != NULL) {
-			x = KEYCMP(reader->sub[i]->key,
-			           reader->key);
+			x = KEYCMP(reader->sub[i]->key, reader->key);
 		}
 		if (reader->key == NULL || x != BEET_CMP_LESS) {
 			if (key == NULL) {
@@ -1001,7 +1002,7 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 	case NOWDB_READER_KRANGE:
 	case NOWDB_READER_CRANGE:
 		for(int i=0; i<reader->ikeys->sz; i++) {
-			sz = nowdb_sizeByOff(reader->recsize,
+			sz = nowdb_sizeByOff(reader->content,
 			                     reader->ikeys->off[i]);
 			memcpy(reader->buf+reader->ikeys->off[i],
 			           (char*)(reader->key)+off, sz);
@@ -1082,11 +1083,13 @@ nowdb_err_t nowdb_reader_fullscan(nowdb_reader_t **reader,
 	                                       FALSE, OBJECT, NULL);
 	if (files->head->cont == NULL) return nowdb_err_get(
 	     nowdb_err_invalid, FALSE, OBJECT, "empty list");
+
 	err = newReader(reader);
 	if (err != NOWDB_OK) return err;
 	(*reader)->type = NOWDB_READER_FULLSCAN;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	err = rewindFullscan(*reader);
@@ -1123,6 +1126,7 @@ nowdb_err_t nowdb_reader_search(nowdb_reader_t **reader,
 	(*reader)->type = NOWDB_READER_SEARCH;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	ber = beet_iter_alloc(index->idx, &(*reader)->iter);
@@ -1188,6 +1192,7 @@ static inline nowdb_err_t mkRange(nowdb_reader_t **reader,
 	(*reader)->type = rtype;
 	(*reader)->filter = filter;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 	(*reader)->ikeys = nowdb_index_getResource(index);
 	(*reader)->eof = 0;
@@ -1346,6 +1351,10 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 	char *src;
 	uint32_t x=0;
 	char more = 1;
+	uint32_t bufsz, remsz;
+
+	bufsz = (NOWDB_IDX_PAGE / reader->recsize) * reader->recsize;
+	remsz = NOWDB_IDX_PAGE - bufsz;
 
 	err = nowdb_reader_fullscan(&full, reader->files, reader->filter);
 	if (err != NOWDB_OK) return err;
@@ -1362,7 +1371,11 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 		src = nowdb_reader_page(full);
 		if (src == NULL) return nowdb_err_get(nowdb_err_panic,
 		                 FALSE, OBJECT, "reader has no page");
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		for(int i=0; i<NOWDB_IDX_PAGE; ) {
+
+			if (i%NOWDB_IDX_PAGE >= bufsz) {
+				i+=remsz; continue;
+			}
 
 			/* we hit the nullrecord */
 			if (memcmp(src+i, nowdb_nullrec,
@@ -1378,14 +1391,18 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
                                                       NOWDB_BITMAP64_ALL,
                                                       src+i, &t, &v);
 				if (err != NOWDB_OK) break;
-				if (*(nowdb_value_t*)v == 0) continue;
+				if (*(nowdb_value_t*)v == 0) {
+					i+=reader->recsize;
+					continue;
+				}
 			}
 			memcpy(reader->buf+x, src+i, reader->recsize);
-			x+=reader->recsize;
+			x+=reader->recsize;i+=reader->recsize;
+			if (x%NOWDB_IDX_PAGE >= bufsz) x+=remsz;
 		}
 		if (err != NOWDB_OK) break;
 	}
-	reader->size = x;
+	// reader->size = x;
 	nowdb_reader_destroy(full); free(full);
 	return err;
 }
@@ -1417,6 +1434,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		                             "too many pending files");
 	} else if (sz == 0) {
 		sz = NOWDB_IDX_PAGE;
+
 	} else {
 		uint32_t tmp = sz / NOWDB_IDX_PAGE;
 		tmp *= NOWDB_IDX_PAGE;
@@ -1431,6 +1449,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 	(*reader)->filter = filter;
 	(*reader)->eval = eval;
 	(*reader)->recsize = ((nowdb_file_t*)files->head->cont)->recordsize;
+	(*reader)->content = ((nowdb_file_t*)files->head->cont)->cont;
 	(*reader)->files = files;
 
 	/* alloc buffer */
@@ -1440,6 +1459,7 @@ nowdb_err_t nowdb_reader_buffer(nowdb_reader_t  **reader,
 		NOMEM("allocating buffer");
 		return err;
 	}
+	(*reader)->size = sz;
 
 	/* fullscan files according to filter */
 	err = fillbuf(*reader);
@@ -1495,14 +1515,18 @@ nowdb_err_t nowdb_reader_bufidx(nowdb_reader_t  **reader,
 		NOMEM("allocating key");
 		return err;
 	}
-	nowdb_mem_sort((*reader)->buf,
-		       (*reader)->size/(*reader)->recsize,
-		       (*reader)->recsize,
-		       (*reader)->recsize == NOWDB_EDGE_SIZE ?
-		               &nowdb_sort_edge_keys_compare :
-		               &nowdb_sort_vertex_keys_compare,
-		       (*reader)->ikeys);
-
+	
+	if (nowdb_mem_merge((*reader)->buf,
+		            (*reader)->size, NOWDB_IDX_PAGE,
+		            (*reader)->recsize,
+		            (*reader)->content == NOWDB_CONT_EDGE ?
+		                    &nowdb_sort_edge_keys_compare :
+		                    &nowdb_sort_vertex_keys_compare,
+		            (*reader)->ikeys) != 0) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		NOMEM("merge sort");
+		return err;
+	}
 	return nowdb_reader_rewind(*reader);
 }
 
@@ -1572,6 +1596,7 @@ static inline nowdb_err_t mkMulti(nowdb_reader_t **reader,
 
 	(*reader)->ikeys = (*reader)->sub[0]->ikeys;
 	(*reader)->recsize = (*reader)->sub[0]->recsize;
+	(*reader)->content = (*reader)->sub[0]->content;
 	(*reader)->ko = (*reader)->sub[0]->ko;
 
 	return nowdb_reader_rewind(*reader);

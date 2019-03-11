@@ -32,7 +32,7 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_target_t    target; /* main target                   */
+	nowdb_content_t  content; /* current target content        */
 	nowdb_reader_t      *rdr; /* the reader                    */
 	nowdb_storefile_t    stf; /* should be a list of stf!      */
 	nowdb_model_t     *model; /* model                         */

@@ -22,7 +22,7 @@
 int nowdb_row_print(char *buf, uint32_t sz, FILE *stream);
 
 /* ------------------------------------------------------------------------
- * Manually create a row buffer with containing one value
+ * Manually create a row buffer containing one value
  * ------------------------------------------------------------------------
  */
 char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz); 

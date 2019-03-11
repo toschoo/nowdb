@@ -25,26 +25,33 @@ void helptxt(char *progname) {
 	fprintf(stderr, "           (b: 1/0, t/f, true/false)\n");
 }
 
+typedef struct {
+	nowdb_key_t origin;
+	nowdb_key_t destin;
+	nowdb_time_t stamp;
+	int64_t      label;
+	int64_t     weight;
+} edge_t; 
+
 /* -----------------------------------------------------------------------
  * write buffer of edges to file
  * -----------------------------------------------------------------------
  */
-void edges(FILE *csv, nowdb_edge_t *buf, uint32_t size) {
+void edges(FILE *csv, edge_t *buf, uint32_t size) {
 	char stamp[32];
 	for(uint32_t i = 0; i<size; i++) {
-		if (nowdb_time_toString(buf[i].timestamp,
+		if (nowdb_time_toString(buf[i].stamp,
 		                        NOWDB_TIME_FORMAT,
 		                        stamp, 32) != 0) {
 			fprintf(stderr, "cannot convert timestamp\n");
 			break;
 		}
-		fprintf(csv, "measure;%lu;%lu;%lu;%s;%lu;%lu\n",
+		fprintf(csv, "%lu;%lu;%s;%ld;%ld\n",
 		             buf[i].origin,
 		             buf[i].destin,
+		             stamp,
 		             buf[i].label,
-		                    stamp,
-		             buf[i].weight,
-		             buf[i].weight2);
+		             buf[i].weight);
 	}
 }
 
@@ -88,11 +95,11 @@ void vertices(FILE *csv, loc_t *buf, uint32_t size) {
  */
 nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 	nowdb_time_t tp;
-	nowdb_edge_t buf[1024];
+	edge_t buf[1024];
 	int j = 0;
 	int rc;
 
-	memset(&buf,0,64*1024);
+	memset(&buf,0,sizeof(edge_t)*1024);
 
 	for(uint32_t i=0; i<count; i++) {
 
@@ -100,7 +107,6 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 		do buf[j].destin = rand()%100; while(buf[j].destin == 0);
 		buf[j].label  = rand()%100;
 		buf[j].weight = (uint64_t)i;
-		buf[j].wtype[0] = NOWDB_TYP_UINT;
 		if (i%10 == 0) {
 			rc = nowdb_time_now(&tp);
 			if (rc != 0) {
@@ -108,7 +114,7 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 				return FALSE;
 			}
 		}
-		buf[j].timestamp = tp;
+		buf[j].stamp = tp;
 		j++;
 		if (j == 1024) {
 			edges(csv, buf, j); j=0;

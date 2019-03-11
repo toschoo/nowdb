@@ -70,6 +70,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
       $(SRC)/store/store.o    \
+      $(SRC)/store/storage.o  \
       $(SRC)/store/comp.o     \
       $(SRC)/store/indexer.o  \
       $(SRC)/store/storewrk.o \
@@ -122,6 +123,7 @@ DEP = $(SRC)/types/types.h    \
       $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
       $(SRC)/store/store.h    \
+      $(SRC)/store/storage.h  \
       $(SRC)/store/comp.h     \
       $(SRC)/store/indexer.h  \
       $(SRC)/store/storewrk.h \
@@ -162,7 +164,8 @@ IFC = include/nowdb/nowdb.h \
 
 default:	lib 
 
-all:	default tools tests bench server client
+#all:	default tools tests bench server client
+all:	default tools tests server client
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
@@ -184,13 +187,12 @@ client:	$(BIN)/nowclient
 tools:	bin/randomfile    \
 	bin/readfile      \
 	bin/catalog       \
-	bin/keepstoreopen \
-	bin/waitstore     \
 	bin/waitscope     \
-	bin/writecsv      \
 	bin/sqltool       \
-	bin/plantool      \
-	bin/scopetool
+	bin/plantool
+
+#	bin/writecsv      \
+#	bin/scopetool
 
 bench: bin/readplainbench    \
        bin/writestorebench   \
@@ -217,14 +219,15 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/vrowsmoke               \
 	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
-	$(SMK)/scopesmoke2             \
 	$(SMK)/imansmoke               \
 	$(SMK)/indexsmoke              \
 	$(SMK)/indexersmoke            \
 	$(SMK)/modelsmoke              \
 	$(SMK)/textsmoke               \
-	$(SMK)/mergesmoke              \
-	$(SMK)/sortsmoke
+	$(SMK)/sortsmoke               \
+	$(SMK)/msortsmoke              \
+	$(SMK)/scopesmoke2             \
+	$(SMK)/mergesmoke
 
 clientsmoke:	$(CMK)/clientsmoke
 
@@ -472,6 +475,12 @@ $(SMK)/sortsmoke: 	$(LIB) $(DEP) $(SMK)/sortsmoke.o
 			$(CC) $(LDFLAGS) -o $@ $@.o \
 			                 $(libs) -lnowdb
 
+$(SMK)/msortsmoke: 	$(LIB) $(DEP) $(SMK)/msortsmoke.o
+			$(LNKMSG)
+			$(CC) $(LDFLAGS) -o $@ $@.o \
+			                 $(libs) -lnowdb
+
+
 $(SMK)/mergesmoke:	$(LIB) $(DEP) $(SMK)/mergesmoke.o \
 			$(COM)/scopes.o \
 			$(COM)/db.o \
@@ -691,8 +700,12 @@ clean:
 	rm -f $(RSC)/*.csv
 	rm -f $(RSC)/*.csv.zip
 	rm -f $(RSC)/*.sql
+	rm -f $(RSC)/*.err
 	rm -rf $(RSC)/test
 	rm -rf $(RSC)/teststore
+	rm -rf $(RSC)/test?
+	rm -rf $(RSC)/test??
+	rm -rf $(RSC)/test???
 	rm -rf $(RSC)/store?
 	rm -rf $(RSC)/store??
 	rm -rf $(RSC)/testscope
@@ -737,6 +750,7 @@ clean:
 	rm -f $(SMK)/textsmoke
 	rm -f $(SMK)/mergesmoke
 	rm -f $(SMK)/sortsmoke
+	rm -f $(SMK)/msortsmoke
 	rm -f $(CMK)/clientsmoke
 	rm -f $(CMK)/clientsmoke2
 	rm -f $(STRESS)/deepscope

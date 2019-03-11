@@ -10,13 +10,14 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/task/worker.h>
+#include <nowdb/store/storage.h>
 
 /* ------------------------------------------------------------------------
  * Start sync worker
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSync(nowdb_worker_t *wrk,
-                                  void         *store,
+                                  void       *storage,
                                   nowdb_queue_t *errq);
 
 /* ------------------------------------------------------------------------
@@ -30,7 +31,7 @@ nowdb_err_t nowdb_store_stopSync(nowdb_worker_t *wrk);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_startSorter(nowdb_worker_t *wrk,
-                                    void         *store,
+                                    void       *storage,
                                     nowdb_queue_t *errq);
 
 /* ------------------------------------------------------------------------
@@ -43,7 +44,7 @@ nowdb_err_t nowdb_store_stopSorter(nowdb_worker_t *wrk);
  * Sorter, sort now!
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_store_sortNow(nowdb_worker_t *wrk);
+nowdb_err_t nowdb_store_sortNow(nowdb_storage_t *strg, void *store);
 
 #endif
 

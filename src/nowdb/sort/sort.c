@@ -10,6 +10,8 @@
 
 // static char *OBJECT = "sort";
 
+extern char nowdb_nullrec[1024];
+
 /* ------------------------------------------------------------------------
  * Generic sorting
  * ------------------------------------------------------------------------
@@ -105,7 +107,10 @@ nowdb_comprsc_t nowdb_sort_getCompare(nowdb_type_t t) {
 	if ((*(nowdb_key_t*)((char*)left+o)) > \
 	    (*(nowdb_key_t*)((char*)right+o))) return NOWDB_SORT_GREATER;
 
-/* this should be for the specific type */
+// this should be for the specific type
+// as it is, it always compare uint64_t,
+// we need either a callback or, even better,
+// the specific type!
 #define WEIGHTCMP(left,right,o) \
 	if ((*(nowdb_value_t*)((char*)left+o)) < \
 	    (*(nowdb_value_t*)((char*)right+o))) return NOWDB_SORT_LESS; \
@@ -138,17 +143,14 @@ nowdb_cmp_t nowdb_sort_edge_keys_compare(const void *left,
                                          void       *keys) {
 	for(int i=0; i<KEYS(keys)->sz; i++) {
 		switch(KEYS(keys)->off[i]) {
-		case NOWDB_OFF_EDGE:
 		case NOWDB_OFF_ORIGIN:
 		case NOWDB_OFF_DESTIN:
-		case NOWDB_OFF_LABEL:
 			KEYCMP(left, right, KEYS(keys)->off[i]);
 
-		case NOWDB_OFF_TMSTMP:
+		case NOWDB_OFF_STAMP:
 			TMSTMPCMP(left, right, KEYS(keys)->off[i]);
 
-		case NOWDB_OFF_WEIGHT:
-		case NOWDB_OFF_WEIGHT2:
+		default:
 			WEIGHTCMP(left, right, KEYS(keys)->off[i]);
 		}
 	}
@@ -202,14 +204,15 @@ nowdb_cmp_t nowdb_sort_vertex_keys_compareD(const void *left,
  * Sorting edges
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_edge(nowdb_edge_t *buf,
-                         uint32_t      num,
-                         nowdb_ord_t   ord) {
+void nowdb_mem_sort_edge(char        *buf,
+                         uint32_t      sz,
+                         uint32_t   recsz,
+                         nowdb_ord_t  ord) {
 	if (ord == NOWDB_ORD_ASC) {
-		nowdb_mem_sort((char*)buf, num*64, 64,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		       &nowdb_sort_edge_compare, NULL);
 	} else if (ord == NOWDB_ORD_DESC) {
-		nowdb_mem_sort((char*)buf, num*64, 64,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		      &nowdb_sort_edge_compareD, NULL);
 	}
 }
@@ -222,10 +225,10 @@ void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
                            uint32_t        num,
                            nowdb_ord_t     ord) {
 	if (ord == NOWDB_ORD_ASC) {
-		nowdb_mem_sort((char*)buf, num*32, 32,
+		nowdb_mem_sort((char*)buf, num, 32,
 		     &nowdb_sort_vertex_compare, NULL);
 	} else if (ord == NOWDB_ORD_DESC) {
-		nowdb_mem_sort((char*)buf, num*32, 32,
+		nowdb_mem_sort((char*)buf, num, 32,
 		    &nowdb_sort_vertex_compareD, NULL);
 	}
 }
@@ -238,30 +241,29 @@ nowdb_cmp_t nowdb_sort_edge_compare(const void *left,
                                     const void *right,
                                     void      *ignore)
 {
-	if (((nowdb_edge_t*)left)->origin <  
-	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->origin >
-	    ((nowdb_edge_t*)right)->origin) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(((char*)left)+NOWDB_OFF_ORIGIN) <  
+	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_ORIGIN))
+		return NOWDB_SORT_LESS;
 
-	if (((nowdb_edge_t*)left)->edge   <
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->edge   >
-	    ((nowdb_edge_t*)right)->edge) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(((char*)left)+NOWDB_OFF_ORIGIN) >  
+	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_ORIGIN))
+		return NOWDB_SORT_GREATER;
 
-	if (((nowdb_edge_t*)left)->destin <
-	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->destin >
-	    ((nowdb_edge_t*)right)->destin) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(((char*)left)+NOWDB_OFF_DESTIN) <  
+	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_DESTIN))
+		return NOWDB_SORT_LESS;
 
-	if (((nowdb_edge_t*)left)->label  <
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->label >
-	    ((nowdb_edge_t*)right)->label) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(((char*)left)+NOWDB_OFF_DESTIN) >  
+	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_DESTIN))
+		return NOWDB_SORT_GREATER;
 
-	if (((nowdb_edge_t*)left)->timestamp <
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_LESS;
-	if (((nowdb_edge_t*)left)->timestamp >
-	    ((nowdb_edge_t*)right)->timestamp) return NOWDB_SORT_GREATER;
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) <
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+		return NOWDB_SORT_LESS;
+
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) >
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+		return NOWDB_SORT_GREATER;
 
 	return NOWDB_SORT_EQUAL;
 }
@@ -331,6 +333,178 @@ static void sortBlocks(ts_algo_list_t  *blocks,
 	}
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: how many rounds
+ * ------------------------------------------------------------------------
+ */
+static inline int crounds(int n) {
+	int l=1;
+	for(int i=n; i>0; i>>=1) l++;
+	return l;
+}
+
+#define ADV(pos) \
+	pos += recsz; \
+	if ((pos%bufsz) >= stp) { \
+		pos += remsz; \
+	}
+
+#define COPY(sp,tp) \
+	memcpy(trg+tp, src+sp, recsz); \
+	tp += recsz; \
+	if ((tp%bufsz) >= stp) { \
+		tp += remsz; \
+	}
+
+/* ------------------------------------------------------------------------
+ * Helper: merging buffers with remainder
+ * ------------------------------------------------------------------------
+ */
+static inline void bufMergeN(char *src, char *trg,
+                             int off, int *toff, int n,
+                             uint32_t size,
+                             uint32_t bufsz,
+                             uint32_t remsz,
+                             uint32_t recsz,
+                             nowdb_comprsc_t compare,
+                             void *args) 
+{
+	uint32_t stp = bufsz-remsz;
+	nowdb_cmp_t x=NOWDB_SORT_EQUAL;
+	int off1=off, off2=off+n*bufsz;
+	int m1=off+n*bufsz-remsz, m2=off2+n*bufsz-remsz;
+
+	while(m1>size) m1-=bufsz;
+	while(m2>size) m2-=bufsz;
+	/*
+	fprintf(stderr, "merging %d to %d with %d to %d (%d)\n",
+	                               off1, m1, off2, m2, size);
+	*/
+	for(;;) {
+		if (off1 < m1) {
+			if (memcmp(src+off1,
+			    nowdb_nullrec,
+			    recsz) == 0) {
+				off1+=bufsz-(off1%bufsz);
+			}
+		}
+		if (off2 < m2) {
+			if (memcmp(src+off2,
+			    nowdb_nullrec,
+			    recsz) == 0) {
+				off2+=bufsz-(off2%bufsz);
+			}
+		}
+		if (off1 >= m1 && off2 >= m2) break;
+		if (off1 < m1 && off2 < m2) {
+			x = compare(src+off1, src+off2, args);
+
+		} else if (off1 >= m1) {
+			x = NOWDB_SORT_GREATER;
+
+		} else {
+			x = NOWDB_SORT_LESS;
+		}
+		if (x != NOWDB_SORT_GREATER) {
+			COPY(off1, *toff); ADV(off1);
+		} else {
+			COPY(off2, *toff); ADV(off2);
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: merging buffers with remainder
+ * ------------------------------------------------------------------------
+ */
+static inline char bufMergeExhaust(char *src, char *trg,
+                                   int    buffers,
+                                   uint32_t    sz,
+                                   uint32_t bufsz,
+                                   uint32_t recsz,
+                                   uint32_t remsz,
+                                   nowdb_comprsc_t compare,
+                                   void *args) {
+	char *s=src, *t=trg, *x;
+	int tot=buffers;
+	int b;
+	int off=0;
+	int toff=0;
+	int m=1;
+
+	while(tot > 1) {
+		// fprintf(stderr, "%d/%d\n", tot, m);
+		while(off < sz) {
+			bufMergeN(s, t, off, &toff, m, sz,
+                                  bufsz, remsz, recsz,
+                                  compare, args);
+			b-=2*m; off+=2*m*bufsz;
+		}
+		off=0;m<<=1;tot-=tot/2;toff=0;
+		x=s; s=t; t=x;
+	}
+	return (s==trg);
+}
+
+/* ------------------------------------------------------------------------
+ * Count effective size of items in buffer,
+ * i.e. discard null records
+ * ------------------------------------------------------------------------
+ */
+static inline uint32_t countItems(char *buf, uint32_t recsz, uint32_t sz) {
+	uint32_t x=0;
+	for(uint32_t i=0; i<sz; i+=recsz) {
+		if (memcmp(buf+i, nowdb_nullrec, recsz) == 0) break;
+		x++;
+	}
+	return x;
+}
+
+/* ------------------------------------------------------------------------
+ * Generic merge sort
+ * ------------------------------------------------------------------------
+ */
+int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize, 
+                                              uint32_t recsize,
+                           nowdb_comprsc_t compare, void *args) {
+	char *trg;
+	uint32_t rm, n;
+	uint32_t nitems;
+	uint32_t bsz,sz;
+
+	// compute items per buffer,
+	// remainder and number of buffers
+	nitems = bufsize/recsize;
+	bsz = nitems*recsize;
+	rm = bufsize - bsz;
+	n  = size/bufsize;
+
+	if (n*bufsize<size) n++;
+	sz=n*bufsize;
+
+	if (sz != size) {
+		fprintf(stderr, "size differs: %u - %u\n", sz, size);
+		return -2;
+	}
+
+	trg = calloc(1, sz);
+	if (trg == NULL) return -1;
+
+	for(uint32_t i=0; i<n; i++) {
+		nitems = countItems(buf+i*bufsize, recsize, bsz);
+		qsort_r(buf+i*bufsize, (size_t)nitems,
+		                       (size_t)recsize,
+		                       compare, args);
+	}
+	if (bufMergeExhaust(buf, trg, n, sz, bufsize,
+	                                     recsize,
+	                          rm, compare, args)) {
+		memcpy(buf, trg, sz);
+	}
+	free(trg);
+	return 0;
+}
+
 #define BLOCK(x) \
 	((nowdb_block_t*)x)
 
@@ -338,11 +512,11 @@ static void sortBlocks(ts_algo_list_t  *blocks,
  * Helper: merging blocks
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
-                                 ts_algo_list_t     *trg,
-                                 nowdb_blist_t    *flist,
-                                 int n, uint32_t recsize,
-                                 nowdb_comprsc_t compare) 
+static inline nowdb_err_t blockMergeN(ts_algo_list_t     *src,
+                                      ts_algo_list_t     *trg,
+                                      nowdb_blist_t    *flist,
+                                      int n, uint32_t recsize,
+                                      nowdb_comprsc_t compare) 
 {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_cmp_t x=NOWDB_SORT_EQUAL;
@@ -409,11 +583,11 @@ static inline nowdb_err_t mergeN(ts_algo_list_t     *src,
  * Helper: merging blocks
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t mergeExhaust(ts_algo_list_t     *src,
-                                       ts_algo_list_t     *trg,
-                                       nowdb_blist_t    *flist,
-                                       int n, uint32_t recsize,
-                                       nowdb_comprsc_t compare) {
+static inline nowdb_err_t blockMergeExhaust(ts_algo_list_t     *src,
+                                            ts_algo_list_t     *trg,
+                                            nowdb_blist_t    *flist,
+                                            int n, uint32_t recsize,
+                                            nowdb_comprsc_t compare) {
 	nowdb_err_t err = NOWDB_OK;
 	int m=n<<1;
 
@@ -422,7 +596,7 @@ static inline nowdb_err_t mergeExhaust(ts_algo_list_t     *src,
 	                src->len/n, n, src, trg);
 	*/
 	while(src->len > 0) {
-		err = mergeN(src, trg, flist, n, recsize, compare);
+		err = blockMergeN(src, trg, flist, n, recsize, compare);
 		if (err != NOWDB_OK) break;
 
 		for(int i=0; i<m; i++) {
@@ -434,16 +608,6 @@ static inline nowdb_err_t mergeExhaust(ts_algo_list_t     *src,
 		if (err != NOWDB_OK) break;
 	}
 	return err;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: how many rounds
- * ------------------------------------------------------------------------
- */
-static inline int crounds(int n) {
-	int l=1;
-	for(int i=n; i>0; i>>=1) l++;
-	return l;
 }
 
 /* ------------------------------------------------------------------------
@@ -468,8 +632,8 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
 		} else {
 			src = &tmp; trg = blocks;
 		}
-		err = mergeExhaust(src, trg, flist, k,
-		                     recsize, compare);
+		err = blockMergeExhaust(src, trg, flist, k,
+		                        recsize, compare);
 		if (err != NOWDB_OK) break;
 		k <<= 1;
 	}

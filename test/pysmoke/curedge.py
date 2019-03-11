@@ -10,11 +10,10 @@ import random
 
 ERR_DUP_KEY = 27
 
-def countedge(es,edge):
+def countedge(es): # there should be a function argument!
     n=0
     for e in es:
-        if e.edge == edge:
-           n+=1
+        n+=1
     return n
 
 # simple queries
@@ -23,11 +22,11 @@ def simplequeries(c):
     print "RUNNING TEST 'simplequeries'"
 
     idx = random.randint(1,len(es)-1)
-    l = countedge(es, 'buys')
+    l = countedge(es)
     n = 0
 
     # fullscan with constant
-    stmt = "select true from sales where edge = 'buys'"
+    stmt = "select true from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
             raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
@@ -44,20 +43,17 @@ def simplequeries(c):
 
     # fullscan with fields
     n = 0
-    stmt = "select edge, origin from sales where edge = 'buys'"
+    stmt = "select origin, destin from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
             raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
             n+=1
-            if row.field(0) != 'buys':
-               raise db.TestFailed("wrong edge: %s" % (row.field(0)))
-
     if n != l:
        raise db.TestFailed("count is wrong: %d / %d" % (l, n))
 
     # count
-    stmt = "select count(*) from sales where edge = 'buys'"
+    stmt = "select count(*) from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
@@ -67,34 +63,29 @@ def simplequeries(c):
 
     l = 0
     for e in es:
-        if e.edge == 'buys' and \
-           e.weight == es[idx].weight:
+        if e.quantity == es[idx].quantity:
            l+=1
 
     print "expected: %d" % l
 
     # fullscan with condition
-    stmt = "select edge, origin, weight from sales \
-             where edge = 'buys' \
-             and weight = %d" % es[idx].weight
+    stmt = "select origin, quantity from buys \
+             where quantity = %d" % es[idx].quantity
     n = 0
     with c.execute(stmt) as cur:
         if not cur.ok():
             raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
             n+=1
-            if row.field(0) != 'buys':
-               raise db.TestFailed("wrong edge: %s" % (row.field(0)))
-            if row.field(2) != es[idx].weight:
-               raise db.TestFailed("wrong weight: %d / %d" % (es[idx].weight, row.field(2)))
+            if row.field(1) != es[idx].quantity:
+               raise db.TestFailed("wrong quantity: %d / %d" % (es[idx].quantity, row.field(1)))
 
     if n != l:
        raise db.TestFailed("count is wrong: %d / %d" % (l, n))
 
     # count with condition
-    stmt = "select count(*) from sales \
-             where edge = 'buys' \
-             and weight = %d" % es[idx].weight
+    stmt = "select count(*) from buys \
+             where quantity = %d" % es[idx].quantity
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
@@ -127,15 +118,14 @@ def groupqueries(c):
     l = len(keys)
 
     # keys only
-    stmt = "select edge, origin from sales group by edge, origin"
+    stmt = "select origin from buys group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(0) == 'buys' and \
-               keys[row.field(1)]:
+            if keys[row.field(0)]:
                raise db.TestFailed("visiting %d twice" % row.field(1))
-            keys[row.field(1)] = True
+            keys[row.field(0)] = True
 
     if l != len(keys):
        raise db.TestFailed("too many keys!")
@@ -145,23 +135,20 @@ def groupqueries(c):
            raise db.TestFailed("key %d not found" % k)
 
     for e in es:
-      if e.edge == 'buys':
-         keys[e.origin] = 0
+        keys[e.origin] = 0
 
     for e in es:
-      if e.edge == 'buys':
-         keys[e.origin] += 1
+        keys[e.origin] += 1
 
     q = {}
 
     # keys with count
-    stmt = "select edge, origin, count(*) from sales group by edge, origin"
+    stmt = "select origin, count(*) from buys group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(0) == 'buys':
-               q[row.field(1)] = row.field(2)
+            q[row.field(0)] = row.field(1)
 
     if len(q) != len(keys):
        raise db.TestFailed("number of keys does not match")
@@ -173,21 +160,20 @@ def groupqueries(c):
         n += v
 
     # crosscheck values
-    if n != countedge(es,'buys'):
+    if n != countedge(es):
        raise db.TestFailed("counted too many values: %d %% %d" % (n, len(es)))
 
     q = {}
 
     # keys with count and where (not in keys)
-    stmt = "select edge, origin, count(*) from sales \
+    stmt = "select origin, count(*) from buys \
              where stamp > '1970-01-01' \
-             group by edge, origin"
+             group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(0) == 'buys':
-               q[row.field(1)] = row.field(2)
+            q[row.field(0)] = row.field(1)
 
     if len(q) != len(keys):
        raise db.TestFailed("number of keys does not match")
@@ -197,21 +183,19 @@ def groupqueries(c):
            raise db.TestFailed("values for key %d differs: %d %% %d" % (k, v, q[k]))
 
     for e in es:
-      if e.edge == 'buys':
-         keys[e.origin] = False
+        keys[e.origin] = False
 
     # keys-only group with where (not in keys)
-    stmt = "select edge, origin from sales \
+    stmt = "select origin from buys \
              where stamp > '1970-01-01' \
-             group by edge, origin"
+             group by origin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(0) == 'buys' and \
-               keys[row.field(1)]:
+            if keys[row.field(0)]:
                raise db.TestFailed("visiting %d twice" % row.field(1))
-            keys[row.field(1)] = True
+            keys[row.field(0)] = True
 
     if l != len(keys):
        raise db.TestFailed("number of keys does not match")
@@ -225,16 +209,16 @@ def orderqueries(c):
 
     print "RUNNING TEST 'orderqueries'"
     
-    ses = sorted(es, key=lambda e: (e.edge, e.destin))
+    ses = sorted(es, key=lambda e: (e.destin))
 
     x=True
     i=0
-    stmt = "select edge, destin from sales"
+    stmt = "select destin from buys"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(1) != ses[i].destin:
+            if row.field(0) != ses[i].destin:
                x=False
                break
             i+=1
@@ -243,13 +227,12 @@ def orderqueries(c):
 
     x=True
     i=0
-    stmt = "select edge, destin from sales order by edge, destin"
+    stmt = "select destin from buys order by destin"
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok (%d): %s" % (cur.code(),cur.details()))
         for row in cur:
-            if row.field(0) == 'buys' and \
-               row.field(1) != ses[i].destin:
+            if row.field(0) != ses[i].destin:
                x=False
                break
             i+=1
@@ -258,7 +241,7 @@ def orderqueries(c):
 
 if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
-        (ps, cs, ss, es) = db.loadDB(c, "db100")
+        (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
         simplequeries(c)
         nwherequeries(c)

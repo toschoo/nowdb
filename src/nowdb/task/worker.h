@@ -24,8 +24,9 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t       type;
-	void          *cont;
+	uint32_t       type; // message type
+	void        *stcont; // static content (never freed)
+	void          *cont; // dynamic content
 } nowdb_wrk_message_t;
 
 #define NOWDB_WRK_STOP  0
@@ -70,6 +71,7 @@ typedef struct {
 	nowdb_queue_t    jobqueue; /* queue where jobs arrive        */
 	nowdb_queue_t   *errqueue; /* queue where to write errors    */
 	void                 *rsc; /* additional resources           */
+	char                 stop; /* set when stopping              */
 	uint32_t          running; /* how many tasks are running     */
 } nowdb_worker_t;
 

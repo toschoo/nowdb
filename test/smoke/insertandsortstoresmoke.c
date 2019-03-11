@@ -16,44 +16,65 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#define ONEANDHALF 16384
+#define EDGE_OFF  25
+#define LABEL_OFF 33
+#define WEIGHT_OFF 41
+
+void setRandomValue(char *e, uint32_t off) {
+	uint64_t x;
+	do x = rand()%100; while(x == 0);
+	memcpy(e+off, &x, 8);
+}
+
+void setValue(char *e, uint32_t off, uint64_t v) {
+	memcpy(e+off, &v, 8);
+}
+
+void makeEdgePattern(char *e) {
+	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
+	setValue(e, NOWDB_OFF_DESTIN, 0xb);
+	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
+	setValue(e, NOWDB_OFF_USER, 3);
+	setValue(e, EDGE_OFF, 0xc);
+	setValue(e, LABEL_OFF, 0xd);
+	setValue(e, WEIGHT_OFF, 0);
+}
+
+#define RECPAGE (NOWDB_IDX_PAGE/recsz)
+#define FULL (128*RECPAGE)
+#define HALF (FULL/2)
+#define FULLPOS NOWDB_MEGA
+#define HALFPOS (FULLPOS/2)
+
+#define ONEANDHALF (FULL+HALF)
 #define DELAY   10000000
 
 nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
-	int rc;
 	nowdb_err_t err;
-	nowdb_edge_t e;
+	char *e;
+	uint64_t max = count;
+	uint32_t recsz = nowdb_edge_recSize(1,3);
 
-	for(uint32_t i=0; i<count; i++) {
+	e = calloc(1, recsz);
+	if (e == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return FALSE;
+	}
 
-		memset(&e,0,64);
-
-		do e.origin = rand()%100; while(e.origin == 0);
-		do e.destin = rand()%100; while(e.destin == 0);
-		do e.edge   = rand()%10; while(e.edge == 0);
-		do e.label  = rand()%10; while(e.label == 0);
-		rc = nowdb_time_now(&e.timestamp);
-		if (rc != 0) {
-			fprintf(stderr, "insert error: %d\n", rc);
-			return FALSE;
-		}
-		e.weight = (uint64_t)i;
-		e.weight2  = 0;
-		e.wtype[0] = NOWDB_TYP_UINT;
-		e.wtype[1] = NOWDB_TYP_NOTHING;
-
-		err = nowdb_store_insert(store, &e);
+	makeEdgePattern(e);
+	for(uint64_t i=0; i<max; i++) {
+		setValue(e, WEIGHT_OFF, i);
+		err = nowdb_store_insert(store, e);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "insert error\n");
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			return FALSE;
+			free(e); return FALSE;
 		}
 	}
-	/*
-	fprintf(stderr, "inserted %u (last: %lu)\n",
-	                           count, e.weight);
-	*/
+	fprintf(stderr, "inserted %u from 0, to %lu\n",
+	       count, *(uint64_t*)(e+WEIGHT_OFF));
+	free(e);
 	return TRUE;
 }
 
@@ -88,22 +109,31 @@ nowdb_bool_t waitForSort(nowdb_store_t *store) {
 
 nowdb_bool_t checkSorted(nowdb_file_t *file) {
 	nowdb_err_t err;
-	nowdb_edge_t *e=NULL;
-	nowdb_edge_t last;
+	char *e=NULL;
+	char *last;
 	char first = 1;
+	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t realsz = NOWDB_IDX_PAGE/recsz;
+	uint32_t remsz = NOWDB_IDX_PAGE - realsz;
+
+	last = calloc(1,recsz);
+	if (last == NULL) {
+		fprintf(stderr, "out-of-mem\n");
+		return FALSE;
+	}
 
 	err = nowdb_file_open(file);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
-		return FALSE;
+		free(last); return FALSE;
 	}
 	err = nowdb_file_rewind(file);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
 		NOWDB_IGNORE(nowdb_file_close(file));
-		return FALSE;
+		free(last); return FALSE;
 	}
 	fprintf(stderr, "%u == %u\n",
 	        file->bufsize, file->blocksize);
@@ -116,7 +146,7 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 			nowdb_err_release(err);
 			if (err->errcode != nowdb_err_eof) {
 				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
+				free(last); return FALSE;
 			} else {
 				break;
 			}
@@ -127,49 +157,43 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 		        file->pos, lseek(file->fd, 0, SEEK_CUR));
 		*/
 
-		for(int i=0;i<file->bufsize;i+=file->recordsize) {
-			e = (nowdb_edge_t*)(file->bptr+i);
-			if (first) {
-				memcpy(&last,e,64); first = 0; continue;
+		for(int i=0;i<file->bufsize;) {
+			if (i >= realsz) {
+				i+=remsz; continue;
 			}
-			if (e->origin < last.origin) {
+			e = (file->bptr+i);
+			if (first) {
+				memcpy(last,e,recsz); first = 0; continue;
+			}
+			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) <
+			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN)) {
 				fprintf(stderr, "not sorted (origin)\n");
 				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
+				free(last); return FALSE;
 			}
-			if (e->origin == last.origin &&
-			    e->edge   <  last.edge) {
-				fprintf(stderr, "not sorted (edge)\n");
-				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
-			}
-			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
-			    e->destin <  last.destin) {
+			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) ==
+			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN) &&
+			    *(uint64_t*)(e+NOWDB_OFF_DESTIN) <
+			    *(uint64_t*)(last+NOWDB_OFF_DESTIN)) {
 				fprintf(stderr, "not sorted (destin)\n");
 				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
+				free(last); return FALSE;
 			}
-			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
-			    e->destin == last.destin &&
-			    e->label  <  last.label) {
-				fprintf(stderr, "not sorted (label)\n");
+			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) ==
+			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN) &&
+			    *(uint64_t*)(e+NOWDB_OFF_DESTIN) ==
+			    *(uint64_t*)(last+NOWDB_OFF_DESTIN) &&
+			    *(uint64_t*)(e+NOWDB_OFF_STAMP) <
+			    *(uint64_t*)(last+NOWDB_OFF_STAMP)) {
+				fprintf(stderr, "%d: not sorted (timestamp)\n", i);
 				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
+				free(last); return FALSE;
 			}
-			if (e->origin == last.origin &&
-			    e->edge   == last.edge   &&
-			    e->destin == last.destin &&
-			    e->label  == last.label  &&
-			    e->timestamp < last.timestamp) {
-				fprintf(stderr, "not sorted (timestamp)\n");
-				NOWDB_IGNORE(nowdb_file_close(file));
-				return FALSE;
-			}
-			memcpy(&last,e,64);
+			memcpy(last,e,recsz);
+			i+=file->recordsize;
 		}
 	}
+	free(last);
 	fprintf(stderr, "file is sorted\n");
 	err = nowdb_file_close(file);
 	if (err != NOWDB_OK) {
@@ -220,13 +244,14 @@ int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store = NULL;
 	struct timespec t1, t2;
+	uint32_t recsz = nowdb_edge_recSize(1,3);
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
 	store = xBootstrap("rsc/store30", compare, NOWDB_COMP_ZSTD, 1,
-	                                      NOWDB_MEGA, NOWDB_MEGA);
+	                                recsz, NOWDB_MEGA, NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -254,7 +279,7 @@ cleanup:
 		if (!closeStore(store)) {
 			fprintf(stderr, "cannot close store\n");
 		}
-		nowdb_store_destroy(store);
+		destroyStore(store);
 		free(store);
 	}
 	nowdb_err_destroy();

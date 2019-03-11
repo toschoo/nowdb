@@ -28,15 +28,17 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t  lock;        /* model is threadsafe   */
-	char           *path;        /* path to model on disk */
-	ts_algo_tree_t *thingByName; /* lookup what it is     */
-	ts_algo_tree_t *vrtxById;    /* lookup vertex by id   */
-	ts_algo_tree_t *vrtxByName;  /* lookup vertex by name */
-	ts_algo_tree_t *propById;    /* lookup prop.  by id   */
-	ts_algo_tree_t *propByName;  /* lookup prop.  by name */
-	ts_algo_tree_t *edgeById;    /* lookup edge   by id   */
-	ts_algo_tree_t *edgeByName;  /* lookup edge   by name */
+	nowdb_rwlock_t  lock;        /* model is threadsafe        */
+	char           *path;        /* path to model on disk      */
+	ts_algo_tree_t *thingByName; /* lookup what it is          */
+	ts_algo_tree_t *vrtxById;    /* lookup vertex by id        */
+	ts_algo_tree_t *vrtxByName;  /* lookup vertex by name      */
+	ts_algo_tree_t *propById;    /* lookup prop.  by id        */
+	ts_algo_tree_t *propByName;  /* lookup prop.  by name      */
+	ts_algo_tree_t *edgeById;    /* lookup edge   by id        */
+	ts_algo_tree_t *edgeByName;  /* lookup edge   by name      */
+	ts_algo_tree_t *pedgeById;   /* lookup edge prop.  by id   */
+	ts_algo_tree_t *pedgeByName; /* lookup edge prop.  by name */
 } nowdb_model_t;
 
 /* ------------------------------------------------------------------------
@@ -56,6 +58,20 @@ void nowdb_model_destroy(nowdb_model_t *model);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_load(nowdb_model_t *model);
+
+/* ------------------------------------------------------------------------
+ * Get all edges
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getEdges(nowdb_model_t   *model,
+                                 ts_algo_list_t **edges);
+
+/* ------------------------------------------------------------------------
+ * Get all vertices
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getVertices(nowdb_model_t  *model,
+                                   ts_algo_list_t **vrtxs);
 
 /* ------------------------------------------------------------------------
  * Add a vertex model
@@ -117,11 +133,30 @@ nowdb_err_t nowdb_model_addEdge(nowdb_model_t      *model,
                                 nowdb_model_edge_t *edge);
 
 /* ------------------------------------------------------------------------
+ * Add edge with properties
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t   *model,
+                                    char             *name,
+                                    char           stamped,
+                                    nowdb_key_t     edgeid,
+                                    nowdb_roleid_t  origin,
+                                    nowdb_roleid_t  destin,
+                                    ts_algo_list_t *props);
+
+/* ------------------------------------------------------------------------
  * Remove an edge model
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_removeEdge(nowdb_model_t *model,
                                    nowdb_key_t    edge);
+
+/* ------------------------------------------------------------------------
+ * Remove edge with properties
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t *model,
+                                       char          *name);
 
 /* ------------------------------------------------------------------------
  * Get vertex by name
@@ -174,6 +209,14 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
                                       ts_algo_list_t *props);
 
 /* ------------------------------------------------------------------------
+ * Get all edge properties of edge (edgeid)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
+                                  nowdb_key_t    edgeid,
+                                  ts_algo_list_t *props);
+
+/* ------------------------------------------------------------------------
  * Get edge by name
  * ------------------------------------------------------------------------
  */
@@ -190,10 +233,28 @@ nowdb_err_t nowdb_model_getEdgeById(nowdb_model_t      *model,
                                     nowdb_model_edge_t **edge);
 
 /* ------------------------------------------------------------------------
+ * Get edge property by (edgeid, propid)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedgeById(nowdb_model_t        *model,
+                                     nowdb_key_t          edgeid,
+                                     nowdb_key_t          propid,
+                                     nowdb_model_pedge_t **pedge);
+
+/* ------------------------------------------------------------------------
+ * Get property by (edgeid, name)
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedgeByName(nowdb_model_t        *model,
+                                       nowdb_key_t          edgeid,
+                                       char                  *name,
+                                       nowdb_model_pedge_t **pedge);
+
+/* ------------------------------------------------------------------------
  * What is by name
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
-                               char           *name,
-                               nowdb_target_t *trg);
+nowdb_err_t nowdb_model_whatIs(nowdb_model_t  *model,
+                               char            *name,
+                               nowdb_content_t *trg);
 #endif

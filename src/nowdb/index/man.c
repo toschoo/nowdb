@@ -189,40 +189,6 @@ static nowdb_err_t registerIndex(nowdb_index_man_t  *iman,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: make context path
- * ------------------------------------------------------------------------
- */
-/*
-static nowdb_err_t getCtxPath(nowdb_index_man_t *man, char *idxname,
-                                                      char *ctxname,
-                                                      char **path) {
-	char *tmp;
-
-	tmp = nowdb_path_append(man->ctxpath, ctxname);
-	if (tmp == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	              FALSE, OBJECT, "allocating context path");
-	*path = nowdb_path_append(tmp, "index"); free(tmp);
-	if (*path == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                FALSE, OBJECT, "allocating context path");
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Helper: make vertex path
- * ------------------------------------------------------------------------
- */
-/*
-static nowdb_err_t getVertexPath(nowdb_index_man_t *man, char *idxname,
-                                                         char **path) {
-	*path = nowdb_path_append(man->vxpath, "index");
-	if (*path == NULL) return nowdb_err_get(nowdb_err_no_mem,
-	                FALSE, OBJECT, "allocating vertex path");
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
  * Helper: open index
  * ------------------------------------------------------------------------
  */
@@ -232,19 +198,12 @@ static nowdb_err_t openIndex(nowdb_index_man_t  *man,
 	char *path=NULL;
 	char *tmp;
 
-	if (desc->ctx == NULL) {
-		// err = getVertexPath(man, desc->name, &path);
-		path = strdup("vertex/index");
-	} else {
-		// err = getCtxPath(man, desc->name, desc->ctx->name, &path);
-		tmp = nowdb_path_append("context", desc->ctx->name);
-		if (tmp == NULL) {
-			NOMEM("allocating index path");
-			return err;
-		}
-		path = nowdb_path_append(tmp, "index"); free(tmp);
+	tmp = nowdb_path_append("context", desc->ctx->name);
+	if (tmp == NULL) {
+		NOMEM("allocating index path");
+		return err;
 	}
-	// if (err != NOWDB_OK) return err;
+	path = nowdb_path_append(tmp, "index"); free(tmp);
 	if (path == NULL) {
 		NOMEM("allocating index path");
 		return err;
@@ -365,6 +324,7 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 			                  "unknown context in index catalog");
 		}
 		free(cnm);
+		(*desc)->cont = (*desc)->ctx->store.cont;
 	}
 	return NOWDB_OK;
 }
@@ -533,9 +493,7 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t   *iman,
                                  ts_algo_tree_t   *context,
                                               void *handle,
                                                 char *base,
-                                                char *path,
-                                             char *ctxpath,
-                                              char *vxpath) {
+                                                char *path) {
 	nowdb_err_t err;
 
 	if (iman == NULL) return nowdb_err_get(nowdb_err_invalid,
@@ -548,15 +506,9 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t   *iman,
 	                         FALSE, OBJECT, "base path NULL");
 	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                             FALSE, OBJECT, "path NULL");
-	if (ctxpath == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                             FALSE, OBJECT, "ctxpath NULL");
-	if (vxpath == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                             FALSE, OBJECT, "vxpath NULL");
 	iman->base = NULL;
 	iman->path = NULL;
 	iman->file = NULL;
-	iman->ctxpath = NULL;
-	iman->vxpath = NULL;
 	iman->handle = handle;
 	iman->context = context;
 	iman->byname = NULL;
@@ -578,27 +530,6 @@ nowdb_err_t nowdb_index_man_init(nowdb_index_man_t   *iman,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                                  "allocating path");
 	}
-	iman->ctxpath = strdup(ctxpath);
-	if (iman->ctxpath == NULL) {
-		nowdb_rwlock_destroy(&iman->lock);
-		free(iman->path); iman->path = NULL;
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                           "allocating context path");
-	}
-	iman->vxpath = strdup(vxpath);
-	if (iman->vxpath == NULL) {
-		nowdb_rwlock_destroy(&iman->lock);
-		free(iman->path); iman->path = NULL;
-		free(iman->ctxpath); iman->ctxpath = NULL;
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                           "allocating vertex path");
-	}
-
-	/*
-	fprintf(stderr, "paths: %s | %s | %s | %s\n",
-	                iman->base, iman->path, iman->ctxpath, iman->vxpath);
-	*/
-
 	iman->byname = ts_algo_tree_new(&comparebyname,
                                         NULL, &noupdate,
 	                                &destroydesc,
@@ -645,12 +576,6 @@ void nowdb_index_man_destroy(nowdb_index_man_t *iman) {
 	}
 	if (iman->path != NULL) {
 		free(iman->path); iman->path = NULL;
-	}
-	if (iman->ctxpath != NULL) {
-		free(iman->ctxpath); iman->ctxpath = NULL;
-	}
-	if (iman->vxpath != NULL) {
-		free(iman->vxpath); iman->vxpath = NULL;
 	}
 	if (iman->base != NULL) {
 		free(iman->base); iman->base = NULL;
@@ -755,7 +680,7 @@ nowdb_err_t nowdb_index_man_getByName(nowdb_index_man_t   *iman,
 	*desc = ts_algo_tree_find(iman->byname, &tmp);
 	if (*desc == NULL) {
 		err = nowdb_err_get(nowdb_err_key_not_found,
-		                     FALSE, OBJECT, "name");
+		                       FALSE, OBJECT, name);
 		goto unlock;
 	}
 

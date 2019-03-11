@@ -22,7 +22,7 @@
 typedef uint32_t nowdb_comp_t;
 typedef uint32_t nowdb_encp_t;
 
-#define NOWDB_HDR_SIZE 32
+#define NOWDB_HDR_BASE_SIZE 24
 
 #define NOWDB_COMP_FLAT 0
 #define NOWDB_COMP_ZSTD 1
@@ -36,6 +36,7 @@ typedef uint32_t nowdb_encp_t;
 #define NOWDB_FILE_SPARE  2 
 #define NOWDB_FILE_READER 4
 #define NOWDB_FILE_SORT   8
+#define NOWDB_FILE_TS    16
 
 #define NOWDB_FILE_MAPSIZE 8388608
 #define NOWDB_FILE_MAXSIZE 1073741824
@@ -55,10 +56,10 @@ typedef enum {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_bitmap64_t set[2]; /* set if not deleted */
-	uint32_t           size; /* compressed size    */
-	uint32_t          delta; /* delta from - to    */
-	int64_t           from;  /* from               */
+	int64_t      from; /* from (period)      */
+	int64_t        to; /* to   (period)      */
+	uint32_t     size; /* compressed size    */
+	uint32_t reserved;
 } nowdb_block_hdr_t;
 
 /* ------------------------------------------------------------------------
@@ -68,35 +69,38 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_fileid_t     id; /* unique identifier                  */
-	uint32_t        order; /* order in ordered stores            */
-	nowdb_path_t     path; /* full path (relative to db path)    */
-	uint32_t         size; /* used size of the file              */
-	uint32_t     capacity; /* overall capcacity                  */
-	uint32_t    blocksize; /* size of stored blocks              */
-	uint32_t   recordsize; /* size of one record                 */
-	uint32_t        state; /* current state of the descriptor    */
-	uint32_t          pos; /* current position in the file       */
-	nowdb_bool_t    dirty; /* map was written                    */
-	nowdb_bool_t     used; /* reader is in use for writing       */
-	int                fd; /* os file descriptor                 */
-	char            *mptr; /* pointer for mapping                */
-	char            *bptr; /* pointer for buffered reading       */
-	char             *tmp; /* temporary buffer for decompression */
-	int               off; /* current position within tmp        */
-	ZSTD_CDict     *cdict; /* compression dictionary             */
-	ZSTD_DDict     *ddict; /* decompression dictionary           */
-	ZSTD_CCtx       *cctx; /* ZSTD compression context           */
-	ZSTD_DCtx       *dctx; /* ZSTD decompression context         */
-	uint32_t      bufsize; /* map or buf size                    */
-	uint32_t      tmpsize; /* actual tmp size                    */
-	nowdb_block_hdr_t hdr; /* current header                     */
-	nowdb_bitmap8_t  ctrl; /* writer, reader, spare, sorted      */
-	nowdb_comp_t     comp; /* compression algorithm              */
-	nowdb_encp_t     encp; /* encryption algorithm               */
-	nowdb_time_t    grain; /* time granularity used for sorting  */
-	nowdb_time_t   oldest; /* oldest timestamp                   */
-	nowdb_time_t   newest; /* newest timestamp                   */
+	nowdb_fileid_t      id; /* unique identifier                  */
+	uint32_t         order; /* order in ordered stores            */
+	nowdb_path_t      path; /* full path (relative to db path)    */
+	uint32_t          size; /* used size of the file              */
+	uint32_t      capacity; /* overall capcacity                  */
+	uint32_t     blocksize; /* size of stored blocks              */
+	uint32_t    recordsize; /* size of one record                 */
+	int32_t        hdrsize; /* headersize                         */
+	uint32_t       setsize; /* size of the control set            */
+	nowdb_content_t   cont; /* content type                       */
+	uint32_t         state; /* current state of the descriptor    */
+	uint32_t           pos; /* current position in the file       */
+	nowdb_bool_t     dirty; /* map was written                    */
+	nowdb_bool_t      used; /* reader is in use for writing       */
+	int                 fd; /* os file descriptor                 */
+	char             *mptr; /* pointer for mapping                */
+	char             *bptr; /* pointer for buffered reading       */
+	char              *tmp; /* temporary buffer for decompression */
+	int                off; /* current position within tmp        */
+	ZSTD_CDict      *cdict; /* compression dictionary             */
+	ZSTD_DDict      *ddict; /* decompression dictionary           */
+	ZSTD_CCtx        *cctx; /* ZSTD compression context           */
+	ZSTD_DCtx        *dctx; /* ZSTD decompression context         */
+	uint32_t       bufsize; /* map or buf size                    */
+	uint32_t       tmpsize; /* actual tmp size                    */
+	nowdb_block_hdr_t *hdr; /* current header                     */
+	nowdb_bitmap8_t   ctrl; /* writer, reader, spare, sorted      */
+	nowdb_comp_t      comp; /* compression algorithm              */
+	nowdb_encp_t      encp; /* encryption algorithm               */
+	nowdb_time_t     grain; /* time granularity used for sorting  */
+	nowdb_time_t    oldest; /* oldest timestamp                   */
+	nowdb_time_t    newest; /* newest timestamp                   */
 } nowdb_file_t;
 
 /* ------------------------------------------------------------------------
@@ -110,6 +114,7 @@ nowdb_err_t nowdb_file_new(nowdb_file_t  **file,
                            uint32_t        size,
                            uint32_t   blocksize,
                            uint32_t  recordsize,
+                           nowdb_content_t cont,
                            nowdb_bitmap8_t ctrl,
                            nowdb_comp_t    comp,
                            nowdb_encp_t    encp,
@@ -128,6 +133,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
                             uint32_t        size,
                             uint32_t   blocksize,
                             uint32_t  recordsize,
+                            nowdb_content_t cont,
                             nowdb_bitmap8_t ctrl,
                             nowdb_comp_t    comp,
                             nowdb_encp_t    encp,

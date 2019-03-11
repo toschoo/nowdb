@@ -61,16 +61,20 @@ char nowdb_expr_compare(nowdb_expr_t expr);
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	uint32_t        etype; /* expression type (field) */
-	nowdb_target_t target; /* vertex or edge?         */
-	int               off; /* offset into data source */
-	nowdb_type_t     type; /* Type of field           */
-	char            *text; /* string if off is text   */
-	char            *name; /* property name if vertex */
-	nowdb_roleid_t   role; /* vertex type if vertex   */
-	nowdb_key_t    propid; /* propid if vertex        */
-	char               pk; /* primary key if vertex   */
-	char           usekey; /* use key instead of text */
+	uint32_t          etype; /* expression type (field) */
+	nowdb_content_t content; /* vertex or edge?         */
+	int                 off; /* offset into data source */
+	nowdb_type_t       type; /* Type of field           */
+	char              *text; /* string if off is text   */
+	char              *name; /* property name if vertex */
+	nowdb_roleid_t     role; /* vertex type if vertex   */
+	nowdb_key_t      edgeid; /* edge   type if edge     */
+	nowdb_key_t      propid; /* propid if vertex        */
+	uint8_t         ctrlbit; /* control bit  for edge   */
+	uint16_t       ctrlbyte; /* control byte for edge   */
+	uint16_t            num; /* number of props (edge)  */
+	char                 pk; /* primary key if vertex   */
+	char             usekey; /* use key instead of text */
 } nowdb_field_t;
 
 /* ------------------------------------------------------------------------
@@ -171,25 +175,6 @@ typedef struct {
 	((nowdb_agg_t*)x)
 
 /* ------------------------------------------------------------------------
- * Edge Model Helper
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_model_edge_t   *e;
-	nowdb_model_vertex_t *o;
-	nowdb_model_vertex_t *d;
-} nowdb_edge_helper_t;
-
-/* ------------------------------------------------------------------------
- * Vertex Model Helper
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_model_vertex_t *v;
-	nowdb_model_prop_t   *p;
-} nowdb_vertex_helper_t;
-
-/* ------------------------------------------------------------------------
  * Evaluation helper
  * the models (v, p, e, o, d) shall be lists!
  * one list for edge  : e, o, d
@@ -197,13 +182,9 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_model_t      *model; /* the model to use for evaluation   */
-	nowdb_text_t        *text; /* the text  to use for evaluation   */
-	nowdb_ptlru_t       *tlru; /* private text lru cache            */
-	ts_algo_list_t         em; /* edge model helper                 */
-	ts_algo_list_t         vm; /* vertex model helper (tree???)     */
-	nowdb_edge_helper_t   *ce; /* current edge helper               */
-	nowdb_vertex_helper_t *cv; /* currrent vertext helper           */
+	nowdb_model_t  *model; /* the model to use for evaluation   */
+	nowdb_text_t   *text;  /* the text  to use for evaluation   */
+	nowdb_ptlru_t  *tlru;  /* private text lru cache            */
 } nowdb_eval_t;
 
 /* -----------------------------------------------------------------------
@@ -216,7 +197,11 @@ void nowdb_eval_destroy(nowdb_eval_t *eval);
  * Create EdgeField expression
  * -----------------------------------------------------------------------
  */
-nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr, uint32_t off);
+nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
+                                    char     *propname,
+                                    uint32_t       off,
+                                    nowdb_type_t  type,
+                                    uint16_t       num);
 
 /* -----------------------------------------------------------------------
  * Create EdgeField expression
@@ -231,7 +216,8 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off);
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
-                                      nowdb_key_t propid);
+                                      nowdb_key_t  propid,
+                                      nowdb_type_t  type);
 
 /* -----------------------------------------------------------------------
  * Create Constant expression

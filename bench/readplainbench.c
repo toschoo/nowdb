@@ -23,6 +23,7 @@ nowdb_err_t getFile(nowdb_file_t **file, nowdb_path_t path) {
 		return nowdb_err_get(nowdb_err_open, TRUE, "bench", path);
 	}
 	err = nowdb_file_new(file, 0, path, st.st_size, 0, 8192, 64,
+	                                            NOWDB_CONT_EDGE,
 	                         NOWDB_FILE_READER, NOWDB_COMP_FLAT,
 	                                  NOWDB_ENCP_NONE, 1, 0, 0);
 	if (err != NOWDB_OK) return err;

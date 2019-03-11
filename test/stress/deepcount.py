@@ -21,9 +21,8 @@ class QThread(threading.Thread):
 
         for i in range(self.loops):
           # print "[%s] range %d" % (self.name, i)
-          with con.execute("select count(*) from tx \
-                             where edge = 'buys_product' \
-                               and origin = 419830620288") as r:
+          with con.execute("select count(*) from buys \
+                             where origin = 419830620288") as r:
             if not r.ok():
                print "ERROR %d on fib: %s" % (r.code(), r.details())
                return

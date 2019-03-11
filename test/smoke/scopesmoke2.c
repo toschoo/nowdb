@@ -37,8 +37,8 @@ typedef struct {
 	int origin;
 	int destin;
 	int64_t timestamp;
-	float weight;
-	float weight2;
+	float price;
+	float quantity;
 } edge_t;
 
 edge_t *edges = NULL;
@@ -75,12 +75,12 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 	FILE *f;
 	int x = halves * HALFEDGE;
 	int h, m, s, ns;
-	double w, w2;
+	double price=0, quantity=0;
 	int c, p;
 	int mxclients = hclients * HALFVRTX;
 	int mxprods = hprods * HALFVRTX;
 	char *loadstr = 
-	"buys;%d;%d;0;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
+	"%d;%d;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
 
 	edges = calloc(x, sizeof(edge_t));
 	if (edges == NULL) {
@@ -101,6 +101,7 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 		fclose(f);
 		return -1;
 	}
+	fprintf(f, "origin;destin;stamp;price;quantity\n");
 	for(int i=0; i<x; i++) {
 
 		do c = rand()%mxclients; while(c == 0);
@@ -111,18 +112,18 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 		s = rand()%60;
 		ns = rand()%1000;
 
-		do w = (double)(rand()%50) / 7; while(w == 0);
-		do w2 = (double)(rand()%27) / 2; while(w2 == 0);
+		do price = (double)(rand()%50) / 7; while(price == 0);
+		do quantity = (double)(rand()%27) / 2; while(quantity == 0);
 
-		w *= w2;
+		price *= quantity;
 
 		fprintf(f, loadstr,  
-		clients[c].id, products[p].id, h, m, s, ns, w, w2);
+		clients[c].id, products[p].id, h, m, s, ns, price, quantity);
 
 		edges[i].origin = clients[c].id;
 		edges[i].destin = products[p].id;
-		edges[i].weight = w;
-		edges[i].weight2 = w2;
+		edges[i].price  = price;
+		edges[i].quantity = quantity;
 
 		nsecs = 1000000l * (int64_t)ns +
 		        1000000000l * (int64_t)s +
@@ -284,6 +285,8 @@ int64_t readResult(nowdb_scope_t *scope,
 	uint32_t cnt = 0;
 	char more = 1;
 
+	fprintf(stderr, "executing '%s'\n", stmt);
+
 	timestamp(&t1);
 	cur = openCursor(scope, stmt);
 	if (cur == NULL) {
@@ -438,36 +441,34 @@ char *getRandom(int       halves,
 	}
 
 #define SQLIDX "\
-select edge, origin, destin, timestamp from sales \
- where edge = 'buys' \
-   and origin = %d \
+select origin, destin, timestamp from buys \
+ where origin = %d \
    and destin = %d \
    and timestamp = %ld"
 
 #define SQLCIDX "\
-select count(*) from sales \
- where edge = 'buys' \
-   and origin = %d \
+select count(*) from buys \
+ where origin = %d \
    and destin = %d \
    and timestamp = %ld"
 
 #define SQLFULL "\
-select edge, origin, destin, timestamp from sales \
+select origin, destin, timestamp from buys \
  where origin = %d \
    and destin = %d \
    and timestamp = %ld"
 
 #define SQLORD "\
-select edge, origin, destin, timestamp from sales \
- order by origin, edge"
+select origin, destin, timestamp from buys \
+ order by origin"
 
 #define SQLGRP "\
-select origin, edge from sales \
- group by origin, edge"
+select origin from buys \
+ group by origin"
 
 #define SQLCOUNT "\
-select origin, edge, count(*) from sales \
- group by origin, edge"
+select origin, count(*) from buys \
+ group by origin"
 	
 int main() {
 	int64_t res=0;
@@ -478,7 +479,7 @@ int main() {
 	char *sql=NULL;
 	char exists = 0;
 
-	int ITER = 10;
+	int ITER = 100;
 
 	srand(time(NULL) ^ (uint64_t)&printf);
 
@@ -507,10 +508,6 @@ int main() {
 	}
 
 	if (!exists) {
-		EXECSTMT("create tiny table sales set stress=constant");
-
-		EXECSTMT("create index cidx_ctx_de on sales (destin, edge)");
-		EXECSTMT("create index cidx_ctx_oe on sales (origin, edge)");
 
 		EXECSTMT("create type product (\
 		            prod_key uint primary key, \
@@ -520,11 +517,11 @@ int main() {
 		            client_id uint primary key, \
 		            client_name text)");
 
-		EXECSTMT("create edge buys (\
+		EXECSTMT("create stamped edge buys (\
 		            origin client, \
 		            destination product, \
-		            weight float, \
-		            weight2 float)");
+		            price float, \
+		            quantity float)");
 
 		if (writeVrtx(PRODS, PRODUCT, 1) != 0) {
 			fprintf(stderr, "cannot write products\n");
@@ -539,15 +536,19 @@ int main() {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 
-		EXECSTMT("load 'rsc/products100.csv' into vertex \
-		           use header as product");
+		fprintf(stderr, "loading products\n");
+		EXECSTMT("load 'rsc/products100.csv' into product use header \
+		           set errors='rsc/products100.err'");
 
-		EXECSTMT("load 'rsc/clients100.csv' into vertex \
-		           use header as client");
+		fprintf(stderr, "loading clients\n");
+		EXECSTMT("load 'rsc/clients100.csv' into client use header \
+		           set errors='rsc/clients100.err'");
 
-		EXECSTMT("load 'rsc/edge100.csv' into sales as edge");
+		fprintf(stderr, "loading edges\n");
+		EXECSTMT("load 'rsc/edge100.csv' into buys use header \
+		           set errors='rsc/edge100.err'");
 
-		if (waitscope(scope, "sales") != 0) {
+		if (waitscope(scope, "buys") != 0) {
 			fprintf(stderr, "cannot wait for scope\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}
@@ -559,8 +560,8 @@ int main() {
 	CHECKRESULT(5, 0, 0, 0);
 	*/
 
-	fprintf(stderr, "'select edge, origin from sales'\n");
-	COUNTRESULT("select edge, origin from sales");
+	fprintf(stderr, "'select origin from buys'\n");
+	COUNTRESULT("select origin from buys");
 	CHECKRESULT(5, 0, 0, 0);
 
 	// test fullscan
@@ -574,7 +575,7 @@ int main() {
 	// test count with fullscan
 	fprintf(stderr, "COUNT W FULLSCAN\n");
 	for(int i=0; i<1; i++) {
-		READRESULT("select count(*) from sales", 0);
+		READRESULT("select count(*) from buys", 0);
 		CHECKRESULT(5, 0, 0, 0);
 	}
 
@@ -596,7 +597,7 @@ int main() {
 	// test count with group
 	fprintf(stderr, "COUNT with GROUP\n");
 	for(int i=0; i<1; i++) {    // RANGE SCAN
-		READRESULT(SQLCOUNT, 2); // res += HALFEDGE;
+		READRESULT(SQLCOUNT, 1); // res += HALFEDGE;
 		CHECKRESULT(5, 0, 0, 0);
 	}
 

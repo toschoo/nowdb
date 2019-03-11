@@ -176,7 +176,6 @@ nowdb_err_t nowdb_group_reduce(nowdb_group_t *group,
 	if (group->reduced) return NOWDB_OK;
 	for(int i=0; i<group->lst; i++) {
 		if (group->fun[i]->ctype == type) {
-			// fprintf(stderr, "GROUP: reduce%d\n", i);
 			err = nowdb_fun_reduce(group->fun[i]);
 			if (err != NOWDB_OK) return err;
 		}

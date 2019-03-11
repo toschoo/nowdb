@@ -12,7 +12,7 @@
 
 static char *OBJECT = "store";
 
-extern char nowdb_nullrec[64];
+extern char nowdb_nullrec[1024];
 
 #define MAX_FILE_NAME 32
 
@@ -38,6 +38,12 @@ extern char nowdb_nullrec[64];
 	}
 
 /* ------------------------------------------------------------------------
+ * Sorter message
+ * ------------------------------------------------------------------------
+ */
+static nowdb_wrk_message_t sortmsg = {11,NULL,NULL};
+
+/* ------------------------------------------------------------------------
  * Allocate and initialise new store object
  * ------------------------------------------------------------------------
  */
@@ -45,9 +51,10 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
+                            nowdb_content_t  cont,
+                            nowdb_storage_t *strg,
                             uint32_t      recsize,
-                            uint32_t     filesize,
-                            uint32_t    largesize)
+                            char               ts)
 {
 	nowdb_err_t err = NOWDB_OK;
 
@@ -58,9 +65,8 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                          "allocating store object");
 	}
-	err = nowdb_store_init(*store, base, lru, ver, recsize,
-	                                              filesize,
-						     largesize);
+	err = nowdb_store_init(*store, base, lru, ver,
+                              cont, strg, recsize, ts);
 	if (err != NOWDB_OK) {
 		free(*store); *store = NULL; return err;
 	}
@@ -310,9 +316,10 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
+                             nowdb_content_t  cont,
+                             nowdb_storage_t *strg,
                              uint32_t      recsize,
-                             uint32_t     filesize,
-                             uint32_t    largesize)
+                             char               ts)
 {
 	nowdb_err_t err;
 	size_t s;
@@ -322,8 +329,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	/* defaults */
 	store->version = ver;
 	store->recsize = recsize;
-	store->filesize = filesize;
-	store->largesize = largesize;
+	store->filesize = strg->filesize;
+	store->largesize = strg->largesize;
 	store->starting = FALSE;
 	store->state = NOWDB_STORE_CLOSED;
 	store->path = NULL;
@@ -336,7 +343,15 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 	store->comp = NOWDB_COMP_FLAT;
 	store->ctx  = NULL;
 	store->nextid = 1;
-	store->tasknum = 1;
+	store->ts = ts;
+	store->cont = cont;
+	store->storage = strg;
+
+	// prepare sort message
+	memcpy(&store->srtmsg, &sortmsg, sizeof(nowdb_wrk_message_t));
+	store->srtmsg.stcont = store;
+
+	store->setsize = nowdb_pagectrlSize(recsize);
 
 	/* lists of files */
 	err = initAllFiles(store);
@@ -399,6 +414,7 @@ nowdb_err_t nowdb_store_configSort(nowdb_store_t     *store,
  * Configure worker
  * ------------------------------------------------------------------------
  */
+/*
 nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
                                       uint32_t    tasknum) {
 	STORENULL();
@@ -408,6 +424,7 @@ nowdb_err_t nowdb_store_configWorkers(nowdb_store_t *store,
 	store->tasknum = tasknum;
 	return NOWDB_OK;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Configure indexing
@@ -508,12 +525,16 @@ static inline nowdb_err_t makeFile(nowdb_store_t *store,
                                    nowdb_fileid_t   fid) {
 	nowdb_path_t  p;
 	nowdb_err_t err;
+	nowdb_bitmap8_t ctrl = NOWDB_FILE_WRITER | NOWDB_FILE_SPARE;
+
+	if (store->ts) ctrl |= NOWDB_FILE_TS;
+
 	p = nowdb_path_append(store->path, name);
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	               FALSE, OBJECT, "allocating file path");
 	err = nowdb_file_new(file, fid, p, store->filesize,0,
-	                     NOWDB_IDX_PAGE, store->recsize, 
-	                     NOWDB_FILE_WRITER | NOWDB_FILE_SPARE,
+	                     NOWDB_IDX_PAGE, store->recsize,
+	                     store->cont, ctrl,
 	                     NOWDB_COMP_FLAT, NOWDB_ENCP_NONE,
 	                     1, NOWDB_TIME_DAWN, NOWDB_TIME_DUSK); 
 	free(p); return err;
@@ -655,7 +676,7 @@ static inline nowdb_err_t makeWaiting(nowdb_store_t *store,
 	if (err != NOWDB_OK) return err;
 
 	if (store->starting) return NOWDB_OK;
-	return nowdb_store_sortNow(&store->sortwrk);
+	return nowdb_store_sortNow(store->storage, store);
 }
 
 /* ------------------------------------------------------------------------
@@ -694,13 +715,15 @@ static inline nowdb_err_t remapWriter(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: adjust writer position to real position onn open,
+ * Helper: adjust writer position to real position on open,
  *         i.e. adjust to last written position instead of 'size'
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 	nowdb_err_t err=NOWDB_OK;
 	uint32_t pos = 0;
+	uint32_t realsz = (NOWDB_IDX_PAGE/store->recsize)*store->recsize;
+	uint32_t remsz = NOWDB_IDX_PAGE - realsz;
 
 	while (store->writer->pos < store->writer->capacity) {
 		if (pos >= store->writer->bufsize) {
@@ -719,6 +742,11 @@ static inline nowdb_err_t adjustWriter(nowdb_store_t *store) {
 		*/
 		pos += store->recsize;
 		store->writer->pos+=store->recsize;
+
+		if (pos%NOWDB_IDX_PAGE >= realsz) {
+			pos+=remsz;
+			store->writer->pos+=remsz;
+		}
 	}
 	if (err == NOWDB_OK) store->writer->size = store->writer->pos;
 	return err;
@@ -761,6 +789,7 @@ static inline nowdb_err_t writeCatalogLine(char *buf, int *off,
 	memcpy(buf+*off, &file->size, 4); *off += 4;
 	memcpy(buf+*off, &file->recordsize, 4); *off += 4;
 	memcpy(buf+*off, &file->blocksize, 4); *off += 4;
+	memcpy(buf+*off, &file->cont, 1); *off += 1;
 	memcpy(buf+*off, &file->ctrl, 1); *off += 1;
 	memcpy(buf+*off, &file->comp, 4); *off += 4;
 	memcpy(buf+*off, &file->encp, 4); *off += 4;
@@ -804,6 +833,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	memcpy(&tmp.size, buf+*off, 4); *off += 4;
 	memcpy(&tmp.recordsize, buf+*off, 4); *off += 4;
 	memcpy(&tmp.blocksize, buf+*off, 4); *off += 4;
+	memcpy(&tmp.cont, buf+*off, 1); *off+=1;
 	memcpy(&tmp.ctrl, buf+*off, 1); *off += 1;
 	memcpy(&tmp.comp, buf+*off, 4); *off += 4;
 	memcpy(&tmp.encp, buf+*off, 4); *off += 4;
@@ -818,6 +848,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 		                  FALSE, OBJECT, store->catalog);
 	if (buf[*off+i] != 0) return nowdb_err_get(nowdb_err_catalog,
 		                      FALSE, OBJECT, store->catalog);
+
 	p = nowdb_path_append(store->path, buf+(*off)); *off+=i+1;
 	if (p == NULL) return nowdb_err_get(nowdb_err_no_mem,
 		       FALSE, OBJECT, "allocating store path");
@@ -826,6 +857,7 @@ static inline nowdb_err_t readCatalogLine(nowdb_store_t *store,
 	                            tmp.size,
 	                            tmp.blocksize,
 	                            tmp.recordsize,
+	                            tmp.cont,
 	                            tmp.ctrl,
 	                            tmp.comp,
                                     tmp.encp,
@@ -998,6 +1030,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	 * size,             4
 	 * recsize,          4
 	 * blocksize,        4
+	 * cont,             1
 	 * ctrl,             1
 	 * compression,      4 
 	 * encryption,       4
@@ -1007,7 +1040,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	 * file name        32
 	 */
 	uint32_t once = 8;
-	uint32_t perline = 92;
+	uint32_t perline = 93;
 	uint32_t nfiles = 1;
 
 	nfiles += store->spares.len;
@@ -1090,39 +1123,6 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
- * Helper: start workers
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t startWorkers(nowdb_store_t *store) {
-	nowdb_err_t err = NOWDB_OK;
-
-	err = nowdb_store_startSync(&store->syncwrk, store, NULL);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_store_startSorter(&store->sortwrk, store, NULL);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_store_stopSync(&store->syncwrk));
-		return err;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: stop workers
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t stopWorkers(nowdb_store_t *store) {
-	nowdb_err_t err = NOWDB_OK;
-
-	err = nowdb_store_stopSorter(&store->sortwrk);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_store_stopSync(&store->syncwrk);
-	if (err != NOWDB_OK) return err;
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
  * Open store
  * ------------------------------------------------------------------------
  */
@@ -1157,12 +1157,6 @@ nowdb_err_t nowdb_store_open(nowdb_store_t *store) {
 		destroyAllFiles(store); goto unlock;
 	}
 
-	/* start workers */
-	err = startWorkers(store);
-	if (err != NOWDB_OK) {
-		destroyAllFiles(store); goto unlock;
-	}
-
 	store->state = NOWDB_STORE_OPEN;
 
 unlock:
@@ -1192,11 +1186,6 @@ nowdb_err_t nowdb_store_close(nowdb_store_t *store) {
 
 	/* close store is NOT THREADSAFE */
 	err = nowdb_unlock_write(&store->lock);
-	if (err != NOWDB_OK) return err;
-
-	/* stop workers: IS NOT THREADSAFE!!!
-	 * DONT LOCK the store when stopping workers! */
-	err = stopWorkers(store);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_lock_write(&store->lock);
@@ -1316,6 +1305,8 @@ unlock:
 	return err;
 }
 
+#define REMAINDER (NOWDB_IDX_PAGE - (pos%NOWDB_IDX_PAGE))
+
 /* ------------------------------------------------------------------------
  * Insert one record
  * ------------------------------------------------------------------------
@@ -1334,22 +1325,26 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	/* optimisation: pos & (bufsize - 1) */
 	pos = store->writer->pos%store->writer->bufsize;
 	memcpy(store->writer->mptr+pos, data, store->recsize);
 	if (!store->writer->dirty) store->writer->dirty = TRUE;
 
 	store->writer->size += store->recsize;
 	pos+=store->recsize; store->writer->pos+=store->recsize;
-	if (pos == store->writer->bufsize) {
+
+	if (REMAINDER < store->recsize) {
+		uint32_t d = REMAINDER;
+		pos+=d;
+		store->writer->size += d;
+		store->writer->pos += d;
+	}
+	if (pos >= store->writer->bufsize) {
 		err = remapWriter(store);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "remap error!\n");
 			goto unlock;
 		}
 	}
-
-	/* insert into indices ? */
 
 unlock:
 	err2 = nowdb_unlock_write(&store->lock);

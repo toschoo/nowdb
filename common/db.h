@@ -13,13 +13,16 @@
 #include <common/scopes.h>
 #include <common/bench.h>
 
-#define HALFEDGE  8192
-#define FULLEDGE 16384
+#define RECPAGE (NOWDB_IDX_PAGE/nowdb_edge_recSize(1,2))
+#define FULLEDGE (8*128*RECPAGE)
+#define HALFEDGE (FULLEDGE/2)
+#define FULLPOS NOWDB_MEGA
+#define HALFPOS (FULLPOS/2)
 
 #define HALFVRTX  8192
 #define FULLVRTX 16384
 
-#define CTXNAME "sales"
+#define CTXNAME "buys"
 
 int createDB(int edges, int clients, int products);
 int dropDB();

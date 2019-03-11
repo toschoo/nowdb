@@ -21,10 +21,12 @@ static char *OBJECT = "model";
 #define VMODEL "vertex.model"
 #define PMODEL "property.model"
 #define EMODEL "edge.model"
+#define AMODEL "pedge.model"
 
 #define V 0
 #define P 1
 #define E 2
+#define A 3
 
 #define MODELNULL() \
 	if (model == NULL) return nowdb_err_get(nowdb_err_invalid, \
@@ -38,6 +40,9 @@ static char *OBJECT = "model";
 
 #define PROP(x) \
 	((nowdb_model_prop_t*)x)
+
+#define PEDGE(x) \
+	((nowdb_model_pedge_t*)x)
 
 #define VRTX(x) \
 	((nowdb_model_vertex_t*)x)
@@ -143,6 +148,51 @@ static ts_algo_cmp_t sortByPos(void *one, void *two) {
 }
 
 /* ------------------------------------------------------------------------
+ * Sort by off
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t sortByOff(void *one, void *two) {
+	if (PEDGE(one)->off < PEDGE(two)->off) return ts_algo_cmp_less;
+	if (PEDGE(one)->off > PEDGE(two)->off) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
+ * compare edge properties by id (edgeid, propid)
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t pedgeidcompare(void *ignore, void *one, void *two) {
+	if (PEDGE(one)->edgeid < PEDGE(two)->edgeid) return ts_algo_cmp_less;
+	if (PEDGE(one)->edgeid > PEDGE(two)->edgeid) return ts_algo_cmp_greater;
+	if (PEDGE(one)->propid < PEDGE(two)->propid) return ts_algo_cmp_less;
+	if (PEDGE(one)->propid > PEDGE(two)->propid) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
+ * compare properties by name (roleid, name)
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_cmp_t pedgenamecompare(void *ignore, void *one, void *two) {
+	if (PEDGE(one)->edgeid < PEDGE(two)->edgeid) return ts_algo_cmp_less;
+	if (PEDGE(one)->edgeid > PEDGE(two)->edgeid) return ts_algo_cmp_greater;
+	int x = strcasecmp(PEDGE(one)->name, PEDGE(two)->name);
+	if (x < 0) return ts_algo_cmp_less;
+	if (x > 0) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* ------------------------------------------------------------------------
+ * Filter by edgeid
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t pedgesByEdgeid(void *ignore, const void *pattern,
+                                                      const void *node) {
+	if (PEDGE(pattern)->edgeid == PEDGE(node)->edgeid) return TRUE;
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------
  * compare vertex by id 
  * ------------------------------------------------------------------------
  */
@@ -199,6 +249,20 @@ static void propdestroy(void *ignore, void **n) {
 }
 
 /* ------------------------------------------------------------------------
+ * destroy edge property
+ * ------------------------------------------------------------------------
+ */
+static void pedgedestroy(void *ignore, void **n) {
+	if (n == NULL) return;
+	if (*n == NULL) return;
+	if (PEDGE(*n)->name != NULL) {
+		free(PEDGE(*n)->name);
+		PEDGE(*n)->name = NULL;
+	}
+	free(*n); *n = NULL;
+}
+
+/* ------------------------------------------------------------------------
  * destroy vertex
  * ------------------------------------------------------------------------
  */
@@ -228,7 +292,7 @@ static void edgedestroy(void *ignore, void **n) {
 
 /* ------------------------------------------------------------------------
  * do not destroy twice!
- * - the name tree is consdered secondary
+ * - the name tree is considered secondary
  * - the id tree is responsible for memory
  * ------------------------------------------------------------------------
  */
@@ -253,11 +317,12 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 	nowdb_path_t f;
 	FILE *tmp;
 
-	for(int i=0;i<3;i++) {
+	for(int i=0;i<4;i++) {
 		switch(i) {
 		case 0: f=VMODEL; break;
 		case 1: f=PMODEL; break;
 		case 2: f=EMODEL; break;
+		case 3: f=AMODEL; break;
 		}
 
 		p = nowdb_path_append(model->path, f);
@@ -280,6 +345,34 @@ static nowdb_err_t mkFiles(nowdb_model_t *model) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: generic find
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t find(nowdb_model_t *model,
+                               ts_algo_tree_t *tree,
+                               void         *wanted,
+                               void         **found) {
+
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+
+	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                                 FALSE, OBJECT, "object");
+
+	err = nowdb_lock_read(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	*found = ts_algo_tree_find(tree, wanted);
+
+	err2 = nowdb_unlock_read(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * init model
  * ------------------------------------------------------------------------
  */
@@ -294,6 +387,8 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 	model->vrtxByName = NULL;
 	model->edgeByName = NULL;
 	model->edgeById = NULL;
+	model->pedgeByName = NULL;
+	model->pedgeById = NULL;
 
 	if (path == NULL) return nowdb_err_get(nowdb_err_invalid,
 	                          FALSE, OBJECT, "path is NULL");
@@ -377,6 +472,26 @@ nowdb_err_t nowdb_model_init(nowdb_model_t *model, char *path) {
 		return err;
 	}
 
+	model->pedgeById = ts_algo_tree_new(&pedgeidcompare, NULL,
+	                                    &noupdate,
+	                                    &pedgedestroy, /* primary! */
+	                                    &pedgedestroy);
+	if (model->pedgeById == NULL) {
+		nowdb_model_destroy(model);
+		NOMEM("tree.new");
+		return err;
+	}
+
+	model->pedgeByName = ts_algo_tree_new(&pedgenamecompare, NULL,
+	                                      &noupdate,
+	                                      &nodestroy, /* secondary */
+	                                      &nodestroy);
+	if (model->pedgeByName == NULL) {
+		nowdb_model_destroy(model);
+		NOMEM("tree.new");
+		return err;
+	}
+
 	/* create the files if they do not exist */
 	err = mkFiles(model);
 	if (err != NOWDB_OK) {
@@ -424,6 +539,58 @@ void nowdb_model_destroy(nowdb_model_t *model) {
 		ts_algo_tree_destroy(model->edgeById);
 		free(model->edgeById); model->edgeById = NULL;
 	}
+	if (model->pedgeByName != NULL) { /* destroy first the secondary! */
+		ts_algo_tree_destroy(model->pedgeByName);
+		free(model->pedgeByName); model->pedgeByName = NULL;
+	}
+	if (model->pedgeById != NULL) {
+		ts_algo_tree_destroy(model->pedgeById);
+		free(model->pedgeById); model->pedgeById = NULL;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Get all edges
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getEdges(nowdb_model_t   *model,
+                                 ts_algo_list_t **edges) {
+	nowdb_err_t err;
+
+	MODELNULL();
+
+	if (model->edgeById->count == 0) {
+		return nowdb_err_get(nowdb_err_not_found, FALSE,OBJECT,
+		                     "no edges in model");
+	}
+	*edges = ts_algo_tree_toList(model->edgeById);
+	if (*edges == NULL) {
+		NOMEM("tree.toList");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get all vertices
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getVertices(nowdb_model_t  *model,
+                                   ts_algo_list_t **vrtxs) {
+	nowdb_err_t err;
+
+	MODELNULL();
+
+	if (model->vrtxById->count == 0) {
+		return nowdb_err_get(nowdb_err_not_found, FALSE,OBJECT,
+		                     "no types in model");
+	}
+	*vrtxs = ts_algo_tree_toList(model->vrtxById);
+	if (*vrtxs == NULL) {
+		NOMEM("tree.toList");
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -461,6 +628,24 @@ static uint32_t computePropSize(ts_algo_list_t *list) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: compute edge property size
+ * ------------------------------------------------------------------------
+ */
+static uint32_t computePedgeSize(ts_algo_list_t *list) {
+	uint32_t sz = 0;
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *p;
+
+	/* size(prop) = strlen(name) + '\0' + propid (8)
+	 *            + roleid(4) + pos(4) + value(4) + pk(1) */
+	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
+		p = runner->cont;
+		sz+=strlen(p->name) + 1 + 8 + 8 + 4 + 4;
+	}
+	return sz;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: compute edge size
  * ------------------------------------------------------------------------
  */
@@ -471,7 +656,7 @@ static uint32_t computeEdgeSize(ts_algo_list_t *list) {
 
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		e = runner->cont;
-		sz+=strlen(e->name) + 1 + 26;
+		sz+=strlen(e->name) + 1 + 8 + 4 + 4 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -514,6 +699,25 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: write pedge to buffer
+ * ------------------------------------------------------------------------
+ */
+static void pedge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
+	uint32_t sz = 0;
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *p;
+
+	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
+		p = runner->cont;
+		memcpy(buf+sz, &p->propid, 8); sz+=8;
+		memcpy(buf+sz, &p->edgeid, 8); sz+=8;
+		memcpy(buf+sz, &p->value, 4); sz+=4;
+		memcpy(buf+sz, &p->off, 4); sz+=4;
+		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
+	}
+}
+
+/* ------------------------------------------------------------------------
  * Helper: write edge to buffer
  * ------------------------------------------------------------------------
  */
@@ -527,10 +731,9 @@ static void edge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &e->edgeid, 8); sz+=8;
 		memcpy(buf+sz, &e->origin, 4); sz+=4;
 		memcpy(buf+sz, &e->destin, 4); sz+=4;
-		memcpy(buf+sz, &e->weight, 4); sz+=4;
-		memcpy(buf+sz, &e->weight2, 4); sz+=4;
-		memcpy(buf+sz, &e->edge, 1); sz+=1;
-		memcpy(buf+sz, &e->label, 1); sz+=1;
+		memcpy(buf+sz, &e->num, 2); sz+=2;
+		memcpy(buf+sz, &e->size, 4); sz+=4;
+		memcpy(buf+sz, &e->ctrl, 4); sz+=4;
 		strcpy(buf+sz, e->name); sz+=strlen(e->name)+1;
 	}
 }
@@ -551,6 +754,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	case V: tree = model->vrtxById; f=VMODEL; break;
 	case P: tree = model->propById; f=PMODEL; break;
 	case E: tree = model->edgeById; f=EMODEL; break;
+	case A: tree = model->pedgeById; f=AMODEL; break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -568,6 +772,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	case V: sz = computeVertexSize(list); break;
 	case P: sz = computePropSize(list); break;
 	case E: sz = computeEdgeSize(list); break;
+	case A: sz = computePedgeSize(list); break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -584,6 +789,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	case V: vertex2buf(buf,sz,list); break;
 	case P: prop2buf(buf,sz,list); break;
 	case E: edge2buf(buf,sz,list); break;
+	case A: pedge2buf(buf,sz,list); break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -706,6 +912,93 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: load pedge model
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t loadPedge(ts_algo_list_t   *list,
+                             char *buf, uint32_t sz) {
+	nowdb_err_t err;
+	uint32_t off = 0;
+	nowdb_model_pedge_t *p;
+	size_t s;
+
+	while(off < sz) {
+		p = calloc(1,sizeof(nowdb_model_pedge_t));
+		if (p == NULL) {
+			NOMEM("allocating prop");
+			return err;
+		}
+		memcpy(&p->propid, buf+off, 8); off+=8;
+		memcpy(&p->edgeid, buf+off, 8); off+=8;
+		memcpy(&p->value, buf+off, 4); off+=4;
+		memcpy(&p->off, buf+off, 4); off+=4;
+		s = strnlen(buf+off, 4097);
+		if (s > 4096) {
+			free(p);
+			return nowdb_err_get(nowdb_err_catalog,
+		         FALSE, OBJECT, "property name too long");
+		}
+		p->name = malloc(s+1);
+		if (p->name == NULL) {
+			free(p);
+			NOMEM("allocating property name");
+			return err;
+		}
+		strcpy(p->name,buf+off); off+=s+1;
+		if (ts_algo_list_append(list, p) != TS_ALGO_OK) {
+			free(p);
+			NOMEM("list.append");
+			return err;
+		}
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: initialise op, dp, tp
+ * ------------------------------------------------------------------------
+ */
+static inline void initEdgePedge(nowdb_model_edge_t *e) {
+
+	e->op.name = "origin";
+	e->op.edgeid = e->edgeid;
+	e->op.off = NOWDB_OFF_ORIGIN;
+
+	e->dp.name = "destin";
+	e->dp.edgeid = e->edgeid;
+	e->dp.off = NOWDB_OFF_DESTIN;
+
+	e->tp.name = "stamp";
+	e->tp.edgeid = e->edgeid;
+	e->tp.off = NOWDB_OFF_STAMP;
+	e->tp.value = NOWDB_TYP_TIME;
+}
+
+static inline nowdb_err_t updEdgePedge(nowdb_model_t  *model,
+                                       nowdb_model_edge_t *e) {
+	nowdb_model_vertex_t pattern, *v;
+
+	pattern.roleid = e->origin;
+	v = ts_algo_tree_find(model->vrtxById, &pattern);
+	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
+	        FALSE, OBJECT, "origin is not a known vertex");
+
+	e->op.value = v->vid == NOWDB_MODEL_NUM?
+	                         NOWDB_TYP_UINT:
+	                         NOWDB_TYP_TEXT;
+
+	pattern.roleid = e->destin;
+	v = ts_algo_tree_find(model->vrtxById, &pattern);
+	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
+	        FALSE, OBJECT, "destin is not a known vertex");
+
+	e->dp.value = v->vid == NOWDB_MODEL_NUM?
+	                         NOWDB_TYP_UINT:
+	                         NOWDB_TYP_TEXT;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: load edge model
  * ------------------------------------------------------------------------
  */
@@ -725,10 +1018,9 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 		memcpy(&e->edgeid, buf+off, 8); off+=8;
 		memcpy(&e->origin, buf+off, 4); off+=4;
 		memcpy(&e->destin, buf+off, 4); off+=4;
-		memcpy(&e->weight, buf+off, 4); off+=4;
-		memcpy(&e->weight2, buf+off, 4); off+=4;
-		memcpy(&e->edge, buf+off, 1); off+=1;
-		memcpy(&e->label, buf+off, 1); off+=1;
+		memcpy(&e->num, buf+off, 2); off+=2;
+		memcpy(&e->size, buf+off, 4); off+=4;
+		memcpy(&e->ctrl, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s > 4096) {
 			free(e);
@@ -747,6 +1039,8 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 			NOMEM("list.append");
 			return err;
 		}
+
+		initEdgePedge(e);
 	}
 	return NOWDB_OK;
 }
@@ -772,6 +1066,8 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	        byName = model->propByName; break;
 	case E: byId = model->edgeById; f=EMODEL;
 	        byName = model->edgeByName; break;
+	case A: byId = model->pedgeById; f=AMODEL;
+	        byName = model->pedgeByName; break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -810,6 +1106,7 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 	case V: err = loadVertex(&list, buf, sz); break;
 	case P: err = loadProp(&list, buf, sz); break;
 	case E: err = loadEdge(&list, buf, sz); break;
+	case A: err = loadPedge(&list, buf, sz); break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -824,6 +1121,13 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 		ts_algo_list_destroy(&list); return err;
 	}
 	for(runner=list.head;runner!=NULL;runner=runner->nxt) {
+		if (what == E) {
+			err = updEdgePedge(model, runner->cont);
+			if (err != NOWDB_OK) {
+				ts_algo_list_destroy(&list);
+				return err;
+			}
+		}
 		if (ts_algo_tree_insert(byId, runner->cont) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byId.insert");
@@ -885,6 +1189,9 @@ nowdb_err_t nowdb_model_load(nowdb_model_t *model) {
 	if (err != NOWDB_OK) goto unlock;
 
 	err = loadModel(model, E);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = loadModel(model, A);
 	if (err != NOWDB_OK) goto unlock;
 
 unlock:
@@ -985,6 +1292,8 @@ static inline nowdb_err_t add(nowdb_model_t  *model,
 	        byName = model->propByName; break;
 	case E: byId = model->edgeById; 
 	        byName = model->edgeByName; break;
+	case A: byId = model->pedgeById; 
+	        byName = model->pedgeByName; break;
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
@@ -1024,6 +1333,16 @@ nowdb_err_t nowdb_model_addProperty(nowdb_model_t      *model,
                                     nowdb_model_prop_t *prop) {
 	MODELNULL();
 	return add(model, P, prop);
+}
+
+/* ------------------------------------------------------------------------
+ * add pedge
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_addPedge(nowdb_model_t      *model,
+                                 nowdb_model_pedge_t *prop) {
+	MODELNULL();
+	return add(model, A, prop);
 }
 
 /* ------------------------------------------------------------------------
@@ -1101,6 +1420,69 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: no duplicated edge properties in a list
+ *         THIS IS NOT EFFICIENT!
+ * ------------------------------------------------------------------------
+ */
+static char pedgeUnique(ts_algo_list_t  *props,
+                       nowdb_model_pedge_t *p) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *q;
+
+	for(runner=props->head;runner!=NULL;runner=runner->nxt) {
+		q = runner->cont;
+		if (p == q) continue;
+		if (strcmp(p->name,q->name) == 0) return 0;
+	}
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: set edgeid to edge properties in a list
+ *         and check that they don't exist
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
+                                nowdb_key_t    edgeid,
+                                ts_algo_list_t *props,
+                                uint16_t         *num, 
+                                uint32_t        *size,
+                                uint32_t        *ctrl) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *p, *tmp;
+	uint32_t off, xb;
+	
+	xb = nowdb_edge_attctrlSize(props->len);
+	off = NOWDB_OFF_USER+xb;
+
+	*ctrl = xb;
+
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		p = runner->cont;
+
+		p->edgeid = edgeid;
+		p->off = off; off+=8;
+
+		(*num)++;
+
+		tmp = ts_algo_tree_find(model->pedgeById, p);
+		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
+		                                 FALSE, OBJECT, p->name);
+		tmp = ts_algo_tree_find(model->pedgeByName, p);
+		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
+		                                 FALSE, OBJECT, p->name);
+		if (!pedgeUnique(props, p)) {
+			return nowdb_err_get(nowdb_err_dup_key,
+		                        FALSE, OBJECT, p->name);
+		}
+
+		// get propid
+	}
+	(*size)=off;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * min and max would be nice functions for ts_algo_tree
  * ------------------------------------------------------------------------
  */
@@ -1116,6 +1498,27 @@ static nowdb_roleid_t getNextRoleid(nowdb_model_t *model) {
 	ts_algo_tree_reduce(model->vrtxById, &max, &findMax);
 	return max+1;
 }
+
+/* ------------------------------------------------------------------------
+ * undo type
+ * ------------------------------------------------------------------------
+ */
+#define UNDOTYPE() \
+	{ \
+	err2 = removeType(model, name);  \
+	if (err2 != NOWDB_OK) {  \
+		nowdb_err_release(err);  \
+		err=err2; err2=NOWDB_OK;  \
+		goto unlock;  \
+	} \
+	}
+
+/* ------------------------------------------------------------------------
+ * Predeclaration
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t removeType(nowdb_model_t  *model,
+                                     char           *name);
 
 /* ------------------------------------------------------------------------
  * add type
@@ -1190,20 +1593,159 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		goto unlock;
 	}
 	if (props != NULL) {
-		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		// note that we remove the props from the list
+		// so that the caller can destroy everything in
+		// the list wether there was an error or not
+		for(runner=props->head; runner!=NULL;) {
 			err = addNL(model->propById,
 			            model->propByName, NULL,
 			            runner->cont, P);
 			if (err != NOWDB_OK) break;
+			ts_algo_list_node_t *tmp = runner->nxt;
+			ts_algo_list_remove(props, runner);
+			free(runner); runner=tmp;
 		}
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOTYPE();
+		}
 	
 		err = storeModel(model, P);
-		if (err != NOWDB_OK) goto unlock;
+		if (err != NOWDB_OK) {
+			UNDOTYPE();
+		}
 	}
 
 	err = storeModel(model, V);
-	if (err != NOWDB_OK) goto unlock;
+	if (err != NOWDB_OK) {
+		UNDOTYPE();
+	}
+
+unlock:
+	err2 = nowdb_unlock_write(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * undo edge
+ * ------------------------------------------------------------------------
+ */
+#define UNDOEDGE() \
+	err2 = removeEdgeType(model, name);  \
+	if (err2 != NOWDB_OK) {  \
+		nowdb_err_release(err);  \
+		err=err2; err2=NOWDB_OK;  \
+		goto unlock;  \
+	}
+
+/* ------------------------------------------------------------------------
+ * predeclaration
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t removeEdgeType(nowdb_model_t *model,
+                                         char          *name);
+
+/* ------------------------------------------------------------------------
+ * add edge
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
+                                    char            *name,
+                                    char          stamped,
+                                    nowdb_key_t    edgeid,
+                                    nowdb_roleid_t origin,
+                                    nowdb_roleid_t destin,
+                                    ts_algo_list_t *props) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+	nowdb_model_edge_t  *edge;
+	ts_algo_list_node_t *runner;
+	thing_t pattern, *thing;
+
+	MODELNULL();
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(model->thingByName, &pattern);
+	if (thing != NULL) {
+		err = nowdb_err_get(nowdb_err_dup_key,
+		                  FALSE, OBJECT, name);
+		goto unlock;
+	}
+
+	edge = calloc(1, sizeof(nowdb_model_edge_t));
+	if (edge == NULL) {
+		NOMEM("allocating edge");
+		goto unlock;
+	}
+	edge->name = strdup(name);
+	if (edge->name == NULL) {
+		NOMEM("allocating edge name");
+		free(edge); goto unlock;
+	}
+
+	edge->edgeid = edgeid;
+	edge->origin = origin;
+	edge->destin = destin;
+	edge->num    = 0;
+	edge->ctrl   = 0;
+	edge->size=stamped?NOWDB_OFF_USER:NOWDB_OFF_STAMP;
+
+	initEdgePedge(edge);
+	err = updEdgePedge(model, edge);
+	if (err != NOWDB_OK) {
+		free(edge->name); free(edge);
+		goto unlock;
+	}
+
+	if (stamped && props != NULL) {
+		err = pedgesUnique(model, edge->edgeid, props,
+		        &edge->num, &edge->size, &edge->ctrl);
+		if (err != NOWDB_OK) {
+			free(edge->name); free(edge);
+			goto unlock;
+		}
+	}
+
+	err = addNL(model->edgeById,
+	            model->edgeByName,
+	            model->thingByName, edge, E);
+	if (err != NOWDB_OK) {
+		free(edge->name); free(edge);
+		goto unlock;
+	}
+	if (stamped && props != NULL) {
+		// note that we remove the props from the list
+		// so that the caller can destroy everything in
+		// the list wether there was an error or not
+		for(runner=props->head; runner!=NULL;) {
+			err = addNL(model->pedgeById,
+			            model->pedgeByName, NULL,
+			            runner->cont, A);
+			if (err != NOWDB_OK) break;
+			ts_algo_list_node_t *tmp = runner->nxt;
+			ts_algo_list_remove(props,runner);
+			free(runner); runner=tmp;
+		}
+		if (err != NOWDB_OK) {
+			UNDOEDGE();
+		}
+	
+		err = storeModel(model, A);
+		if (err != NOWDB_OK) {
+			UNDOEDGE();
+		}
+	}
+
+	err = storeModel(model, E);
+	if (err != NOWDB_OK) {
+		UNDOEDGE();
+	}
 
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
@@ -1296,6 +1838,46 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * remove pedge
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removePedge(nowdb_model_t *model,
+                                    nowdb_key_t   edgeid,
+                                    nowdb_key_t   propid) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+	nowdb_model_pedge_t *p;
+	nowdb_model_pedge_t  tmp;
+
+	MODELNULL();
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	tmp.edgeid = edgeid;
+	tmp.propid = propid;
+
+	p = ts_algo_tree_find(model->pedgeById, &tmp);
+	if (p == NULL) {
+		err = nowdb_err_get(nowdb_err_key_not_found,
+		                    FALSE, OBJECT, "propid");
+		goto unlock;
+	}
+
+	ts_algo_tree_delete(model->pedgeByName, p);
+	ts_algo_tree_delete(model->pedgeById, p);
+
+	err = storeModel(model, A);
+unlock:
+	err2 = nowdb_unlock_write(&model->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * remove edge
  * ------------------------------------------------------------------------
  */
@@ -1336,34 +1918,24 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
- * Remove type in one go
+ * Helper: remove type in one go
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
-                                   char           *name) {
+static inline nowdb_err_t removeType(nowdb_model_t  *model,
+                                     char           *name) {
 	nowdb_err_t err = NOWDB_OK;
-	nowdb_err_t err2 = NOWDB_OK;
 	nowdb_model_prop_t ptmp;
 	nowdb_model_vertex_t *vrtx, vtmp;
 	ts_algo_list_t props;
 	ts_algo_list_node_t *runner;
 	thing_t pattern;
 
-	MODELNULL();
-
-	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                           FALSE, OBJECT, "name is NULL");
-
-	err = nowdb_lock_write(&model->lock);
-	if (err != NOWDB_OK) return err;
-
 	vtmp.name = name;
 
 	vrtx = ts_algo_tree_find(model->vrtxByName, &vtmp);
 	if (vrtx == NULL) {
-		err = nowdb_err_get(nowdb_err_key_not_found,
+		return nowdb_err_get(nowdb_err_key_not_found,
 		                        FALSE, OBJECT, name);
-		goto unlock;
 	}
 
 	// get all properties
@@ -1373,7 +1945,7 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 	if (ts_algo_tree_filter(model->propById, &props, &ptmp,
 	                          propsByRoleid) != TS_ALGO_OK) {
 		NOMEM("tree.filter");
-		goto unlock;
+		return err;
 	}
 
 	for(runner=props.head; runner!=NULL; runner=runner->nxt) {
@@ -1388,6 +1960,35 @@ nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
 	ts_algo_tree_delete(model->vrtxByName, vrtx);
 	ts_algo_tree_delete(model->vrtxById, vrtx);
 
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove type in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeType(nowdb_model_t  *model,
+                                   char           *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2 = NOWDB_OK;
+
+	MODELNULL();
+
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&model->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = removeType(model, name);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, P);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, V);
+	if (err != NOWDB_OK) goto unlock;
+
 unlock:
 	err2 = nowdb_unlock_write(&model->lock);
 	if (err2 != NOWDB_OK) {
@@ -1398,26 +1999,77 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
- * Helper: generic find
+ * Helper: remove edge in one go
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t find(nowdb_model_t *model,
-                               ts_algo_tree_t *tree,
-                               void         *wanted,
-                               void         **found) {
+static inline nowdb_err_t removeEdgeType(nowdb_model_t *model,
+                                         char          *name) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_model_pedge_t ptmp;
+	nowdb_model_edge_t *edge, etmp;
+	ts_algo_list_t props;
+	ts_algo_list_node_t *runner;
+	thing_t pattern;
+	etmp.name = name;
 
+	edge = ts_algo_tree_find(model->edgeByName, &etmp);
+	if (edge == NULL) {
+		return nowdb_err_get(nowdb_err_key_not_found,
+		                        FALSE, OBJECT, name);
+	}
+
+	// get all properties
+	ptmp.edgeid = edge->edgeid;
+	ts_algo_list_init(&props);
+
+	if (ts_algo_tree_filter(model->pedgeById, &props, &ptmp,
+	                          pedgesByEdgeid) != TS_ALGO_OK) {
+		NOMEM("tree.filter");
+		return err;
+	}
+
+	for(runner=props.head; runner!=NULL; runner=runner->nxt) {
+		ts_algo_tree_delete(model->pedgeByName, runner->cont);
+		ts_algo_tree_delete(model->pedgeById, runner->cont);
+	}
+
+	ts_algo_list_destroy(&props);
+
+	pattern.name = edge->name;
+	ts_algo_tree_delete(model->thingByName, &pattern);
+	ts_algo_tree_delete(model->edgeByName, edge);
+	ts_algo_tree_delete(model->edgeById, edge);
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove edge in one go
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_removeEdgeType(nowdb_model_t  *model,
+                                       char           *name) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2 = NOWDB_OK;
 
-	if (found == NULL) return nowdb_err_get(nowdb_err_invalid,
-	                                 FALSE, OBJECT, "object");
+	MODELNULL();
 
-	err = nowdb_lock_read(&model->lock);
+	if (name == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "name is NULL");
+
+	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
 
-	*found = ts_algo_tree_find(tree, wanted);
+	err = removeEdgeType(model, name);
+	if (err != NOWDB_OK) goto unlock;
 
-	err2 = nowdb_unlock_read(&model->lock);
+	err = storeModel(model, A);
+	if (err != NOWDB_OK) goto unlock;
+
+	err = storeModel(model, E);
+
+unlock:
+	err2 = nowdb_unlock_write(&model->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err;
 		return err2;
@@ -1552,6 +2204,86 @@ nowdb_err_t nowdb_model_getPropByName(nowdb_model_t      *model,
 }
 
 /* ------------------------------------------------------------------------
+ * Get pedge by id
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedgeById(nowdb_model_t       *model,
+                                     nowdb_key_t         edgeid,
+                                     nowdb_key_t         propid,
+                                     nowdb_model_pedge_t **prop) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_model_pedge_t tmp;
+
+	MODELNULL();
+
+	tmp.edgeid = edgeid;
+	tmp.propid = propid;
+
+	err = find(model, model->pedgeById, &tmp, (void**)prop);
+	if (err != NOWDB_OK) return err;
+	if (*prop == NULL) return nowdb_err_get(nowdb_err_key_not_found,
+		                                   FALSE, OBJECT, "id");
+	return NOWDB_OK;
+}
+
+static inline char getCanonicalPedge(nowdb_model_t       *model,
+                                     nowdb_key_t         edgeid,
+                                     char                 *name,
+                                     nowdb_model_pedge_t **prop) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e, pattern;
+	char x = 0;
+
+	if (strcasecmp(name, "origin")         == 0) x=1;
+	else if (strcasecmp(name, "destin")    == 0  ||
+	         strcasecmp(name, "dest")      == 0  ||
+	         strcasecmp(name, "dst")       == 0) x=2;
+	else if (strcasecmp(name, "stamp")     == 0  ||
+	         strcasecmp(name, "timestamp") == 0) x=3;
+	else return 0;
+
+	pattern.edgeid = edgeid;
+	err = find(model, model->edgeById, &pattern, (void**)&e);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(err); // we ignore it here
+		return 0;
+	}
+	
+	switch(x) {
+	case 1: *prop = &e->op; break;
+	case 2: *prop = &e->dp; break;
+	case 3: *prop = &e->tp; break;
+	}
+
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
+ * find pedge by name
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedgeByName(nowdb_model_t       *model,
+                                       nowdb_key_t         edgeid,
+                                       char                 *name,
+                                       nowdb_model_pedge_t **prop) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_model_pedge_t tmp;
+
+	MODELNULL();
+
+	if (getCanonicalPedge(model, edgeid, name, prop)) return NOWDB_OK;
+
+	tmp.edgeid = edgeid;
+	tmp.name   = name;
+
+	err = find(model, model->pedgeByName, &tmp, (void**)prop);
+	if (err != NOWDB_OK) return err;
+	if (*prop == NULL) return nowdb_err_get(nowdb_err_key_not_found,
+		                                   FALSE, OBJECT, name);
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: copy list
  * ------------------------------------------------------------------------
  */
@@ -1616,6 +2348,8 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
 		return err;
 	}
 
+	if (unsorted.len == 0) return NOWDB_OK;
+
 	// sort properties by pos
 	sorted = ts_algo_list_sort(&unsorted, sortByPos);
 	ts_algo_list_destroy(&unsorted);
@@ -1635,12 +2369,76 @@ nowdb_err_t nowdb_model_getProperties(nowdb_model_t  *model,
 }
 
 /* ------------------------------------------------------------------------
+ * Get pedges
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
+                                  nowdb_key_t    edgeid,
+                                  ts_algo_list_t *props) {
+	nowdb_err_t err;
+	nowdb_model_edge_t *e, pattern;
+	nowdb_model_pedge_t tmp;
+	ts_algo_list_t unsorted, *sorted;
+
+	MODELNULL();
+	if (props == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                           FALSE, OBJECT, "list is NULL");
+
+	pattern.edgeid = edgeid;
+	e = ts_algo_tree_find(model->edgeById, &pattern);
+	if (e == NULL) INVALID("no such edge");
+
+	if (e->size > NOWDB_OFF_USER) {
+
+		ts_algo_list_init(&unsorted);
+		tmp.edgeid = edgeid;
+
+		// filter properties using tmp (i.e. roleid)
+		if (ts_algo_tree_filter(model->pedgeById, &unsorted, &tmp,
+		                        pedgesByEdgeid) != TS_ALGO_OK) {
+			NOMEM("tree.filter");
+			return err;
+		}
+	
+		// sort properties by off
+		sorted = ts_algo_list_sort(&unsorted, sortByOff);
+		ts_algo_list_destroy(&unsorted);
+		if (sorted == NULL) {
+			NOMEM("list.sort");
+			return err;
+		}
+
+		// copy sorted list to result list
+		err = copyList(sorted, props);
+		ts_algo_list_destroy(sorted); free(sorted);
+		if (err != NOWDB_OK) {
+			NOMEM("list.copy");
+			return err;
+		}
+	}
+	if (e->size > NOWDB_OFF_STAMP) {
+		if (ts_algo_list_insert(props, &e->tp) != TS_ALGO_OK) {
+			ts_algo_list_destroy(props);
+			NOMEM("list.insert");
+			return err;
+		}
+	}
+	if (ts_algo_list_insert(props, &e->dp) != TS_ALGO_OK ||
+	    ts_algo_list_insert(props, &e->op) != TS_ALGO_OK) {
+		ts_algo_list_destroy(props);
+		NOMEM("list.insert");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * What is by name
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
-                               char          *name,
-                               nowdb_target_t *trg) {
+                               char           *name,
+                               nowdb_content_t *trg) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_err_t err2;
 	thing_t pattern, *thing;
@@ -1659,8 +2457,8 @@ nowdb_err_t nowdb_model_whatIs(nowdb_model_t *model,
 		err = nowdb_err_get(nowdb_err_key_not_found,
 	                               FALSE, OBJECT, name);
 	} else {
-		*trg = thing->t==E?NOWDB_TARGET_EDGE:
-		                   NOWDB_TARGET_VERTEX;
+		*trg = thing->t==E?NOWDB_CONT_EDGE:
+		                   NOWDB_CONT_VERTEX;
 	}
 
 	err2 = nowdb_unlock_read(&model->lock);

@@ -55,6 +55,7 @@ static char *OBJECT = "plan";
  */
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           nowdb_model_edge_t   *e,
                            char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
@@ -278,14 +279,43 @@ static inline nowdb_err_t intersect(nowdb_scope_t  *scope,
 }
 
 /* ------------------------------------------------------------------------
+ * get pedge or vertex prop
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getPedgeOrProp(nowdb_scope_t        *scope,
+                                         char                *target,
+                                         char                 *field,
+			                 nowdb_model_edge_t      **e,
+			                 nowdb_model_pedge_t **pedge) {
+	nowdb_err_t err;
+
+	if (*e == NULL) {
+		err = nowdb_model_getEdgeByName(scope->model,
+			                           target, e);
+		if (err != NOWDB_OK) return err;
+	}
+	err = nowdb_model_getPedgeByName(scope->model,
+                                         (*e)->edgeid,
+                                         field, pedge);
+	if (err != NOWDB_OK) return err;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * fields to keys
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
+static inline nowdb_err_t fields2keys(nowdb_scope_t  *scope,
+                                      char           *target,
+                                      ts_algo_list_t *fields,
+                                      int                trg,
                                       nowdb_index_keys_t **keys) {
 	nowdb_err_t err;
 	nowdb_field_t *f;
-	ts_algo_list_node_t *runner;
+	ts_algo_list_node_t  *runner;
+	nowdb_model_pedge_t  *pedge;
+	nowdb_model_edge_t   *e=NULL;
 	int i=0;
 
 	if (fields->len == 0) return NOWDB_OK;
@@ -305,11 +335,17 @@ static inline nowdb_err_t fields2keys(ts_algo_list_t      *fields,
 	for(runner=fields->head; runner!=NULL; runner=runner->nxt) {
 		f = runner->cont;
 		if (f->name != NULL) {
-			// for the moment no properties!
-			free((*keys)->off); free(*keys);
-			INVALIDAST("cannot handle property fields");
+			err = getPedgeOrProp(scope, target, f->name,
+			                                &e, &pedge);
+			if (err != NOWDB_OK) {
+				free((*keys)->off); free(*keys);
+				return err;
+			}
+			(*keys)->off[i] = (uint16_t)pedge->off;
+		} else {
+			(*keys)->off[i] = (uint16_t)f->off;
 		}
-		(*keys)->off[i] = (uint16_t)f->off; i++;
+		i++;
 	}
 	return NOWDB_OK;
 }
@@ -329,11 +365,12 @@ static inline nowdb_err_t getGroupOrderIndex(nowdb_scope_t  *scope,
 	nowdb_plan_idx_t   *idx=NULL;
 	nowdb_err_t err;
 
-	err = fields2keys(fields, &keys);
+	// we should use expressions here!
+	err = fields2keys(scope, context, fields, stype, &keys);
 	if (err != NOWDB_OK) return err;
 	if (keys == NULL) return NOWDB_OK;
 
-	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
+	if (context != NULL) { // we always need a context!
 		err = nowdb_scope_getContext(scope, context, &ctx);
 		if (err != NOWDB_OK) {
 			free(keys->off); free(keys);
@@ -382,7 +419,7 @@ static inline nowdb_err_t getIndices(nowdb_scope_t  *scope,
 
 	if (filter == NULL) return NOWDB_OK;
 
-	if (context != NULL && stype == NOWDB_AST_CONTEXT) {
+	if (context != NULL) { // we always need a context
 		err = nowdb_scope_getContext(scope, context, &ctx);
 		if (err != NOWDB_OK) return err;
 	}
@@ -469,12 +506,18 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	nowdb_expr_t t = NULL;
 	nowdb_expr_t and=NULL;
 	nowdb_model_vertex_t *v=NULL;
+	nowdb_model_edge_t   *e=NULL;
 	char x=0;
 
 	*filter = NULL;
 
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
 		err = getType(scope, trg, &t, &v);
+		if (err != NOWDB_OK) return err;
+	}
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
+		err = nowdb_model_getEdgeByName(scope->model,
+		                             trg->value, &e);
 		if (err != NOWDB_OK) return err;
 	}
 	op = nowdb_ast_field(ast);
@@ -484,7 +527,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 		fprintf(stderr, "EXPR: %s\n", (char*)op->value);
 		*/
 
-		err = getExpr(scope, v, 0, trg, op, &w, &x);
+		err = getExpr(scope, v, e, 0, trg, op, &w, &x);
 		if (err != NOWDB_OK) {
 			if (t != NULL) {
 				nowdb_expr_destroy(t); free(t);
@@ -505,7 +548,6 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 			nowdb_expr_destroy(w); free(w);
 			INVALIDAST("aggregates not allowed in where");
 		}
-
 	}
 	if (t != NULL && w != NULL) {
 		err = nowdb_expr_newOp(&and, NOWDB_EXPR_OP_AND, t, w);
@@ -687,13 +729,37 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	                            field->value, &p);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_expr_newVertexField(exp, field->value,
-	                             v->roleid, p->propid);
+	err = nowdb_expr_newVertexField(exp, field->value, v->roleid,
+	                                         p->propid, p->value);
 	if (err != NOWDB_OK) return err;
-	NOWDB_EXPR_TOFIELD(*exp)->type = p->value;
 	if (p->pk) {
-		NOWDB_EXPR_TOFIELD(*exp)->off = NOWDB_OFF_VERTEX;
+		FIELD(*exp)->off = NOWDB_OFF_VERTEX;
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get edge field
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getEdgeField(nowdb_scope_t  *scope,
+                                       nowdb_expr_t     *exp,
+                                       nowdb_model_edge_t *e,
+                                       nowdb_ast_t    *field) {
+	nowdb_err_t err;
+	nowdb_model_pedge_t *p;
+
+	if (e == NULL) {
+		INVALIDAST("edge type is NULL");
+	}
+	err = nowdb_model_getPedgeByName(scope->model,
+	                                    e->edgeid,
+	                            field->value, &p);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_expr_newEdgeField(exp, field->value,
+	                       p->off, p->value, e->num);
+	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
 
@@ -704,6 +770,7 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
  */
 static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           nowdb_model_edge_t   *e,
                            char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t        *fun,
@@ -720,7 +787,7 @@ static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
 	                                       NOWDB_CONT_VERTEX;
 	param = nowdb_ast_param(fun);
 	if (param != NULL) {
-		err = getExpr(scope, v, needtxt, trg, param, &myx, &dummy);
+		err = getExpr(scope, v, e, needtxt, trg, param, &myx, &dummy);
 		if (err != NOWDB_OK) return err;
 	}
 	err = nowdb_fun_new(&f, op, cont, myx, NULL);
@@ -940,6 +1007,7 @@ static inline nowdb_err_t textoptimise(nowdb_scope_t *scope,
  */
 static nowdb_err_t makeOp(nowdb_scope_t    *scope,
                           nowdb_model_vertex_t *v,
+                          nowdb_model_edge_t   *e,
                           char            needtxt,
                           nowdb_ast_t        *trg,
                           nowdb_ast_t      *field,
@@ -961,7 +1029,7 @@ static nowdb_err_t makeOp(nowdb_scope_t    *scope,
 		                                 (char*)o->value);
 		*/
 		
-		err = getExpr(scope, v, needtxt, trg, o, &exp, agg);
+		err = getExpr(scope, v, e, needtxt, trg, o, &exp, agg);
 		if (err != NOWDB_OK) {
 			// destroy list and values, etc.
 			DESTROYLIST(ops);
@@ -1013,6 +1081,7 @@ static nowdb_err_t makeOp(nowdb_scope_t    *scope,
  */
 static nowdb_err_t makeFun(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           nowdb_model_edge_t   *e,
                            char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
@@ -1028,9 +1097,9 @@ static nowdb_err_t makeFun(nowdb_scope_t    *scope,
 	}
 	if (x) {
 		*agg=1;
-		return makeAgg(scope, v, needtxt, trg, field, op, expr);
+		return makeAgg(scope, v, e, needtxt, trg, field, op, expr);
 	}
-	return makeOp(scope, v, needtxt, trg, field, op, expr, agg);
+	return makeOp(scope, v, e, needtxt, trg, field, op, expr, agg);
 }
 
 /* -----------------------------------------------------------------------
@@ -1039,6 +1108,7 @@ static nowdb_err_t makeFun(nowdb_scope_t    *scope,
  */
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
+                           nowdb_model_edge_t   *e,
                            char            needtxt,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
@@ -1046,7 +1116,6 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            char               *agg) {
 	nowdb_err_t err;
 	nowdb_type_t typ;
-	int off=-1;
 	void *value=NULL;
 
 	/* expression */
@@ -1055,7 +1124,7 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 
 		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
-		err = makeFun(scope, v, needtxt, trg, field, expr, agg);
+		err = makeFun(scope, v, e, needtxt, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
 
 
@@ -1075,16 +1144,10 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 	} else {
 		/* we need to distinguish the target! */
 		if (trg->stype == NOWDB_AST_CONTEXT) {
-
-			off = nowdb_edge_offByName(field->value);
-			if (off < 0) {
-				INVALIDAST("unknown field name");
-			}
-			err = nowdb_expr_newEdgeField(expr, off);
+			err = getEdgeField(scope, expr, e, field);
 			if (err != NOWDB_OK) return err;
 
 		} else if (trg->stype == NOWDB_AST_TYPE) {
-			// get roleid and propid 
 			err = getVertexField(scope, expr, v, field);
 			if (err != NOWDB_OK) return err;
 
@@ -1140,15 +1203,25 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
                                     ts_algo_list_t **aggs) {
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_model_vertex_t *v=NULL;
+	nowdb_model_edge_t   *e=NULL;
 	nowdb_expr_t exp;
 	nowdb_ast_t *field;
 	char agg;
 	char dagg=0;
 
+	// fprintf(stderr, "target: %s (%d)\n", (char*)trg->value, trg->stype);
+
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
 		err = nowdb_model_getVertexByName(scope->model,
 		                               trg->value, &v);
+		if (err != NOWDB_OK) return err;
+	}
+
+	// get edge type
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
+		err = nowdb_model_getEdgeByName(scope->model,
+		                             trg->value, &e);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -1162,10 +1235,10 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 	field = nowdb_ast_field(ast);
 	while (field != NULL) {
 
-		// fprintf(stderr, "%s\n", (char*)field->value);
+		// fprintf(stderr, "FIELD: %s\n", (char*)field->value);
 
 		agg = 0;
-		err = getExpr(scope, v, needtxt, trg, field, &exp, &agg);
+		err = getExpr(scope, v, e, needtxt, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
 		if (agg) {
@@ -1242,8 +1315,8 @@ static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
  */
 static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
                                        nowdb_ast_t   *trg) {
-	nowdb_err_t  err;
-	nowdb_target_t t;
+	nowdb_err_t   err;
+	nowdb_content_t t;
 
 	err = nowdb_model_whatIs(scope->model, trg->value, &t);
 	if (err != NOWDB_OK) {
@@ -1255,8 +1328,8 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
 		return err;
 	}
 
-	trg->stype = t==NOWDB_TARGET_VERTEX?NOWDB_AST_TYPE:
-	                                 NOWDB_AST_CONTEXT;
+	trg->stype = t==NOWDB_CONT_VERTEX?NOWDB_AST_TYPE:
+	                               NOWDB_AST_CONTEXT;
 	return NOWDB_OK;
 }
 
@@ -1264,7 +1337,7 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
- *   on either vertex or context
+ *   on either vertex or edge
  * - that's it
  * -----------------------------------------------------------------------
  */
@@ -1286,6 +1359,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
 
+	// what is this???
 	err = adjustTarget(scope, trg);
 	if (err != NOWDB_OK) return err;
 

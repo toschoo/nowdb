@@ -57,8 +57,9 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "cannot init error manager\n");
 		return EXIT_FAILURE;
 	}
-	err = nowdb_store_init(&store, path, NULL, 0, 64,
-	                         NOWDB_MEGA, NOWDB_GIGA);
+	err = nowdb_store_init(&store, path, NULL, 0,
+	                         NOWDB_CONT_EDGE, 64,
+	                    NOWDB_MEGA, NOWDB_GIGA,1);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init store\n");
 		nowdb_err_print(err);
@@ -112,7 +113,7 @@ int main(int argc, char **argv) {
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
 		for(int i=1;i<len;i++) {
-			err = nowdb_store_sortNow(&store.sortwrk);
+			err = nowdb_store_sortNow(&store.sortwrk, &store);
 			if (err != NOWDB_OK) {
 				fprintf(stderr,
 				"\ncannot send sort message\n");

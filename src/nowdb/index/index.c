@@ -27,7 +27,7 @@ static char *OBJECT = "idx";
  */
 #define HOSTDSZ sizeof(beet_pageid_t)
 #define EMBKSZ sizeof(nowdb_pageid_t)
-#define EMBDSZ 16
+#define EMBDSZ 4
 #define INTDSZ sizeof(beet_pageid_t)
 
 /* -----------------------------------------------------------------------
@@ -124,10 +124,8 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
  */
 uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
 	uint32_t sz = 0;
-
 	for(int i=0; i<k->sz; i++) {
 		if (k->off[i] < NOWDB_OFF_VTYPE) sz += 8; else sz +=4;
-		
 	}
 	return sz;
 }
@@ -137,15 +135,8 @@ uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
  * ------------------------------------------------------------------------
  */
 uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k) {
-	uint32_t sz = 0;
-
-	for(int i=0; i<k->sz; i++) {
-		if (k->off[i] < NOWDB_OFF_WTYPE) sz += 8; else sz +=4;
-		
-	}
-	return sz;
+	return (k->sz * sizeof(nowdb_key_t));
 }
-
 
 /* -----------------------------------------------------------------------
  * Destroy index keys
@@ -167,6 +158,9 @@ nowdb_err_t nowdb_index_desc_create(char                *name,
                                     nowdb_index_t       *idx,
                                     nowdb_index_desc_t **desc) {
 
+	if (ctx == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                            FALSE, OBJECT, "no context");
+
 	*desc = calloc(1, sizeof(nowdb_index_desc_t));
 	if (*desc == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	           FALSE, OBJECT, "allocating index descriptor");
@@ -174,6 +168,7 @@ nowdb_err_t nowdb_index_desc_create(char                *name,
 	(*desc)->name = strdup(name);
 	if ((*desc)->name == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                         FALSE, OBJECT, "allocating index name");
+	(*desc)->cont = ctx->store.cont;
 	(*desc)->ctx = ctx;
 	(*desc)->keys = keys;
 	(*desc)->idx = idx;
@@ -223,11 +218,10 @@ static nowdb_err_t removePath(char *path) {
 static uint32_t computeKeySize(nowdb_index_desc_t *desc) {
 	uint32_t s = 0;
 
+	// better to use sizeByOff!
 	for(int i=0;i<desc->keys->sz;i++) {
-		if ((desc->ctx == NULL &&
-		     desc->keys->off[i] >= NOWDB_OFF_VTYPE) ||
-		    (desc->ctx != NULL &&
-		     desc->keys->off[i] >= NOWDB_OFF_WTYPE))
+		if (desc->cont == NOWDB_CONT_VERTEX &&
+		    desc->keys->off[i] >= NOWDB_OFF_VTYPE)
 			s+=4;
 		else s+=8;
 	}
@@ -249,7 +243,7 @@ static void setEmbCompare(beet_config_t *cfg) {
  * ------------------------------------------------------------------------
  */
 static void setHostCompare(nowdb_index_desc_t *desc, beet_config_t *cfg) {
-	if (desc->ctx == NULL) {
+	if (desc->cont == NOWDB_CONT_VERTEX) {
 		cfg->compare = "nowdb_index_vertex_compare";
 	} else {
 		cfg->compare = "nowdb_index_edge_compare";
@@ -271,8 +265,10 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 	cfg->subPath = NULL;
 
 	cfg->keySize = EMBKSZ;
-	cfg->dataSize = EMBDSZ;
-	
+	cfg->dataSize = desc->ctx != NULL &&
+	                desc->ctx->store.setsize > 0 ?
+	                desc->ctx->store.setsize     : EMBDSZ;
+
 	switch(size) {
 		case NOWDB_CONFIG_SIZE_TINY:
 
@@ -329,11 +325,15 @@ static void computeEmbSize(nowdb_index_desc_t *desc,
 			break;
 	}
 
-	cfg->leafNodeSize = (targetsz-12)/(EMBKSZ+EMBDSZ);
+	cfg->leafNodeSize = (targetsz-12)/(EMBKSZ+cfg->dataSize);
 	cfg->intNodeSize = (targetsz-8)/(EMBKSZ+INTDSZ);
 
-	cfg->leafPageSize = cfg->leafNodeSize * (EMBKSZ + EMBDSZ) + 12;
+	cfg->leafPageSize = cfg->leafNodeSize * (EMBKSZ + cfg->dataSize) + 12;
 	cfg->intPageSize = cfg->intNodeSize * (EMBKSZ + INTDSZ) + 8;
+
+	fprintf(stderr, "CREATING EMB  IDX with size: %d/%u/%u/%u/%u/%u\n",
+	                cfg->keySize, cfg->dataSize, cfg->leafNodeSize, cfg->intNodeSize,
+	                                             cfg->leafPageSize, cfg->intPageSize);
 }
 
 /* ------------------------------------------------------------------------
@@ -395,6 +395,10 @@ static void computeHostSize(nowdb_index_desc_t *desc,
 
 	cfg->leafPageSize = (cfg->keySize+HOSTDSZ)*cfg->leafNodeSize+12;
 	cfg->intPageSize = (cfg->keySize+INTDSZ)*cfg->intNodeSize+8;
+
+	fprintf(stderr, "CREATING HOST IDX with size: %d/%lu/%u/%u/%u/%u\n",
+	                cfg->keySize, HOSTDSZ, cfg->leafNodeSize, cfg->intNodeSize,
+	                                       cfg->leafPageSize, cfg->intPageSize);
 }
 
 /* ------------------------------------------------------------------------
@@ -651,7 +655,7 @@ nowdb_err_t nowdb_index_enduse(nowdb_index_t *idx) {
 nowdb_err_t nowdb_index_insert(nowdb_index_t    *idx,
                                char            *keys,
                                nowdb_pageid_t    pge,
-                               nowdb_bitmap64_t *map) {
+                               nowdb_bitmap8_t  *map) {
 	beet_err_t  ber;
 	beet_pair_t pair;
 

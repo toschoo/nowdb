@@ -122,22 +122,48 @@ nowdb_cmp_t nowdb_sort_wrapBeet(const void *left,
                                 void      *ignore);
 
 /* ------------------------------------------------------------------------
- * Generic sorting
+ * Generic sorting (=qsort_r)
  * ------------------------------------------------------------------------
  */
 void nowdb_mem_sort(char *buf, uint32_t size, uint32_t recsize,
                            nowdb_comprsc_t compare, void *args);
 
 /* ------------------------------------------------------------------------
- * Sorting edges
+ * Generic merging for recsize that does not divide bufsize
+ * ---------------
+ * - sorts the single buffers
+ * - merges the sorted buffers respecting the remainders
+ *   + resulting from bufsize/recsize and
+ *   + from buffers that are not completely filled
+ * - parameter 'size' must be given in multiple of page (=bufsize)
+ *   (this is check and if size is not a multiple of page,
+ *    and error is returned, namely -2)
+ *     
+ * - returns 0 on success and a negative value on error, namely
+ *   -1:  not enough memory
+ *   -2:  size is not a multiple of page
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_edge(nowdb_edge_t *buf,
-                         uint32_t      num,
-                         nowdb_ord_t   ord);
+int nowdb_mem_merge(char *buf, uint32_t size, uint32_t bufsize,
+                                              uint32_t recsize,
+                           nowdb_comprsc_t compare, void *args);
+
+/* ------------------------------------------------------------------------
+ * Sorting edges
+ * -------------
+ * - size is the size of the buffer in bytes
+ * - recsz is the size of the edge
+ * ------------------------------------------------------------------------
+ */
+void nowdb_mem_sort_edge(char        *buf,
+                         uint32_t    size,
+                         uint32_t   recsz,
+                         nowdb_ord_t  ord);
 
 /* ------------------------------------------------------------------------
  * Sorting vertices
+ * ----------------
+ * - num is the number of vertices
  * ------------------------------------------------------------------------
  */
 void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,

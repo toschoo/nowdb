@@ -17,6 +17,7 @@
 #include <nowdb/task/worker.h>
 #include <nowdb/sort/sort.h>
 #include <nowdb/store/comp.h>
+#include <nowdb/store/storage.h>
 #include <nowdb/mem/plru12.h>
 
 #include <tsalgo/list.h>
@@ -29,29 +30,31 @@
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     lock; /* read/write lock             */
-	nowdb_version_t version; /* database version            */
-	uint32_t        recsize; /* size of record stored       */
-	uint32_t       filesize; /* size of new files           */
-	uint32_t      largesize; /* size of new readers         */
-	nowdb_path_t       path; /* base path                   */
-	nowdb_path_t    catalog; /* path to catalog             */
-	nowdb_file_t    *writer; /* where we currently write to */
-	ts_algo_list_t   spares; /* available spares            */
-	ts_algo_list_t  waiting; /* unprepard readers           */
-	ts_algo_tree_t  readers; /* collection of readers       */
-	nowdb_fileid_t   nextid; /* next free fileid            */
-	nowdb_comp_t       comp; /* compression                 */
-	nowdb_compctx_t    *ctx; /* compression context         */
-	nowdb_comprsc_t compare; /* comparison                  */
-	void              *iman; /* index manager               */
-	void           *context; /* context for indexing        */
-	nowdb_plru12_t     *lru; /* lru for vertices            */
-	uint32_t        tasknum; /* number of sorter tasks      */
-	nowdb_worker_t  syncwrk; /* background sync             */
-	nowdb_worker_t  sortwrk; /* background sorter           */
-	nowdb_bool_t   starting; /* set during startup          */
-	char              state; /* open or closed              */
+	nowdb_rwlock_t        lock; /* read/write lock             */
+	nowdb_version_t    version; /* database version            */
+	nowdb_content_t       cont; /* edge or vertex              */
+	uint32_t           recsize; /* size of record stored       */
+	uint32_t          filesize; /* size of new files           */
+	uint32_t         largesize; /* size of new readers         */
+	uint32_t           setsize; /* records per page            */
+	nowdb_path_t          path; /* base path                   */
+	nowdb_path_t       catalog; /* path to catalog             */
+	nowdb_file_t       *writer; /* where we currently write to */
+	ts_algo_list_t      spares; /* available spares            */
+	ts_algo_list_t     waiting; /* unprepard readers           */
+	ts_algo_tree_t     readers; /* collection of readers       */
+	nowdb_fileid_t      nextid; /* next free fileid            */
+	nowdb_comp_t          comp; /* compression                 */
+	nowdb_compctx_t       *ctx; /* compression context         */
+	nowdb_comprsc_t    compare; /* comparison                  */
+	void                 *iman; /* index manager               */
+	void              *context; /* context for indexing        */
+	nowdb_plru12_t        *lru; /* lru for vertices            */
+	nowdb_bool_t      starting; /* set during startup          */
+	nowdb_wrk_message_t srtmsg; /* sort message for this store */
+	nowdb_storage_t   *storage; /* where it belongs to         */
+	char                 state; /* open or closed              */
+	char                    ts; /* stores a timeseries         */
 } nowdb_store_t;
 
 /* ------------------------------------------------------------------------
@@ -69,9 +72,10 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
                             nowdb_plru12_t   *lru,
                             nowdb_version_t   ver,
+                            nowdb_content_t  cont,
+                            nowdb_storage_t *strg,
                             uint32_t      recsize,
-                            uint32_t     filesize,
-                            uint32_t    largesize);
+                            char               ts);
 
 /* ------------------------------------------------------------------------
  * Initialise already allocated store object
@@ -81,9 +85,10 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
                              nowdb_plru12_t   *lru,
                              nowdb_version_t   ver,
+                             nowdb_content_t  cont,
+                             nowdb_storage_t *strg,
                              uint32_t      recsize,
-                             uint32_t     filesize,
-                             uint32_t    largesize);
+                             char               ts);
 
 /* ------------------------------------------------------------------------
  * Configure sorting
