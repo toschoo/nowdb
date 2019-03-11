@@ -1268,34 +1268,6 @@ static inline nowdb_err_t closeAllContexts(nowdb_scope_t *scope) {
 	return NOWDB_OK;
 }
 
-/* ------------------------------------------------------------------------
- * Helper: close vertex
- * ------------------------------------------------------------------------
- */
-/*
-static inline void closeVertex(nowdb_scope_t *scope) {
-	nowdb_err_t err;
-	nowdb_storage_t *strg, pattern;
-
-	pattern.name = VSTORE;
-	strg = ts_algo_tree_find(&scope->storage, &pattern);
-	if (strg == NULL) return;
-
-	err = nowdb_storage_removeStore(strg, &scope->vertices);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot remove vertex from storage\n");
-		nowdb_err_print(err); nowdb_err_release(err);
-		return;
-	}
-	err = nowdb_store_close(&scope->vertices);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "cannot close vertex store\n");
-		nowdb_err_print(err); nowdb_err_release(err);
-		return;
-	}
-}
-*/
-
 /* -----------------------------------------------------------------------
  * Create a scope physically on disk
  * -----------------------------------------------------------------------
