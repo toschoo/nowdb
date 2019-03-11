@@ -119,13 +119,13 @@ then
 	exit 1
 fi
 
-#echo "running imansmoke" >> log/test.log
-#test/smoke/imansmoke >> log/test.log 2>&1
-#if [ $? -ne 0 ]
-#then
-#	echo "FAILED: imansmoke failed"
-#	exit 1
-#fi
+echo "running imansmoke" >> log/test.log
+test/smoke/imansmoke >> log/test.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: imansmoke failed"
+	exit 1
+fi
 
 echo "running indexersmoke" >> log/test.log
 test/smoke/indexersmoke >> log/test.log 2>&1

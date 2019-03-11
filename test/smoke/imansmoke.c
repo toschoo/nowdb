@@ -18,7 +18,6 @@
 #define BASE "rsc/idxdb10"
 #define IMNPATH "rsc/idxdb10/iman10"
 #define CTXPATH "context"
-#define VXPATH "vertex"
 
 /* ------------------------------------------------------------------------
  * Tree callbacks for contexts: compare name
@@ -108,6 +107,7 @@ int makectxdir(char *ctxname) {
  * Make vertex directory (scope would do it for us!)
  * ------------------------------------------------------------------------
  */
+/*
 int makevxdir() {
 	struct stat st;
 	char *i;
@@ -139,6 +139,7 @@ int makevxdir() {
 	free(i);
 	return 0;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * Create an index descriptor
@@ -196,6 +197,7 @@ int addCtx(ts_algo_tree_t *ctx, char *name) {
 		return -1;
 	}
 	c->name = name;
+	c->store.cont = NOWDB_CONT_EDGE;
 	if (ts_algo_tree_insert(ctx, c) != TS_ALGO_OK) {
 		fprintf(stderr, "cannot insert context\n");
 		return -1;
@@ -225,10 +227,6 @@ ts_algo_tree_t *fakeCtx() {
 	ctx = ts_algo_tree_new(&ctxcompare, NULL, &noupdate,
 	                       &ctxdestroy, &ctxdestroy);
 
-	if (makevxdir() != 0) {
-		ts_algo_tree_destroy(ctx); free(ctx);
-		return NULL;
-	}
 	if (makectxdir("CTX_TEST") != 0) {
 		ts_algo_tree_destroy(ctx); free(ctx);
 		return NULL;
@@ -485,6 +483,13 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
+	ctxpath = makeCtxPath("CTX_TEST");
+	if (ctxpath == NULL) {
+		fprintf(stderr, "out-of-mem making ctxpath\n");
+		rc = EXIT_FAILURE;
+		goto cleanup;
+	}
+
 	/* ----------------------------------------------------------------
 	 * initialise iman for next series of tests
 	 * ----------------------------------------------------------------
@@ -514,7 +519,7 @@ int main() {
 		fprintf(stderr, "cannot create desc for idx0\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(BASE, VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for idx0\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
@@ -542,6 +547,10 @@ int main() {
 		destroyKeys(&k2); 
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	for (int i=0; i<c2->sz; i++) {
+		fprintf(stderr, "%hu|", c2->off[i]);
+	}
+	fprintf(stderr, "\n");
 
 	desc = createIndexDesc("idx1", myctx, k2, NULL);
 	if (desc == NULL) {
@@ -549,7 +558,7 @@ int main() {
 		fprintf(stderr, "cannot create desc for idx1\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (createIndex(BASE, VXPATH, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
+	if (createIndex(BASE, ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
 		fprintf(stderr, "create Index failed for idx1\n");
 		nowdb_index_desc_destroy(desc); free(desc);
 		rc = EXIT_FAILURE; goto cleanup;
@@ -622,15 +631,8 @@ int main() {
 
 	desc = createIndexDesc("cdx1", myctx, k3, NULL);
 	if (desc == NULL) {
-		fprintf(stderr, "cannot create desc for idx1\n");
+		fprintf(stderr, "cannot create desc for cdx1\n");
 		rc = EXIT_FAILURE; goto cleanup;
-	}
-
-	ctxpath = makeCtxPath("CTX_TEST");
-	if (ctxpath == NULL) {
-		fprintf(stderr, "out-of-mem making ctxpath\n");
-		rc = EXIT_FAILURE;
-		goto cleanup;
 	}
 
 	if (createIndex(BASE, ctxpath, NOWDB_CONFIG_SIZE_TINY, desc) != 0) {
@@ -699,8 +701,12 @@ int main() {
 	 * make sure it's still all there!
 	 * ----------------------------------------------------------------
 	 */
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for k2 (3)\n");
+		for (int i=0; i<c2->sz; i++) {
+			fprintf(stderr, "%hu|", c2->off[i]);
+		}
+		fprintf(stderr, "\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (testGetIdx(&man, "cdx1", myctx, c3) != 0) {
@@ -732,7 +738,7 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for k4 (3)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for k2 (4)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
@@ -757,7 +763,7 @@ int main() {
 		fprintf(stderr, "testGetIdx failed for k4 (4)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (testGetIdx(&man, "idx1", NULL, c2) != 0) {
+	if (testGetIdx(&man, "idx1", myctx, c2) != 0) {
 		fprintf(stderr, "testGetIdx failed for k2 (5)\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
