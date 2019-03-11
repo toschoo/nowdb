@@ -24,7 +24,6 @@
 void helptxt(char *progname) {
 	fprintf(stderr, "%s <path-to-base> [options]\n", progname);
 	fprintf(stderr, "all options are in the format -opt value\n");
-	fprintf(stderr, "global_typed: present typed version of untyped edges\n");
 	fprintf(stderr, "global_timing: timing information\n");
 }
 
@@ -34,7 +33,6 @@ void helptxt(char *progname) {
  */
 int global_count = 0;
 char global_timing = 0;
-char global_typed = 0;
 nowdb_scope_t *global_scope = NULL;
 
 /* -----------------------------------------------------------------------
@@ -51,13 +49,6 @@ int parsecmd(int argc, char **argv) {
 		return -1;
 	}
 
-	global_typed = ts_algo_args_findBool(
-	            argc, argv, 2, "typed", 0, &err);
-	if (err != 0) {
-		fprintf(stderr, "command line error: %d\n", err);
-		return -1;
-	}
-
 	global_timing = ts_algo_args_findBool(
 	            argc, argv, 2, "timing", 0, &err);
 	if (err != 0) {
@@ -65,34 +56,6 @@ int parsecmd(int argc, char **argv) {
 		return -1;
 	}
 	return 0;
-}
-
-/* -----------------------------------------------------------------------
- * Print vertices
- * -----------------------------------------------------------------------
- */
-void printVertex(nowdb_vertex_t *buf, uint32_t sz) {
-	for(uint32_t i=0; i<sz; i++) {
-		fprintf(stdout, "%lu(%u).%lu: %lu (%u)\n",
-		                 buf[i].vertex, buf[i].role,
-		                 buf[i].property,
-		                 buf[i].value, buf[i].vtype);
-	}
-}
-
-/* -----------------------------------------------------------------------
- * Print edges
- * -----------------------------------------------------------------------
- */
-void printEdge(nowdb_edge_t *buf, uint32_t sz) {
-	for(uint32_t i=0; i<sz; i++) {
-		fprintf(stdout, "%lu -[%lu]-> %lu #%lu @%ld: ",
-		                buf[i].origin, buf[i].edge, buf[i].destin,
-		                buf[i].label, buf[i].timestamp);
-		fprintf(stdout, "%lu (%u), %lu (%u)\n",
-		                buf[i].weight, buf[i].wtype[0],
-		                buf[i].weight2, buf[i].wtype[1]);
-	}
 }
 
 /* -----------------------------------------------------------------------
@@ -115,105 +78,6 @@ void printRow(char *buf, uint32_t sz) {
 		nowdb_err_release(err); \
 		return; \
 	}
-
-/* -----------------------------------------------------------------------
- * Print edges typed
- * -----------------------------------------------------------------------
- */
-void printTypedEdge(nowdb_edge_t *buf, uint32_t sz) {
-	char tmp[32];
-	nowdb_model_t *m;
-	nowdb_text_t  *t;
-	nowdb_model_edge_t *edge=NULL;
-	nowdb_model_vertex_t *origin=NULL;
-	nowdb_model_vertex_t *destin=NULL;
-	nowdb_type_t typ;
-	nowdb_err_t err;
-	int rc;
-	char *str;
-	void *w;
-
-	m = global_scope->model;
-	t = global_scope->text;
-	for(uint32_t i=0; i<sz; i++) {
-		if (edge == NULL || edge->edgeid != buf[i].edge) {
-			err = nowdb_model_getEdgeById(m,
-			             buf[i].edge, &edge);
-			HANDLEERR("unknown edge");
-			err = nowdb_model_getVertexById(m,
-			            edge->origin, &origin);
-			HANDLEERR("unknown vertex (origin)");
-			err = nowdb_model_getVertexById(m,
-			            edge->destin, &destin);
-			HANDLEERR("unknown vertex (destin)");
-		}
-		fprintf(stdout, "%s;", edge->name);
-		if (origin->vid == NOWDB_MODEL_TEXT) {
-			err = nowdb_text_getText(t, buf[i].origin, &str);
-			HANDLEERR("unknown text (origin)");
-			fprintf(stdout, "%s;", str); free(str);
-		} else {
-			fprintf(stdout, "%lu;", buf[i].origin);
-		}
-		if (destin->vid == NOWDB_MODEL_TEXT) {
-			err = nowdb_text_getText(t, buf[i].destin, &str);
-			HANDLEERR("unknown text (destin)");
-			fprintf(stdout, "%s;", str); free(str);
-		} else {
-			fprintf(stdout, "%lu;", buf[i].destin);
-		}
-		if (edge->label == NOWDB_MODEL_TEXT) {
-			err = nowdb_text_getText(t, buf[i].label, &str);
-			HANDLEERR("unknown text (label)");
-			fprintf(stdout, "%s;", str); free(str);
-		} else {
-			fprintf(stdout, "%lu;", buf[i].label);
-		}
-		rc = nowdb_time_toString(buf[i].timestamp,
-		                          NOWDB_TIME_FORMAT,
-		                          tmp, 32);
-		if (rc != 0) err = nowdb_err_get(rc,
-		     FALSE, "scopetool", "toString");
-		HANDLEERR("cannot convert timestamp");
-		fprintf(stdout, "%s;", tmp);
-
-		for(int z=0;z<2;z++) {
-			if (z == 0) {
-				typ = buf[i].wtype[0];
-				w = &buf[i].weight;
-			} else {
-				typ = buf[i].wtype[1];
-				w = &buf[i].weight2;
-			}
-			switch(typ) {
-			case NOWDB_TYP_TEXT:
-				err = nowdb_text_getText(t,
-				       *(uint64_t*)w, &str);
-				HANDLEERR("unknown text (weight)");
-				fprintf(stdout, "%s;", str); 
-				free(str); break;
-			case NOWDB_TYP_TIME:
-			case NOWDB_TYP_DATE:
-				rc = nowdb_time_toString(*(int64_t*)w,
-				           NOWDB_TIME_FORMAT, tmp, 32);
-				if (rc != 0) err = nowdb_err_get(rc, FALSE,
-				                   "scopetool", "toString");
-				HANDLEERR("cannot convert time (weight)");
-				fprintf(stdout, "%s;", tmp); break;
-			case NOWDB_TYP_UINT:
-				fprintf(stdout, "%lu;", *(uint64_t*)w); break;
-			case NOWDB_TYP_INT:
-				fprintf(stdout, "%ld;", *(int64_t*)w); break;
-			case NOWDB_TYP_FLOAT:
-				fprintf(stdout, "%.4f;", *(double*)w); break;
-			default:
-				fprintf(stdout, ";");
-
-			}
-		}
-		fprintf(stdout, "\n");
-	}
-}
 
 /* -----------------------------------------------------------------------
  * Print report
@@ -279,21 +143,7 @@ int processCursor(nowdb_cursor_t *cur) {
 		*/
 		total += cnt;
 		// fprintf(stderr, "%lu\n", total);
-		if (cur->recsz == 32) {
-			if (cur->row != NULL && cur->hasid) {
-				printRow(buf, osz);
-			} else {
-				printVertex((nowdb_vertex_t*)buf, osz/32);
-			}
-		} else {
-			if (global_typed) {
-				printTypedEdge((nowdb_edge_t*)buf, osz/64);
-			} else if (cur->row != NULL && cur->hasid) {
-				printRow(buf, osz);
-			} else {
-				printEdge((nowdb_edge_t*)buf, osz/cur->recsz);
-			}
-		}
+		printRow(buf, osz);
 		if (eof) break;
 	}
 	fprintf(stderr, "Read: %lu\n", total);

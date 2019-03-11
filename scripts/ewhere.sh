@@ -8,7 +8,7 @@
 # - creates the database rsc/db500
 # - creates an edge and a context
 # - creates rsc/kilo.csv with 1000 edges using writecsv
-# - copies this file to rsc/ctx_measure.csv and adds a header to it
+# - copies this file to rsc/measure.csv and adds a header to it
 # - it then generates random wheres containing
 #   edge, origin, destin and timestamp
 #   - with and & ors (randomly)
@@ -26,13 +26,14 @@ else
 fi
 
 # sqlprefix
-csvsqlprfx="select count(*) from ctx_measure "
-nowsqlprfx="use db500;select count(*) from ctx_measure "
+csvsqlprfx="select count(*) from measure "
+nowsqlprfx="use db500;select count(*) from measure "
 csvsqlsufx=""
 nowsqlsufx=";"
 
 # make sure everything we need is there
-make all
+make bin/scopetool
+make bin/writecsv
 if [ $? -ne 0 ]
 then
 	echo "cannot make stuff"
@@ -41,7 +42,7 @@ fi
 
 file=rsc/kilo.csv
 vfile=rsc/loc.csv
-csv=rsc/ctx_measure.csv
+csv=rsc/measure.csv
 base=rsc
 loader=test/sql/load2.sql
 
@@ -51,26 +52,23 @@ function mkwhere() {
 
 	line=$(head -$l $file | tail -1)
 	vars=$(echo $line | cut -d";" -f1-5)
-	edge=$(echo $vars | cut -d";" -f1)
-	origin=$(echo $vars | cut -d";" -f2)
-	destin=$(echo $vars | cut -d";" -f3)
+	origin=$(echo $vars | cut -d";" -f1)
+	destin=$(echo $vars | cut -d";" -f2)
 	label=$(echo $vars | cut -d";" -f4)
 
-	for i in {0..3}
+	for i in {0..2}
 	do
 		x=$(($RANDOM%2))
 		if [ $x -eq 0 ]
 		then
 			case $i in
-			0) c1="or" ;;
-			1) c2="or" ;;
-			2) c3="or" ;;
+			1) c1="or" ;;
+			2) c2="or" ;;
 			esac
 		else 
 			case $i in
-			0) c1="and" ;;
-			1) c2="and" ;;
-			2) c3="and" ;;
+			1) c1="and" ;;
+			2) c2="and" ;;
 			esac
 		fi
 	done
@@ -79,24 +77,24 @@ function mkwhere() {
 	x=$(($RANDOM%4))
 	case $x in
 		0) 
-			e="edge='$edge'"; o="origin=$origin";
+			o="origin=$origin";
 			d="destin=$destin"; l="label=$label"
 			;;
 		1) 
-			e="(edge='$edge'"; o="origin=$origin"; 
+			o="(origin=$origin"; 
 			d="destin=$destin)"; l="label=$label" 
 			;;
 		2) 
-			e="edge='$edge'";o="(origin=$origin"; 
-			d="destin=$destin)"; l="label=$label"
+			o="(origin=$origin"; 
+			d="destin=$destin"; l="label=$label)"
 			;;
 		3) 
-			e="edge='$edge'";o="(origin=$origin"; 
-			d="destin=$destin)"; l="label=$label"
+			o="origin=$origin"; 
+			d="(destin=$destin"; l="label=$label)"
 			;;
 	esac
 
-	w="where $e $c1 $o $c2 $d $c3 $l"
+	w="where $o $c1 $d $c2 $l"
 
 	printf "%s\n" "$w"
 }
@@ -106,7 +104,7 @@ bin/writecsv > $file
 bin/writecsv -vertex 1 > $vfile
 
 # make them csvsql-readable
-echo "edge;origin;destin;label;timestamp;weight;weight2" > $csv
+echo "origin;destin;stamp;label;weight" > $csv
 cat $file >> $csv
 
 # load them into database

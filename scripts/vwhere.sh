@@ -31,7 +31,8 @@ csvsqlsufx=""
 nowsqlsufx=";"
 
 # make sure everything we need is there
-make all
+make bin/writecsv
+make bin/scopetool
 if [ $? -ne 0 ]
 then
 	echo "cannot make stuff"

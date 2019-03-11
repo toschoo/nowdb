@@ -187,8 +187,6 @@ client:	$(BIN)/nowclient
 tools:	bin/randomfile    \
 	bin/readfile      \
 	bin/catalog       \
-	bin/keepstoreopen \
-	bin/waitstore     \
 	bin/waitscope     \
 	bin/sqltool       \
 	bin/plantool

@@ -54,8 +54,8 @@ typedef struct {
 	int origin;
 	int destin;
 	int64_t timestamp;
-	float weight;
-	float weight2;
+	double weight;
+	double weight2;
 } edge_t;
 
 edge_t *edges = NULL;
@@ -86,7 +86,7 @@ int writeEdges(char *path, int halves, int hprods, int hclients) {
 	int mxclients = hclients * HALFVRTX;
 	int mxprods = hprods * HALFVRTX;
 	char *loadstr = 
-	"buys;%d;%d;0;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
+	"%d;%d;2018-08-28T%02d:%02d:%02d.%03d;%.2f;%.2f\n";
 
 	edges = calloc(x, sizeof(edge_t));
 	if (edges == NULL) {
@@ -99,6 +99,7 @@ int writeEdges(char *path, int halves, int hprods, int hclients) {
 		perror("cannot open vertex file");
 		return -1;
 	}
+	fprintf(f, "origin;destin;stamp;weight;weight2\n");
 
 	err = nowdb_time_parse("2018-08-28T00:00:00",
 	                    NOWDB_TIME_FORMAT, &base);
@@ -333,7 +334,7 @@ int main() {
 	struct timespec t1, t2;
 	uint64_t aff, errs, rt;
 	uint64_t count;
-	double   s;
+	double  s;
 	uint64_t cnt=0;
 	double   w, wt=0;
 	int t;
@@ -369,11 +370,6 @@ int main() {
 	// yet another error
 	EXECFAULTY("select edge from nosuchcontext");
 
-	EXEC("create tiny table sales set stress=constant");
-
-	EXEC("create index cidx_ctx_de on sales (destin, edge)");
-	EXEC("create index cidx_ctx_oe on sales (origin, edge)");
-
 	EXEC("create type product (\
 		prod_key uint primary key, \
 		prod_desc text)");
@@ -382,7 +378,7 @@ int main() {
 		client_id uint primary key, \
 		client_name text)");
 
-	EXEC("create edge buys (\
+	EXEC("create stamped edge buys (\
 		origin client, \
 		destination product, \
 		weight float, \
@@ -401,17 +397,15 @@ int main() {
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	EXECDLL("load 'rsc/products100.csv' into vertex \
-		  use header as product");
-	EXECDLL("load 'rsc/clients100.csv' into vertex \
-		  use header as client");
-	EXECDLL("load 'rsc/edge100.csv' into sales as edge");
+	EXECDLL("load 'rsc/products100.csv' into product use header");
+	EXECDLL("load 'rsc/clients100.csv' into client use header");
+	EXECDLL("load 'rsc/edge100.csv' into buys use header");
 
 	fprintf(stderr, "wait a second!\n");
 	// sleep(5);
 
-	sprintf(q, "select count(*), sum(weight) from sales\
-	             where edge = 'buys' and origin=%lu", wanted);
+	sprintf(q, "select count(*), sum(weight) from buys\
+	             where origin=%lu", wanted);
 	EXECCUR(q);
 
 	err = nowdb_cursor_open(res, &cur);
@@ -424,7 +418,6 @@ int main() {
 		fprintf(stderr, "no row!\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	nowdb_row_write(stderr, row);
 	tmp = nowdb_row_field(row, 0, &t);
 	if (tmp == NULL) {
 		fprintf(stderr, "cannot get count\n");
@@ -438,21 +431,24 @@ int main() {
 	}
 	memcpy(&s, tmp, 8);
 
+	nowdb_row_write(stderr, row);
+
 	err = nowdb_cursor_close(cur);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot close cursor: %d\n", err);
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
-	fprintf(stderr, "EXPECTING: %lu / %.4f\n", count, s);
+
+	fprintf(stderr, "EXPECTING: %lu | %.4f\n", count, s);
 
 	timestamp(&t1);
 
 	int havedata = 1;
 	if (count == 0) havedata = 0;
 
-	sprintf(q, "select edge, destin, timestamp, weight from sales\
-	             where edge = 'buys' and origin=%lu", wanted);
+	sprintf(q, "select destin, timestamp, weight from buys \
+	             where origin=%lu", wanted);
 	EXECCUR(q);
 
 	err = nowdb_cursor_open(res, &cur);
@@ -472,7 +468,7 @@ int main() {
 			rc = EXIT_FAILURE; goto cleanup;
 		}
 		cnt++;
-		tmp = nowdb_row_field(row, 3, &t);
+		tmp = nowdb_row_field(row, 2, &t);
 		if (tmp == NULL) {
 			fprintf(stderr, "cannot get weight!\n");
 			rc = EXIT_FAILURE; goto cleanup;
@@ -482,7 +478,7 @@ int main() {
 		while ((err = nowdb_row_next(row)) == NOWDB_OK) {
 			cnt++;
 
-			tmp = nowdb_row_field(row, 3, &t);
+			tmp = nowdb_row_field(row, 2, &t);
 			if (tmp == NULL) {
 				fprintf(stderr, "cannot get weight!\n");
 				rc = EXIT_FAILURE; goto cleanup;

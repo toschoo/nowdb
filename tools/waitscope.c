@@ -134,8 +134,8 @@ int main(int argc, char **argv) {
 		fprintf(stdout, "%08d", len);
 		fflush(stdout);
 		for(int i=1;i<len;i+=2) {
-			err = nowdb_store_sortNow(&ctx->store.sortwrk,
-			                          &ctx->store);
+			err = nowdb_store_sortNow(ctx->store.storage,
+			                         &ctx->store);
 			if (err != NOWDB_OK) {
 				fprintf(stderr,
 				"\ncannot send sort message\n");

@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	err = nowdb_store_init(&store, path, NULL, 0,
-	                         NOWDB_CONT_EDGE, 64,
-	                    NOWDB_MEGA, NOWDB_GIGA,1);
+	                       NOWDB_CONT_EDGE, strg,
+	                                       64, 1);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "cannot init store\n");
 		nowdb_err_print(err);
