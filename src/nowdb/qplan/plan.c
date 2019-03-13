@@ -1191,6 +1191,77 @@ static inline nowdb_err_t filterAgg(nowdb_expr_t expr,
 }
 
 /* -----------------------------------------------------------------------
+ * Get all fields for projection (i.e. 'select *')
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t getAllFields(nowdb_scope_t    *scope,
+                                       nowdb_ast_t        *trg,
+                                       ts_algo_list_t **fields) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_model_vertex_t *v=NULL;
+	nowdb_model_edge_t   *e=NULL;
+	ts_algo_list_t         props;
+	ts_algo_list_node_t     *run;
+
+	ts_algo_list_init(&props);
+
+	// get vertex type
+	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
+		err = nowdb_model_getVertexByName(scope->model,
+		                               trg->value, &v);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_model_getProperties(scope->model,
+		                           v->roleid, &props);
+		if (err != NOWDB_OK) return err;
+	}
+
+	// get edge type
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
+		err = nowdb_model_getEdgeByName(scope->model,
+		                             trg->value, &e);
+		if (err != NOWDB_OK) return err;
+		err = nowdb_model_getPedges(scope->model,
+		                      e->edgeid, &props);
+		if (err != NOWDB_OK) return err;
+	}
+
+	// get fields
+	*fields = calloc(1, sizeof(ts_algo_list_t));
+	if (*fields == NULL) {
+		NOMEM("allocating list");
+		ts_algo_list_destroy(&props);
+		return err;
+	}
+	ts_algo_list_init(*fields);
+
+	for (run=props.head; run!=NULL; run=run->nxt) {
+		nowdb_expr_t exp;
+
+		if (trg->stype == NOWDB_AST_TYPE) {
+			nowdb_model_prop_t *p = run->cont;
+			err = nowdb_expr_newVertexField(&exp, p->name,
+			                                    v->roleid,
+	                                         p->propid, p->value);
+		} else {
+			nowdb_model_pedge_t *p = run->cont;
+			err = nowdb_expr_newEdgeField(&exp, p->name,
+	                                  p->off, p->value, e->num);
+		}
+		if (err != NOWDB_OK) break;
+		if (ts_algo_list_append(*fields, exp) != TS_ALGO_OK) {
+			NOMEM("list.append"); break;
+		}
+	}
+	ts_algo_list_destroy(&props);
+	if (err != NOWDB_OK) {
+		ts_algo_list_destroy(*fields);
+		free(*fields); *fields = NULL;
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Get fields for projection, grouping and ordering 
  * The name is misleading, it should be more like 'getExprs'
  * -----------------------------------------------------------------------
@@ -1310,7 +1381,7 @@ static inline nowdb_err_t compareForGrouping(ts_algo_list_t *grp,
 }
 
 /* -----------------------------------------------------------------------
- * Adjust target to what it s according to model
+ * Adjust target to what it is according to model
  * -----------------------------------------------------------------------
  */
 static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
@@ -1355,6 +1426,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	from = nowdb_ast_from(ast);
 	if (from == NULL) INVALIDAST("no 'from' in DQL");
+	// tableless projection...
 
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
@@ -1664,9 +1736,11 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 
 	/* add projection */
 	if (sel == NULL) return NOWDB_OK;
-	if (sel->stype == NOWDB_AST_STAR) return NOWDB_OK;
-
-	err = getFields(scope, trg, sel, 1, &pj, &agg);
+	if (sel->stype == NOWDB_AST_STAR) {
+		err = getAllFields(scope, trg, &pj);
+	} else {
+		err = getFields(scope, trg, sel, 1, &pj, &agg);
+	}
 	if (err != NOWDB_OK) {
 		if (agg != NULL) {
 			destroyFunList(agg); free(agg);
