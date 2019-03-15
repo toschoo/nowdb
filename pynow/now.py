@@ -327,6 +327,40 @@ class Result:
 
         return int(_rCount(self.r))
 
+    # field with type information
+    def typedField(self, idx):
+        x = self.rType()
+        if x != CURSOR and x != ROW:
+            raise WrongType("result not a cursor nor a row")
+
+        t = c_long()
+        v = _rField(self.r, c_long(idx), byref(t))
+
+        if t.value == TEXT:
+            s = cast(v, c_char_p)
+            return (t.value, s.value)
+
+        elif t.value == TIME or t.value == DATE or t.value == INT:
+            i = cast(v,POINTER(c_longlong))
+            return (t.value, i[0])
+
+        elif t.value == UINT:
+            u = cast(v,POINTER(c_ulonglong))
+            return (t.value, u[0])
+
+        elif t.value == FLOAT:
+            f = cast(v,POINTER(c_double))
+            return (t.value, f[0])
+
+        elif t.value == BOOL:
+            f = cast(v,POINTER(c_byte))
+            if f[0] == 0:
+                return (t.value, False)
+            return (t.value, True)
+
+        else:
+            return (NOTHING, None)
+
     # field from row
     def field(self, idx):
         x = self.rType()

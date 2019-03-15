@@ -1,34 +1,45 @@
-# -------------------------------------------------------------------------
-#  Python DB API for NoWDB
-#
-#  -----------------------------------
-#  (c) Tobias Schoofs, 2019
-#  -----------------------------------
-#  
-#  This file is part of the NOWDB CLIENT Library.
-# 
-#  The NOWDB CLIENT Library is free software; you can redistribute it
-#  and/or modify it under the terms of the GNU Lesser General Public
-#  License as published by the Free Software Foundation; either
-#  version 2.1 of the License, or (at your option) any later version.
-# 
-#  The NOWDB CLIENT Library
-#  is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#  Lesser General Public License for more details.
-# 
-#  You should have received a copy of the GNU Lesser General Public
-#  License along with the NOWDB CLIENT Library; if not, see
-#  <http://www.gnu.org/licenses/>.
-# -------------------------------------------------------------------------
+'''
+   Python DB API for NoWDB
+
+   -----------------------------------
+   (c) Tobias Schoofs, 2019
+   -----------------------------------
+   
+   This file is part of the NOWDB CLIENT Library.
+
+   It provides a client API compliant to the
+   PEP 249 Python Database API Specification 2.0.
+
+   It provides in particular
+   - a connection object and constructor
+   - a cursor to execute sql queries against a NoWDB database server
+  
+   The NOWDB CLIENT Library is free software; you can redistribute it
+   and/or modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+  
+   The NOWDB CLIENT Library
+   is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+  
+   You should have received a copy of the GNU Lesser General Public
+   License along with the NOWDB CLIENT Library; if not, see
+   <http://www.gnu.org/licenses/>.
+'''
 import now
 from exceptions import StandardError
+from datetime import datetime
 
 # globals
 apilevel = "2.0"
 threadsafety = 2
 paramstyle = "format"
+
+dictrow = 1
+tuplerow = 2
 
 # exceptions
 class Warning(StandardError):
@@ -75,13 +86,13 @@ class IntegrityError(DatabaseError):
     def __str__(self):
         return super(DatabaseError, self).__str__()
 
-class InternalError(Error):
+class InternalError(DatabaseError):
     def __init__(self, info):
         super(DatabaseError, self).__init__(info)
     def __str__(self):
         return super(DatabaseError, self).__str__()
 
-class ProgrammingError(Error):
+class ProgrammingError(DatabaseError):
     def __init__(self, info):
         super(DatabaseError, self).__init__(info)
     def __str__(self):
@@ -93,41 +104,47 @@ class NotSupportedError(DatabaseError):
     def __str__(self):
         return super(DatabaseError, self).__str__()
 
-class Date:
-    def __init__(y,m,d):
-       pass
+# Type constructors
+def Date(y,m,d):
+    return datetime(y,m,d,tzinfo=now.utc)
 
-class Time:
-    def __init__(h,i,s):
-       pass
+def Timestamp(y,m,d,h,i,s):
+    return datetime(y,m,d,h,i,s,now.utc)
 
-class Timestamp:
-    def __init__(y,m,d,h,i,s):
-       pass
+def Time(h,i,s):
+    raise NotSupportedError("Time is not supported; use Timestamp instead")
 
-class DateFromTicks:
-    def __init__(t):
-       pass
+def DateFromTicks(t):
+    raise NotSupportedError("fromTicks is not supported")
 
-class TimeFromTicks:
-    def __init__(t):
-       pass
+def TimeFromTicks(t):
+    raise NotSupportedError("fromTicks is not supported")
 
-class TimestampFromTicks:
-    def __init__(t):
-       pass
+def TimestampFromTicks(t):
+    raise NotSupportedError("fromTicks is not supported")
 
-class Binary:
-    def __init__(s):
-       pass
+def Binary(s):
+    raise NotSupportedError("Binary is not supported")
 
-# connection
 class Connection:
+   '''
+   The Connection class provides access to a NoWDB server.
+   Connection is a resource manager and can be used
+   in a 'with' statement, e.g.:
+      with nowapi.connect('localhost', '50677', 'mydb', 'user', 'mypwd') as c:
+           ...
+   close() is called on leaving the scope of the with statment.
+   
+   A connection can be shared between threads.
+   '''
    def __init__(self):
        self._c = None
        pass
 
    def close(self):
+       '''
+       Closes the connection to the database.
+       '''
        if not self._c is None:
           self._c.close()
           self._c = None
@@ -139,6 +156,9 @@ class Connection:
        pass
 
    def cursor(self):
+       '''
+       Ceates a cursor.
+       '''
        return Cursor(self)
 
    def __enter__(self):
@@ -147,7 +167,19 @@ class Connection:
    def __exit__(self, a, b, c):
      self.close()
 
-def connect(host, port, db, u, p):
+def connect(host, port, u, p, db=None):
+    '''
+    Connection constructor; it expects
+    - a host (e.g. an IP address, a hostname or 'localhost')
+    - a port number
+    - a database to use
+    - a username
+    - a password.
+    
+    The database may be None.
+    In that case, a database may be dynamically selected
+    using the SQL command 'use'.
+    '''
     try:
        c = now.connect(host, port, u, p)
     except Exception as x:
@@ -190,8 +222,63 @@ def removefrom(s):
            break
     return (x,n[:l])
 
+def convert(t, v):
+    if t != now.TIME and t != now.DATE:
+       return v
+    else:
+       return now.now2dt(v)
+
+def addpars(op, ps):
+    if ps is None:
+       return op
+    l = []
+    for p in ps:
+        if type(p) == datetime:
+           l.append(now.dt2now(p))
+        else:
+           l.append(p)
+    return (op % tuple(i for i in l))
+
 # cursor
 class Cursor:
+    '''
+    Cursor objects provide a means to execute statements
+    against a database server.
+    They are created from a connection object using
+    the 'cursor()' method.
+
+    If the Cursor is executed with a select statement,
+    results can be fetched from the database.
+    There three fetch methods:
+    - fetchone, which obtains one row from the resultset
+    - fetchmany, which obtains n rows from the resultset
+    - fetchall, which obtains all rows from the resultset
+
+    Note that there is no performance benefit in using
+    fetchmany instead of fetchone.
+    The client/server protocol already optimises
+    the fetching policy internally. fetchone, therefore,
+    performs a call to the server only when there are no more
+    rows locally available.
+
+    Cursors allocate local resources
+    and resources in the database server.
+    To avoid local memory leaks and to go gentle on
+    server resources, the cursor should be closed,
+    when the resultset is not needed any more.
+
+    Cursor is a resource manager that can be used in a
+    'with' statment, e.g.:
+         with cursor.execute("select * from mytable") as cur:
+              ...
+    The cursor is automatically closed on leaving the scope
+    of the with statement.
+
+    Cursor is an iterator that can be used
+    with an 'in' statement, e.g.:
+         for row in cursor:
+             ...
+    '''
     def __init__(self, c):
         self._cur = None
         self._con = c
@@ -199,17 +286,42 @@ class Cursor:
         self.arraysize = 1
         self.description = None
         self.rowcount = -1
+        self.rowformat = dictrow
 
     def callproc(self):
         pass
 
     def close(self):
+        '''
+        closes the cursor. Note that a cursor on execution
+        allocates local and server resources.
+        It should therefore be closed as soon as the resultset
+        is not needed anymore.
+        '''
         if self._cur is not None:
            self._cur.release()
            self._cur = None
            self._ff = True
            self.description = None
            self.rowcount = -1
+
+    def setRowFormat(self, rowtype):
+        '''
+        sets the rowformat. Valid options are
+        - dictrow: rows are presented as dictionary fieldname -> value
+        - tuplerow: rows are presented as tuples (fieldname, value)
+        Default: dictrow.
+        The dictrow is more convenient, since it allows to refer to values as
+            row['fieldname']
+        In some cases, when constants or functions are used,
+        fieldnames are awkward, e.g.
+            row['round(sum(price)/count(*))']
+        In such cases it is more appropriate to refer to the field as
+            row[1]
+        '''
+        if rowtype != dictrow and rowtype != tuplerow:
+           raise InterfaceError("unknown row format: %s" % rowtype)
+        self.rowformat = rowtype
 
     def getfields(self, s, n):
         try:
@@ -237,17 +349,21 @@ class Cursor:
             self.description.append((f,0))
             
     def execute(self, op, parameters=None):
+        '''
+        executes an sql statement.
+        '''
         if self._con is None:
            raise InterfaceError("no connection")
         if self._cur is not None:
            self.close()
 
-        # parameters!
+        opp = addpars(op, parameters)
 
-        self.mkdesc(op)
+        self.mkdesc(opp)
         r = None
+
         try:
-           r = self._con._c.execute(op)
+           r = self._con._c.execute(opp)
         except Exception as x:
            raise DatabaseError(str(x))
         if r is None:
@@ -263,7 +379,7 @@ class Cursor:
         self._ff  = True
 
     def executemany(self, ops, seq_of_parameters=None):
-        pass
+        raise NotSupportedError("executemany is not supported")
 
     def getrow(self):
         if self._cur.rw is None:
@@ -273,14 +389,35 @@ class Cursor:
            e = r.details()
            r.release()
            raise InerfaceError(e)
-        s = {}
+
+        if self.rowformat == dictrow:
+           s = {}
+        else:
+           s = []
+        
         for i in range(r.count()):
-            f = r.field(i)
-            s[self.description[i][0]] = f
-            # self.description[i].type_code = r.field(i)
-        return s
+            (t,f) = r.typedField(i)
+            if self.rowformat == dictrow:
+               s[self.description[i][0]] = convert(t,f)
+            else:
+               s.append(convert(t,f))
+
+        if self.rowformat == dictrow:
+           return s
+        else:
+           return tuple(s)
 
     def fetchone(self):
+        '''
+        fetches one row from the resultset.
+        Note that a fetchone does not necessarily
+        implies an interaction with the server.
+        Rows are retrieved from the server in
+        batches and kept locally; only when the
+        local batch of rows is exhaused, fetchone
+        sends a fetch request to the server to
+        obtain the next batch.
+        '''
         if self._cur is None:
            raise InterfaceError("not executed")
         if self._ff:
@@ -299,6 +436,11 @@ class Cursor:
         return self.getrow()
 
     def fetchmany(self, size=1):
+        '''
+        fetches n rows from the resultset (n>=1, default: 1).
+        Note that fetchmany does not necessarily has performance
+        advantages over fetchone (see docstring on fetchone).
+        '''
         r = []
         for i in range(size):
             row = self.fetchone()
@@ -310,6 +452,9 @@ class Cursor:
         return r
 
     def fetchall(self):
+        '''
+        fetches all rows from the resultset.
+        '''
         r = []
         while True:
           row = self.fetchone()
