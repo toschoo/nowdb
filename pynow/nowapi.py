@@ -40,6 +40,7 @@ paramstyle = "format"
 
 dictrow = 1
 tuplerow = 2
+listrow = 3
 
 # exceptions
 class Warning(StandardError):
@@ -319,7 +320,7 @@ class Cursor:
         In such cases it is more appropriate to refer to the field as
             row[1]
         '''
-        if rowtype != dictrow and rowtype != tuplerow:
+        if rowtype not in [dictrow,tuplerow,listrow]:
            raise InterfaceError("unknown row format: %s" % rowtype)
         self.rowformat = rowtype
 
@@ -402,7 +403,7 @@ class Cursor:
             else:
                s.append(convert(t,f))
 
-        if self.rowformat == dictrow:
+        if self.rowformat != tuplerow:
            return s
         else:
            return tuple(s)
