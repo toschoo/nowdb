@@ -132,7 +132,7 @@ class Connection:
    The Connection class provides access to a NoWDB server.
    Connection is a resource manager and can be used
    in a 'with' statement, e.g.:
-      with nowapi.connect('localhost', '50677', 'mydb', 'user', 'mypwd') as c:
+      with nowapi.connect('localhost', '50677', 'user', 'mypwd', 'mydb') as c:
            ...
    close() is called on leaving the scope of the with statment.
    

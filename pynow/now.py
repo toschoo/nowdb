@@ -1,27 +1,33 @@
-# -------------------------------------------------------------------------
-#  Basic Python NOWDB Client Interface
-#
-#  -----------------------------------
-#  (c) Tobias Schoofs, 2018
-#  -----------------------------------
-#  
-#  This file is part of the NOWDB CLIENT Library.
-# 
-#  The NOWDB CLIENT Library is free software; you can redistribute it
-#  and/or modify it under the terms of the GNU Lesser General Public
-#  License as published by the Free Software Foundation; either
-#  version 2.1 of the License, or (at your option) any later version.
-# 
-#  The NOWDB CLIENT Library
-#  is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#  Lesser General Public License for more details.
-# 
-#  You should have received a copy of the GNU Lesser General Public
-#  License along with the NOWDB CLIENT Library; if not, see
-#  <http://www.gnu.org/licenses/>.
-# -------------------------------------------------------------------------
+'''
+   Basic Python NOWDB Client Interface
+ 
+   -----------------------------------
+   (c) Tobias Schoofs, 2018
+   -----------------------------------
+   
+   This file is part of the NOWDB CLIENT Library.
+
+   It provides in particular
+   - a connection object and constructor
+   - an execute method
+   - a polymorphic result type
+   - an iterable cursor result type
+  
+   The NOWDB CLIENT Library is free software; you can redistribute it
+   and/or modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+  
+   The NOWDB CLIENT Library
+   is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+  
+   You should have received a copy of the GNU Lesser General Public
+   License along with the NOWDB CLIENT Library; if not, see
+   <http://www.gnu.org/licenses/>.
+'''
 
 from ctypes import *
 from datetime import *
@@ -163,6 +169,17 @@ def connect(addr, port, usr, pwd):
 
 # ---- a connection
 class Connection:
+    '''
+    The Connection class provides access to a NoWDB server.
+    Connection is a resource manager and can be used
+    in a 'with' statement, e.g.:
+       with nowapi.connect('localhost', '50677', 'user', 'mypwd') as c:
+           ...
+    close() is called on leaving the scope of the with statment.
+   
+    A connection can be shared between threads.
+
+    '''
     def __init__(self, addr, port, usr, pwd):
         con = c_void_p()
         x = _connect(byref(con), c_char_p(addr), c_char_p(port), c_char_p(usr), c_char_p(pwd), c_long(0))
@@ -184,6 +201,14 @@ class Connection:
           self.close()
           
     def close(self):
+        '''
+        closes the connection to the database.
+        The method should be called when the connection
+        is not needed anymore. Connection allocate C resources
+        that are only freed on calling close().
+        Note that the resource manager calls close() internally
+        on leaving the scope of the 'with' statement.
+        '''
         x = _closeCon(self.con)
         if x == 0:
             self.con = None
@@ -191,6 +216,10 @@ class Connection:
             print "cannot close connection!"
 
     def execute(self, stmt):
+        '''
+        executes an sql statement agains the database.
+        It returns a polymorphic 'result' (see below).
+        '''
         r = c_void_p()
         x = _exec(self.con, c_char_p(stmt), byref(r))
         if x == 0:
@@ -200,6 +229,33 @@ class Connection:
 
 # ---- result
 class Result:
+    '''
+    Result is a polymorphic datatype representing the result
+    of a return statement. It can in particular be
+    - a status (ok or not ok)
+    - a report (rows affected)
+    - a cursor (an iterator).
+    Result implements the resource manager, it can, hence,
+    be used with the 'with' statement. On leaving the scope
+    of the statement, 'release' is called on the result, e.g.:
+
+    with con.execute('select * from mytable') as res:
+         if not res.ok():
+            raise MyError(res.details())
+         # do something
+
+    Results correspond to resources in the underlying C library
+    and shall therefore be released when they are not needed
+    anymore. Otherwise, the C library will leak memory.
+
+    If the result is a cursor, it is also an iterator,
+    which can be iterated by means of the 'in' construction, e.g.:
+
+    with con.execute('select * from mytable') as cur:
+         for row cur:
+             # do something with the row
+
+    '''
     def __init__(self, r):
         # print "result up"
         self.r = r
@@ -210,7 +266,11 @@ class Result:
             self.cur = _rCurId(self.r)
 
     def release(self):
-        # print "result down"
+        '''
+        releases the corresponding resources in the underlying
+        C library. When used with a 'with' statement,
+        release() is called internally.
+        '''
         if self.rw != None:
             self.rw.release()
 
@@ -280,23 +340,46 @@ class Result:
 
     # result type
     def rType(self):
+        '''
+        returns the type of the result, either
+        - status
+        - report
+        - row (iterator)
+        - cursor (iterator)
+        '''
         return _rType(self.r)
 
     # status is ok
     def ok(self):
+        '''
+        returns False if an error occurred and True otherwise.
+        '''
         x = _rStatus(self.r)
         return (x == 0)
 
     # error code
     def code(self):
+        '''
+        returns the errorcode of the result.
+        '''
         return _rErrCode(self.r)
 
     # error details
     def details(self):
+        '''
+        returns a more detailed error message.
+        '''
         return _rDetails(self.r)
 
     # get row from cursor
     def row(self):
+        '''
+        returns the row(s) from a cursor.
+        Cursors may hold a bunch of rows.
+        This method copies the rows stored in the cursor
+        and returns it to the user.
+        Note that a row is a result and must be released.
+        '''
         if self.rType() != CURSOR and self.rType() != ROW:
            raise WrongType("result is not a cursor")
         r = _rCopy(_rRow(self.r))
@@ -306,6 +389,11 @@ class Result:
 
     # next row from row
     def nextRow(self):
+        '''
+        advances to the next row.
+        If there was at least one more row,
+        the method returns True, otherwise False.
+        '''
         t = self.rType()
         if t != CURSOR and t != ROW:
             raise WrongType("result not a cursor nor a row")
@@ -318,6 +406,9 @@ class Result:
 
     # count fields in row
     def count(self):
+        '''
+        counts the number of fields in a single row.
+        '''
         x = self.rType()
         if x != ROW:
             raise WrongType("result not a row")
@@ -329,6 +420,16 @@ class Result:
 
     # field with type information
     def typedField(self, idx):
+        '''
+        returns the tuple (type, value) of the idxth field
+        of the current row (starting to count from 0).
+        Example:
+          with con.execute('select * from mytable') as cur:
+               for row cur:
+                   (t,v) = row.field(0)
+                   print("value %s is of type %d" % (t,v))
+        
+        '''
         x = self.rType()
         if x != CURSOR and x != ROW:
             raise WrongType("result not a cursor nor a row")
@@ -363,6 +464,9 @@ class Result:
 
     # field from row
     def field(self, idx):
+        '''
+        Same as typedField, but without type information.
+        '''
         x = self.rType()
         if x != CURSOR and x != ROW:
             raise WrongType("result not a cursor nor a row")
@@ -397,6 +501,9 @@ class Result:
 
     # fetch a bunch of rows from cursor
     def fetch(self):
+        '''
+        fetches the next bunch of rows from the server.
+        '''
         if self.rType() != CURSOR and self.rType() != ROW:
             raise WrongType("result is not a cursor")
 
@@ -406,11 +513,18 @@ class Result:
 
     # end-of-file
     def eof(self):
+        '''
+        returns True if the all rows were fetched from the server,
+        otherwise it returns False.
+        '''
         x = _rEof(self.r)
         return (x != 0)
 
 # something went wrong in the client
 class ClientError(Exception):
+    '''
+    Exception indicating that something went wrong in the client API.
+    '''
     def __init__(self, code):
         self.code = code
 
@@ -420,6 +534,9 @@ class ClientError(Exception):
 # something went wrong in the db
 # is raised only in a for loop
 class DBError(Exception):
+    '''
+    Exception indicating that something went wrong in the server.
+    '''
     def __init__(self, code, details):
         self.code = code
         self.details = details
@@ -430,6 +547,10 @@ class DBError(Exception):
 # type mismatch: we are at the edge
 # of python dynamic typing to C static typing
 class WrongType(Exception):
+    '''
+    Exception indicating that an invalid method was called
+    on a result, e.g. fetch on a result that is not a cursor.
+    '''
     def __init__(self, s):
         self.str = s
 
