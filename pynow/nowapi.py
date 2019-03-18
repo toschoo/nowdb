@@ -107,9 +107,15 @@ class NotSupportedError(DatabaseError):
 
 # Type constructors
 def Date(y,m,d):
+    '''
+    constructs a timestamp.
+    '''
     return datetime(y,m,d,tzinfo=now.utc)
 
 def Timestamp(y,m,d,h,i,s):
+    '''
+    constructs a timestamp.
+    '''
     return datetime(y,m,d,h,i,s,now.utc)
 
 def Time(h,i,s):
@@ -161,6 +167,23 @@ class Connection:
        Ceates a cursor.
        '''
        return Cursor(self)
+
+   def execute(self, stmt, parameters=None, rowformat=dictrow):
+       '''
+       This is a convenience interface (not foreseen in the DB API)
+       that creates a cursor, executes the statement on it and
+       returns it. It allows to write more concise code of the form:
+          for row in con.execute('select * from mytab'):
+              ...
+       Parameters:
+       - stmt      : an SQL string
+       - parameters: parameters for that string
+       - rowformat : the rowformat for the cursor
+       '''
+       cur = self.cursor()
+       cur.setRowFormat(rowformat)
+       cur.execute(stmt, parameters)
+       return cur
 
    def __enter__(self):
      return self
