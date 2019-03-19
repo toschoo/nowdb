@@ -282,6 +282,9 @@ class Result:
         self.r = None
         self.cur = None
 
+    def __del__(self):
+        self.release()
+
     # cursor is a resource manager
     def __enter__(self):
        return self
@@ -297,8 +300,8 @@ class Result:
             if self.code() == EOF:
                return self
             raise DBError(self.code(), self.details())
-          
-        if self.cur == None and self.rType() != ROW:
+
+        if self.cur is None and self.rType() != ROW:
             raise WrongType("result is not a cursor")
 
         self.rw = self.row()
@@ -347,6 +350,8 @@ class Result:
         - row (iterator)
         - cursor (iterator)
         '''
+        if self.r is None:
+           raise ClientError('no result')
         return _rType(self.r)
 
     # status is ok

@@ -323,6 +323,7 @@ class Cursor:
         is not needed anymore.
         '''
         if self._cur is not None:
+           # print("CLOSE")
            self._cur.release()
            self._cur = None
            self._ff = True
@@ -406,6 +407,8 @@ class Cursor:
         raise NotSupportedError("executemany is not supported")
 
     def getrow(self):
+        if self._cur is None:
+           return None
         if self._cur.rw is None:
            return None
         r = self._cur.rw
@@ -501,8 +504,12 @@ class Cursor:
     def __next__(self):
         r = self.fetchone()
         if r is None:
+           self.close()
            raise StopIteration
         return r
 
     def next(self):
         return self.__next__()
+
+    def __del__(self):
+        self.close()
