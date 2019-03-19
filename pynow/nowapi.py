@@ -288,7 +288,7 @@ class Cursor:
     Cursors allocate local resources
     and resources in the database server.
     To avoid local memory leaks and to go gentle on
-    server resources, the cursor should be closed,
+    server resources, the cursor should be closed (see close method),
     when the resultset is not needed any more.
 
     Cursor is a resource manager that can be used in a
@@ -297,6 +297,11 @@ class Cursor:
               ...
     The cursor is automatically closed on leaving the scope
     of the with statement.
+
+    Otherwise, resources allocated by the cursor in the client
+    library as well as in the server, remain pending until
+    the garbage collector removes the cursor object
+    (and calls its __del__ method).
 
     Cursor is an iterator that can be used
     with an 'in' statement, e.g.:
@@ -320,7 +325,9 @@ class Cursor:
         closes the cursor. Note that a cursor on execution
         allocates local and server resources.
         It should therefore be closed as soon as the resultset
-        is not needed anymore.
+        is not needed anymore. Otherwise, resources on client-
+        and server-side remain pending until the cursor
+        object is collected by the Python GC.
         '''
         if self._cur is not None:
            # print("CLOSE")

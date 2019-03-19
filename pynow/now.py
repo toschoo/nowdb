@@ -235,7 +235,7 @@ class Result:
     - a status (ok or not ok)
     - a report (rows affected)
     - a cursor (an iterator).
-    Result implements the resource manager, it can, hence,
+    Result implements the resource manager and can
     be used with the 'with' statement. On leaving the scope
     of the statement, 'release' is called on the result, e.g.:
 
@@ -246,7 +246,10 @@ class Result:
 
     Results correspond to resources in the underlying C library
     and shall therefore be released when they are not needed
-    anymore. Otherwise, the C library will leak memory.
+    anymore. Otherwise, the resources in the C library and
+    potential server resources remain pending until the result
+    is collected by the Python GC (which calls the result's
+    __del__ method). 
 
     If the result is a cursor, it is also an iterator,
     which can be iterated by means of the 'in' construction, e.g.:
@@ -269,7 +272,8 @@ class Result:
         '''
         releases the corresponding resources in the underlying
         C library. When used with a 'with' statement,
-        release() is called internally.
+        release() is called internally; otherwise is called
+        by the Python GC through the __del__ method.
         '''
         if self.rw != None:
             self.rw.release()
