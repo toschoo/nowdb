@@ -87,6 +87,9 @@
 %type expr {nowdb_ast_t*}
 %destructor expr {nowdb_ast_destroyAndFree($$);}
 
+%type prj {nowdb_ast_t*}
+%destructor prj {nowdb_ast_destroyAndFree($$);}
+
 %type case {nowdb_ast_t*}
 %destructor case {nowdb_ast_destroyAndFree($$);}
 
@@ -140,6 +143,9 @@
 
 %type expr_list {nowdb_ast_t*}
 %destructor expr_list {nowdb_ast_destroyAndFree($$);}
+
+%type prj_list {nowdb_ast_t*}
+%destructor prj_list {nowdb_ast_destroyAndFree($$);}
 
 %type val_list {nowdb_ast_t*}
 %destructor val_list {nowdb_ast_destroyAndFree($$);}
@@ -721,7 +727,7 @@ projection_clause(P) ::= SELECT STAR. {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, NOWDB_AST_STAR);
 }
 
-projection_clause(P) ::= SELECT expr_list(F). {
+projection_clause(P) ::= SELECT prj_list(F). {
 	NOWDB_SQL_CREATEAST(&P, NOWDB_AST_SELECT, 0);
 	NOWDB_SQL_ADDKID(P,F);
 }
@@ -773,6 +779,26 @@ order_clause(O) ::= ORDER BY field_list(F). {
 /* %left CONCAT. */
 /* %left COLLATE. */
 /* %right BITNOT. */
+
+prj_list(L) ::= prj(P). {
+	NOWDB_SQL_CHECKSTATE();
+	L = P;
+}
+ 
+prj_list(L) ::= prj_list(PL) COMMA prj(P). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(PL,P);
+	L = PL;
+}
+
+prj(P) ::= expr(E). {
+	P=E;
+}
+
+/* currently we ignore the alias! */
+prj(P) ::= expr(E) AS IDENTIFIER. {
+	P=E;
+}
 
 expr_list(L) ::= expr(F). {
 	NOWDB_SQL_CHECKSTATE();

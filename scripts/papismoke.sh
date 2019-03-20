@@ -39,14 +39,23 @@ then
 	exit 1
 fi
 
-#echo "RUNNING insert.py" >> log/papismoke.log
-#test/papismoke/insert.py >> log/papismoke.log 2>&1
-#if [ $? -ne 0 ]
-#then
-#	echo "FAILED: insert.py failed"
-#	kill -2 $p
-#	exit 1
-#fi
+echo "RUNNING alias.py" >> log/papismoke.log
+test/papismoke/alias.py >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: alias.py failed"
+	kill -2 $p
+	exit 1
+fi
+
+echo "RUNNING insert.py" >> log/papismoke.log
+test/papismoke/insert.py >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: insert.py failed"
+	kill -2 $p
+	exit 1
+fi
 
 kill -2 $p
 

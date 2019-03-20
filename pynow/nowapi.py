@@ -228,11 +228,22 @@ def whitespace(s):
 def isWhitespace(s):
     return (s in [' ', '\n', '\t'])
 
+def getalias(f):
+    g = whitespace(f[::-1])
+    l = len(g)
+    for i in range(l):
+        if isWhitespace(g[i]):
+           a = whitespace(g[i:])
+           if a[:2] == 'sa' and isWhitespace(a[2]):
+              h = g[:i]
+              return h[::-1]
+    return g[::-1] 
+
 def extractfields(s):
     fs = s.split(',')
     r = []
     for f in fs:
-        r.append(whitespace(f))
+        r.append(getalias(f))
     return r
 
 def removefrom(s):
