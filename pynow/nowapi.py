@@ -365,7 +365,7 @@ class Cursor:
    
     def selparse(self, op):
         tmp = whitespace(op)
-        if tmp.startswith('select'):
+        if tmp.lower().startswith('select'):
            (tmp2, n) = removefrom(tmp[6:])
            if whitespace(tmp2).startswith('*'):
               return self.getfields(tmp2,n)
