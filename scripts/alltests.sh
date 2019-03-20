@@ -25,7 +25,6 @@ then
 	echo "FAILED: vwhere failed"
 	exit 1
 fi
-echo "PASSED"
 
 echo "RUNNING SMOKE TESTS IN PYTHON"
 scripts/pysmoke.sh
@@ -44,4 +43,14 @@ then
 	echo "FAILED: ewhere failed"
 	exit 1
 fi
+
+echo "RUNNING PYTHON DB API TESTS IN PYTHON"
+scripts/papismoke.sh
+if [ $? -ne 0 ]
+then
+	exit 1
+fi
+
+sleep 1
+
 echo "PASSED"
