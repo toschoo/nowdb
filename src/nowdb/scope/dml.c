@@ -504,6 +504,7 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	if (err != NOWDB_OK) return err;
 
 	if (off < NOWDB_OFF_USER) return NOWDB_OK;
+	if (val->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 
 	uint8_t bit;
 	uint16_t byte;
@@ -645,40 +646,6 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 }
 
 /* ------------------------------------------------------------------------
- * Correct type:
- * This is chaotic! We should once and for all define the correction
- * in types and use it everywhere...
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t correctType(uint32_t typ,
-                         nowdb_simple_value_t *val) {
-	nowdb_err_t err;
-	// this is all googledemoogle
-	if (typ == NOWDB_TYP_TIME ||
-	    typ == NOWDB_TYP_DATE) {
-		if (val->type == NOWDB_TYP_TEXT) {
-			val->type = typ;
-			return NOWDB_OK;
-		}
-		if (val->type == NOWDB_TYP_UINT) {
-			val->type = NOWDB_TYP_INT;
-			return NOWDB_OK;
-		}
-		if (val->type == NOWDB_TYP_INT) {
-			return NOWDB_OK;
-		}
-	}
-	/* this is as it should be!!!
-	if (nowdb_correctType(typ, &val->type, val->value) != 0) {
-		INVALIDVAL("cannot correct value");
-		return err;
-	}
-	*/
-	INVALIDVAL("types differ");
-	return err;
-}
-
-/* ------------------------------------------------------------------------
  * Insert vertex in fields/value format
  * NOTE: this relies on setTarget
  * ------------------------------------------------------------------------
@@ -697,13 +664,19 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		if (dml->p[i]->value != val->type) {
-			err = correctType(dml->p[i]->value, val);
-			if (err != NOWDB_OK) return err;
+			if (nowdb_correctType(dml->p[i]->value,
+			                     &val->type,
+			                     val->value) != 0) {
+				INVALID("types differ");
+			}
 		}
 		// store primary key in vertex
 		if (dml->p[i]->pk) {
 			err = getValueAsType(dml, val, &vrtx.vertex);
 			if (err != NOWDB_OK) return err;
+			if (val->type == NOWDB_TYP_NOTHING) {
+				INVALID("pk is NULL");
+			}
 			pkfound = 1;
 
 		// check all other values
@@ -733,6 +706,11 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	// ... and store all attributes
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
+
+		if (val->type == NOWDB_TYP_NOTHING) {
+			i++; continue;
+		}
+
 		vrtx.property = dml->p[i]->propid;
 		vrtx.vtype = dml->p[i]->value;
 

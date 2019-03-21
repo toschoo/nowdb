@@ -79,6 +79,7 @@ int nowdb_correctType(nowdb_type_t good,
                       void       *value) 
 {
 	if (good == *bad) return 0;
+	if (*bad == NOWDB_TYP_NOTHING) return 0;
 
 	if (good == NOWDB_TYP_TIME ||
             good == NOWDB_TYP_DATE) {

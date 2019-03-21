@@ -1890,7 +1890,10 @@ static inline nowdb_err_t copyval(void *src, nowdb_type_t t,
                                   nowdb_simple_value_t *val) {
 	nowdb_err_t err;
 
-	if (t == NOWDB_TYP_TEXT) {
+	if (t == NOWDB_TYP_NOTHING) {
+		val->value = NULL;
+
+	} else if (t == NOWDB_TYP_TEXT) {
 		val->value = strdup(src);
 		if (val->value == NULL) {
 			NOMEM("strdup");
@@ -1988,10 +1991,6 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 
 	v = nowdb_ast_value(op);
 	while(v != NULL) {
-		if (v->value == NULL) {
-			v = nowdb_ast_value(v); continue;
-		}
-
 		err = expr2simplev(scope, trg, v, &val);
 		if (err != NOWDB_OK) break;
 
