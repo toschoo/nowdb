@@ -287,11 +287,16 @@ dll ::= LOAD STRING(S) INTO dml_target(T) AS EDGE(E). {
  * DML
  * ------------------------------------------------------------------------
  */
-dml ::= INSERT INTO dml_target(T) LPAR field_list(F) RPAR LPAR val_list(V) RPAR. {
+dml ::= INSERT INTO dml_target(T) LPAR field_list(F) RPAR LPAR expr_list(V) RPAR. {
 	NOWDB_SQL_MAKE_INSERT(T,F,V);
 }
 
-dml ::= INSERT INTO dml_target(T) LPAR val_list(V) RPAR. {
+dml ::= INSERT INTO dml_target(T) LPAR field_list(F) RPAR VALUES LPAR expr_list(V) RPAR. {
+	NOWDB_SQL_MAKE_INSERT(T,F,V);
+}
+
+
+dml ::= INSERT INTO dml_target(T) VALUES LPAR expr_list(V) RPAR. {
 	NOWDB_SQL_MAKE_INSERT(T,NULL,V);
 }
 
@@ -714,9 +719,6 @@ load_option(O) ::= ERRORS EQ STRING(S). {
  */
 dml_target(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DMLTARGET(T, NOWDB_AST_CONTEXT, I)
-}
-dml_target(T) ::= VERTEX. {
-	NOWDB_SQL_MAKE_DMLTARGET(T, NOWDB_AST_VERTEX, NULL)
 }
 
 /* ------------------------------------------------------------------------

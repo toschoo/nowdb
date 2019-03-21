@@ -392,76 +392,6 @@ static inline nowdb_err_t getKey(nowdb_dml_t *dml,
 }
 
 /* ------------------------------------------------------------------------
- * Set edge model
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml) {
-	nowdb_err_t err;
-	nowdb_key_t eid;
-
-	err = getKey(dml, edge, &eid);
-	if (err != NOWDB_OK) return err;
-
-	if (dml->e != NULL) {
-		if (dml->e->edgeid == eid) return NOWDB_OK;
-	}
-
-	err = nowdb_model_getEdgeById(dml->scope->model, eid, &dml->e);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_model_getVertexById(dml->scope->model,
-	                          dml->e->origin, &dml->o);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_model_getVertexById(dml->scope->model,
-	                          dml->e->destin, &dml->d);
-	if (err != NOWDB_OK) return err;
-
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Get edge model
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
-                                 ts_algo_list_t *fields,
-                                 ts_algo_list_t *values) {
-	ts_algo_list_node_t *frun, *vrun, *edge=NULL;
-	nowdb_simple_value_t *val;
-	char tp=0;
-	int off=-1;
-
-	vrun = values->head;
-	if (fields != NULL) {
-		for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
-			off = nowdb_edge_offByName(frun->cont);
-			if (off == NOWDB_OFF_EDGE) {
-				edge=vrun; if (tp) break;
-			} else if (off == NOWDB_OFF_TMSTMP) {
-				tp=1; if (edge != NULL) break;
-			}
-			vrun = vrun->nxt;
-		}
-		if (edge == NULL) {
-			INVALID("edge field missing in insert");
-		}
-		if (!tp) {
-			INVALID("timestamp missing in insert");
-		}
-		val = edge->cont;
-	} else {
-		if (values == NULL) INVALID("no values");
-	}
-	// fprintf(stderr, "%s\n", (char*)val->value);
-	return setEdgeModel(dml);
-}
-*/
-
-/* ------------------------------------------------------------------------
  * Check edge model
  * ------------------------------------------------------------------------
  */
@@ -501,9 +431,9 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		break;
 
 	case NOWDB_OFF_STAMP:
-		if (val->type == NOWDB_TYP_TEXT) {
-			val->type = NOWDB_TYP_TIME; break;
-		}
+		if (val->type == NOWDB_TYP_DATE ||
+                    val->type == NOWDB_TYP_TIME) break;
+
 		if (val->type != NOWDB_TYP_INT  &&
 		    val->type != NOWDB_TYP_UINT) {
 			INVALID("not a valid timestamp");
@@ -524,49 +454,10 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		                     val->value) != 0) {
 			INVALID("invalid type");
 		}
-
 	}
 	return NOWDB_OK;
 }
 
-/* ------------------------------------------------------------------------
- * String to int or uint
- * ------------------------------------------------------------------------
- */
-#define STROX(t,to) \
-	*((t*)target) = to(val->value, &hlp, 10); \
-	if (*hlp != 0) {  \
-		err = nowdb_err_get(nowdb_err_invalid, \
-		      FALSE, OBJECT, "string to int"); \
-	}
-
-/* ------------------------------------------------------------------------
- * String to double
- * ------------------------------------------------------------------------
- */
-#define STROD() \
-	*((double*)target) = strtod(val->value, &hlp); \
-	if (*hlp != 0) {  \
-		err = nowdb_err_get(nowdb_err_invalid, \
-		      FALSE, OBJECT, "string to double"); \
-	}
-
-/* ------------------------------------------------------------------------
- * String to time
- * ------------------------------------------------------------------------
- */
-#define STRTOTIME() \
-	if (strnlen(val->value, 4096) == 10) { \
-		rc = nowdb_time_fromString(val->value, \
-		             NOWDB_DATE_FORMAT,target);\
-	} else { \
-		rc = nowdb_time_fromString(val->value,\
-		            NOWDB_TIME_FORMAT,target);\
-	} \
-	if (rc != 0) { \
-		err = nowdb_err_get(rc, FALSE, OBJECT, "string to time"); \
-	}
-	
 /* ------------------------------------------------------------------------
  * Convert property value from string
  * ------------------------------------------------------------------------
@@ -575,8 +466,6 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
                                 nowdb_simple_value_t *val,
                                          void     *target) {
 	nowdb_err_t err=NOWDB_OK;
-	char *hlp=NULL;
-	int rc;
 
 	switch(val->type) {
 	case NOWDB_TYP_NOTHING:
@@ -585,30 +474,18 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 	case NOWDB_TYP_TEXT:
 		// fprintf(stderr, "TEXT: %s\n", (char*)val->value);
 		return getKey(dml, val->value, target);
-
+		
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
-		// fprintf(stderr, "TIME: %s\n", (char*)val->value);
-		STRTOTIME();
-		break;
-
 	case NOWDB_TYP_FLOAT:
-		// fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
-		STROD();
-		break;
-
 	case NOWDB_TYP_INT:
-		// fprintf(stderr, "INT: %s\n", (char*)val->value);
-		STROX(int64_t, strtol);
-		break;
-
 	case NOWDB_TYP_UINT:
-		// fprintf(stderr, "UINT: %s\n", (char*)val->value);
-		STROX(uint64_t, strtoul);
-		break;
+		memcpy(target, val->value, sizeof(nowdb_key_t)); break;
 
-	// bool
-
+	case NOWDB_TYP_BOOL:
+		// error: we cannot insert booleans
+		INVALID("boolean cannot be inserted");
+	
 	default: INVALID("unknown type");
 	}
 	return err;

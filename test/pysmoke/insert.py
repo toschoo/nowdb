@@ -553,7 +553,7 @@ def insertallvertex(c):
 
     # insert without field list (complete, no fields)
     k = getNextKey(c)
-    stmt = "insert into product2 (%d, 'product %s', 1, 3, 1.59)" % (k, str(k))
+    stmt = "insert into product2 values (%d, 'product %s', 1, 3, 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
        if not r.ok():
           raise db.TestFailed("cannot insert %d: %s" % (k,r.details()))
@@ -572,7 +572,7 @@ def insertallvertex(c):
 
     # insert without field list (incomplete, no fields)
     k = getNextKey(c)
-    stmt = "insert into product2 (%d, 'product %s', 1, 1.59)" % (k, str(k))
+    stmt = "insert into product2 values (%d, 'product %s', 1, 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert incompletely")
@@ -587,7 +587,7 @@ def insertallvertex(c):
 
     # insert without field list (complete, no fields, wrong type)
     k = getNextKey(c)
-    stmt = "insert into product2 (%d, 'product %s', 1, '3', 1.59)" % (k, str(k))
+    stmt = "insert into product2 values (%d, 'product %s', 1, '3', 1.59)" % (k, str(k))
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert with wrong type")
@@ -666,7 +666,7 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into buys (%d, %d, '%s', 1, 1.49)" % (k, p, s)
+    stmt = "insert into buys values (%d, %d, '%s', 1, 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if not r.ok():
           raise db.TestFailed("cannot insert edge: %d -- %s" % (r.code(),r.details()))
@@ -693,7 +693,7 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into buys (%d, %d, '%s', 1.49)" % (k, p, s)
+    stmt = "insert into buys values (%d, %d, '%s', 1.49)" % (k, p, s)
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert incomplete edge")
@@ -715,7 +715,7 @@ def insertalledge(c,ps,cs):
     dt = datetime.datetime.utcnow()
     s = dt.strftime(now.TIMEFORMAT)
     t = now.dt2now(dt)
-    stmt = "insert into buys (%d, 'my product', '%s', 1, 1.49)" % (k, s)
+    stmt = "insert into buys values (%d, 'my product', '%s', 1, 1.49)" % (k, s)
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert edge with wrong type!")
