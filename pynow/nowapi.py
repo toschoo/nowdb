@@ -234,28 +234,74 @@ def getalias(f):
     for i in range(l):
         if isWhitespace(g[i]):
            a = whitespace(g[i:])
+           if len(a) < 3:
+              continue
            if a[:2] == 'sa' and isWhitespace(a[2]):
               h = g[:i]
               return h[::-1]
     return g[::-1] 
 
-def extractfields(s):
-    fs = s.split(',')
+def parsefield(s):
+    l = len(s)
+    instr = 0
+    inpar = 0
+    i = 0
+    while i < l:
+        if instr == 1:
+           if s[i] == "'":
+              instr = 0
+           i+=1
+           continue
+
+        if inpar > 0:
+           if s[i] == ")":
+              inpar -= 1
+           elif s[i] == "(":
+              inpar += 1
+           i+=1
+           continue
+
+        if s[i] == "'":
+            instr = 1
+            i+=1
+            continue
+
+        if s[i] == "(":
+            inpar += 1
+            i+=1
+            continue
+
+        if s[i] == ",":
+           return (i, False)
+
+        if s[i:i+4] == "from":
+           # print("'%s' '%s' '%s'" % (s[i-1], s[i:i+4], s[i+4]))
+           if (i == 0 or isWhitespace(s[i-1])) and \
+              (i+4 >= l or isWhitespace(s[i+4])):
+              return (i-1, True)
+        i+=1
+
+    return (i,True)
+
+def parsefields(s):
+    fs = []
+    a = 0
+    z = 0
+    x = False
+    while not x:
+       (z,x) = parsefield(s[a:])
+       fs.append(s[a:a+z])
+       a += z + 1
+    return (fs,a)
+
+def extractfields(fs):
     r = []
     for f in fs:
-        r.append(getalias(f))
+        a = getalias(f)
+        if len(a) < 1:
+           raise InterfaceError("not a valid alias")
+        r.append(a)
     return r
-
-def removefrom(s):
-    i = s.find('from')
-    x = s[:i]
-    n = whitespace(s[i+5:])
-    l = len(n)
-    for i in range(l):
-        if isWhitespace(n[i]):
-           l=i
-           break
-    return (x,n[:l])
 
 def convert(t, v):
     if t != now.TIME and t != now.DATE:
@@ -268,10 +314,12 @@ def addpars(op, ps):
        return op
     l = []
     for p in ps:
-        if type(p) == datetime:
-           l.append(now.dt2now(p))
+        if p is None:
+           l.append('NULL')
+        elif type(p) == datetime:
+           l.append(str(now.dt2now(p)))
         else:
-           l.append(p)
+           l.append(str(p))
     return (op % tuple(i for i in l))
 
 # cursor
@@ -341,7 +389,6 @@ class Cursor:
         object is collected by the Python GC.
         '''
         if self._cur is not None:
-           # print("CLOSE")
            self._cur.release()
            self._cur = None
            self._ff = True
@@ -366,20 +413,22 @@ class Cursor:
            raise InterfaceError("unknown row format: %s" % rowtype)
         self.rowformat = rowtype
 
-    def getfields(self, s, n):
+    def getfields(self, s):
+        print(s)
         try:
-            r = self._con._c.execute("describe %s" % n)
+            r = self._con._c.execute("describe %s" % s)
         except Exception as x:
             raise DatabaseError(str(x))
         for row in r:
             self.description.append((row.field(0),0))
    
     def selparse(self, op):
-        tmp = whitespace(op)
-        if tmp.lower().startswith('select'):
-           (tmp2, n) = removefrom(tmp[6:])
-           if whitespace(tmp2).startswith('*'):
-              return self.getfields(tmp2,n)
+        tmp1 = whitespace(op)
+        if tmp1.lower().startswith('select'):
+           tmp = tmp1[6:]
+           (tmp2, n) = parsefields(tmp)
+           if whitespace(tmp).startswith('*'):
+              return self.getfields(whitespace(tmp[n+4:]))
            return extractfields(tmp2)
         return None
 
@@ -387,6 +436,7 @@ class Cursor:
         self.description = []
         fs = self.selparse(op)
         if fs is None:
+           self.rowformat = listrow
            return
         for f in fs:
             self.description.append((f,0))
@@ -466,7 +516,10 @@ class Cursor:
         if self._cur is None:
            raise InterfaceError("not executed")
         if self._ff:
-           self._cur.__iter__()
+           try:
+              self._cur.__iter__()
+           except Exception:
+              return None
            self._ff = False
            self.rowcount = 0
         try:

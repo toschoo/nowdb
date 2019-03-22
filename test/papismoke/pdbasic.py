@@ -5,18 +5,20 @@ import nowapi as na
 import pandas as pd
 import random as rnd
 
-IT = 1000
+IT = 100
 
 # describe from the database
 def stats(c, o, f):
-    sql = "select count(*), avg(%s), stddev(%s), \
-                            max(%s), min(%s), median(%s) \
+    sql = "select count(*)   as count, \
+                  avg(%s)    as mean,  \
+                  stddev(%s) as std,   \
+                  max(%s)    as max,   \
+                  min(%s)    as min,   \
+                  median(%s) as med    \
              from buys \
             where origin = %d" % (f, f, f, f, f, o)
-    for row in c.execute(sql, rowformat=na.listrow):
-        return {'count': row[0], 'mean': row[1], 'std': row[2], \
-                                 'max' : row[3], 'min': row[4], \
-                                 '50%' : row[5]}
+    for row in c.execute(sql):
+        return row
 
 # select a random row
 def randomRow(df):
@@ -42,7 +44,7 @@ def compare(df,d):
        raise db.TestFailed('std differs')
 
     mf = float(int(df['50%'] * 1000))/1000
-    m  = float(int(d['50%'] * 1000))/1000
+    m  = float(int(d['med'] * 1000))/1000
     if mf != m:
        raise db.TestFailed('50% differs')
 

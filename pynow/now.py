@@ -320,6 +320,8 @@ class Result:
             raise StopIteration
 
         if self.needNext:
+            if self.rw is None:
+               raise StopIteration
             if not self.rw.nextRow():
                 self.rw.release()
                 self.rw = None
