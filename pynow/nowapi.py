@@ -414,13 +414,14 @@ class Cursor:
         self.rowformat = rowtype
 
     def getfields(self, s):
-        print(s)
         try:
             r = self._con._c.execute("describe %s" % s)
         except Exception as x:
             raise DatabaseError(str(x))
+        fs = []
         for row in r:
-            self.description.append((row.field(0),0))
+            fs.append(row.field(0))
+        return fs
    
     def selparse(self, op):
         tmp1 = whitespace(op)

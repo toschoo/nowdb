@@ -58,6 +58,15 @@ then
 	exit 1
 fi
 
+echo "RUNNING exec.py" >> log/papismoke.log
+test/papismoke/exec.py >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: exec.py failed"
+	kill -2 $p
+	exit 1
+fi
+
 kill -2 $p
 
 sleep 1
