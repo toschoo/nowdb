@@ -65,6 +65,27 @@ def wrongtest(c):
     except Exception as x:
        print(str(x))
 
+    try:
+       c.execute("select count(*) as from from product")
+       raise db.TestFailed("'field as from' passed")
+    except Exception as x:
+       print(str(x))
+
+    try:
+       c.execute("select count(*) as from product")
+       raise db.TestFailed("empty alias passed")
+    except Exception as x:
+       print(str(x))
+
+    '''
+    this won't work (parser waits for more input)
+    try:
+       c.execute("select count(*) as c")
+       raise db.TestFailed("no from passed")
+    except Exception as x:
+       print(str(x))
+    '''
+
 def aliastest(c):
     
     print "RUNNING TEST 'aliastest'"
@@ -77,6 +98,10 @@ def aliastest(c):
     for row in c.execute("select count(*) + 1 as c1 from product"):
         if row['c1'] != l+1:
            raise db.TestFailed('c1 differs')
+
+    for row in c.execute("select null as nix from product"):
+        if row['nix'] is not None:
+           raise db.TestFailed('not null!')
 
     x = random.randint(0,l)
     i = 0
@@ -92,9 +117,38 @@ def aliastest(c):
            checkprod(c,row['key'])
            break
         i+=1
+    i = 0
     for row in c.execute("select prod_key as askey, prod_desc as d from product"):
         if i == x:
            checkprod(c,row['askey'])
+           break
+        i+=1
+    i = 0
+    for row in c.execute("select prod_desc as d, prod_key as key, prod_desc as d from product"):
+        if i == x:
+           checkprod(c,row['key'])
+           break
+        i+=1
+    i = 0
+    for row in c.execute("select sum(coal(prod_price,0)) as sum, prod_key as key, prod_desc as d from product"):
+        if i == x:
+           checkprod(c,row['key'])
+           break
+        i+=1
+    i = 0
+    for row in c.execute("select * from product"):
+        if i == x:
+           k = row['prod_key']
+           checkprod(c,row['prod_key'])
+           break
+        i+=1
+    i = 0
+    for row in c.execute("select * from product where prod_key = %d" % k):
+        checkprod(c,row['prod_key'])
+
+    for row in c.execute("select 'from' as one, 'bla' as from_bla, prod_key as key, 'from' as my_from from product"):
+        if i == x:
+           checkprod(c,row['key'])
            break
         i+=1
 

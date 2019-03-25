@@ -56,11 +56,38 @@ static char *OBJECT = "plan";
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
                            nowdb_model_edge_t   *e,
-                           char            needtxt,
+                           uint32_t         limits,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
                            nowdb_expr_t      *expr,
                            char               *agg);
+
+/* ------------------------------------------------------------------------
+ * Get expression from plan
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_plan_getExpr(nowdb_scope_t    *scope,
+                               nowdb_model_vertex_t *v,
+                               nowdb_model_edge_t   *e,
+                               nowdb_ast_t        *trg,
+                               nowdb_ast_t      *field,
+                               uint32_t         limits,
+                               nowdb_expr_t      *expr,
+                               char               *agg) {
+	nowdb_err_t err;
+	
+	err = getExpr(scope, v, e, limits, trg, field, expr, agg);
+	if (err != NOWDB_OK) return err;
+
+	if (*agg) {
+		if (!(limits & NOWDB_PLAN_OK_AGG)) {
+			nowdb_expr_destroy(*expr);
+			free(*expr); *expr = NULL;
+			INVALIDAST("aggregate not allowed here");
+		}
+	}
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Identify index candidates in filter
@@ -507,6 +534,7 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	nowdb_expr_t and=NULL;
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_model_edge_t   *e=NULL;
+	uint32_t limits;
 	char x=0;
 
 	*filter = NULL;
@@ -527,7 +555,10 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 		fprintf(stderr, "EXPR: %s\n", (char*)op->value);
 		*/
 
-		err = getExpr(scope, v, e, 0, trg, op, &w, &x);
+		NOWDB_PLAN_OK_ALL(limits);
+		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
+		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_NEED_TEXT);
+		err = getExpr(scope, v, e, limits, trg, op, &w, &x);
 		if (err != NOWDB_OK) {
 			if (t != NULL) {
 				nowdb_expr_destroy(t); free(t);
@@ -771,7 +802,7 @@ static inline nowdb_err_t getEdgeField(nowdb_scope_t  *scope,
 static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
                            nowdb_model_edge_t   *e,
-                           char            needtxt,
+                           uint32_t         limits,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t        *fun,
                            int                  op,
@@ -787,7 +818,7 @@ static nowdb_err_t makeAgg(nowdb_scope_t    *scope,
 	                                       NOWDB_CONT_VERTEX;
 	param = nowdb_ast_param(fun);
 	if (param != NULL) {
-		err = getExpr(scope, v, e, needtxt, trg, param, &myx, &dummy);
+		err = getExpr(scope, v, e, limits, trg, param, &myx, &dummy);
 		if (err != NOWDB_OK) return err;
 	}
 	err = nowdb_fun_new(&f, op, cont, myx, NULL);
@@ -1008,7 +1039,7 @@ static inline nowdb_err_t textoptimise(nowdb_scope_t *scope,
 static nowdb_err_t makeOp(nowdb_scope_t    *scope,
                           nowdb_model_vertex_t *v,
                           nowdb_model_edge_t   *e,
-                          char            needtxt,
+                          uint32_t         limits,
                           nowdb_ast_t        *trg,
                           nowdb_ast_t      *field,
                           int                  op,
@@ -1029,7 +1060,7 @@ static nowdb_err_t makeOp(nowdb_scope_t    *scope,
 		                                 (char*)o->value);
 		*/
 		
-		err = getExpr(scope, v, e, needtxt, trg, o, &exp, agg);
+		err = getExpr(scope, v, e, limits, trg, o, &exp, agg);
 		if (err != NOWDB_OK) {
 			// destroy list and values, etc.
 			DESTROYLIST(ops);
@@ -1063,7 +1094,7 @@ static nowdb_err_t makeOp(nowdb_scope_t    *scope,
 	// we rework this expression
 	// because we can evaluate it more efficiently
 	// by replacing text with keys
-	if (!needtxt) {
+	if (!(limits & NOWDB_PLAN_NEED_TEXT)) {
 		err = textoptimise(scope, expr);
 		if (err != NOWDB_OK) {
 			nowdb_expr_destroy(*expr);
@@ -1082,7 +1113,7 @@ static nowdb_err_t makeOp(nowdb_scope_t    *scope,
 static nowdb_err_t makeFun(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
                            nowdb_model_edge_t   *e,
-                           char            needtxt,
+                           uint32_t         limits,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
                            nowdb_expr_t      *expr,
@@ -1097,9 +1128,9 @@ static nowdb_err_t makeFun(nowdb_scope_t    *scope,
 	}
 	if (x) {
 		*agg=1;
-		return makeAgg(scope, v, e, needtxt, trg, field, op, expr);
+		return makeAgg(scope, v, e, limits, trg, field, op, expr);
 	}
-	return makeOp(scope, v, e, needtxt, trg, field, op, expr, agg);
+	return makeOp(scope, v, e, limits, trg, field, op, expr, agg);
 }
 
 /* -----------------------------------------------------------------------
@@ -1109,7 +1140,7 @@ static nowdb_err_t makeFun(nowdb_scope_t    *scope,
 static nowdb_err_t getExpr(nowdb_scope_t    *scope,
                            nowdb_model_vertex_t *v,
                            nowdb_model_edge_t   *e,
-                           char            needtxt,
+                           uint32_t         limits,
                            nowdb_ast_t        *trg,
                            nowdb_ast_t      *field,
                            nowdb_expr_t      *expr,
@@ -1124,11 +1155,20 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 
 		// fprintf(stderr, "FUN: %s\n", (char*)field->value);
 
-		err = makeFun(scope, v, e, needtxt, trg, field, expr, agg);
+		if (!(limits & NOWDB_PLAN_OK_OP)) {
+			INVALIDAST("operation not allowed here");
+		}
+
+		err = makeFun(scope, v, e, limits, trg, field, expr, agg);
 		if (err != NOWDB_OK) return err;
 
 
 	} else if (field->ntype == NOWDB_AST_VALUE) {
+
+		if (!(limits & NOWDB_PLAN_OK_CONST)) {
+			INVALIDAST("constant not allowed here");
+		}
+
 		typ = nowdb_ast_type(field->stype);
 		err = getConstValue(&typ, field->value, &value);
 		if (err != NOWDB_OK) return err;
@@ -1142,6 +1182,10 @@ static nowdb_err_t getExpr(nowdb_scope_t    *scope,
 		if (value != NULL) free(value);
 
 	} else {
+		if (!(limits & NOWDB_PLAN_OK_FIELD)) {
+			INVALIDAST("field not allowed here");
+		}
+
 		/* we need to distinguish the target! */
 		if (trg->stype == NOWDB_AST_CONTEXT) {
 			err = getEdgeField(scope, expr, e, field);
@@ -1269,7 +1313,7 @@ static inline nowdb_err_t getAllFields(nowdb_scope_t    *scope,
 static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
                                     nowdb_ast_t        *trg,
                                     nowdb_ast_t        *ast,
-                                    char            needtxt,
+                                    char             limits,
                                     ts_algo_list_t **fields, 
                                     ts_algo_list_t **aggs) {
 	nowdb_err_t err = NOWDB_OK;
@@ -1309,11 +1353,11 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 		// fprintf(stderr, "FIELD: %s\n", (char*)field->value);
 
 		agg = 0;
-		err = getExpr(scope, v, e, needtxt, trg, field, &exp, &agg);
+		err = getExpr(scope, v, e, limits, trg, field, &exp, &agg);
 		if (err != NOWDB_OK) break;
 		
 		if (agg) {
-			if (aggs == NULL) {
+			if (aggs == NULL) { // !(limits & NOWDB_PLAN_OK_AGG)
 				INVALIDAST("aggregates not allowed here");
 			}
 			if (*aggs == NULL) {
@@ -1422,6 +1466,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	nowdb_ast_t  *trg, *from, *sel, *group=NULL, *order=NULL;
 	nowdb_ast_t  *field;
 	nowdb_plan_t *stp;
+	uint32_t limits=0;
 	char hasAgg=0;
 
 	from = nowdb_ast_from(ast);
@@ -1493,7 +1538,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	group = nowdb_ast_group(ast);
 	if (group != NULL) {
 		// do we need text in group by?
-		err = getFields(scope, trg, group, 1, &grp, NULL);
+                NOWDB_PLAN_OK_ALL(limits);
+		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
+		err = getFields(scope, trg, group, limits, &grp, NULL);
 		if (err != NOWDB_OK) {
 			if (filter != NULL) {
 				nowdb_expr_destroy(filter); free(filter);
@@ -1517,7 +1564,9 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	/* get order by */
 	order = nowdb_ast_order(ast);
 	if (order != NULL && idxes.len == 0) {
-		err = getFields(scope, trg, order, 1, &ord, NULL);
+		NOWDB_PLAN_OK_ALL(limits);
+		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
+		err = getFields(scope, trg, order, limits, &ord, NULL);
 		if (err != NOWDB_OK) {
 			if (filter != NULL) {
 				nowdb_expr_destroy(filter); free(filter);
@@ -1739,7 +1788,8 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	if (sel->stype == NOWDB_AST_STAR) {
 		err = getAllFields(scope, trg, &pj);
 	} else {
-		err = getFields(scope, trg, sel, 1, &pj, &agg);
+		NOWDB_PLAN_OK_ALL(limits);
+		err = getFields(scope, trg, sel, limits, &pj, &agg);
 	}
 	if (err != NOWDB_OK) {
 		if (agg != NULL) {
