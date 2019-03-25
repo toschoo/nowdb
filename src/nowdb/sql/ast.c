@@ -426,6 +426,7 @@ static inline int addmisc(nowdb_ast_t *n,
 	case NOWDB_AST_FETCH: ADDKID(0);
 	case NOWDB_AST_CLOSE: ADDKID(0);
 	case NOWDB_AST_EXEC: ADDKID(0);
+	case NOWDB_AST_SELECT: ADDKID(0);
 	default: return -1;
 	}
 }

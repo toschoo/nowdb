@@ -262,6 +262,19 @@ typedef struct {
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------
+ * Make a MISC statement representing an isolated 'SELECT'
+ * Parameters:
+ * - p: project clause
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_SELECT(p) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *m; \
+	NOWDB_SQL_CREATEAST(&m, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(m, p); \
+	nowdbsql_state_pushAst(nowdbres, m);
+
+/* ------------------------------------------------------------------------
  * Make a MISC statement representing 'EXECUTE'
  * Parameters:
  * - u: the integer identifying the cursor

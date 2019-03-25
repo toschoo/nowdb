@@ -504,4 +504,10 @@ void nowdb_expr_show(nowdb_expr_t expr, FILE *stream);
 #define NOWDB_EXPR_OP_LENGTH 10002
 #define NOWDB_EXPR_OP_STRCAT 10003
 #define NOWDB_EXPR_OP_POS    10004
+
+/* -----------------------------------------------------------------------
+ * INTERNALS
+ * -----------------------------------------------------------------------
+ */
+#define NOWDB_EXPR_OP_VERSION 50001
 #endif

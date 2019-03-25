@@ -9,6 +9,7 @@
 #ifndef nowdb_types_decl
 #define nowdb_types_decl
 
+#include <nowdb/types/version.h>
 #include <stdint.h>
 
 #ifdef __GNUC__
@@ -29,7 +30,7 @@
 
 #define NOWDB_MAGIC 0x450099db
 
-#define NOWDB_VERSION 1
+#define NOWDB_DB_VERSION 1
 
 #define NOWDB_OS_PAGE  4096
 #define NOWDB_IDX_PAGE 8192

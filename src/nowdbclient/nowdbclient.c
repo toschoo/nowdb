@@ -751,7 +751,7 @@ int nowdb_row_write(FILE *stream, nowdb_row_t row) {
 			i+=8; break;
 
 		case NOWDB_FLOAT: 
-			fprintf(stream, "%.4f", *(double*)(buf+i));
+			fprintf(stream, "%.8f", *(double*)(buf+i));
 			i+=8; break;
 
 		case NOWDB_BOOL: 

@@ -1781,6 +1781,9 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
 	case NOWDB_EXPR_OP_WHEN: return showargs(op, "when", stream);
 	case NOWDB_EXPR_OP_ELSE: return showargs(op, "else", stream);
 	case NOWDB_EXPR_OP_COAL: return showargs(op, "coalesce", stream);
+
+	case NOWDB_EXPR_OP_VERSION: return showargs(op, "version", stream);
+
 	default: showargs(op, "unknown", stream);
 	}
 }
@@ -2414,6 +2417,13 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_POS:
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT, NULL);
 
+	/* -----------------------------------------------------------------------
+	 * Internals
+	 * -----------------------------------------------------------------------
+	 */
+	case NOWDB_EXPR_OP_VERSION:
+		COPYADDR(res, &nowdb_version_string); break;
+
 	default: INVALID("unknown function");
 
 	}
@@ -2501,6 +2511,8 @@ static inline int getArgs(int o) {
 
 	case NOWDB_EXPR_OP_ELSE: return 1;
 	case NOWDB_EXPR_OP_COAL: return 1;
+
+	case NOWDB_EXPR_OP_VERSION: return 0;
 
 	default: return -1;
 	}
@@ -2726,6 +2738,8 @@ static inline int evalType(nowdb_op_t *op, char guess) {
 		}
 		return NOWDB_TYP_NOTHING;
 
+	case NOWDB_EXPR_OP_VERSION: return NOWDB_TYP_TEXT;
+
 	default: return -1;
 	}
 }
@@ -2828,6 +2842,8 @@ int nowdb_op_fromName(char *op, char *agg) {
 	if (strcasecmp(op, "else") == 0) return NOWDB_EXPR_OP_ELSE;
 	if (strcasecmp(op, "coal") == 0) return NOWDB_EXPR_OP_COAL;
 	if (strcasecmp(op, "coalesce") == 0) return NOWDB_EXPR_OP_COAL;
+
+	if (strcasecmp(op, "version") == 0) return NOWDB_EXPR_OP_VERSION;
 
 	*agg = 1;
 
