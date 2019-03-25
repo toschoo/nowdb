@@ -181,8 +181,14 @@ class Connection:
 
     '''
     def __init__(self, addr, port, usr, pwd):
+        if type(addr) != str or \
+           type(port) != str: # usr/pwd
+           raise ParamError('address, port, user and password must be string')
+
         con = c_void_p()
-        x = _connect(byref(con), c_char_p(addr), c_char_p(port), c_char_p(usr), c_char_p(pwd), c_long(0))
+        x = _connect(byref(con), c_char_p(addr), c_char_p(port),\
+                                 c_char_p(usr), c_char_p(pwd), \
+                                 c_long(0))
         if x == 0:
             self.con = con
             self.addr = addr
@@ -220,6 +226,8 @@ class Connection:
         executes an sql statement agains the database.
         It returns a polymorphic 'result' (see below).
         '''
+        if type(stmt) != str:
+           raise ParamError('statement must be a string')
         r = c_void_p()
         x = _exec(self.con, c_char_p(stmt), byref(r))
         if x == 0:
@@ -530,6 +538,17 @@ class Result:
         '''
         x = _rEof(self.r)
         return (x != 0)
+
+# parameter error
+class ParamError(Exception):
+    '''
+    Exception indicating that an invalid parameter was passed to the client library
+    '''
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __str__(self):
+       return self.msg
 
 # something went wrong in the client
 class ClientError(Exception):

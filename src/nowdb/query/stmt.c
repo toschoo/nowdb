@@ -1998,7 +1998,7 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 			NOMEM("values.append");
 			break;
 		}
-		v = nowdb_ast_value(v);
+		v = nowdb_ast_field(v);
 	}
 	
 	if (err != NOWDB_OK) goto cleanup;

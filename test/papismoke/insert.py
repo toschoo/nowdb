@@ -3,6 +3,7 @@
 import db
 import nowapi as na
 import random as rnd
+import math
 
 def countdb(c,t):
     sql = "select count(*) as cnt from %s" % t
@@ -144,6 +145,34 @@ def insertnulledge(c,o,d):
         if row['med'] != (50*p+51*p)/2:
            raise db.TestFailed("median differs")
 
+def insertfun(c):
+     print("RUNNING TEST 'insertfun'")
+
+     p = findlast(c)
+     p += 10
+
+     sql = "insert into product (prod_key, prod_desc, prod_price) \
+                        values  (%d, '%s', pi())" % (p, 'pi')
+     c.execute(sql).close()
+     for row in c.execute("select * from product where prod_key = %d" % p):
+         print("%d (%s): %.6f" % (row['prod_key'], row['prod_desc'], row['prod_price']))
+         if float(round(row['prod_price'] * 1000))/1000 != \
+            float(round(math.pi*1000))/1000:
+            db.TestFailed("this is not pi: %.f" % row['prod_price'])
+
+     o = findrand(c)
+     sql = "insert into buys (origin, destin, stamp, quantity, price) \
+                        values  (%d, %d, now(), touint(round(e()*1000.0)), e()*pi())" % (o, p)
+     c.execute(sql).close()
+     for row in c.execute("select * from buys where origin = %d and destin = %d" % (o,p)):
+         print("%d (%d): %s | %.6f | %.6f" % (row['origin'], row['destin'], row['stamp'], \
+                                              row['quantity'], row['price']))
+         if row['quantity'] * 1000 != round(math.e*1000):
+            db.TestFailed("this is not e: %.f" % row['quantity'])
+         if float(round(row['price'] * 1000))/1000 != \
+            float(round(math.e*math.pi*1000))/1000:
+            db.TestFailed("this is not e*pi: %.f" % row['price'])
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
@@ -164,5 +193,7 @@ if __name__ == "__main__":
           print("%d -> %d" % (o,d))
           insertnullvertex(c,d)
           insertnulledge(c,o,d)
+
+        insertfun(c)
 
     print("PASSED")

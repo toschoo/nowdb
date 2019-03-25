@@ -138,10 +138,14 @@ def aliastest(c):
     i = 0
     for row in c.execute("select * from product"):
         if i == x:
+           k = row['prod_key']
            checkprod(c,row['prod_key'])
            break
         i+=1
     i = 0
+    for row in c.execute("select * from product where prod_key = %d" % k):
+        checkprod(c,row['prod_key'])
+
     for row in c.execute("select 'from' as one, 'bla' as from_bla, prod_key as key, 'from' as my_from from product"):
         if i == x:
            checkprod(c,row['key'])

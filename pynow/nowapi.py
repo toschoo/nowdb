@@ -414,8 +414,14 @@ class Cursor:
         self.rowformat = rowtype
 
     def getfields(self, s):
+        i = 0
+        l = len(s)
+        while i < l:
+            if isWhitespace(s[i]):
+               break
+            i+=1
         try:
-            r = self._con._c.execute("describe %s" % s)
+            r = self._con._c.execute("describe %s" % s[:i])
         except Exception as x:
             raise DatabaseError(str(x))
         fs = []
@@ -427,10 +433,12 @@ class Cursor:
         tmp1 = whitespace(op)
         if tmp1.lower().startswith('select'):
            tmp = tmp1[6:]
-           (tmp2, n) = parsefields(tmp)
-           if whitespace(tmp).startswith('*'):
-              return self.getfields(whitespace(tmp[n+4:]))
-           return extractfields(tmp2)
+           tmp2 = whitespace(tmp)
+           if tmp2.startswith('*'):
+              tmp3 = whitespace(tmp2[1:])
+              return self.getfields(whitespace(tmp3[4:]))
+           (tmp3, n) = parsefields(tmp2)
+           return extractfields(tmp3)
         return None
 
     def mkdesc(self, op):
