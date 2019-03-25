@@ -1127,6 +1127,9 @@ static nowdb_err_t makeFun(nowdb_scope_t    *scope,
 		INVALIDAST("unknown operator");
 	}
 	if (x) {
+		if (!(limits & NOWDB_PLAN_OK_AGG)) {
+			INVALIDAST("aggregate not allowed here");
+		}
 		*agg=1;
 		return makeAgg(scope, v, e, limits, trg, field, op, expr);
 	}
