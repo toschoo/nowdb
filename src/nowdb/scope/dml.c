@@ -392,76 +392,6 @@ static inline nowdb_err_t getKey(nowdb_dml_t *dml,
 }
 
 /* ------------------------------------------------------------------------
- * Set edge model
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t setEdgeModel(nowdb_dml_t *dml) {
-	nowdb_err_t err;
-	nowdb_key_t eid;
-
-	err = getKey(dml, edge, &eid);
-	if (err != NOWDB_OK) return err;
-
-	if (dml->e != NULL) {
-		if (dml->e->edgeid == eid) return NOWDB_OK;
-	}
-
-	err = nowdb_model_getEdgeById(dml->scope->model, eid, &dml->e);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_model_getVertexById(dml->scope->model,
-	                          dml->e->origin, &dml->o);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_model_getVertexById(dml->scope->model,
-	                          dml->e->destin, &dml->d);
-	if (err != NOWDB_OK) return err;
-
-	return NOWDB_OK;
-}
-*/
-
-/* ------------------------------------------------------------------------
- * Get edge model
- * ------------------------------------------------------------------------
- */
-/*
-static inline nowdb_err_t getEdgeModel(nowdb_dml_t *dml,
-                                 ts_algo_list_t *fields,
-                                 ts_algo_list_t *values) {
-	ts_algo_list_node_t *frun, *vrun, *edge=NULL;
-	nowdb_simple_value_t *val;
-	char tp=0;
-	int off=-1;
-
-	vrun = values->head;
-	if (fields != NULL) {
-		for(frun=fields->head; frun!=NULL; frun=frun->nxt) {
-			off = nowdb_edge_offByName(frun->cont);
-			if (off == NOWDB_OFF_EDGE) {
-				edge=vrun; if (tp) break;
-			} else if (off == NOWDB_OFF_TMSTMP) {
-				tp=1; if (edge != NULL) break;
-			}
-			vrun = vrun->nxt;
-		}
-		if (edge == NULL) {
-			INVALID("edge field missing in insert");
-		}
-		if (!tp) {
-			INVALID("timestamp missing in insert");
-		}
-		val = edge->cont;
-	} else {
-		if (values == NULL) INVALID("no values");
-	}
-	// fprintf(stderr, "%s\n", (char*)val->value);
-	return setEdgeModel(dml);
-}
-*/
-
-/* ------------------------------------------------------------------------
  * Check edge model
  * ------------------------------------------------------------------------
  */
@@ -501,9 +431,9 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		break;
 
 	case NOWDB_OFF_STAMP:
-		if (val->type == NOWDB_TYP_TEXT) {
-			val->type = NOWDB_TYP_TIME; break;
-		}
+		if (val->type == NOWDB_TYP_DATE ||
+                    val->type == NOWDB_TYP_TIME) break;
+
 		if (val->type != NOWDB_TYP_INT  &&
 		    val->type != NOWDB_TYP_UINT) {
 			INVALID("not a valid timestamp");
@@ -524,49 +454,10 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		                     val->value) != 0) {
 			INVALID("invalid type");
 		}
-
 	}
 	return NOWDB_OK;
 }
 
-/* ------------------------------------------------------------------------
- * String to int or uint
- * ------------------------------------------------------------------------
- */
-#define STROX(t,to) \
-	*((t*)target) = to(val->value, &hlp, 10); \
-	if (*hlp != 0) {  \
-		err = nowdb_err_get(nowdb_err_invalid, \
-		      FALSE, OBJECT, "string to int"); \
-	}
-
-/* ------------------------------------------------------------------------
- * String to double
- * ------------------------------------------------------------------------
- */
-#define STROD() \
-	*((double*)target) = strtod(val->value, &hlp); \
-	if (*hlp != 0) {  \
-		err = nowdb_err_get(nowdb_err_invalid, \
-		      FALSE, OBJECT, "string to double"); \
-	}
-
-/* ------------------------------------------------------------------------
- * String to time
- * ------------------------------------------------------------------------
- */
-#define STRTOTIME() \
-	if (strnlen(val->value, 4096) == 10) { \
-		rc = nowdb_time_fromString(val->value, \
-		             NOWDB_DATE_FORMAT,target);\
-	} else { \
-		rc = nowdb_time_fromString(val->value,\
-		            NOWDB_TIME_FORMAT,target);\
-	} \
-	if (rc != 0) { \
-		err = nowdb_err_get(rc, FALSE, OBJECT, "string to time"); \
-	}
-	
 /* ------------------------------------------------------------------------
  * Convert property value from string
  * ------------------------------------------------------------------------
@@ -575,8 +466,6 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
                                 nowdb_simple_value_t *val,
                                          void     *target) {
 	nowdb_err_t err=NOWDB_OK;
-	char *hlp=NULL;
-	int rc;
 
 	switch(val->type) {
 	case NOWDB_TYP_NOTHING:
@@ -585,30 +474,18 @@ static inline nowdb_err_t getValueAsType(nowdb_dml_t *dml,
 	case NOWDB_TYP_TEXT:
 		// fprintf(stderr, "TEXT: %s\n", (char*)val->value);
 		return getKey(dml, val->value, target);
-
+		
 	case NOWDB_TYP_DATE:
 	case NOWDB_TYP_TIME:
-		// fprintf(stderr, "TIME: %s\n", (char*)val->value);
-		STRTOTIME();
-		break;
-
 	case NOWDB_TYP_FLOAT:
-		// fprintf(stderr, "FLOAT: %s\n", (char*)val->value);
-		STROD();
-		break;
-
 	case NOWDB_TYP_INT:
-		// fprintf(stderr, "INT: %s\n", (char*)val->value);
-		STROX(int64_t, strtol);
-		break;
-
 	case NOWDB_TYP_UINT:
-		// fprintf(stderr, "UINT: %s\n", (char*)val->value);
-		STROX(uint64_t, strtoul);
-		break;
+		memcpy(target, val->value, sizeof(nowdb_key_t)); break;
 
-	// bool
-
+	case NOWDB_TYP_BOOL:
+		// error: we cannot insert booleans
+		INVALID("boolean cannot be inserted");
+	
 	default: INVALID("unknown type");
 	}
 	return err;
@@ -627,6 +504,7 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	if (err != NOWDB_OK) return err;
 
 	if (off < NOWDB_OFF_USER) return NOWDB_OK;
+	if (val->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 
 	uint8_t bit;
 	uint16_t byte;
@@ -768,40 +646,6 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 }
 
 /* ------------------------------------------------------------------------
- * Correct type:
- * This is chaotic! We should once and for all define the correction
- * in types and use it everywhere...
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t correctType(uint32_t typ,
-                         nowdb_simple_value_t *val) {
-	nowdb_err_t err;
-	// this is all googledemoogle
-	if (typ == NOWDB_TYP_TIME ||
-	    typ == NOWDB_TYP_DATE) {
-		if (val->type == NOWDB_TYP_TEXT) {
-			val->type = typ;
-			return NOWDB_OK;
-		}
-		if (val->type == NOWDB_TYP_UINT) {
-			val->type = NOWDB_TYP_INT;
-			return NOWDB_OK;
-		}
-		if (val->type == NOWDB_TYP_INT) {
-			return NOWDB_OK;
-		}
-	}
-	/* this is as it should be!!!
-	if (nowdb_correctType(typ, &val->type, val->value) != 0) {
-		INVALIDVAL("cannot correct value");
-		return err;
-	}
-	*/
-	INVALIDVAL("types differ");
-	return err;
-}
-
-/* ------------------------------------------------------------------------
  * Insert vertex in fields/value format
  * NOTE: this relies on setTarget
  * ------------------------------------------------------------------------
@@ -820,13 +664,19 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		if (dml->p[i]->value != val->type) {
-			err = correctType(dml->p[i]->value, val);
-			if (err != NOWDB_OK) return err;
+			if (nowdb_correctType(dml->p[i]->value,
+			                     &val->type,
+			                     val->value) != 0) {
+				INVALID("types differ");
+			}
 		}
 		// store primary key in vertex
 		if (dml->p[i]->pk) {
 			err = getValueAsType(dml, val, &vrtx.vertex);
 			if (err != NOWDB_OK) return err;
+			if (val->type == NOWDB_TYP_NOTHING) {
+				INVALID("pk is NULL");
+			}
 			pkfound = 1;
 
 		// check all other values
@@ -856,6 +706,11 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	// ... and store all attributes
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
+
+		if (val->type == NOWDB_TYP_NOTHING) {
+			i++; continue;
+		}
+
 		vrtx.property = dml->p[i]->propid;
 		vrtx.vtype = dml->p[i]->value;
 

@@ -80,7 +80,6 @@
 (?i:TYPE)		return NOWDB_SQL_TYPE;
 (?i:TEXT)		return NOWDB_SQL_TEXT;
 (?i:DATE)		return NOWDB_SQL_DATE;
-(?i:DATETIME)		return NOWDB_SQL_TIME;
 (?i:TIME)		return NOWDB_SQL_TIME;
 (?i:FLOAT)		return NOWDB_SQL_FLOAT;
 (?i:INT)		return NOWDB_SQL_INT;
@@ -122,6 +121,7 @@
 (?i:SET)		return NOWDB_SQL_SET;
 (?i:ON)			return NOWDB_SQL_ON;
 (?i:IN)			return NOWDB_SQL_IN;
+(?i:VALUES)		return NOWDB_SQL_VALUES;
 
 (?i:IF)			return NOWDB_SQL_IF;
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;

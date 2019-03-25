@@ -1868,15 +1868,91 @@ static nowdb_err_t handleDLL(nowdb_ast_t *ast,
  */
 static inline void destroyValues(ts_algo_list_t *values) {
 	ts_algo_list_node_t *runner, *tmp;
+	nowdb_simple_value_t *v;
 
 	runner=values->head;
 	while(runner!=NULL) {
 		tmp = runner->nxt;
 		ts_algo_list_remove(values, runner);
+		v = runner->cont;
+		if (v->value != NULL) free(v->value);
 		free(runner->cont);
 		free(runner);
 		runner=tmp;
 	}
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: copy value
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copyval(void *src, nowdb_type_t t,
+                                  nowdb_simple_value_t *val) {
+	nowdb_err_t err;
+
+	if (t == NOWDB_TYP_NOTHING) {
+		val->value = NULL;
+
+	} else if (t == NOWDB_TYP_TEXT) {
+		val->value = strdup(src);
+		if (val->value == NULL) {
+			NOMEM("strdup");
+			return err;
+		}
+	} else {
+		val->value = malloc(sizeof(nowdb_key_t));
+		if (val->value == NULL) {
+			NOMEM("allocating value");
+			return err;
+		}
+		memcpy(val->value, src, sizeof(nowdb_key_t));
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: expression to simplified value
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
+                                       nowdb_ast_t   *trg,
+                                       nowdb_ast_t   *v,
+                                       nowdb_simple_value_t **val) {
+	nowdb_err_t err=NOWDB_OK;
+	uint64_t rmap = 0xffffffffffffffff;
+	nowdb_expr_t expr;
+	uint32_t limits;
+	void *tmp;
+	char agg=0;
+
+	NOWDB_PLAN_OK_ALL(limits);
+	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_FIELD);
+	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
+
+	err = nowdb_plan_getExpr(scope, NULL, NULL,
+                       trg, v, limits, &expr, &agg);
+	if (err != NOWDB_OK) return err;
+
+	*val = malloc(sizeof(nowdb_simple_value_t));
+	if (*val == NULL) {
+		NOMEM("allocating simplified value");
+		nowdb_expr_destroy(expr); free(expr);
+		return err;
+	}
+	err = nowdb_expr_eval(expr, NULL, rmap, NULL,
+	                    &(*val)->type, &tmp);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(expr); free(expr);
+		free(*val); *val = NULL;
+		return err;
+	}
+	err = copyval(tmp, (*val)->type, *val);
+	nowdb_expr_destroy(expr); free(expr);
+	if (err != NOWDB_OK) {
+		free(*val); *val = NULL;
+		return err;
+	}
+	return NOWDB_OK;
 }
 
 /* -------------------------------------------------------------------------
@@ -1915,23 +1991,14 @@ static nowdb_err_t handleInsert(nowdb_ast_t      *op,
 
 	v = nowdb_ast_value(op);
 	while(v != NULL) {
-		if (v->value == NULL) {
-			v = nowdb_ast_value(v); continue;
-		}
-		val = malloc(sizeof(nowdb_simple_value_t));
-		if (val == NULL) {
-			NOMEM("allocating simplified value");
-			break;
-		}
-
-		val->value = v->value;
-		val->type = nowdb_ast_type(v->stype);
+		err = expr2simplev(scope, trg, v, &val);
+		if (err != NOWDB_OK) break;
 
 		if (ts_algo_list_append(&values, val) != TS_ALGO_OK) {
 			NOMEM("values.append");
 			break;
 		}
-		v = nowdb_ast_value(v);
+		v = nowdb_ast_field(v);
 	}
 	
 	if (err != NOWDB_OK) goto cleanup;

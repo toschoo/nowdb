@@ -1,7 +1,8 @@
 
 echo "RUNNING TEST BATTERY 'PAPISMOKE'" > log/papismoke.log
 
-nohup nowdbd -b rsc > log/nowdb.log 2>&1 &
+export PYTHONPATH=$PYTHONPATH:./test/server
+nohup nowdbd -b rsc -y > log/nowdb.log 2>&1 &
 if [ $? -ne 0 ]
 then
 	echo "FAILED: cannot run server"
@@ -53,6 +54,15 @@ test/papismoke/insert.py >> log/papismoke.log 2>&1
 if [ $? -ne 0 ]
 then
 	echo "FAILED: insert.py failed"
+	kill -2 $p
+	exit 1
+fi
+
+echo "RUNNING exec.py" >> log/papismoke.log
+test/papismoke/exec.py >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: exec.py failed"
 	kill -2 $p
 	exit 1
 fi

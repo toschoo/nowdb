@@ -98,4 +98,33 @@ void nowdb_plan_destroy(ts_algo_list_t *plan, char content);
  */
 void nowdb_plan_show(ts_algo_list_t *plan, FILE *stream);
 
+#define NOWDB_PLAN_OK_FIELD 1
+#define NOWDB_PLAN_OK_CONST 2
+#define NOWDB_PLAN_OK_OP    4
+#define NOWDB_PLAN_OK_AGG   8
+
+#define NOWDB_PLAN_NEED_TEXT 1024 
+
+#define NOWDB_PLAN_OK_ALL(limits) \
+	limits = NOWDB_PLAN_OK_FIELD | \
+	         NOWDB_PLAN_OK_CONST | \
+	         NOWDB_PLAN_OK_OP    | \
+	         NOWDB_PLAN_OK_AGG   | \
+                 NOWDB_PLAN_NEED_TEXT
+
+#define NOWDB_PLAN_OK_REMOVE(limits, k) \
+	limits ^= k
+
+/* ------------------------------------------------------------------------
+ * Get expression from plan
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_plan_getExpr(nowdb_scope_t    *scope,
+                               nowdb_model_vertex_t *v,
+                               nowdb_model_edge_t   *e,
+                               nowdb_ast_t        *trg,
+                               nowdb_ast_t      *field,
+                               uint32_t         limits,
+                               nowdb_expr_t      *expr,
+                               char               *agg);
 #endif
