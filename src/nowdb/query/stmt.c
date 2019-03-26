@@ -1355,20 +1355,75 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: convert nowdb type to python type
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static inline nowdb_err_t buildPyType(nowdb_simple_value_t *val,
+                                      uint16_t              pos,
+                                      PyObject            *args) {
+	nowdb_err_t err;
+	PyObject *x;
+	double d;
+	uint64_t u;
+	int64_t l;
+
+	switch(val->type) {
+	case NOWDB_TYP_TEXT:
+		x = Py_BuildValue("s",val->value); break;
+ 
+	case NOWDB_TYP_FLOAT: 
+		memcpy(&d, val->value, sizeof(double));
+		x = Py_BuildValue("d",d); break;
+
+	case NOWDB_TYP_UINT: 
+		memcpy(&u, val->value, sizeof(uint64_t));
+		x = Py_BuildValue("K",u); break;
+
+	case NOWDB_TYP_INT: 
+	case NOWDB_TYP_DATE: 
+	case NOWDB_TYP_TIME: 
+		memcpy(&l, val->value, sizeof(int64_t));
+		x = Py_BuildValue("L",l); break;
+
+	case NOWDB_TYP_BOOL:
+		x = PyBool_FromLong((long int)(*(int64_t*)val->value));
+		break;
+
+	// NOTHING
+
+	default:
+		INVALID("invalid parameter type");
+		return err;
+	}
+	if (PyTuple_SetItem(args,(Py_ssize_t)pos,x) != 0) {
+		PYTHONERR("cannot set item to tuple");
+		return err;
+	}
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
  * Helper: load arguments for python function
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
-static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
+static nowdb_err_t loadPyArgs(nowdb_scope_t *scope,
+                              nowdb_proc_desc_t *pd,
                               nowdb_ast_t   *params,
                               PyObject       **args) {
 	nowdb_err_t err;
+	nowdb_simple_value_t *val;
 	nowdb_ast_t *p;
+
+	/*
 	nowdb_value_t v;
 	int x;
 	double d;
 	uint64_t u;
 	int64_t l;
+	*/
 
 	if (pd->argn == 0) {
 		if (params == NULL) return NOWDB_OK;
@@ -1394,98 +1449,23 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			return err;
 		}
 
-		/*
-		fprintf(stderr, "parameter %hu (%hu): %s\n",
-		     pd->args[i].pos,  pd->args[i].typ, (char*)p->value);
-		*/
-
-		if (pd->args[i].typ != NOWDB_TYP_TEXT) {
-			if (nowdb_strtoval(p->value,
-			            pd->args[i].typ,
-                                           &v) != 0)
-			{
-				Py_DECREF(*args);
-				INVALID("conversion error");
-				return err;
-			}
-		}
-
-		switch(pd->args[i].typ) {
-
-		case NOWDB_TYP_TEXT:
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("s", p->value)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
- 
-		case NOWDB_TYP_FLOAT: 
-			memcpy(&d, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("d", d)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_UINT: 
-			memcpy(&u, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("K", u)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_INT: 
-		case NOWDB_TYP_DATE: 
-		case NOWDB_TYP_TIME: 
-			memcpy(&l, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("L", l)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_BOOL:
-			if (v) {
-				x = PyTuple_SetItem(*args,
-				    (Py_ssize_t)pd->args[i].pos,
-				     Py_True);
-			} else {
-				x = PyTuple_SetItem(*args,
-				    (Py_ssize_t)pd->args[i].pos,
-				     Py_False);
-			}
-			if (x != 0) {
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		default:
-			fprintf(stderr, "INVALID TYPE (%hu): %hu\n",
-			        pd->args[i].pos, pd->args[i].typ);
+		err = expr2simplev(scope, NULL, p, &val);
+		if (err != NOWDB_OK) {
 			Py_DECREF(*args);
-			INVALID("invalid parameter type");
 			return err;
 		}
-		p = nowdb_ast_param(p);
+
+		err = buildPyType(val, pd->args[i].pos, *args);
+		if (err != NOWDB_OK) {
+			Py_DECREF(*args);
+			if (val->value != NULL) free(val->value);
+			free(val);
+			return err;
+		}
+		if (val->value != NULL) free(val->value);
+		free(val); val = NULL;
+
+		p = nowdb_ast_nextParam(p);
 	}
 	if (p != NULL) {
 		Py_DECREF(*args);
@@ -1501,7 +1481,8 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
-static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
+static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
+                                     nowdb_ast_t        *ast,
                                      nowdb_proc_t      *proc,
                                      nowdb_proc_desc_t   *pd,
                                      PyObject             *f,
@@ -1525,7 +1506,7 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 	PyEval_RestoreThread(ts);
 	
 	// load arguments
-	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+	err = loadPyArgs(scope, pd, nowdb_ast_param(ast), &args);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "PY ARGS NOT LOADED\n");
 		nowdb_err_print(err);
@@ -1564,7 +1545,8 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
  * Handle execute statement
  * -------------------------------------------------------------------------
  */
-static nowdb_err_t handleExec(nowdb_ast_t        *ast,
+static nowdb_err_t handleExec(nowdb_scope_t    *scope,
+                              nowdb_ast_t        *ast,
                               void               *rsc,
                               nowdb_qry_result_t *res) {
 	nowdb_err_t err;
@@ -1594,7 +1576,7 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 		}
 
 #ifdef _NOWDB_WITH_PYTHON
-		return execPython(ast, rsc, pd, f, res);
+		return execPython(scope, ast, rsc, pd, f, res);
 #else
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                        "python not supported");
@@ -2223,7 +2205,7 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		return handleUse(op, rsc, base, res);
 
 	case NOWDB_AST_EXEC:
-		return handleExec(op, rsc, res);
+		return handleExec(scope, op, rsc, res);
 
 	case NOWDB_AST_FETCH: 
 	case NOWDB_AST_CLOSE: 

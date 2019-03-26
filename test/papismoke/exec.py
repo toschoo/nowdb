@@ -3,6 +3,7 @@
 import db
 import nowapi as na
 import random as rnd
+import math
 
 def countdb(c,t):
     sql = "select count(*) as cnt from %s" % t
@@ -32,6 +33,18 @@ def price(c,p):
 
 def createprocs(c):
     print "RUNNING 'createprocs'"
+
+    c.execute("drop procedure myfloatadd if exists").close()
+    c.execute("create procedure db.myfloatadd(a float, b float) language python").close()
+
+    c.execute("drop procedure myintadd if exists").close()
+    c.execute("create procedure db.myintadd(a int, b int) language python").close()
+
+    c.execute("drop procedure myuintadd if exists").close()
+    c.execute("create procedure db.myuintadd(a uint, b uint) language python").close()
+
+    c.execute("drop procedure mylogic if exists").close()
+    c.execute("create procedure db.mylogic(o text, a bool, b bool) language python").close()
 
     c.execute("drop procedure mycount if exists").close()
     c.execute("create procedure db.mycount(t text) language python").close()
@@ -126,6 +139,135 @@ def grouptest(c):
            float(round(1000*row[6]))/1000:
            raise db.TestFailed("pm differs")
 
+def addtest(c):
+
+    print "RUNNING TEST 'addtest'"
+
+    # float
+    a = rnd.uniform(0.1,100.0)
+    b = rnd.uniform(0.1,100.0)
+    
+    c1 = a+b
+
+    for row in c.execute("exec myfloatadd(%f, %f)" % (a,b)):
+        c2 = row[0]
+        print("%f ?= %f" % (c1,c2))
+
+    if float(round(c1*1000)/1000) != float(round(c2*1000))/1000:
+       raise db.TestFailed("float add differs: %f | %f" % (c1,c2))
+
+    # signed int 
+    a = rnd.randint(0,100)
+    b = rnd.randint(0,100)
+
+    if rnd.randint(0,2) == 0:
+       a *= -1
+
+    if rnd.randint(0,2) == 0:
+       b *= -1
+    
+    c1 = a+b
+
+    for row in c.execute("exec myintadd(%d, %d)" % (a,b)):
+        c2 = row[0]
+        print("%d ?= %d" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("int add differs: %f | %f" % (c1,c2))
+
+    # unsigned int 
+    a = rnd.randint(0,100)
+    b = rnd.randint(0,100)
+
+    c1 = a+b
+
+    for row in c.execute("exec myuintadd(%d, %d)" % (a,b)):
+        c2 = row[0]
+        print("%d ?= %d" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("uint add differs: %f | %f" % (c1,c2))
+    
+
+def logictest(c):
+
+    print "RUNNING TEST 'logictest'"
+
+    a = True if rnd.randint(0,1) == 0 else False
+    b = False if rnd.randint(0,1) == 0 else True
+
+    c1 = a and b 
+
+    for row in c.execute("exec mylogic('and', %s, %s)" % (a,b)):
+        c2 = row[0]
+        print("%s ?= %s" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("AND failed: %s | %s" % (c1,c2))
+
+    c1 = a or b 
+
+    for row in c.execute("exec mylogic('or', %s, %s)" % (a,b)):
+        c2 = row[0]
+        print("%s ?= %s" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("OR failed: %s | %s" % (c1,c2))
+
+    c1 = (a and not b) or (not a and b) 
+
+    for row in c.execute("exec mylogic('xor', %s, %s)" % (a,b)):
+        c2 = row[0]
+        print("%s ?= %s" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("XOR failed: %s | %s" % (c1,c2))
+
+def express(c):
+
+    print "RUNNING TEST 'express'"
+
+    # arithmetic
+    a = rnd.randint(0,100)
+    b = rnd.randint(0,100)
+
+    d = -1 if rnd.randint(0,2) == 0 else 1
+
+    c1 = math.pi*a+d*b
+
+    for row in c.execute("exec myfloatadd(pi()*%d, %d*%d)" % (a,d,b)):
+        c2 = row[0]
+        print("%d ?= %d" % (c1,c2))
+
+    if float(round(c1*1000)/1000) != float(round(c2*1000))/1000:
+       raise db.TestFailed("float add differs: %f | %f" % (c1,c2))
+
+    # logic
+    c1 = (a > b) and (d <= 0)
+    
+    for row in c.execute("exec mylogic('and', %d>%d, %d<=0)" % (a,b,d)):
+        c2 = row[0]
+        print("%s ?= %s" % (c1,c2))
+
+    if c1 != c2:
+       raise db.TestFailed("LOGIC failed: %s | %s" % (c1,c2))
+
+def invalidpars(c):
+
+    print "RUNNING TEST 'invalidpars'"
+
+    try:
+       c.execute("exec myfloatadd(price1, price2)")
+       raise db.TestFailed("called exec with fields")
+    except Exception as x:
+       print("caught %s" % str(x))
+
+    try:
+       c.execute("exec myfloatadd(pi(), sum(1))")
+       raise db.TestFailed("called exec with agg")
+    except Exception as x:
+       print("caught %s" % str(x))
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
@@ -135,5 +277,9 @@ if __name__ == "__main__":
        for i in range(100):
            counttest(c)
            grouptest(c)
+           addtest(c)
+           logictest(c)
+           express(c)
+           invalidpars(c)
 
     print("PASSED")
