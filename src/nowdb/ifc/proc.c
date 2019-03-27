@@ -55,6 +55,7 @@ typedef struct {
 #ifdef _NOWDB_WITH_PYTHON
 	PyObject   *m;    /* module      */
 	PyObject   *d;    /* dictionary  */
+	PyObject   *c;    /* caller      */
 #endif
 } module_t;
 
@@ -104,8 +105,10 @@ typedef struct {
 	nowdb_proc_desc_t *pd;
 #ifdef _NOWDB_WITH_PYTHON
 	PyObject           *f;
+	PyObject           *c;
 #else
 	void               *f;
+	void               *c;
 #endif
 } fun_t;
 
@@ -236,6 +239,24 @@ static nowdb_err_t setDB(nowdb_proc_t *proc,
 
 	return NOWDB_OK;
 }
+static PyObject *getCaller(PyObject *dict)
+{
+	PyObject  *f;
+	PyObject  *m, *d;
+
+	m = PyDict_GetItemString(dict, "nowdb");
+	if (m == NULL) return NULL;
+
+	d = PyModule_GetDict(m);
+	if (d == NULL) return NULL;
+	
+	f = PyDict_GetItemString(d, "_caller");
+	if (f == NULL) return NULL;
+
+	if (!PyCallable_Check(f)) return NULL;
+
+	return f;
+}
 #endif
 
 #define TREE(x) \
@@ -272,6 +293,13 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 			nowdb_err_print(err);
 			nowdb_err_release(err);
 			return TS_ALGO_ERR;
+		}
+
+		MODULE(module)->c = getCaller(MODULE(module)->d);
+		if (MODULE(module)->c == NULL) {
+			fprintf(stderr, "cannot get caller\n");
+			PyErr_Print();
+    			return TS_ALGO_NO_MEM;
 		}
 	}
 	return TS_ALGO_OK;
@@ -560,6 +588,7 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 	PyObject *mn=NULL;
 	PyObject *m=NULL;
 	PyObject *d=NULL;
+	PyObject *c=NULL;
 #endif
 
 #ifdef _NOWDB_WITH_PYTHON
@@ -588,6 +617,12 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 		return err;
 	}
 
+	c = getCaller(d);
+	if (c == NULL) {
+		Py_XDECREF(m);
+		return err;
+	}
+
 	*module = calloc(1, sizeof(module_t));
 	if (*module == NULL) {
 		NOMEM("allocating module");
@@ -604,6 +639,7 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
 
 	(*module)->m = m;
 	(*module)->d = d;
+	(*module)->c = c;
 
 	if (ts_algo_tree_insert(proc->mods, *module) != TS_ALGO_OK) {
 		NOMEM("tree.insert");
@@ -653,6 +689,7 @@ static nowdb_err_t loadFun(nowdb_proc_t    *proc,
 	}
 
 	(*fun)->f = f;
+	(*fun)->c = module->c;
 	(*fun)->pd = pd;
 
 	if (ts_algo_tree_insert(proc->funs, *fun) != TS_ALGO_OK) {
@@ -671,7 +708,8 @@ static nowdb_err_t loadFun(nowdb_proc_t    *proc,
 nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
                                char            *fname,
                                nowdb_proc_desc_t **pd,
-                               void             **fun) {
+                               void             **fun,
+                               void            **call) {
 	nowdb_err_t       err;
 	module_t *m, mpattern;
 	fun_t    *f, fpattern;
@@ -687,6 +725,7 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 		ENABLED(&f->pd);
 		*pd  = f->pd;
 		*fun = f->f;
+		*call = f->c;
 		return NOWDB_OK;
 	}
 
@@ -718,7 +757,21 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	}
 
 	*fun = f->f;
+        *call = m->c;
 
 	UNLOCK();
 	return NOWDB_OK;
 }
+
+PyObject *nowdb_proc_call(void *call, void *fun, void *args) {
+	if (call == NULL) {
+		fprintf(stderr, "NO CALLER\n");
+		return NULL;
+	}
+	if (args == NULL) {
+		return PyObject_CallFunctionObjArgs(call, fun, Py_None, NULL);
+	} else {
+		return PyObject_CallFunctionObjArgs(call, fun, args, NULL);
+	}
+}
+

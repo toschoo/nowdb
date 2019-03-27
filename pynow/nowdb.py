@@ -412,6 +412,19 @@ class Result:
         else:
             return None
 
+def _caller(f,t):
+    try:
+       if t is None:
+          r = f()
+       else:
+          r = f(*t)
+       if r is None:
+            return success().toDB()
+       else:
+            return r.toDB()
+    except Exception as x:
+       return makeError(str(x)).toDB() 
+
 class DBError(Exception):
   def __init__(self, c, d):
     self._code = c

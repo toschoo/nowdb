@@ -97,8 +97,19 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc);
  */
 void nowdb_proc_updateInterpreter(nowdb_proc_t *proc);
 
+/* ------------------------------------------------------------------------
+ * Load callable function (and the caller)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
                                char            *fname,
                                nowdb_proc_desc_t **pd,
-                               void             **fun);
+                               void             **fun,
+                               void            **call);
+
+/* ------------------------------------------------------------------------
+ * Call the function
+ * ------------------------------------------------------------------------
+ */
+PyObject *nowdb_proc_call(void *call, void *fun, void *args);
 #endif

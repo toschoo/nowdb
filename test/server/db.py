@@ -3,35 +3,28 @@ from datetime import *
 
 def sayhello():
     print("hello")
-    return nowdb.success().toDB()
+    return nowdb.success()
 
 def timetest(t):
     res = nowdb.makeRow()
-    try:
-        with nowdb.execute("select count(*) \
-                              from buys \
-                             where stamp <= %d" % t) as cur:
-            for row in cur:
-                res.add2Row(nowdb.UINT, row.field(0))
-                res.closeRow()
-            return res.toDB()
-    except Exception as x:
-        return nowdb.makeError(nowdb.USRERR, str(x)).toDB()
-    return nowdb.success().toDB()
+    with nowdb.execute("select count(*) \
+                          from buys \
+                         where stamp <= %d" % t) as cur:
+        for row in cur:
+            res.add2Row(nowdb.UINT, row.field(0))
+            res.closeRow()
+        return res
+    return nowdb.success()
 
 def mycount(tab):
     sql = "select count(*) from %s" % tab
     print(sql)
     with nowdb.execute(sql) as cur:
          res = nowdb.makeRow()
-         try:
-             for row in cur:
-                 res.add2Row(nowdb.UINT, cur.field(0))
-                 res.closeRow()
-             return res.toDB()
-         except Exception as x:
-             res.release()
-             return nowdb.makeError(nowdb.USRERR, str(x)).toDB()
+         for row in cur:
+             res.add2Row(nowdb.UINT, cur.field(0))
+             res.closeRow()
+         return res
 
 def myadd(t,a,b):
     res = nowdb.makeRow()
@@ -45,15 +38,15 @@ def myadd(t,a,b):
 
 def myfloatadd(a,b):
     print("myadd: %f + %f" % (a,b))
-    return myadd(nowdb.FLOAT, a, b).toDB()
+    return myadd(nowdb.FLOAT, a, b)
 
 def myuintadd(a,b):
     print("myadd: %d + %d" % (a,b))
-    return myadd(nowdb.UINT, a, b).toDB()
+    return myadd(nowdb.UINT, a, b)
 
 def myintadd(a,b):
     print("myadd: %d + %d" % (a,b))
-    return myadd(nowdb.INT, a, b).toDB()
+    return myadd(nowdb.INT, a, b)
 
 def mylogic(o,a,b):
     if o == "and":
@@ -68,7 +61,7 @@ def mylogic(o,a,b):
     res = nowdb.makeRow()
     res.add2Row(nowdb.BOOL, c)
     res.closeRow()
-    return res.toDB()
+    return res
 
 def getunique(t):
     sql = "select max(id) from unique"
@@ -116,6 +109,6 @@ def groupbuy(p):
    
         sql = "select destin, f1, f2, f3, f4, f5, f6 \
                  from result where origin = %d" % uid
-        return nowdb.execute(sql).toDB()
+        return nowdb.execute(sql)
     except Exception as x:
-        return nowdb.makeError(nowdb.USRERR,str(x)).toDB()
+        return nowdb.makeError(nowdb.USRERR,str(x))

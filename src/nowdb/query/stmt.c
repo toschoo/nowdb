@@ -1486,6 +1486,7 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
                                      nowdb_proc_t      *proc,
                                      nowdb_proc_desc_t   *pd,
                                      PyObject             *f,
+                                     PyObject             *c,
                                      nowdb_qry_result_t *res)
 {
 	nowdb_err_t err;
@@ -1514,7 +1515,7 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		return err;
 	}
 
-	r = PyObject_CallObject(f, args);
+	r = nowdb_proc_call(c, f, args);
 	if (args != NULL) Py_DECREF(args);
 
 	if (r == NULL) {
@@ -1553,7 +1554,7 @@ static nowdb_err_t handleExec(nowdb_scope_t    *scope,
 	char *pname;
 	nowdb_proc_desc_t *pd;
 	nowdb_t *lib;
-	void    *f;
+	void  *f, *c;
 
 	lib = nowdb_proc_getLib(rsc);
 	if (lib == NULL) {
@@ -1564,7 +1565,7 @@ static nowdb_err_t handleExec(nowdb_scope_t    *scope,
 	pname = ast->value;
 	if (pname == NULL) INVALIDAST("procedure without name");
 
-	err = nowdb_proc_loadFun(rsc, pname, &pd, &f);
+	err = nowdb_proc_loadFun(rsc, pname, &pd, &f, &c);
 	if (err != NOWDB_OK) return err;
 
 	switch(pd->lang) {
@@ -1576,7 +1577,7 @@ static nowdb_err_t handleExec(nowdb_scope_t    *scope,
 		}
 
 #ifdef _NOWDB_WITH_PYTHON
-		return execPython(scope, ast, rsc, pd, f, res);
+		return execPython(scope, ast, rsc, pd, f, c, res);
 #else
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                        "python not supported");
