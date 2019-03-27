@@ -401,7 +401,7 @@ def createEdges(bs, vs, c, p, s):
     for i in range(bs):
         cdx = random.randint(0,len(c)-1)
         pdx = random.randint(0,len(p)-1)
-        tp = t + datetime.timedelta(
+        tp = t - datetime.timedelta(
             microseconds=random.randint(0,96*3600000000))
         w = random.randint(1,100)
         w2 = w * p[pdx].price

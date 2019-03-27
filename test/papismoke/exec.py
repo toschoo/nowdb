@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import db
+import now
 import nowapi as na
 import random as rnd
 import math
@@ -33,6 +34,9 @@ def price(c,p):
 
 def createprocs(c):
     print "RUNNING 'createprocs'"
+
+    c.execute("drop procedure timetest if exists").close()
+    c.execute("create procedure db.timetest(t time) language python").close()
 
     c.execute("drop procedure myfloatadd if exists").close()
     c.execute("create procedure db.myfloatadd(a float, b float) language python").close()
@@ -268,11 +272,31 @@ def invalidpars(c):
     except Exception as x:
        print("caught %s" % str(x))
 
+def timetest(c):
+
+    print "RUNNING TEST 'timetest'"
+
+    x = countdb(c,'buys')
+
+    for row in c.execute("exec timetest(now())"):
+        print('time: %d' % row[0])
+        if row[0] != x:
+           raise db.TestFailed("there are edges from the future")
+
+    for row in c.execute("select now() as now"):
+        ds = row['now'].strftime(now.TIMEFORMAT)
+
+    for row in c.execute("exec timetest('%s')" % ds):
+        print('time: %d' % row[0])
+        if row[0] != x:
+           raise db.TestFailed("there are edges from the future")
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
        createprocs(c)
        hellotest(c)
+       timetest(c)
 
        for i in range(100):
            counttest(c)

@@ -5,6 +5,20 @@ def sayhello():
     print("hello")
     return nowdb.success().toDB()
 
+def timetest(t):
+    res = nowdb.makeRow()
+    try:
+        with nowdb.execute("select count(*) \
+                              from buys \
+                             where stamp <= %d" % t) as cur:
+            for row in cur:
+                res.add2Row(nowdb.UINT, row.field(0))
+                res.closeRow()
+            return res.toDB()
+    except Exception as x:
+        return nowdb.makeError(nowdb.USRERR, str(x)).toDB()
+    return nowdb.success().toDB()
+
 def mycount(tab):
     sql = "select count(*) from %s" % tab
     print(sql)
