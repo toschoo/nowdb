@@ -73,7 +73,7 @@ static nowdb_err_t createScope(nowdb_ast_t  *op,
 		}
 	}
 
-	err = nowdb_scope_new(&scope, p, NOWDB_VERSION); free(p);
+	err = nowdb_scope_new(&scope, p, NOWDB_DB_VERSION); free(p);
 	if (err != NOWDB_OK) return err;
 	
 	err = nowdb_scope_create(scope);
@@ -112,7 +112,7 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 	}
 
 	if (lib == NULL) {
-		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);free(p);
+		err = nowdb_scope_new(&scope, p, NOWDB_DB_VERSION);free(p);
 		if (err != NOWDB_OK) return err;
 
 		err = nowdb_scope_drop(scope);
@@ -137,7 +137,7 @@ static nowdb_err_t dropScope(nowdb_ast_t  *op,
 	if (err != NOWDB_OK) goto unlock;
 
 	if (scope == NULL) {
-		err = nowdb_scope_new(&scope, p, NOWDB_VERSION);
+		err = nowdb_scope_new(&scope, p, NOWDB_DB_VERSION);
 		if (err != NOWDB_OK) goto unlock;
 
 		err = nowdb_scope_drop(scope);
@@ -175,7 +175,7 @@ static nowdb_err_t openScope(nowdb_path_t     path,
                              nowdb_scope_t **scope) {
 	nowdb_err_t err;
 
-	err = nowdb_scope_new(scope, path, NOWDB_VERSION);
+	err = nowdb_scope_new(scope, path, NOWDB_DB_VERSION);
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_scope_open(*scope);
@@ -988,6 +988,79 @@ static nowdb_err_t dropProc(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: copy value
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t copyval(void *src, nowdb_type_t t,
+                                  nowdb_simple_value_t *val) {
+	nowdb_err_t err;
+
+	if (t == NOWDB_TYP_NOTHING) {
+		val->value = NULL;
+
+	} else if (t == NOWDB_TYP_TEXT) {
+		val->value = strdup(src);
+		if (val->value == NULL) {
+			NOMEM("strdup");
+			return err;
+		}
+	} else {
+		val->value = malloc(sizeof(nowdb_key_t));
+		if (val->value == NULL) {
+			NOMEM("allocating value");
+			return err;
+		}
+		memcpy(val->value, src, sizeof(nowdb_key_t));
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: expression to simplified value
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
+                                       nowdb_ast_t   *trg,
+                                       nowdb_ast_t   *v,
+                                       nowdb_simple_value_t **val) {
+	nowdb_err_t err=NOWDB_OK;
+	uint64_t rmap = 0xffffffffffffffff;
+	nowdb_expr_t expr;
+	uint32_t limits;
+	void *tmp;
+	char agg=0;
+
+	NOWDB_PLAN_OK_ALL(limits);
+	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_FIELD);
+	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
+
+	err = nowdb_plan_getExpr(scope, NULL, NULL,
+                       trg, v, limits, &expr, &agg);
+	if (err != NOWDB_OK) return err;
+
+	*val = calloc(1,sizeof(nowdb_simple_value_t));
+	if (*val == NULL) {
+		NOMEM("allocating simplified value");
+		nowdb_expr_destroy(expr); free(expr);
+		return err;
+	}
+	err = nowdb_expr_eval(expr, NULL, rmap, NULL,
+	                    &(*val)->type, &tmp);
+	if (err != NOWDB_OK) {
+		nowdb_expr_destroy(expr); free(expr);
+		free(*val); *val = NULL;
+		return err;
+	}
+	err = copyval(tmp, (*val)->type, *val);
+	nowdb_expr_destroy(expr); free(expr);
+	if (err != NOWDB_OK) {
+		free(*val); *val = NULL;
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
  * Load a file
  * TODO:
  * - Should be more versatile,
@@ -1211,20 +1284,146 @@ unlock:
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: handle single select statement
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
+                                nowdb_ast_t         *op,
+                                nowdb_qry_result_t *res) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_qry_row_t *r;
+	char *row=NULL, *tmp;
+	uint32_t sz=0;
+	nowdb_ast_t     *v;
+	nowdb_simple_value_t *val;
+
+	v = nowdb_ast_field(op);
+	while(v != NULL) {
+		err = expr2simplev(scope, NULL, v, &val);
+		if (err != NOWDB_OK) {
+			if (row != NULL) free(row);
+			return err;
+		}
+		if (row == NULL) {
+			row = nowdb_row_fromValue(val->type,
+			                          val->value, &sz);
+			if (row == NULL) {
+				if (val->value != NULL) {
+					free(val->value);
+				}
+				free(val); val = NULL;
+				NOMEM("allocating row");
+				break;
+			}
+		} else {
+			tmp = nowdb_row_addValue(row, val->type,
+			                              val->value, &sz);
+			if (tmp == NULL) {
+				if (val->value != NULL) {
+					free(val->value);
+				}
+				free(val); val = NULL;
+				free(row); row = NULL;
+				NOMEM("allocating row");
+				break;
+			}
+			row = tmp;
+		}
+		if (val != NULL) {
+			if (val->value != NULL) {
+				free(val->value);
+			}
+			free(val); val = NULL;
+		}
+		v = nowdb_ast_field(v);
+	}
+	if (err != NOWDB_OK) return err;
+	if (row != NULL) {
+		nowdb_row_addEOR(row, &sz);
+		r = calloc(1, sizeof(nowdb_qry_row_t));
+		if (r == NULL) {
+			free(row);
+			NOMEM("allocating qryrow");
+			return err;
+		}
+		r->sz = sz;
+		r->row = row;
+		res->resType = NOWDB_QRY_RESULT_ROW;
+		res->result = r;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: convert nowdb type to python type
+ * -------------------------------------------------------------------------
+ */
+#ifdef _NOWDB_WITH_PYTHON
+static inline nowdb_err_t buildPyType(nowdb_simple_value_t *val,
+                                      uint16_t              pos,
+                                      PyObject            *args) {
+	nowdb_err_t err;
+	PyObject *x;
+	double d;
+	uint64_t u;
+	int64_t l;
+
+	switch(val->type) {
+	case NOWDB_TYP_TEXT:
+		x = Py_BuildValue("s",val->value); break;
+ 
+	case NOWDB_TYP_FLOAT: 
+		memcpy(&d, val->value, sizeof(double));
+		x = Py_BuildValue("d",d); break;
+
+	case NOWDB_TYP_UINT: 
+		memcpy(&u, val->value, sizeof(uint64_t));
+		x = Py_BuildValue("K",u); break;
+
+	case NOWDB_TYP_INT: 
+	case NOWDB_TYP_DATE: 
+	case NOWDB_TYP_TIME: 
+		memcpy(&l, val->value, sizeof(int64_t));
+		x = Py_BuildValue("L",l); break;
+
+	case NOWDB_TYP_BOOL:
+		x = PyBool_FromLong((long int)(*(int64_t*)val->value));
+		break;
+
+	// NOTHING
+
+	default:
+		INVALID("invalid parameter type");
+		return err;
+	}
+	if (PyTuple_SetItem(args,(Py_ssize_t)pos,x) != 0) {
+		PYTHONERR("cannot set item to tuple");
+		return err;
+	}
+	return NOWDB_OK;
+}
+#endif
+
+/* -------------------------------------------------------------------------
  * Helper: load arguments for python function
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
-static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
+static nowdb_err_t loadPyArgs(nowdb_scope_t *scope,
+                              nowdb_proc_desc_t *pd,
                               nowdb_ast_t   *params,
                               PyObject       **args) {
 	nowdb_err_t err;
+	nowdb_simple_value_t *val;
 	nowdb_ast_t *p;
+
+	/*
 	nowdb_value_t v;
 	int x;
 	double d;
 	uint64_t u;
 	int64_t l;
+	*/
 
 	if (pd->argn == 0) {
 		if (params == NULL) return NOWDB_OK;
@@ -1250,98 +1449,23 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
 			return err;
 		}
 
-		/*
-		fprintf(stderr, "parameter %hu (%hu): %s\n",
-		     pd->args[i].pos,  pd->args[i].typ, (char*)p->value);
-		*/
-
-		if (pd->args[i].typ != NOWDB_TYP_TEXT) {
-			if (nowdb_strtoval(p->value,
-			            pd->args[i].typ,
-                                           &v) != 0)
-			{
-				Py_DECREF(*args);
-				INVALID("conversion error");
-				return err;
-			}
-		}
-
-		switch(pd->args[i].typ) {
-
-		case NOWDB_TYP_TEXT:
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("s", p->value)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
- 
-		case NOWDB_TYP_FLOAT: 
-			memcpy(&d, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("d", d)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_UINT: 
-			memcpy(&u, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("K", u)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_INT: 
-		case NOWDB_TYP_DATE: 
-		case NOWDB_TYP_TIME: 
-			memcpy(&l, &v, 8);
-			if (PyTuple_SetItem(*args,
-			   (Py_ssize_t)pd->args[i].pos,
-			    Py_BuildValue("L", l)) != 0) 
-			{
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		case NOWDB_TYP_BOOL:
-			if (v) {
-				x = PyTuple_SetItem(*args,
-				    (Py_ssize_t)pd->args[i].pos,
-				     Py_True);
-			} else {
-				x = PyTuple_SetItem(*args,
-				    (Py_ssize_t)pd->args[i].pos,
-				     Py_False);
-			}
-			if (x != 0) {
-				Py_DECREF(*args);
-				PYTHONERR("cannot set item to tuple");
-				return err;
-			}
-			break;
-
-		default:
-			fprintf(stderr, "INVALID TYPE (%hu): %hu\n",
-			        pd->args[i].pos, pd->args[i].typ);
+		err = expr2simplev(scope, NULL, p, &val);
+		if (err != NOWDB_OK) {
 			Py_DECREF(*args);
-			INVALID("invalid parameter type");
 			return err;
 		}
-		p = nowdb_ast_param(p);
+
+		err = buildPyType(val, pd->args[i].pos, *args);
+		if (err != NOWDB_OK) {
+			Py_DECREF(*args);
+			if (val->value != NULL) free(val->value);
+			free(val);
+			return err;
+		}
+		if (val->value != NULL) free(val->value);
+		free(val); val = NULL;
+
+		p = nowdb_ast_nextParam(p);
 	}
 	if (p != NULL) {
 		Py_DECREF(*args);
@@ -1357,7 +1481,8 @@ static nowdb_err_t loadPyArgs(nowdb_proc_desc_t *pd,
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
-static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
+static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
+                                     nowdb_ast_t        *ast,
                                      nowdb_proc_t      *proc,
                                      nowdb_proc_desc_t   *pd,
                                      PyObject             *f,
@@ -1381,7 +1506,7 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
 	PyEval_RestoreThread(ts);
 	
 	// load arguments
-	err = loadPyArgs(pd, nowdb_ast_param(ast), &args);
+	err = loadPyArgs(scope, pd, nowdb_ast_param(ast), &args);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "PY ARGS NOT LOADED\n");
 		nowdb_err_print(err);
@@ -1420,7 +1545,8 @@ static inline nowdb_err_t execPython(nowdb_ast_t        *ast,
  * Handle execute statement
  * -------------------------------------------------------------------------
  */
-static nowdb_err_t handleExec(nowdb_ast_t        *ast,
+static nowdb_err_t handleExec(nowdb_scope_t    *scope,
+                              nowdb_ast_t        *ast,
                               void               *rsc,
                               nowdb_qry_result_t *res) {
 	nowdb_err_t err;
@@ -1450,7 +1576,7 @@ static nowdb_err_t handleExec(nowdb_ast_t        *ast,
 		}
 
 #ifdef _NOWDB_WITH_PYTHON
-		return execPython(ast, rsc, pd, f, res);
+		return execPython(scope, ast, rsc, pd, f, res);
 #else
 		return nowdb_err_get(nowdb_err_not_supp, FALSE, OBJECT,
 	                                        "python not supported");
@@ -1883,79 +2009,6 @@ static inline void destroyValues(ts_algo_list_t *values) {
 }
 
 /* -------------------------------------------------------------------------
- * Helper: copy value
- * -------------------------------------------------------------------------
- */
-static inline nowdb_err_t copyval(void *src, nowdb_type_t t,
-                                  nowdb_simple_value_t *val) {
-	nowdb_err_t err;
-
-	if (t == NOWDB_TYP_NOTHING) {
-		val->value = NULL;
-
-	} else if (t == NOWDB_TYP_TEXT) {
-		val->value = strdup(src);
-		if (val->value == NULL) {
-			NOMEM("strdup");
-			return err;
-		}
-	} else {
-		val->value = malloc(sizeof(nowdb_key_t));
-		if (val->value == NULL) {
-			NOMEM("allocating value");
-			return err;
-		}
-		memcpy(val->value, src, sizeof(nowdb_key_t));
-	}
-	return NOWDB_OK;
-}
-
-/* -------------------------------------------------------------------------
- * Helper: expression to simplified value
- * -------------------------------------------------------------------------
- */
-static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
-                                       nowdb_ast_t   *trg,
-                                       nowdb_ast_t   *v,
-                                       nowdb_simple_value_t **val) {
-	nowdb_err_t err=NOWDB_OK;
-	uint64_t rmap = 0xffffffffffffffff;
-	nowdb_expr_t expr;
-	uint32_t limits;
-	void *tmp;
-	char agg=0;
-
-	NOWDB_PLAN_OK_ALL(limits);
-	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_FIELD);
-	NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
-
-	err = nowdb_plan_getExpr(scope, NULL, NULL,
-                       trg, v, limits, &expr, &agg);
-	if (err != NOWDB_OK) return err;
-
-	*val = malloc(sizeof(nowdb_simple_value_t));
-	if (*val == NULL) {
-		NOMEM("allocating simplified value");
-		nowdb_expr_destroy(expr); free(expr);
-		return err;
-	}
-	err = nowdb_expr_eval(expr, NULL, rmap, NULL,
-	                    &(*val)->type, &tmp);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(expr); free(expr);
-		free(*val); *val = NULL;
-		return err;
-	}
-	err = copyval(tmp, (*val)->type, *val);
-	nowdb_expr_destroy(expr); free(expr);
-	if (err != NOWDB_OK) {
-		free(*val); *val = NULL;
-		return err;
-	}
-	return NOWDB_OK;
-}
-
-/* -------------------------------------------------------------------------
  * Handle insert statement
  * -------------------------------------------------------------------------
  */
@@ -2152,7 +2205,7 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		return handleUse(op, rsc, base, res);
 
 	case NOWDB_AST_EXEC:
-		return handleExec(op, rsc, res);
+		return handleExec(scope, op, rsc, res);
 
 	case NOWDB_AST_FETCH: 
 	case NOWDB_AST_CLOSE: 
@@ -2162,6 +2215,11 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		res->resType = NOWDB_QRY_RESULT_OP;
 		res->result = op;
 		return NOWDB_OK;
+
+	case NOWDB_AST_SELECT: 
+		res->resType = NOWDB_QRY_RESULT_NOTHING;
+		res->result = NULL;
+		return handleSelect(scope, op, res);
 
 	default: INVALIDAST("invalid operation in AST");
 	}

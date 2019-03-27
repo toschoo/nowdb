@@ -426,6 +426,7 @@ static inline int addmisc(nowdb_ast_t *n,
 	case NOWDB_AST_FETCH: ADDKID(0);
 	case NOWDB_AST_CLOSE: ADDKID(0);
 	case NOWDB_AST_EXEC: ADDKID(0);
+	case NOWDB_AST_SELECT: ADDKID(0);
 	default: return -1;
 	}
 }
@@ -769,6 +770,9 @@ static inline int addval(nowdb_ast_t *n,
 static inline int addexec(nowdb_ast_t *n,
                           nowdb_ast_t *k) {
 	switch(k->ntype) {
+	case NOWDB_AST_FIELD:
+	case NOWDB_AST_FUN:
+	case NOWDB_AST_OP:
 	case NOWDB_AST_VALUE: ADDKID(0);
 	default: return -1;
 	}
@@ -847,6 +851,7 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
  */
 int nowdb_ast_addParam(nowdb_ast_t *n, nowdb_ast_t *k) {
 	switch(n->ntype) {
+	case NOWDB_AST_EXEC:
 	case NOWDB_AST_OP: return addparop(n,k);
 	case NOWDB_AST_FUN: return addparfun(n,k);
 	default: return -1;

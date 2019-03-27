@@ -104,7 +104,8 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/ifc/nowproc.o    \
       $(SRC)/ifc/nowdb.o
 
-DEP = $(SRC)/types/types.h    \
+DEP = $(SRC)/types/version.h  \
+      $(SRC)/types/types.h    \
       $(SRC)/types/errman.h   \
       $(HDR)/errcode.h        \
       $(SRC)/types/error.h    \

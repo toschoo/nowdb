@@ -349,13 +349,16 @@ misc ::= FETCH UINTEGER(I). {
 misc ::= CLOSE UINTEGER(I). {
 	NOWDB_SQL_MAKE_CLOSE(I);	
 }
+misc ::= projection_clause(P). {
+	NOWDB_SQL_MAKE_SELECT(P);
+}
 
 /* val_list shall be expression list! */
 misc ::= EXECUTE IDENTIFIER(I) LPAR RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,NULL);
 }
 
-misc ::= EXECUTE IDENTIFIER(I) LPAR val_list(V) RPAR. {
+misc ::= EXECUTE IDENTIFIER(I) LPAR expr_list(V) RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,V);
 }
 

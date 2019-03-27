@@ -25,6 +25,45 @@ void nowdb_client_close() {
 	nowdb_errman_destroy();
 }
 
+char *nowdb_version_string = NOWDB_VERSION_STRING;
+
+static int versioncomponent(int x) {
+	char tmp[32];
+        char *ptr=NULL;
+	int m = strlen(nowdb_version_string);
+        int i = 0;
+        int j = 0;
+        int z = 0;
+	for(; i<m; i++) {
+		if (nowdb_version_string[i] == '.') {
+			if (z == x) break;
+			z++;
+
+		} else if (z == x) {
+			tmp[j] = nowdb_version_string[i]; j++;
+		}
+	}
+	if (x < 3 && i == m) return 0;
+	tmp[j] = 0;
+	return (int)strtol(tmp,&ptr,10);
+}
+
+int nowdb_version() {
+	return versioncomponent(0);
+}
+
+int nowdb_major() {
+	return versioncomponent(1);
+}
+
+int nowdb_minor() {
+	return versioncomponent(2);
+}
+
+int nowdb_build() {
+	return versioncomponent(3);
+}
+
 int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
 	char *tmp;
 	double d;
@@ -70,9 +109,6 @@ int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
 	}
 	return 0;
 }
-
-// correct Type
-// str2type
 
 int nowdb_correctType(nowdb_type_t good,
                       nowdb_type_t *bad,
