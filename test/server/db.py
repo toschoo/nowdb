@@ -5,6 +5,20 @@ def sayhello():
     print("hello")
     return nowdb.success().toDB()
 
+def timetest(t):
+    res = nowdb.makeRow()
+    try:
+        with nowdb.execute("select count(*) \
+                              from buys \
+                             where stamp <= %d" % t) as cur:
+            for row in cur:
+                res.add2Row(nowdb.UINT, row.field(0))
+                res.closeRow()
+            return res.toDB()
+    except Exception as x:
+        return nowdb.makeError(nowdb.USRERR, str(x)).toDB()
+    return nowdb.success().toDB()
+
 def mycount(tab):
     sql = "select count(*) from %s" % tab
     print(sql)
@@ -18,6 +32,43 @@ def mycount(tab):
          except Exception as x:
              res.release()
              return nowdb.makeError(nowdb.USRERR, str(x)).toDB()
+
+def myadd(t,a,b):
+    res = nowdb.makeRow()
+    try:
+        res.add2Row(t, a + b)
+        res.closeRow()
+        return res
+    except Exception as x:
+        res.release()
+        return nowdb.makeError(nowdb.USRERR, str(x))
+
+def myfloatadd(a,b):
+    print("myadd: %f + %f" % (a,b))
+    return myadd(nowdb.FLOAT, a, b).toDB()
+
+def myuintadd(a,b):
+    print("myadd: %d + %d" % (a,b))
+    return myadd(nowdb.UINT, a, b).toDB()
+
+def myintadd(a,b):
+    print("myadd: %d + %d" % (a,b))
+    return myadd(nowdb.INT, a, b).toDB()
+
+def mylogic(o,a,b):
+    if o == "and":
+       c = a and b
+    elif o == "or":
+       c = a or b
+    elif o == "xor":
+       c = (a and not b) or (not a and b)
+    else:
+       c = True
+       
+    res = nowdb.makeRow()
+    res.add2Row(nowdb.BOOL, c)
+    res.closeRow()
+    return res.toDB()
 
 def getunique(t):
     sql = "select max(id) from unique"

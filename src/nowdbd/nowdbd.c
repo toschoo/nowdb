@@ -5,6 +5,7 @@
  * ========================================================================
  */
 #include <nowdb/types/types.h>
+#include <nowdb/types/version.h>
 #include <nowdb/types/error.h>
 #include <nowdb/types/time.h>
 #include <nowdb/ifc/nowdb.h>
@@ -23,15 +24,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
-/* -----------------------------------------------------------------------
- * Version Info
- * -----------------------------------------------------------------------
- */
-#define VERSION 0
-#define MAJOR 0
-#define MINOR 0
-#define BUILD 1
 
 /* -----------------------------------------------------------------------
  * Global variables
@@ -87,7 +79,10 @@ void helptxt(char *progname) {
  * -----------------------------------------------------------------------
  */
 void printVersion() {
-	fprintf(stdout, "%d.%d.%d.%d\n", VERSION, MAJOR, MINOR, BUILD);
+	fprintf(stdout, "%d.%d.%d.%d\n", nowdb_version(),
+	                                 nowdb_major(),
+	                                 nowdb_minor(),
+	                                 nowdb_build());
 }
 
 /* -----------------------------------------------------------------------
