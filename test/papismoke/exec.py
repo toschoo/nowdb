@@ -38,6 +38,9 @@ def createprocs(c):
     c.execute("drop procedure timetest if exists").close()
     c.execute("create procedure db.timetest(t time) language python").close()
 
+    c.execute("drop procedure easter if exists").close()
+    c.execute("create procedure db.easter(y uint) language python").close()
+
     c.execute("drop procedure myfloatadd if exists").close()
     c.execute("create procedure db.myfloatadd(a float, b float) language python").close()
 
@@ -157,7 +160,7 @@ def addtest(c):
         c2 = row[0]
         print("%f ?= %f" % (c1,c2))
 
-    if float(round(c1*1000)/1000) != float(round(c2*1000))/1000:
+    if (round(c1*100)/100) != (round(c2*100))/100:
        raise db.TestFailed("float add differs: %f | %f" % (c1,c2))
 
     # signed int 
@@ -291,12 +294,21 @@ def timetest(c):
         if row[0] != x:
            raise db.TestFailed("there are edges from the future")
 
+def eastertest(c):
+
+    print "RUNNING TEST 'eastertest'"
+
+    for i in range(50):
+        for row in c.execute("exec easter(%d)" % (i+2000)):
+            print('easter %d: %s' % (i+2000,row[0].strftime(now.DATEFORMAT)))
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
        createprocs(c)
        hellotest(c)
        timetest(c)
+       eastertest(c)
 
        for i in range(100):
            counttest(c)

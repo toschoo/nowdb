@@ -275,6 +275,10 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 		m = PyImport_ReloadModule(MODULE(module)->m);
 		if (m == NULL) {
 			fprintf(stderr, "cannot reload\n");
+			Py_DECREF(MODULE(module)->m);
+			MODULE(module)->m=NULL;
+			MODULE(module)->d=NULL;
+			MODULE(module)->c=NULL;
 			PyErr_Print();
 			return TS_ALGO_NO_MEM;
 		}
@@ -284,12 +288,20 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 		MODULE(module)->d = PyModule_GetDict(m);
 		if (MODULE(module)->d == NULL) {
 			fprintf(stderr, "cannot get dictionary\n");
+			Py_DECREF(MODULE(module)->m);
+			MODULE(module)->m=NULL;
+			MODULE(module)->d=NULL;
+			MODULE(module)->c=NULL;
 			PyErr_Print();
     			return TS_ALGO_NO_MEM;
 		}
 
 		err = setDB(TREE(tree)->rsc,MODULE(module)->d);
 		if (err != NOWDB_OK) {
+			Py_DECREF(MODULE(module)->m);
+			MODULE(module)->m=NULL;
+			MODULE(module)->d=NULL;
+			MODULE(module)->c=NULL;
 			nowdb_err_print(err);
 			nowdb_err_release(err);
 			return TS_ALGO_ERR;
@@ -298,6 +310,10 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 		MODULE(module)->c = getCaller(MODULE(module)->d);
 		if (MODULE(module)->c == NULL) {
 			fprintf(stderr, "cannot get caller\n");
+			Py_DECREF(MODULE(module)->m);
+			MODULE(module)->m=NULL;
+			MODULE(module)->d=NULL;
+			MODULE(module)->c=NULL;
 			PyErr_Print();
     			return TS_ALGO_NO_MEM;
 		}
@@ -312,11 +328,6 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 	nowdb_err_t err;
 
-	proc->mods->rsc = proc;
-	if (ts_algo_tree_map(proc->mods, &reloadModule) != TS_ALGO_OK) {
-		PYTHONERR("cannot reload modules");
-		return err;
-	}
 	if (proc->funs != NULL) {
 		ts_algo_tree_destroy(proc->funs);
 		if (ts_algo_tree_init(proc->funs,
@@ -328,6 +339,11 @@ static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 			free(proc->funs); proc->funs = NULL;
 			return err;
 		}
+	}
+	proc->mods->rsc = proc;
+	if (ts_algo_tree_map(proc->mods, &reloadModule) != TS_ALGO_OK) {
+		PYTHONERR("cannot reload modules");
+		return err;
 	}
 	return NOWDB_OK;
 }

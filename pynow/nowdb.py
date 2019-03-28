@@ -373,10 +373,10 @@ class Result:
         if x != ROW:
             raise WrongType("result not a row")
 
-	if self.r is None:
+	if self._r is None:
            return 0
 
-        return int(_rCount(self.r))
+        return int(_rCount(self._r))
 
   # field from row
   def field(self, idx):
