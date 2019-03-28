@@ -296,11 +296,17 @@ class Result:
        _rDestroy(self._r, 1)
     self._r = None 
 
+  def __del__(self):
+    self.release()
+
   def rType(self):
     return _rType(self._r)
 
-  def toDB(self):
-    return self._r
+  def _toDB(self):
+    r = self._r
+    self._r = None
+    self._rw = None
+    return r
 
   def ok(self):
     return (_rStatus(self._r) != 0)
@@ -419,11 +425,11 @@ def _caller(f,t):
        else:
           r = f(*t)
        if r is None:
-            return success().toDB()
+            return success()._toDB()
        else:
-            return r.toDB()
+            return r._toDB()
     except Exception as x:
-       return makeError(str(x)).toDB() 
+       return makeError(str(x))._toDB() 
 
 class DBError(Exception):
   def __init__(self, c, d):

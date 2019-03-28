@@ -19,12 +19,20 @@ def timetest(t):
 def mycount(tab):
     sql = "select count(*) from %s" % tab
     print(sql)
+    cur = nowdb.execute(sql)
+    res = nowdb.makeRow()
+    for row in cur:
+        res.add2Row(nowdb.UINT, cur.field(0))
+        res.closeRow()
+    return res
+    '''
     with nowdb.execute(sql) as cur:
          res = nowdb.makeRow()
          for row in cur:
              res.add2Row(nowdb.UINT, cur.field(0))
              res.closeRow()
          return res
+    '''
 
 def myadd(t,a,b):
     res = nowdb.makeRow()
