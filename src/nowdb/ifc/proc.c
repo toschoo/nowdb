@@ -169,12 +169,28 @@ static void destroyInterpreter(nowdb_proc_t *proc) {
 
 #ifdef _NOWDB_WITH_PYTHON
 /* ------------------------------------------------------------------------
+ * Helper: load nowdb 
+ * ------------------------------------------------------------------------
+ */
+static PyObject *loadNoWDB(nowdb_proc_t *proc) {
+	PyObject *mn, *m;
+
+	if (proc->nowmod != NULL) return proc->nowmod;
+
+	mn = PyString_FromString("nowdb");
+	if (mn == NULL) return NULL;
+
+  	m = PyImport_Import(mn); Py_XDECREF(mn);
+	if (m == NULL) return NULL;
+
+	proc->nowmod = m;
+	return m;
+}
+/* ------------------------------------------------------------------------
  * Helper: set DB
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t setDB(nowdb_proc_t *proc,
-                         PyObject     *dict) 
-{
+static nowdb_err_t setDB(nowdb_proc_t *proc) {
 	nowdb_err_t err;
 	PyObject  *args;
 	PyObject  *r;
@@ -196,7 +212,8 @@ static nowdb_err_t setDB(nowdb_proc_t *proc,
 	}
 	*/
 
-	m = PyDict_GetItemString(dict, "nowdb");
+	// m = PyDict_GetItemString(dict, "nowdb");
+	m = loadNoWDB(proc);
 	if (m == NULL) {
 		PYTHONERR("nowdb not imported");
 		return err;
@@ -236,25 +253,29 @@ static nowdb_err_t setDB(nowdb_proc_t *proc,
 	r = PyObject_CallObject(f, args);
 	if (args != NULL) Py_DECREF(args);
 	if (r != NULL) Py_DECREF(r);
-
 	return NOWDB_OK;
 }
-static PyObject *getCaller(PyObject *dict)
+static PyObject *getCaller(nowdb_proc_t *proc)
 {
 	PyObject  *f;
 	PyObject  *m, *d;
 
+	/*
 	m = PyDict_GetItemString(dict, "nowdb");
+	if (m == NULL) return NULL;
+	*/
+	m = loadNoWDB(proc);
 	if (m == NULL) return NULL;
 
 	d = PyModule_GetDict(m);
-	if (d == NULL) return NULL;
+	if (d == NULL) {
+		return NULL;
+	}
 	
 	f = PyDict_GetItemString(d, "_caller");
 	if (f == NULL) return NULL;
 
 	if (!PyCallable_Check(f)) return NULL;
-
 	return f;
 }
 #endif
@@ -296,7 +317,7 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
     			return TS_ALGO_NO_MEM;
 		}
 
-		err = setDB(TREE(tree)->rsc,MODULE(module)->d);
+		err = setDB(TREE(tree)->rsc);
 		if (err != NOWDB_OK) {
 			Py_DECREF(MODULE(module)->m);
 			MODULE(module)->m=NULL;
@@ -307,7 +328,7 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 			return TS_ALGO_ERR;
 		}
 
-		MODULE(module)->c = getCaller(MODULE(module)->d);
+		MODULE(module)->c = getCaller(TREE(tree)->rsc);
 		if (MODULE(module)->c == NULL) {
 			fprintf(stderr, "cannot get caller\n");
 			Py_DECREF(MODULE(module)->m);
@@ -375,6 +396,10 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 		PyEval_RestoreThread(proc->pyIntp); // acquire lock
 	}
 
+	if (proc->nowmod != NULL) {
+		Py_XDECREF(proc->nowmod); proc->nowmod = NULL;
+	}
+
 	err = reloadModules(proc);
 
 	if (proc->pyIntp != NULL) {
@@ -427,6 +452,7 @@ nowdb_err_t nowdb_proc_create(nowdb_proc_t **proc,
 
 	(*proc)->lib = lib;
 	(*proc)->scope = scope;
+	(*proc)->nowmod = NULL;
 
 	(*proc)->dml = calloc(1, sizeof(nowdb_dml_t));
 	if ((*proc)->dml == NULL) {
@@ -511,6 +537,10 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
 #ifdef _NOWDB_WITH_PYTHON
 	if (proc->pyIntp != NULL) {
 		PyEval_RestoreThread(proc->pyIntp);
+	}
+	if (proc->nowmod != NULL) {
+		Py_XDECREF(proc->nowmod);
+		proc->nowmod = NULL;
 	}
 #endif
 	if (proc->mods != NULL) {
@@ -627,13 +657,13 @@ static nowdb_err_t loadModule(nowdb_proc_t *proc,
     		return err;
 	}
 
-	err = setDB(proc, d);
+	err = setDB(proc);
 	if (err != NOWDB_OK) {
 		Py_XDECREF(m);
 		return err;
 	}
 
-	c = getCaller(d);
+	c = getCaller(proc);
 	if (c == NULL) {
 		Py_XDECREF(m);
 		return err;

@@ -37,6 +37,7 @@ typedef struct nowdb_proc_t {
 	ts_algo_tree_t    *funs;   /* loaded functions          */
 #ifdef _NOWDB_WITH_PYTHON
 	PyThreadState     *pyIntp; /* Python interpreter thread */
+	PyObject          *nowmod; /* the 'nowdb' module        */
 #endif
 } nowdb_proc_t;
 

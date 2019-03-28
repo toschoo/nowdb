@@ -1,56 +1,48 @@
-import nowdb
+import nowdb as nd
 from datetime import *
 
 def sayhello():
     print("hello")
-    return nowdb.success()
+    return nd.success()
 
 def timetest(t):
-    res = nowdb.makeRow()
-    with nowdb.execute("select count(*) \
+    res = nd.makeRow()
+    with nd.execute("select count(*) \
                           from buys \
                          where stamp <= %d" % t) as cur:
         for row in cur:
-            res.add2Row(nowdb.UINT, row.field(0))
+            res.add2Row(nd.UINT, row.field(0))
             res.closeRow()
         return res
-    return nowdb.success()
+    return nd.success()
 
 def mycount(tab):
     sql = "select count(*) from %s" % tab
     print(sql)
-    cur = nowdb.execute(sql)
-    res = nowdb.makeRow()
+    cur = nd.execute(sql)
+    res = nd.makeRow()
     for row in cur:
-        res.add2Row(nowdb.UINT, cur.field(0))
+        res.add2Row(nd.UINT, cur.field(0))
         res.closeRow()
     return res
-    '''
-    with nowdb.execute(sql) as cur:
-         res = nowdb.makeRow()
-         for row in cur:
-             res.add2Row(nowdb.UINT, cur.field(0))
-             res.closeRow()
-         return res
-    '''
 
 def myadd(t,a,b):
-    res = nowdb.makeRow()
+    res = nd.makeRow()
     res.add2Row(t, a + b)
     res.closeRow()
     return res
 
 def myfloatadd(a,b):
     print("myadd: %f + %f" % (a,b))
-    return myadd(nowdb.FLOAT, a, b)
+    return myadd(nd.FLOAT, a, b)
 
 def myuintadd(a,b):
     print("myadd: %d + %d" % (a,b))
-    return myadd(nowdb.UINT, a, b)
+    return myadd(nd.UINT, a, b)
 
 def myintadd(a,b):
     print("myadd: %d + %d" % (a,b))
-    return myadd(nowdb.INT, a, b)
+    return myadd(nd.INT, a, b)
 
 def mylogic(o,a,b):
     if o == "and":
@@ -62,8 +54,8 @@ def mylogic(o,a,b):
     else:
        c = True
        
-    res = nowdb.makeRow()
-    res.add2Row(nowdb.BOOL, c)
+    res = nd.makeRow()
+    res.add2Row(nd.BOOL, c)
     res.closeRow()
     return res
 
@@ -86,26 +78,26 @@ def easter(y):
     if d > 31:
        d-=31
        m+=1
-    t = nowdb.dt2now(datetime(y,m,d))
-    res = nowdb.makeRow()
-    res.add2Row(nowdb.TIME,t)
+    t = nd.dt2now(datetime(y,m,d))
+    res = nd.makeRow()
+    res.add2Row(nd.TIME,t)
     res.closeRow()
     return res
 
 def getunique(t):
     sql = "select max(id) from unique"
-    with nowdb.execute(sql) as cur:
+    with nd.execute(sql) as cur:
         for row in cur:
            x = row.field(0) + 1
            sql = "insert into unique (id, desc) \
                               values (%d, '%s')" % (x, t)
-           with nowdb.execute(sql) as r:
+           with nd.execute(sql) as r:
                 if not r.ok():
                    raise DBError(r.code(), r.details())
            return x
 
 def getnow():
-    with nowdb.execute("select now()") as row:
+    with nd.execute("select now()") as row:
          return row.field(0)
 
 def groupbuy(p):
@@ -116,9 +108,9 @@ def groupbuy(p):
     uid = getunique('groupbuy')
     dt  = getnow()
 
-    with nowdb.execute(sql) as cur:
+    with nd.execute(sql) as cur:
          if not cur.ok():
-            raise nowdb.makeError(cur.code(), cur.details())
+            raise nd.makeError(cur.code(), cur.details())
          for row in cur:
              f1 = row.field(0)
              f2 = row.field(1)
@@ -132,10 +124,10 @@ def groupbuy(p):
                                         %f, %f, %f, %f, %f, %f)" % \
                                        (uid, p, dt, \
                                         f1, f2, f3, f4, f5, f6)
-             with nowdb.execute(ins) as r:
+             with nd.execute(ins) as r:
                   if not r.ok():
-                     raise nowdb.DBError(r.code(), r.details())
+                     raise nd.DBError(r.code(), r.details())
    
     sql = "select destin, f1, f2, f3, f4, f5, f6 \
              from result where origin = %d" % uid
-    return nowdb.execute(sql)
+    return nd.execute(sql)
