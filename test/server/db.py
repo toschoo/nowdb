@@ -131,3 +131,20 @@ def groupbuy(p):
     sql = "select destin, f1, f2, f3, f4, f5, f6 \
              from result where origin = %d" % uid
     return nd.execute(sql)
+
+_fibn1 = 0
+_fibn2 = 1
+
+def fibreset():
+    global _fibn1
+    global _fibn2
+    _fibn1 = 0
+    _fibn2 = 1
+
+def fib():
+    global _fibn1
+    global _fibn2
+    f = _fibn1 + _fibn2
+    _fibn1 = _fibn2
+    _fibn2 = f
+    return nd.makeReturnValue(nd.UINT, _fibn1)

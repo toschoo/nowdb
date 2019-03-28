@@ -35,6 +35,12 @@ def price(c,p):
 def createprocs(c):
     print "RUNNING 'createprocs'"
 
+    c.execute("drop procedure fib if exists").close()
+    c.execute("create procedure db.fib() language python").close()
+
+    c.execute("drop procedure fibreset if exists").close()
+    c.execute("create procedure db.fibreset() language python").close()
+
     c.execute("drop procedure timetest if exists").close()
     c.execute("create procedure db.timetest(t time) language python").close()
 
@@ -302,6 +308,22 @@ def eastertest(c):
         for row in c.execute("exec easter(%d)" % (i+2000)):
             print('easter %d: %s' % (i+2000,row[0].strftime(now.DATEFORMAT)))
 
+def fib(n):
+    if n == 0 or n == 1:
+        return 1
+    return fib(n-1) + fib(n-2)
+
+def fibtest(c):
+
+    print "RUNNING TEST 'fibtest'"
+
+    c.execute("exec fibreset()")
+    for i in range(10):
+        for row in c.execute("exec fib()"):
+            print('fib %d: %d' % (i,row[0]))
+            if row[0] != fib(i):
+                raise db.TestFailed('not the expected fib: %d - %d' % (row[0], fib(i)))
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
@@ -309,6 +331,7 @@ if __name__ == "__main__":
        hellotest(c)
        timetest(c)
        eastertest(c)
+       fibtest(c)
 
        for i in range(100):
            counttest(c)

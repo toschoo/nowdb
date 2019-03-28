@@ -218,9 +218,19 @@ def success():
 
 def makeRow():
   '''
-  make a empty row result.
+  make an empty row result.
   '''
   return Result(_mkRow())
+
+def makeReturnValue(t,v):
+  '''
+  make a row result containing the value 'v'
+  as nowdb type 't'.
+  '''
+  r = Result(_mkRow())
+  r.add2Row(t, v)
+  r.closeRow()
+  return r
 
 def convert(t, value):
   '''
@@ -583,7 +593,7 @@ def _caller(f,t):
        else:
             return r._toDB()
     except Exception as x:
-       return makeError(str(x))._toDB() 
+       return makeError(USRERR, str(x))._toDB() 
 
 class DBError(Exception):
   '''
