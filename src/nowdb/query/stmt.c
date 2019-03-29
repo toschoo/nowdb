@@ -1417,14 +1417,6 @@ static nowdb_err_t loadPyArgs(nowdb_scope_t *scope,
 	nowdb_simple_value_t *val;
 	nowdb_ast_t *p;
 
-	/*
-	nowdb_value_t v;
-	int x;
-	double d;
-	uint64_t u;
-	int64_t l;
-	*/
-
 	if (pd->argn == 0) {
 		if (params == NULL) return NOWDB_OK;
 		PYTHONERR("too many arguments");
@@ -1657,6 +1649,10 @@ static nowdb_err_t showThings(nowdb_scope_t    *scope,
 	return err;
 }
 
+/* -------------------------------------------------------------------------
+ * Helper: get vertex properties
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t getProps(nowdb_scope_t  *scope,
                             char           *name,
                             ts_algo_list_t *list) {
@@ -1672,6 +1668,10 @@ static nowdb_err_t getProps(nowdb_scope_t  *scope,
 	return NOWDB_OK;
 }
 
+/* -------------------------------------------------------------------------
+ * Helper: get edge properties
+ * -------------------------------------------------------------------------
+ */
 static nowdb_err_t getPedges(nowdb_scope_t  *scope,
                              char           *name,
                              ts_algo_list_t *list) {

@@ -13,6 +13,8 @@ p=$!
 
 echo "SERVER $p RUNNING" >> log/papismoke.log
 
+sleep 1
+
 echo "RUNNING baicsmoke.py" >> log/papismoke.log
 test/papismoke/basicsmoke.py >> log/papismoke.log 2>&1
 if [ $? -ne 0 ]

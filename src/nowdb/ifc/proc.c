@@ -19,6 +19,10 @@ static char *OBJECT = "proc";
 #define LIB(x) \
 	((nowdb_t*)x)
 
+/* -------------------------------------------------------------------------
+ * Check whether Python is enabled
+ * -------------------------------------------------------------------------
+ */
 #define ENABLED(p) \
 	if ((*p)->lang == NOWDB_STORED_PYTHON && \
 	    !LIB(proc->lib)->pyEnabled) { \
@@ -28,6 +32,10 @@ static char *OBJECT = "proc";
 		return err; \
 	}
 
+/* -------------------------------------------------------------------------
+ * Lock Python Sub-Interpreter
+ * -------------------------------------------------------------------------
+ */
 #ifdef _NOWDB_WITH_PYTHON
 #define LOCK() \
 	PyEval_RestoreThread(proc->pyIntp);
@@ -104,8 +112,8 @@ typedef struct {
 	char         *funname;
 	nowdb_proc_desc_t *pd;
 #ifdef _NOWDB_WITH_PYTHON
-	PyObject           *f;
-	PyObject           *c;
+	PyObject           *f; // the function
+	PyObject           *c; // the caller
 #else
 	void               *f;
 	void               *c;
@@ -169,20 +177,23 @@ static void destroyInterpreter(nowdb_proc_t *proc) {
 
 #ifdef _NOWDB_WITH_PYTHON
 /* ------------------------------------------------------------------------
- * Helper: load nowdb 
+ * Helper: load nowdb module (nowdb.py)
  * ------------------------------------------------------------------------
  */
 static PyObject *loadNoWDB(nowdb_proc_t *proc) {
 	PyObject *mn, *m;
 
+	// if already loaded, return reference
 	if (proc->nowmod != NULL) return proc->nowmod;
 
+	// load
 	mn = PyString_FromString("nowdb");
 	if (mn == NULL) return NULL;
 
   	m = PyImport_Import(mn); Py_XDECREF(mn);
 	if (m == NULL) return NULL;
 
+	// and remember
 	proc->nowmod = m;
 	return m;
 }
@@ -197,22 +208,6 @@ static nowdb_err_t setDB(nowdb_proc_t *proc) {
 	PyObject  *f;
 	PyObject  *m, *d;
 
-	/*
-	PyObject  *k=NULL, *v=NULL;
-	Py_ssize_t pos = 0;
-
-	while(PyDict_Next(dict, &pos, &k, &v)) {
-		PyObject *str = PyObject_Repr(k);
-		if (str == NULL) {
-			fprintf(stderr, "no string\n"); continue;
-		}
-		const char* s = PyString_AsString(str);
-		Py_DECREF(str);
-		fprintf(stderr, "KEY %d: %s\n", (int)pos, s);
-	}
-	*/
-
-	// m = PyDict_GetItemString(dict, "nowdb");
 	m = loadNoWDB(proc);
 	if (m == NULL) {
 		PYTHONERR("nowdb not imported");
@@ -255,15 +250,16 @@ static nowdb_err_t setDB(nowdb_proc_t *proc) {
 	if (r != NULL) Py_DECREF(r);
 	return NOWDB_OK;
 }
+
+/* ------------------------------------------------------------------------
+ * Helper: Get caller
+ * ------------------------------------------------------------------------
+ */
 static PyObject *getCaller(nowdb_proc_t *proc)
 {
 	PyObject  *f;
 	PyObject  *m, *d;
 
-	/*
-	m = PyDict_GetItemString(dict, "nowdb");
-	if (m == NULL) return NULL;
-	*/
 	m = loadNoWDB(proc);
 	if (m == NULL) return NULL;
 
@@ -381,19 +377,9 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 	if (proc->lib == NULL) return NOWDB_OK;
 
 #ifdef _NOWDB_WITH_PYTHON
-	
-	/* do we need this???
-	if (LIB(proc->lib)->mst != NULL) {
-		if (rand()%100 == 0) {
-			PyEval_RestoreThread(LIB(proc->lib)->mst);
-			PyGC_Collect();
-			LIB(proc->lib)->mst = PyEval_SaveThread();
-		}
-	}
-	*/
-
+	// acquire lock
 	if (proc->pyIntp != NULL) {
-		PyEval_RestoreThread(proc->pyIntp); // acquire lock
+		PyEval_RestoreThread(proc->pyIntp);
 	}
 
 	if (proc->nowmod != NULL) {
@@ -402,8 +388,9 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 
 	err = reloadModules(proc);
 
+	// release lock
 	if (proc->pyIntp != NULL) {
-		proc->pyIntp = PyEval_SaveThread(); // release lock
+		proc->pyIntp = PyEval_SaveThread();
 	}
 #endif
 	return err;
@@ -419,7 +406,6 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 	if (proc->lib == NULL) return NOWDB_OK;
 
 #ifdef _NOWDB_WITH_PYTHON
-	fprintf(stderr, "CREATING INTERPRETER\n");
 	if (LIB(proc->lib)->mst != NULL) {
 		PyEval_RestoreThread(LIB(proc->lib)->mst); // acquire lock
 
@@ -428,7 +414,7 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 			return nowdb_err_get(nowdb_err_python, FALSE, OBJECT,
 			                     "cannot create new interpreter");
 		}
-		PyThreadState_Swap(LIB(proc->lib)->mst);   // swap back to main
+		PyThreadState_Swap(LIB(proc->lib)->mst);   // switch back to main
 		LIB(proc->lib)->mst = PyEval_SaveThread(); // release lock
 	}
 #endif
@@ -809,6 +795,10 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	return NOWDB_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Call function
+ * ------------------------------------------------------------------------
+ */
 PyObject *nowdb_proc_call(void *call, void *fun, void *args) {
 	if (call == NULL) {
 		fprintf(stderr, "NO CALLER\n");
