@@ -35,8 +35,17 @@ def price(c,p):
 def createprocs(c):
     print "RUNNING 'createprocs'"
 
+    c.execute("drop procedure fib if exists").close()
+    c.execute("create procedure db.fib() language python").close()
+
+    c.execute("drop procedure fibreset if exists").close()
+    c.execute("create procedure db.fibreset() language python").close()
+
     c.execute("drop procedure timetest if exists").close()
     c.execute("create procedure db.timetest(t time) language python").close()
+
+    c.execute("drop procedure easter if exists").close()
+    c.execute("create procedure db.easter(y uint) language python").close()
 
     c.execute("drop procedure myfloatadd if exists").close()
     c.execute("create procedure db.myfloatadd(a float, b float) language python").close()
@@ -157,7 +166,7 @@ def addtest(c):
         c2 = row[0]
         print("%f ?= %f" % (c1,c2))
 
-    if float(round(c1*1000)/1000) != float(round(c2*1000))/1000:
+    if (round(c1*100)/100) != (round(c2*100))/100:
        raise db.TestFailed("float add differs: %f | %f" % (c1,c2))
 
     # signed int 
@@ -291,12 +300,38 @@ def timetest(c):
         if row[0] != x:
            raise db.TestFailed("there are edges from the future")
 
+def eastertest(c):
+
+    print "RUNNING TEST 'eastertest'"
+
+    for i in range(50):
+        for row in c.execute("exec easter(%d)" % (i+2000)):
+            print('easter %d: %s' % (i+2000,row[0].strftime(now.DATEFORMAT)))
+
+def fib(n):
+    if n == 0 or n == 1:
+        return 1
+    return fib(n-1) + fib(n-2)
+
+def fibtest(c):
+
+    print "RUNNING TEST 'fibtest'"
+
+    c.execute("exec fibreset()")
+    for i in range(10):
+        for row in c.execute("exec fib()"):
+            print('fib %d: %d' % (i,row[0]))
+            if row[0] != fib(i):
+                raise db.TestFailed('not the expected fib: %d - %d' % (row[0], fib(i)))
+
 if __name__ == "__main__":
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
        createprocs(c)
        hellotest(c)
        timetest(c)
+       eastertest(c)
+       fibtest(c)
 
        for i in range(100):
            counttest(c)

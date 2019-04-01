@@ -37,6 +37,7 @@ typedef struct nowdb_proc_t {
 	ts_algo_tree_t    *funs;   /* loaded functions          */
 #ifdef _NOWDB_WITH_PYTHON
 	PyThreadState     *pyIntp; /* Python interpreter thread */
+	PyObject          *nowmod; /* the 'nowdb' module        */
 #endif
 } nowdb_proc_t;
 
@@ -97,8 +98,19 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc);
  */
 void nowdb_proc_updateInterpreter(nowdb_proc_t *proc);
 
+/* ------------------------------------------------------------------------
+ * Load callable function (and the caller)
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
                                char            *fname,
                                nowdb_proc_desc_t **pd,
-                               void             **fun);
+                               void             **fun,
+                               void            **call);
+
+/* ------------------------------------------------------------------------
+ * Call the function
+ * ------------------------------------------------------------------------
+ */
+PyObject *nowdb_proc_call(void *call, void *fun, void *args);
 #endif
