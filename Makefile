@@ -283,6 +283,9 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/query/rowutl.o \
 			         $(SRL)/nowdbclient.o $(clibs)
 
+# lua client
+# gcc -shared -I../lib -I/usr/include/lua5.3 -fPIC -o cnow.so nowluawrap.c -lnowdbclient
+
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
 		$(CMPMSG)
