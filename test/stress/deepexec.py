@@ -12,22 +12,21 @@ class QThread(threading.Thread):
   def run(self):
     try:
       with Connection("127.0.0.1", "55505", None, None) as con:
-        with con.execute("use retail") as r:
+        with con.execute("use db150") as r:
           if not r.ok():
              print "ERROR: %d on use: %s" % (r.code(), r.details())
              return
 
         for i in range(self.loops):
-          with con.execute("exec fib(5)") as r:
-            if not r.ok():
-              print "ERROR %d on fib: %s" % (r.code(), r.details())
-              return
-
           if i%5 == 0:
             with con.execute("exec fibreset()") as r:
               if not r.ok():
                 print "ERROR %d on fibreset: %s" % (r.code(), r.details())
                 return
+          with con.execute("exec fib()") as r:
+            if not r.ok():
+              print "ERROR %d on fib: %s" % (r.code(), r.details())
+              return
 
     except ClientError as x:
       print "[%s] cannot connect: %s" % (self.name, x)

@@ -242,14 +242,13 @@ class Result:
     of a return statement. It can in particular be
     - a status (ok or not ok)
     - a report (rows affected)
-    - a cursor (an iterator).
+    - a cursor or row (both iterators).
+
     Result implements the resource manager and can
     be used with the 'with' statement. On leaving the scope
     of the statement, 'release' is called on the result, e.g.:
 
     with con.execute('select * from mytable') as res:
-         if not res.ok():
-            raise MyError(res.details())
          # do something
 
     Results correspond to resources in the underlying C library
@@ -259,11 +258,11 @@ class Result:
     is collected by the Python GC (which calls the result's
     __del__ method). 
 
-    If the result is a cursor, it is also an iterator,
+    If the result is a cursor or a row, it is also an iterator,
     which can be iterated by means of the 'in' construction, e.g.:
 
     with con.execute('select * from mytable') as cur:
-         for row cur:
+         for row in cur:
              # do something with the row
 
     '''
@@ -280,7 +279,7 @@ class Result:
         '''
         releases the corresponding resources in the underlying
         C library. When used with a 'with' statement,
-        release() is called internally; otherwise is called
+        release() is called internally; otherwise it is called
         by the Python GC through the __del__ method.
         '''
         if self.rw != None:
@@ -533,7 +532,7 @@ class Result:
     # end-of-file
     def eof(self):
         '''
-        returns True if the all rows were fetched from the server,
+        returns True if all rows were fetched from the server,
         otherwise it returns False.
         '''
         x = _rEof(self.r)

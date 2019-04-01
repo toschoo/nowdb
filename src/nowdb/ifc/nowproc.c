@@ -452,7 +452,6 @@ nowdb_dbresult_t nowdb_dbresult_wrap(void *result) {
 	case NOWDB_QRY_RESULT_CURSOR:
 		r = mkResult(NOWDB_DBRESULT_CURSOR); break;
 
-	/* row ! */
 	default:
 		fprintf(stderr, "unknown result type\n");
 		return NULL;
@@ -464,6 +463,14 @@ nowdb_dbresult_t nowdb_dbresult_wrap(void *result) {
 	r->res.resType = QRES(result)->resType;
 	r->res.result = QRES(result)->result;
 
+	// REPORT
+	
+	if (QRES(result)->resType == NOWDB_QRY_RESULT_ROW) {
+		ROW(r)->buf = QROW(QRES(result)->result)->row;
+        	ROW(r)->sz  = QROW(QRES(result)->result)->sz;
+        	ROW(r)->off = 0;
+        	ROW(r)->own = 1;
+	}
 	return r;
 }
 
