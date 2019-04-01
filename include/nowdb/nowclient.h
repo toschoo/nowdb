@@ -67,6 +67,20 @@
 const char *nowdb_err_explain(int err);
 
 /* ------------------------------------------------------------------------
+ * NoWDB types
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_TYP_NOTHING  0
+#define NOWDB_TYP_TEXT     1
+#define NOWDB_TYP_DATE     2
+#define NOWDB_TYP_TIME     3
+#define NOWDB_TYP_FLOAT    4
+#define NOWDB_TYP_INT      5
+#define NOWDB_TYP_UINT     6
+#define NOWDB_TYP_LONGTEXT 8
+#define NOWDB_TYP_BOOL     9
+
+/* ------------------------------------------------------------------------
  * Time is a 64-bit signed integer
  * ------------------------------------------------------------------------
  */

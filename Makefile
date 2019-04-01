@@ -24,7 +24,7 @@ CFLAGS = -O3 -g -Wall -std=c99 -fPIC \
 
 LDFLAGS = -L./lib
 
-INC = -I./include -I./test -I./src -I./
+INC = -I./include -I./test -I./src -I./ -I/usr/include/lua5.3
 LIB = lib
 CLIENTLIB = nowclientlib 
 
@@ -32,6 +32,7 @@ SRC = src/nowdb
 SRD = src/nowdbd
 SRL = src/nowdbclient
 PYC = pynow
+LUA = lua
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -283,8 +284,19 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/query/rowutl.o \
 			         $(SRL)/nowdbclient.o $(clibs)
 
-# lua client
-# gcc -shared -I../lib -I/usr/include/lua5.3 -fPIC -o cnow.so nowluawrap.c -lnowdbclient
+# Lua Client library
+nowluaifc:	$(LUA)/libnowluaifc.so
+
+$(LUA)/libnowluaifc.so:	nowclientlib \
+			$(LUA)/libluaifc.o
+			$(LNKMSG)
+			$(CC) -shared \
+		      	-o $(LUA)/libnowluaifc.so \
+		           $(LUA)/libluaifc.o -lnowdbclient -llua5.3
+
+$(LUA)/libluaifc.o:	$(LUA)/libluaifc.c
+			$(CMPMSG)
+			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
@@ -696,6 +708,9 @@ clean:
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
 	rm -f $(OUTLIB)/libnowdbclient.so
+	rm -f $(OUTLIB)/libnowluaifc.so
+	rm -f $(LUA)/libnowluaifc.so
+	rm -f $(LUA)/*.o
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
 	rm -f $(RSC)/*.dbz
