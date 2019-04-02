@@ -285,6 +285,8 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
 			         $(SRL)/nowdbclient.o $(clibs)
 
 # Lua Client library
+lua:	nowluaifc
+
 nowluaifc:	$(LUA)/libnowluaifc.so
 
 $(LUA)/libnowluaifc.so:	nowclientlib \

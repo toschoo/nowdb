@@ -2,7 +2,7 @@
 -- Basic Lua NOWDB Client Interface
 
 --------------------------------------
--- (c) Tobias Schoofs, 2018
+-- (c) Tobias Schoofs, 2019
 --------------------------------------
    
 -- This file is part of the NOWDB CLIENT Library.
@@ -340,16 +340,7 @@ function now.connect(srv, port, usr, pwd)
   -- the generator may throw an error (i.e. call error)
   ---------------------------------------------------------------
   ifc.rows = function(stmt)
-     local rc, r = execute(stmt)
-     if r == nil then error('no result') end
-     if type(r) == 'string' then error(rc .. ": " .. r) end
-     rc = (rc == now.OK) and r.errcode() or rc
-     if rc ~= now.OK then 
-        msg = r.errdetails()
-        r.release()
-        error(rc .. ": " .. msg)
-     end
-     return r.rows()
+     return errexecute(stmt).rows()
   end
 
   setmetatable(ifc, {__gc=close})

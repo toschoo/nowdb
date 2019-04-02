@@ -447,6 +447,7 @@ void nowdb_connection_destroy(nowdb_con_t con) {
  * ------------------------------------------------------------------------
  */
 static nowdb_result_t mkResult(nowdb_con_t con) {
+	// fprintf(stderr, "CREATING RESULT\n");
 	nowdb_result_t r = calloc(1, sizeof(struct nowdb_result_t));
 	if (r == NULL) return NULL;
 	r->con = con;
@@ -459,6 +460,7 @@ static nowdb_result_t mkResult(nowdb_con_t con) {
  */
 void nowdb_result_destroy(nowdb_result_t res) {
 	if (res == NULL) return;
+	// fprintf(stderr, "DESTROYING RESULT\n");
 	if (res->mybuf != NULL) {
 		free(res->mybuf); res->mybuf = NULL;
 	}
