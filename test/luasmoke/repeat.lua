@@ -14,15 +14,22 @@ end
 
 local function fastcount(tab)
   local stmt = string.format("select count(*) from %s", tab)
-  for row in con.rows(stmt) do
+  local cur = con.errexecute(stmt) 
+  local n = 0
+  for row in  cur.rows() do
       print(string.format("% 8s: % 5d", tab, row.field(0)))
-      return row.field(0)
+      n = row.field(0)
   end
+  cur.release()
+  return n
 end
+
 local function slowcount(tab)
   local stmt = string.format("select * from %s", tab)
   local cnt=0
-  for row in con.rows(stmt) do cnt = cnt + 1 end
+  local cur = con.errexecute(stmt)
+  for row in cur.rows() do cnt = cnt + 1 end
+  cur.release()
   return cnt
 end
 
@@ -30,11 +37,11 @@ while true do
 -- for i = 1,100 do
   -- print("iteration " .. i)
   db.createDB(con, 'db250')
-  db.addRandomData(con, {products=100,
-                         clients = 50,
-                         stores = 25,
-                         buys = 1000,
-                         visits = 150})
+  local pd, cl, sr, bu, vs = db.addRandomData(con, {products=100,
+                                                    clients = 50,
+                                                    stores = 25,
+                                                    buys = 1000,
+                                                    visits = 150})
 
   -- count
   if fastcount("client") ~= slowcount("client") then
@@ -52,6 +59,7 @@ while true do
   if fastcount("visits") ~= slowcount("visits") then
      error("visits count differs")
   end
-  print(collectgarbage("count"))
+  pd=nil;cl=nil;sr=nil;bu=nil;vs=nil
   collectgarbage("collect")
+  print(collectgarbage("count"))
 end

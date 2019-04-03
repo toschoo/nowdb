@@ -76,6 +76,7 @@ function db.createDB(c,dbname)
   if rc ~= now.OK then
      error("cannot create edge vists")
   end
+  res.release()
 end
 
 local function randomstring(n)
@@ -89,63 +90,17 @@ local function randomstring(n)
   return s
 end
 
-local function getNow(c)
-  local rc, cur = c.execute("select now()")
-  if rc ~= now.OK then
-     error("no time: " .. rc .. " (" .. cur ..")")
-  end
-  for row in cur.rows() do
-    return row.field(0)
-  end
-end
-
-local function sec()
-   return 1000000000
-end
-
-local function minute()
-  return 60*sec()
-end
-
-local function hour()
-  return 60*minute()
-end
-
-local function day()
-  return 24*hour()
-end
-
-local function year()
-   return 365 * day()
-end
-
-local function round2sec(t)
-  return sec()*math.floor(t/sec())
-end
-
-local function round2min(t)
-  return minute()*math.floor(t/minute())
-end
-
-local function round2hour(t)
-  return hour()*math.floor(t/hour())
-end
-
-local function round2day(t)
-  return day()*math.floor(t/day())
-end
-
 local function randomdate(c, years)
-  local y = math.random(6,70) * year()
-  local n = getNow(c)
-  local d = math.random(1,365)
-  return round2day(n+d-y)
+  local y = math.random(6,70) * now.year
+  local rc, n = c.getnow()
+  local d = math.random(1,now.year)
+  return now.round(n+d-y, now.day)
 end
 
 local function randomtime(c, days)
-  local d = math.random(0,days) * day()
-  local x = math.random(0,day())
-  local n = getNow(c)
+  local d = math.random(0,days) * now.day
+  local x = math.random(0,now.day)
+  local rc, n = c.getnow()
   return n-(x+d)
 end
 
@@ -230,6 +185,11 @@ function db.addRandomData(c,cfg)
   return products, clients, stores, bgd, vgd
 end
 
+local piopen  = [[insert into product (
+                    prod_key, prod_desc,
+                    prod_cat, prod_packing,
+                    prod_price) values (]]
+
 function db.createProduct(key, desc, cat, pack, price)
   local self = {key  = key,
                 desc = desc,
@@ -239,19 +199,14 @@ function db.createProduct(key, desc, cat, pack, price)
 
   -- print("creating product " .. key .. " | " .. desc .. " | " .. price)
 
-  self.iopen  = [[insert into product (
-                  prod_key, prod_desc,
-                  prod_cat, prod_packing,
-                  prod_price) values (]]
-
   function self.store(c)
-     stmt = self.iopen ..
-            self.key .. ', ' ..
-            "'" .. self.desc .. "', " ..
-            self.cat .. ", " ..
-            self.pack .. ", " ..
-            self.price .. ")"
-     c.errexecute(stmt)
+     local stmt = piopen ..
+           self.key .. ', ' ..
+           "'" .. self.desc .. "', " ..
+           self.cat .. ", " ..
+           self.pack .. ", " ..
+           self.price .. ")"
+     c.pexecute(stmt)
   end
 
   function self.tocsv()
@@ -260,22 +215,22 @@ function db.createProduct(key, desc, cat, pack, price)
 
   return self
 end
+
+local ciopen  = [[insert into client (
+                  client_key, client_name, birthdate)
+                  values (]]
 
 function db.createClient(key, name, birthdate)
   local self = {key  = key,
                 name = name,
                 birthdate = birthdate}
 
-  self.iopen  = [[insert into client (
-                  client_key, client_name, birthdate)
-                  values (]]
-
   function self.store(c)
-     local stmt = self.iopen ..
+     local stmt = ciopen ..
                   self.key .. ', ' ..
                   "'" .. self.name .. "', " ..
                   self.birthdate .. ")"
-     c.errexecute(stmt)
+     c.pexecute(stmt)
   end
 
   function self.tocsv()
@@ -284,6 +239,10 @@ function db.createClient(key, name, birthdate)
 
   return self
 end
+
+local siopen  = [[insert into store (
+                  store_name, city, address, size)
+                  values (]]
 
 function db.createStore(name, city, address, size)
   local self = {name = name,
@@ -291,17 +250,13 @@ function db.createStore(name, city, address, size)
                 address = address, 
                 size = size}
 
-  self.iopen  = [[insert into store (
-                  store_name, city, address, size)
-                  values (]]
-
   function self.store(c)
-     local stmt = self.iopen ..
+     local stmt = siopen ..
                   "'" .. self.name .. "', " ..
                   "'" .. self.city .. "', " ..
                   "'" .. self.address .. "', " ..
                   self.size .. ")"
-     c.errexecute(stmt)
+     c.pexecute(stmt)
   end
 
   function self.tocsv()
@@ -310,6 +265,11 @@ function db.createStore(name, city, address, size)
 
   return self
 end
+
+
+local biopen  = [[insert into buys (
+                  origin, destin, stamp, quantity, price)
+                  values (]]
 
 function db.createBuy(c,p,tp,q)
   local self = {client = c.key,
@@ -318,18 +278,14 @@ function db.createBuy(c,p,tp,q)
                 quant = q,
                 price = q*p.price}
 
-  self.iopen  = [[insert into buys (
-                  origin, destin, stamp, quantity, price)
-                  values (]]
-
   function self.store(c)
-     local stmt = self.iopen ..
+     local stmt = biopen ..
                   self.client .. ", " ..
                   self.product .. ", " ..
                   self.stamp .. ", " ..
                   self.quant.. ", " ..
                   self.price .. ")" 
-     c.errexecute(stmt)
+     c.pexecute(stmt)
   end
 
   function self.tocsv()
@@ -339,6 +295,10 @@ function db.createBuy(c,p,tp,q)
   return self
 end
 
+local viopen  = [[insert into visits (
+                  origin, destin, stamp, quantity, price)
+                  values (]]
+
 function db.createVisit(c,p,s,tp,q)
   local self = {client = c.key,
                 shop   = s.name,
@@ -346,18 +306,14 @@ function db.createVisit(c,p,s,tp,q)
                 quant = q,
                 price = q*p.price}
 
-  self.iopen  = [[insert into visits (
-                  origin, destin, stamp, quantity, price)
-                  values (]]
-
   function self.store(c)
-     local stmt = self.iopen ..
+     local stmt = viopen ..
                   self.client .. ", " ..
                   "'" .. self.shop .. "', " ..
                   self.stamp .. ", " ..
                   self.quant.. ", " ..
                   self.price .. ")" 
-     c.errexecute(stmt)
+     c.pexecute(stmt)
   end
 
   function self.tocsv()

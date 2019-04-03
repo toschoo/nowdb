@@ -77,8 +77,27 @@ now.EOR = 10
 
 ---------------------------------------------------------------------------
 -- Time handling
--- TODO
 ---------------------------------------------------------------------------
+now.second = 1000000000
+now.minute = 60*now.second
+now.hour   = 60*now.minute
+now.day    = 24*now.hour
+now.year   = 365*now.day
+
+function now.round(t, d)
+  return d*math.floor(t/d)
+end
+
+function now.timeformat(t)
+  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%d',
+                       t.year, t.month, t.day, 
+                       t.hour, t.min, t.sec, t.nano)
+end
+
+function now.dateformat(t)
+  return string.format('%04d-%02d-%02d',
+                       t.year, t.month, t.day)
+end
 
 ---------------------------------------------------------------------------
 -- Get error code for this guy
@@ -219,7 +238,12 @@ local function makeResult(r)
     return conv(t,v)
   end
 
-  -- release the type (may be left to the gc)
+  -- release the type.
+  -- This may be left to the gc, however,
+  -- since there is no control over when
+  -- the GC will reclaim the memory,
+  -- it is safer to explicitly call release,
+  -- when the result is not needed any longer.
   local function release()
     if self.cr == nil then return end
     cnow_release(self.cr)
@@ -306,6 +330,17 @@ function now.connect(srv, port, usr, pwd)
     return r
   end
 
+  -- like errexecute, but does not return the result
+  local function pexecute(stmt)
+    rc, r = execute(stmt)
+    if rc ~= now.OK then
+       error(rc .. ": " .. r)
+    end
+    if r ~= nil then
+       r.release()
+    end
+  end
+
   -- use this database in this session
   local function use(db)
     local stmt = "use " .. db
@@ -320,12 +355,69 @@ function now.connect(srv, port, usr, pwd)
     return now.OK
   end
 
+  local function now2then(t)
+    local frm  = [[select year(%d), month(%d), mday(%d),
+                          wday(%d), yday(%d),
+                          hour(%d), minute(%d), second(%d),
+                          nano(%d)]]
+    local stmt = string.format(frm, t, t, t, t, t, t, t, t, t)
+    local rc, cur = execute(stmt)
+    if rc ~= now.OK then
+       return rc, cur
+    end
+    local r = {}
+    for row in cur.rows() do
+        r.year = row.field(0)
+        r.month = row.field(1)
+        r.day = row.field(2)
+        r.wday = row.field(3) + 1
+        r.yday = row.field(4)
+        r.hour = row.field(5)
+        r.min = row.field(6)
+        r.sec = row.field(7)
+        r.nano =row.field(8) 
+    end
+    cur.release()
+    return now.OK, r
+  end
+
+  local function then2now(t)
+    local frm = "select '%s'"
+    local stmt = string.format(frm, now.timeformat(t))
+    local rc, cur = execute(stmt)
+    if rc ~= now.OK then
+       return rc, cur
+    end
+    for row in cur.rows() do
+        r = row.field(0)
+    end
+    cur.release()
+    return now.OK, r
+  end
+
+  local function getnow()
+    local rc, cur = execute("select now()")
+    if rc ~= now.OK then
+       return now.OK, cur
+    end
+    local n = 0
+    for row in cur.rows() do
+        n = row.field(0)
+    end
+    cur.release()
+    return now.OK, n
+  end
+
   -- the public interface 
   local ifc = {
      close = close,
      use = use, 
      execute = execute,
-     errexecute = errexecute
+     errexecute = errexecute,
+     pexecute = pexecute,
+     getnow   = getnow,
+     fromnow  = now2then,
+     tonow    = then2now
   }
 
   ---------------------------------------------------------------

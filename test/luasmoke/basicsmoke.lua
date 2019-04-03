@@ -45,3 +45,46 @@ end
 if fastcount("visits") ~= slowcount("visits") then
    error("visits count differs")
 end
+
+-- time
+local function weekday(n)
+  if     n == 1 then return 'Sun'
+  elseif n == 2 then return 'Mon'
+  elseif n == 3 then return 'Tue'
+  elseif n == 4 then return 'Wed'
+  elseif n == 5 then return 'Thu'
+  elseif n == 6 then return 'Fri'
+  else               return 'Sat'
+  end
+end
+
+local rc, n = con.getnow()
+if rc ~= now.OK then
+   error("cannot get now: " .. rc .. " (" .. n .. ")")
+end
+local rc, t = con.fromnow(n)
+if rc ~= now.OK then
+   error("cannot convert from now: " .. rc .. " (" .. t .. ")")
+end
+
+local f = string.format('%04d-%02d-%02dT%02d:%02d:%02d.%d',
+                           t.year, t.month, t.day, 
+                           t.hour, t.min, t.sec,
+                           math.floor(t.nano/1000000))
+
+print(f .. " was a " .. weekday(t.wday) .. ", " .. t.yday .. ". day of the year")
+
+print(now.timeformat(t))
+print(now.dateformat(t))
+
+local rc, m = con.tonow(t)
+if rc ~= now.OK then
+   error("cannot convert to now: " .. rc .. " (" .. m .. ")")
+end
+
+print(string.format("%d ?= %d", n, m))
+
+if n ~= m then
+   error("tonow(fromnow(n)) is not n")
+end
+
