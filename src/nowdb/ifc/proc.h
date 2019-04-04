@@ -20,6 +20,9 @@
 
 #include <tsalgo/tree.h>
 
+#include <lualib.h>
+#include <lauxlib.h>
+
 #ifdef _NOWDB_WITH_PYTHON
 #include NOWDB_INC_PYTHON
 #endif
@@ -39,6 +42,10 @@ typedef struct nowdb_proc_t {
 	PyThreadState     *pyIntp; /* Python interpreter thread */
 	PyObject          *nowmod; /* the 'nowdb' module        */
 #endif
+	char              *luapath; // path where lua code resides
+	char              *nowpath; // path to nowdb.lua
+	lua_State         *luaIntp; // Lua interpreter
+	                            // caller
 } nowdb_proc_t;
 
 /* ------------------------------------------------------------------------
@@ -112,5 +119,5 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
  * Call the function
  * ------------------------------------------------------------------------
  */
-PyObject *nowdb_proc_call(void *call, void *fun, void *args);
+void *nowdb_proc_call(nowdb_proc_t *proc, void *call, void *fun, void *args);
 #endif

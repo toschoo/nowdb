@@ -40,6 +40,13 @@
 #define PYTHONERR(s) \
 	err = nowdb_err_get(nowdb_err_python, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "lua error"
+ * -------------------------------------------------------------------------
+ */
+#define LUAERR(s) \
+	err = nowdb_err_get(nowdb_err_lua, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
 
 /* -------------------------------------------------------------------------
@@ -876,7 +883,8 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 	lang = l->value;
 	if (lang == NULL) INVALIDAST("no name in language option");
 
-	if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
+	if (strcasecmp(lang, "lua") == 0) lx = NOWDB_STORED_LUA;
+	else if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
 	else INVALIDAST("unknown language in AST");
 
 	// return type
@@ -1354,6 +1362,91 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
 	return err;
 }
 
+#define LUADESTROYARGS(n,args) \
+	for(int i=0; i<n; i++) { \
+		if (args[i] != NULL) { \
+			if (args[i]->value != NULL) { \
+				free(args[i]->value); \
+			} \
+			free(args[i]); args[i] = NULL; \
+		} \
+	} \
+	free(args);
+
+/* -------------------------------------------------------------------------
+ * Helper: get lua arguments from ast
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getLuaArgs(nowdb_scope_t        *scope,
+                                     nowdb_proc_desc_t       *pd,
+                                     nowdb_ast_t         *params,
+                                     nowdb_simple_value_t **args) {
+	nowdb_err_t err;
+	nowdb_ast_t  *p;
+
+	if (pd->argn == 0) return NOWDB_OK;
+	if (params == NULL) {
+		LUAERR("not enough parameters");
+		return err;
+	}
+	p = params;
+	for(int i=0; i<pd->argn; i++) {
+		err = expr2simplev(scope, NULL, p, args+i);
+		if (err != NOWDB_OK) {
+			LUADESTROYARGS(i,args);
+			return err;
+		}
+		p = nowdb_ast_nextParam(p);
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: execute Lua function 
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t execLua(nowdb_scope_t    *scope,
+                                  nowdb_ast_t        *ast,
+                                  nowdb_proc_t      *proc,
+                                  nowdb_proc_desc_t   *pd,
+                                  void                 *f,
+                                  void                 *c,
+                                  nowdb_qry_result_t *res) {
+	nowdb_err_t err;
+	nowdb_simple_value_t **args=NULL;
+	nowdb_dbresult_t p;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
+
+	if (pd->argn > 0) {
+		args = calloc(pd->argn, sizeof(nowdb_simple_value_t*));
+		if (args == NULL) {
+			NOMEM("allocating argument buffer");
+			return err;
+		}
+		err = getLuaArgs(scope, pd, nowdb_ast_param(ast), args);
+		if (err != NOWDB_OK) {
+			free(args); return err;
+		}
+	}
+
+	p = nowdb_proc_call(proc, c, f, args);
+	if (args != NULL) {
+		LUADESTROYARGS(pd->argn, args);
+	}
+	if (p == NULL) {
+		LUAERR("Call failed: result is NULL");
+		return err;
+	}
+	if (!nowdb_dbresult_status(p)) {
+		err = nowdb_dbresult_err(p); free(p);
+		return err;
+	}
+	nowdb_dbresult_result(p, res); free(p);
+	return NOWDB_OK;
+}
+
 /* -------------------------------------------------------------------------
  * Helper: convert nowdb type to python type
  * -------------------------------------------------------------------------
@@ -1469,7 +1562,7 @@ static nowdb_err_t loadPyArgs(nowdb_scope_t *scope,
 #endif
 
 /* -------------------------------------------------------------------------
- * Helper: load arguments for python function
+ * Helper: execute a python function
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
@@ -1477,8 +1570,8 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
                                      nowdb_ast_t        *ast,
                                      nowdb_proc_t      *proc,
                                      nowdb_proc_desc_t   *pd,
-                                     PyObject             *f,
-                                     PyObject             *c,
+                                     void                 *f,
+                                     void                 *c,
                                      nowdb_qry_result_t *res)
 {
 	nowdb_err_t err;
@@ -1507,7 +1600,7 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		return err;
 	}
 
-	r = nowdb_proc_call(c, f, args);
+	r = nowdb_proc_call(proc, c, f, args);
 	if (args != NULL) Py_DECREF(args);
 
 	if (r == NULL) {
@@ -1561,6 +1654,14 @@ static nowdb_err_t handleExec(nowdb_scope_t    *scope,
 	if (err != NOWDB_OK) return err;
 
 	switch(pd->lang) {
+	case NOWDB_STORED_LUA:
+ 		if (!lib->luaEnabled) {
+			INVALID("feature not enabled: Lua");
+			return err;
+		}
+
+		return execLua(scope, ast, rsc, pd, f, c, res);
+
 	case NOWDB_STORED_PYTHON:
 
  		if (!lib->pyEnabled) {

@@ -49,7 +49,8 @@ OUTLIB = lib
 DOC=doc
 MAN=doc/manual
 LIBPY = python2.7
-libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
+LIBLUA = lua5.3
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY) -l$(LIBLUA)
 clibs = -lm -lpthread -ltsalgo -lcsv
 
 OBJ = $(SRC)/types/types.o    \

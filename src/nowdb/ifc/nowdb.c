@@ -208,6 +208,14 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		nowdb_library_close(*lib); *lib = NULL;
 		return err;
 	}
+	(*lib)->luapath = malloc(strlen(base) + 5);
+	if ((*lib)->luapath == NULL) {
+		NOMEM("allocating luapath");
+		nowdb_library_close(*lib); *lib = NULL;
+		return err;
+	}
+	sprintf((*lib)->luapath, "%s/lua", base);
+
 	(*lib)->fthreads = calloc(1,sizeof(ts_algo_list_t));
 	if ((*lib)->fthreads == NULL) {
 		NOMEM("allocating list");
@@ -244,6 +252,7 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		(*lib)->mst = PyEval_SaveThread(); // save thread state
 	}
 #endif
+	(*lib)->luaEnabled = 1; // check flags!!!
 	return NOWDB_OK;
 }
 
@@ -399,6 +408,9 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->base != NULL) {
 		free(lib->base); lib->base = NULL;
+	}
+	if (lib->luapath != NULL) {
+		free(lib->luapath); lib->luapath = NULL;
 	}
 	if (lib->lock != NULL) {
 		nowdb_rwlock_destroy(lib->lock);

@@ -89,17 +89,20 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t     *lock; /* protect the library    */
-	char               *base; /* base path              */
-	ts_algo_tree_t   *scopes; /* tree of scope          */
-	ts_algo_list_t *fthreads; /* list of free sessions  */
-	ts_algo_list_t *uthreads; /* list of used sessions  */
-	int             nthreads; /* max number of sessions */
-	int               loglvl; /* max number of sessions */
-	char           pyEnabled; /* enable python          */
+	nowdb_rwlock_t     *lock; /* protect the library      */
+	char               *base; /* base path                */
+	ts_algo_tree_t   *scopes; /* tree of scope            */
+	ts_algo_list_t *fthreads; /* list of free sessions    */
+	ts_algo_list_t *uthreads; /* list of used sessions    */
+	int             nthreads; /* max number of sessions   */
+	int             lthreads; /* min number of sessions   */
+	int               loglvl; /* log level                */
+	char            *luapath; /* where lua scripts reside */
+	char           pyEnabled; /* enable python            */
+	char          luaEnabled; /* enable lua               */
 
 #ifdef _NOWDB_WITH_PYTHON
-	PyThreadState       *mst; /* python thread state    */
+	PyThreadState       *mst; /* python thread state      */
 #endif
 
 } nowdb_t;
