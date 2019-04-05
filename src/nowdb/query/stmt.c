@@ -1618,7 +1618,6 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		nowdb_proc_updateInterpreter(proc);
 		return err;
 	}
-
 	nowdb_dbresult_result(p, res); free(p);
 
 	nowdb_proc_updateInterpreter(proc);

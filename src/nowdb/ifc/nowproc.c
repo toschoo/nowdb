@@ -318,7 +318,24 @@ nowdb_dbresult_t nowdb_dbresult_makeError(int errcode,
 	if (r == NULL) return NULL;
 
 	r->errcode = errcode;
-	r->err = nowdb_err_get(errcode, FALSE, "python", msg);
+	r->err = nowdb_err_get(errcode, FALSE, "procedure", msg);
+
+	return r;
+}
+
+/* ------------------------------------------------------------------------
+ * Create a result from error (already having an error descriptor)
+ * ------------------------------------------------------------------------
+ */
+nowdb_dbresult_t nowdb_dbresult_fromError(nowdb_err_t err) {
+	struct nowdb_dbresult_t *r;
+
+	r = mkResult(NOWDB_DBRESULT_STATUS);
+	if (r == NULL) return NULL;
+
+	if (err == NOWDB_OK) return r;
+	r->errcode = err->errcode;
+	r->err = err;
 
 	return r;
 }

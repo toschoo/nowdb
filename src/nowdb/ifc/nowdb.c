@@ -242,6 +242,10 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		return err;
 	}
 
+	if (flags & NOWDB_ENABLE_LUA) {
+		(*lib)->luaEnabled = 1;
+	}
+
 #ifdef _NOWDB_WITH_PYTHON
 	if (flags & NOWDB_ENABLE_PYTHON) {
 		(*lib)->pyEnabled = 1;
@@ -252,7 +256,6 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		(*lib)->mst = PyEval_SaveThread(); // save thread state
 	}
 #endif
-	(*lib)->luaEnabled = 1; // check flags!!!
 	return NOWDB_OK;
 }
 

@@ -6,6 +6,7 @@
  */
 #include <nowdb/scope/scope.h>
 #include <nowdb/ifc/proc.h>
+#include <nowdb/ifc/luaproc.h>
 #include <nowdb/ifc/nowdb.h>
 
 static char *OBJECT = "proc";
@@ -45,13 +46,17 @@ static char *OBJECT = "proc";
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
-#define LOCK() \
-	PyEval_RestoreThread(proc->pyIntp);
-#define UNLOCK() \
-	nowdb_proc_updateInterpreter(proc);
+#define LOCK(p) \
+	if ((*p)->lang == NOWDB_STORED_PYTHON) { \
+		PyEval_RestoreThread(proc->pyIntp); \
+	}
+#define UNLOCK(p) \
+	if ((*p)->lang == NOWDB_STORED_PYTHON) { \
+		nowdb_proc_updateInterpreter(proc); \
+	}
 #else
-#define LOCK()
-#define UNLOCK()
+#define LOCK(p)
+#define UNLOCK(p)
 #endif
 
 /* -------------------------------------------------------------------------
@@ -73,7 +78,7 @@ static char *OBJECT = "proc";
  * Get error message from lua
  * -------------------------------------------------------------------------
  */
-static inline nowdb_err_t LUAERRMSG(nowdb_proc_t *proc, char *m) {
+static inline nowdb_err_t mkLuaErr(nowdb_proc_t *proc, char *m) {
 	nowdb_err_t err;
 	char *msg = NULL; 
 
@@ -83,6 +88,7 @@ static inline nowdb_err_t LUAERRMSG(nowdb_proc_t *proc, char *m) {
 	if (msg == NULL) { 
 		LUAERR(m);
 	} else {
+		fprintf(stderr, "ERROR: %s\n", msg);
 		int s = strlen(msg) + strlen(m) + 3;
 		char *desc = malloc(s);
 		if (desc == NULL) {
@@ -280,6 +286,12 @@ static inline nowdb_err_t pushvalue(nowdb_proc_t *proc,
 	return NOWDB_OK;
 }
 
+extern nowdb_dbresult_t nowdb_dbresult_fromError(nowdb_err_t err);
+
+static inline nowdb_dbresult_t dberr(nowdb_err_t err) {
+	return nowdb_dbresult_fromError(err);
+}
+
 /* ------------------------------------------------------------------------
  * Helper: call lua
  * ------------------------------------------------------------------------
@@ -289,35 +301,50 @@ static void *luacall(nowdb_proc_t           *proc,
                      nowdb_simple_value_t  **args) {
 	nowdb_err_t err;
 
-	lua_getglobal(LUA, "nowdb_caller");
-
-	lua_pushstring(LUA, funname);
-
+	if (lua_getglobal(LUA, "_nowdb_caller") == 0) {
+		LUAERR("not a global function: nowdb_caller");
+		return dberr(err);
+	}
+	if (lua_getglobal(LUA, funname) == 0) {
+		LUAERR("not a global function");
+		return dberr(err);
+	}
 	for(int i=0; i<argn; i++) {
 		err = pushvalue(proc, args[i]);
-		if (err != NOWDB_OK) return err;
+		if (err != NOWDB_OK) return dberr(err);
 	}
-	if (lua_pcall(LUA, argn, 0, 0) != 0) { // expect 1 return!
-		LUAERRMSG(proc, "Error on function call");
+	if (lua_pcall(LUA, argn+1, 1, 0) != 0) {
+		return dberr(mkLuaErr(proc, "Error on function call"));
+	}
+	if (!lua_isinteger(LUA, 1)) {
+		LUAERR("Invalid result");
+		return dberr(err);
+	}
+	return (nowdb_dbresult_t)lua_tointeger(LUA,1);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: set DB (Lua)
+ * ------------------------------------------------------------------------
+ */
+static nowdb_err_t setLuaDB(nowdb_proc_t *proc) {
+	nowdb_err_t err;
+
+	if (lua_getglobal(LUA, "_nowdb_setDB") == 0) {
+		LUAERR("not a global function: _nowdb_setDB");
 		return err;
 	}
-	// get return value: dbresult_t
+	lua_pushinteger(LUA, (uint64_t)proc);
+	if (lua_pcall(LUA, 1, 0, 0) != 0) {
+		return mkLuaErr(proc, "Error on _nowdb_setDB");
+	}
 	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
- * Helper: set DB
+ * Helper: set DB (Python)
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t setLuaDB(nowdb_proc_t *proc) {
-	lua_getglobal(LUA, "_setDB");
-	lua_pushinteger(LUA, (uint64_t)proc);
-	if (lua_pcall(LUA, 1, 0, 0) != 0) {
-		return LUAERRMSG(proc, "Error on _setDB");
-	}
-	return NOWDB_OK;
-}
-
 static nowdb_err_t setPyDB(nowdb_proc_t *proc) {
 	nowdb_err_t err;
 #ifdef _NOWDB_WITH_PYTHON
@@ -539,6 +566,11 @@ static inline nowdb_err_t createLua(nowdb_proc_t *proc) {
 
 	luaL_openlibs(LUA);
 
+	err = nowdb_registerNow2Lua(LUA);
+	if (err != NOWDB_OK) {
+		lua_close(LUA); LUA = NULL;
+		return err;
+	}
 	if (proc->nowpath == NULL) {
 		proc->nowpath = malloc(strlen(proc->luapath) + 12);
 		if (proc->nowpath == NULL) {
@@ -550,16 +582,14 @@ static inline nowdb_err_t createLua(nowdb_proc_t *proc) {
 	}
 	int x = luaL_dofile(LUA, proc->nowpath);
 	if (x != 0) {
-		LUAERR("cannot load 'nowdb' module");
-		lua_close(LUA);
-		LUA = NULL;
+		err = mkLuaErr(proc, "cannot load 'nowdb' module");
+		lua_close(LUA); LUA = NULL;
 		return err;
 	}
 	err = setLuaDB(proc);
 	if (err != NOWDB_OK) {
-		LUAERR("cannot set database in 'nowdb'");
-		lua_close(LUA);
-		LUA = NULL;
+		err = mkLuaErr(proc, "cannot set database in 'nowdb'");
+		lua_close(LUA); LUA = NULL;
 		return err;
 	}
 	return NOWDB_OK;
@@ -1049,7 +1079,7 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 
 	ENABLED(pd);
 
-	LOCK();
+	LOCK(pd);
 
 	mpattern.modname = (*pd)->module;
 	m = ts_algo_tree_find(proc->mods, &mpattern);
@@ -1058,7 +1088,7 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 		if (err != NOWDB_OK) {
 			nowdb_proc_desc_destroy(*pd);
 			free(*pd); *pd = NULL;
-			UNLOCK();
+			UNLOCK(pd);
 			return err;
 		}
 	}
@@ -1067,14 +1097,14 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	if (err != NOWDB_OK) {
 		nowdb_proc_desc_destroy(*pd);
 		free(*pd); *pd = NULL;
-		UNLOCK();
+		UNLOCK(pd);
 		return err;
 	}
 
 	*fun = f;
         *call = m->c;
 
-	UNLOCK();
+	UNLOCK(pd);
 	return NOWDB_OK;
 }
 
