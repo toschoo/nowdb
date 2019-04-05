@@ -106,6 +106,7 @@ static inline nowdb_err_t mkLuaErr(nowdb_proc_t *proc, char *m) {
  */
 typedef struct {
 	char *modname;    /* module name */
+	int  lang;        // language
 #ifdef _NOWDB_WITH_PYTHON
 	PyObject   *m;    /* module      */
 	PyObject   *d;    /* dictionary  */
@@ -135,9 +136,13 @@ static void moduledestroy(void *rsc, void **n) {
 		free(MODULE(*n)->modname);
 	}
 #ifdef _NOWDB_WITH_PYTHON
-	Py_XDECREF(MODULE(*n)->m);
-	MODULE(*n)->m = NULL;
-	MODULE(*n)->d = NULL;
+	if (MODULE(*n)->lang == NOWDB_STORED_PYTHON) {
+		if (MODULE(*n)->m != NULL) {
+			Py_XDECREF(MODULE(*n)->m);
+		}
+		MODULE(*n)->m = NULL;
+		MODULE(*n)->d = NULL;
+	}
 #endif
 	free(*n); *n=NULL;
 }
@@ -484,6 +489,31 @@ static ts_algo_rc_t reloadModule(void *tree, void *module) {
 	}
 	return TS_ALGO_OK;
 }
+#endif
+
+static ts_algo_bool_t luamodule(void *ignore, const void *pattern, const void *node) {
+	return (MODULE(node)->lang == NOWDB_STORED_LUA);
+}
+
+static nowdb_err_t removeLuaModules(ts_algo_tree_t *tree) {
+	nowdb_err_t err;
+	ts_algo_list_t result;
+	ts_algo_list_node_t *run;
+
+	ts_algo_list_init(&result);
+	if (ts_algo_tree_filter(tree, &result,
+	      NULL, &luamodule) != TS_ALGO_OK) 
+	{
+		NOMEM("filtering tree");
+		ts_algo_list_destroy(&result);
+		return err;
+	}
+	for(run=result.head; run!=NULL; run=run->nxt) {
+		ts_algo_tree_delete(tree, run->cont);
+	}
+	ts_algo_list_destroy(&result);
+	return NOWDB_OK;
+}
 
 /* ------------------------------------------------------------------------
  * Helper: reload modules
@@ -504,14 +534,19 @@ static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 			return err;
 		}
 	}
+
+	err = removeLuaModules(proc->mods);
+	if (err != NOWDB_OK) return err;
+
+#ifdef _NOWDB_WITH_PYTHON
 	proc->mods->rsc = proc;
 	if (ts_algo_tree_map(proc->mods, &reloadModule) != TS_ALGO_OK) {
 		PYTHONERR("cannot reload modules");
 		return err;
 	}
+#endif
 	return NOWDB_OK;
 }
-#endif
 
 /* ------------------------------------------------------------------------
  * Helper: set lua path
@@ -631,6 +666,8 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
 static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 	nowdb_err_t err = NOWDB_OK;
 
+	fprintf(stderr, "REINIT\n");
+
 	if (proc == NULL) return NOWDB_OK;
 	if (proc->lib == NULL) return NOWDB_OK;
 
@@ -644,19 +681,23 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 
 #ifdef _NOWDB_WITH_PYTHON
 	// acquire lock
-	if (proc->pyIntp != NULL) {
-		PyEval_RestoreThread(proc->pyIntp);
-	}
+	if (LIB(proc->lib)->pyEnabled) {
+		if (proc->pyIntp != NULL) {
+			PyEval_RestoreThread(proc->pyIntp);
+		}
 
-	if (proc->nowmod != NULL) {
-		Py_XDECREF(proc->nowmod); proc->nowmod = NULL;
+		if (proc->nowmod != NULL) {
+			Py_XDECREF(proc->nowmod); proc->nowmod = NULL;
+		}
 	}
 
 	err = reloadModules(proc);
 
 	// release lock
-	if (proc->pyIntp != NULL) {
-		proc->pyIntp = PyEval_SaveThread();
+	if (LIB(proc->lib)->pyEnabled) {
+		if (proc->pyIntp != NULL) {
+			proc->pyIntp = PyEval_SaveThread();
+		}
 	}
 #endif
 	return err;
@@ -889,6 +930,8 @@ static nowdb_err_t loadLuaModule(nowdb_proc_t *proc,
 		free(*module);
 		return err;
 	}
+	(*module)->lang = NOWDB_STORED_LUA;
+
 	if (ts_algo_tree_insert(proc->mods, *module) != TS_ALGO_OK) {
 		NOMEM("tree.insert");
 		free((*module)->modname); free(*module);
@@ -960,6 +1003,7 @@ static nowdb_err_t loadPyModule(nowdb_proc_t *proc,
 		Py_XDECREF(m); free(*module);
 		return err;
 	}
+	(*module)->lang = NOWDB_STORED_PYTHON;
 
 	(*module)->m = m;
 	(*module)->d = d;

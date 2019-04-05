@@ -64,6 +64,14 @@ function nowdb_dateformat(t)
                        t.year, t.month, t.day)
 end
 
+local function errdetails(r)
+  return now2lua_errdetails(r)
+end
+
+local function errcode(r)
+  return now2lua_errcode(r)
+end
+
 local function mkResult(r)
   local self = {cr=r}
 
@@ -127,15 +135,27 @@ local function mkResult(r)
     end
     local rc = now2lua_nextrow(self.cr)
     rc = (rc == nowdb_OK) and errcode() or rc
-    if rc ~= nowdb_OK then
-       if rc == nowdb_EOF then return rc end
-       return rc
-    end
+    if rc ~= nowdb_OK then return rc end
+    return nowdb_OK
+  end
+
+  -- open cursor
+  local function open()
+    if self.opened then return nowdb_OK end
+    if resulttype() ~= nowdb_CURSOR then return nowdb_NOTACUR end
+    now2lua_open(self.cr)
+    self.opened = true
     return nowdb_OK
   end
 
   -- iterator (see below)
   local function _rows()
+    if not self.opened then 
+       rc = open()
+       if rc ~= nowdb_OK then return nil end
+       fetch()
+       if not ok() then return nil end
+    end
     if self.neednext then
        local rc = nextrow()
        if rc ~= nowdb_OK then
@@ -171,9 +191,10 @@ local function mkResult(r)
     local r = resulttype()
     if r ~= nowdb_CURSOR and r ~= nowdb_ROW
     then
-       return nowdb_NOTHING, nil
+       return nil
     end
     local t, v = now2lua_field(self.cr, i)
+    print(string.format("have field of type %d: ", t) .. tostring(v))
     return conv(t,v)
   end
 
@@ -211,7 +232,7 @@ local function mkResult(r)
     errcode = errcode,
     errdetails = errdetails,
     resulttype = resulttype,
-    getid = getid,
+    open  = open,
     fetch = fetch,
     nextrow = nextrow,
     countfields = countfields,
@@ -272,9 +293,98 @@ function nowdb_makeresult(t,v)
    return nowdb_OK, row
 end
 
+function nowdb_execute(stmt)
+  local rc, r = now2lua_execute(_nowdb_db, stmt)
+  if rc ~= nowdb_OK then
+     if r == nil then return rc, "unknown error" end
+     local msg = ''
+     if type(r) == 'string' then
+        msg = r 
+     else
+        msg = errdetails(r)
+        now2lua_release(r)
+     end
+     return rc, msg
+  end
+  return nowdb_OK, mkResult(r)
+end
+
+-- like execute, but may call error
+function nowdb_errexecute(stmt)
+  rc, r = execute(stmt)
+  if rc ~= nowdb_OK then
+     error(rc .. ": " .. r)
+  end
+  return r
+end
+
+-- like errexecute, but does not return the result
+function nowdb_pexecute(stmt)
+  rc, r = execute(stmt)
+  if rc ~= nowdb_OK then
+    error(rc .. ": " .. r)
+  end
+  if r ~= nil then
+     r.release()
+  end
+end
+
+function nowdb_from(t)
+    local frm  = [[select year(%d), month(%d), mday(%d),
+                          wday(%d), yday(%d),
+                          hour(%d), minute(%d), second(%d),
+                          nano(%d)]]
+    local stmt = string.format(frm, t, t, t, t, t, t, t, t, t)
+    local rc, cur = execute(stmt)
+    if rc ~= nowdb_OK then
+       return rc, cur
+    end
+    local r = {}
+    for row in cur.rows() do
+        r.year = row.field(0)
+        r.month = row.field(1)
+        r.day = row.field(2)
+        r.wday = row.field(3) + 1
+        r.yday = row.field(4)
+        r.hour = row.field(5)
+        r.min = row.field(6)
+        r.sec = row.field(7)
+        r.nano =row.field(8) 
+    end
+    cur.release()
+    return nowdb_OK, r
+end
+
+function nowdb_to(t)
+    local frm = "select '%s'"
+    local stmt = string.format(frm, nowdb_timeformat(t))
+    local rc, cur = execute(stmt)
+    if rc ~= nowdb_OK then
+       return rc, cur
+    end
+    for row in cur.rows() do
+        r = row.field(0)
+    end
+    cur.release()
+    return nowdb_OK, r
+end
+
+function nowdb_getnow()
+    local rc, cur = execute("select now()")
+    if rc ~= nowdb_OK then
+       return nowdb_OK, cur
+    end
+    local n = 0
+    for row in cur.rows() do
+        n = row.field(0)
+    end
+    cur.release()
+    return nowdb_OK, n
+end
+
 function _nowdb_caller(callee, ...)
   print("LUA CALLER")
-  r = callee(...)
+  local r = callee(...)
   if r == nil then return now2lua_success() end
   if r.toDB ~= nil then return r.toDB() end
   return now2lua_error(nowdb_USRERR, "unexpected result type")

@@ -147,7 +147,6 @@ nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res) {
 char *nowdb_dbresult_details(nowdb_dbresult_t res) {
 	if (res == NULL) return NULL;
 	return nowdb_err_describe(res->err, ';');
-	
 }
 
 /* ------------------------------------------------------------------------
@@ -318,7 +317,7 @@ nowdb_dbresult_t nowdb_dbresult_makeError(int errcode,
 	if (r == NULL) return NULL;
 
 	r->errcode = errcode;
-	r->err = nowdb_err_get(errcode, FALSE, "procedure", msg);
+	r->err = nowdb_err_get(errcode, FALSE, "user", msg);
 
 	return r;
 }
