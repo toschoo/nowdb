@@ -316,6 +316,7 @@ function now.connect(srv, port, usr, pwd)
     if rc ~= now.OK then
        if r == nil then return rc end
        local msg = (type(r) == 'string') and r or errdetails(r)
+       r.release()
        return rc, msg
     end
     return now.OK, makeResult(r)
@@ -323,22 +324,15 @@ function now.connect(srv, port, usr, pwd)
 
   -- like execute, but may call error
   local function errexecute(stmt)
-    rc, r = execute(stmt)
-    if rc ~= now.OK then
-       error(rc .. ": " .. r)
-    end
+    local rc, r = execute(stmt)
+    if rc ~= now.OK then error(rc .. ": " .. r) end
     return r
   end
 
   -- like errexecute, but does not return the result
   local function pexecute(stmt)
-    rc, r = execute(stmt)
-    if rc ~= now.OK then
-       error(rc .. ": " .. r)
-    end
-    if r ~= nil then
-       r.release()
-    end
+    local r = errexecute(stmt)
+    if r ~= nil then r.release() end
   end
 
   -- use this database in this session

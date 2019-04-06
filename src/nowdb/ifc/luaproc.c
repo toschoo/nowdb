@@ -63,7 +63,7 @@
 	int64_t b = (int64_t)lua_toboolean(lu,n);
 
 #define PUSHRESULT(r) \
-	lua_pushinteger(lu, (uint64_t)r);
+	lua_pushinteger(lu, (int64_t)r);
 
 #define PUSHOK(r) \
 	lua_pushinteger(lu, (uint64_t)NOWDB_OK);
@@ -84,8 +84,10 @@ static int now2lua_error(lua_State *lu) {
 	STRING(2)
 
 	r = nowdb_dbresult_makeError(i, str); free(str);
+	if (r == NULL) {
+		EXITERR(nowdb_err_no_mem, "cannot create error");
+	}
 	PUSHRESULT(r)
-
 	return 1;
 }
 
