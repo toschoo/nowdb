@@ -8,7 +8,7 @@ function add(a,b)
   return row
 end
 
-function icancount(t)
+function fastcount(t)
   local stmt = string.format("select count(*) from %s", t)
   local cur = nowdb.execute(stmt)
   for row in cur.rows() do

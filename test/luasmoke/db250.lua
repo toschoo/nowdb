@@ -206,7 +206,7 @@ function db.createProduct(key, desc, cat, pack, price)
            self.cat .. ", " ..
            self.pack .. ", " ..
            self.price .. ")"
-     c.pexecute(stmt)
+     c.execute_(stmt)
   end
 
   function self.tocsv()
@@ -230,7 +230,7 @@ function db.createClient(key, name, birthdate)
                   self.key .. ', ' ..
                   "'" .. self.name .. "', " ..
                   self.birthdate .. ")"
-     c.pexecute(stmt)
+     c.execute_(stmt)
   end
 
   function self.tocsv()
@@ -256,7 +256,7 @@ function db.createStore(name, city, address, size)
                   "'" .. self.city .. "', " ..
                   "'" .. self.address .. "', " ..
                   self.size .. ")"
-     c.pexecute(stmt)
+     c.execute_(stmt)
   end
 
   function self.tocsv()
@@ -285,7 +285,7 @@ function db.createBuy(c,p,tp,q)
                   self.stamp .. ", " ..
                   self.quant.. ", " ..
                   self.price .. ")" 
-     c.pexecute(stmt)
+     c.execute_(stmt)
   end
 
   function self.tocsv()
@@ -313,7 +313,7 @@ function db.createVisit(c,p,s,tp,q)
                   self.stamp .. ", " ..
                   self.quant.. ", " ..
                   self.price .. ")" 
-     c.pexecute(stmt)
+     c.execute_(stmt)
   end
 
   function self.tocsv()

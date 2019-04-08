@@ -5,7 +5,7 @@ Actually, since "test" and "hello" are literal strings, they aren't collected un
 --]]
 
 now = require('now')
-db = require('db')
+db = require('db250')
 
 local rc, con = now.connect('localhost', '55505', nil, nil)
 if rc ~= now.OK then

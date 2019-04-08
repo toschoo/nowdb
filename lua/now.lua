@@ -330,7 +330,7 @@ function now.connect(srv, port, usr, pwd)
   end
 
   -- like errexecute, but does not return the result
-  local function pexecute(stmt)
+  local function execute_(stmt)
     local r = errexecute(stmt)
     if r ~= nil then r.release() end
   end
@@ -408,7 +408,7 @@ function now.connect(srv, port, usr, pwd)
      use = use, 
      execute = execute,
      errexecute = errexecute,
-     pexecute = pexecute,
+     execute_ = execute_,
      getnow   = getnow,
      fromnow  = now2then,
      tonow    = then2now
