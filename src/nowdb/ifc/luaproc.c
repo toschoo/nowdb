@@ -2,6 +2,7 @@
  * (c) Tobias Schoofs, 2019
  * ========================================================================
  * Lua Interface
+ * TODO: report
  * ========================================================================
  */
 
@@ -9,7 +10,7 @@
 #include <nowdb/nowproc.h>
 
 /* ------------------------------------------------------------------------
- * LUA Interface
+ * Stack operation macros
  * ------------------------------------------------------------------------
  */
 #define PUSHERR(x,m) \
@@ -28,9 +29,6 @@
 	if (r == NULL) { \
 		EXITERR(nowdb_err_lua, "not a valid result"); \
 	} \
-	if (r == NULL) { \
-		EXITERR(nowdb_err_lua, "result is NULL"); \
-	}
 
 #define DB() \
 	if (!lua_isinteger(lu, 1)) { \
@@ -45,7 +43,7 @@
 	if (!lua_isstring(lu, n)) { \
 		EXITERR(nowdb_err_lua, "not a string"); \
 	} \
-	char *str = strdup(lua_tostring(lu,n)); \
+	str = (char*)lua_tostring(lu,n); \
 	if (str == NULL) { \
 		EXITERR(nowdb_err_no_mem, "cannot duplicate string"); \
 	}
@@ -54,20 +52,26 @@
 	if (!lua_isinteger(lu, n)) { \
 		EXITERR(nowdb_err_lua, "not an integer"); \
 	} \
-	int64_t i = lua_tointeger(lu,n);
+	i = lua_tointeger(lu,n);
 
 #define BOOL(n) \
 	if (!lua_isboolean(lu, n)) { \
 		EXITERR(nowdb_err_lua, "not a boolean"); \
 	} \
-	int64_t b = (int64_t)lua_toboolean(lu,n);
+	b = (int64_t)lua_toboolean(lu,n);
 
 #define PUSHRESULT(r) \
 	lua_pushinteger(lu, (int64_t)r);
 
 #define PUSHOK(r) \
-	lua_pushinteger(lu, (uint64_t)NOWDB_OK);
+	lua_pushinteger(lu, (int64_t)NOWDB_OK);
 
+/* ------------------------------------------------------------------------
+ * Create 'success' result
+ * Note that when success fails, we return NULL,
+ * so there is no risk that we call a method on an invalid pointer
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_success(lua_State *lu) {
 	nowdb_dbresult_t r;
 
@@ -77,22 +81,30 @@ static int now2lua_success(lua_State *lu) {
 	return 1;
 }
 
+/* ------------------------------------------------------------------------
+ * Create error result with return code / error msg passed in
+ * Note that when makeError fails, we return NULL,
+ * so there is no risk that we call a method on an invalid pointer
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_error(lua_State *lu) {
 	nowdb_dbresult_t r;
+	int64_t i;
+	char *str;
 
 	INTEGER(1)
 	STRING(2)
 
-	r = nowdb_dbresult_makeError(i, str); free(str);
-	if (r == NULL) {
-		EXITERR(nowdb_err_no_mem, "cannot create error");
-	}
+	r = nowdb_dbresult_makeError(i, str);
 	PUSHRESULT(r)
 	return 1;
 }
 
-// report
-
+/* ------------------------------------------------------------------------
+ * Make empty row result
+ * returns OK and the row
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_makeRow(lua_State *lu) {
 	nowdb_dbrow_t r = nowdb_dbresult_makeRow();
 	if (r == NULL) {
@@ -103,6 +115,10 @@ static int now2lua_makeRow(lua_State *lu) {
 	return 2;
 }
 
+/* ------------------------------------------------------------------------
+ * Get row capacity (returns the capacity only)
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_rowCapacity(lua_State *lu) {
 	RESULT()
 	lua_pushinteger(lu, (int64_t)nowdb_dbresult_rowCapacity(
@@ -110,10 +126,19 @@ static int now2lua_rowCapacity(lua_State *lu) {
 	return 1;
 }
 
+/* ------------------------------------------------------------------------
+ * Add a value to a row
+ * receives the row, the type and the value
+ * returns ok and, on error, an error message.
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_add2Row(lua_State *lu) {
 	void *v=NULL;
 	int64_t n;
+	int64_t b;
+	int64_t i;
 	double  d;
+	char *str;
 
 	RESULT()
 	INTEGER(2)
@@ -148,6 +173,11 @@ static int now2lua_add2Row(lua_State *lu) {
 	return 1;
 }
 
+/* ------------------------------------------------------------------------
+ * Add EOR to row
+ * receives the row and returns ok and, on error, the error message
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_closeRow(lua_State *lu) {
 	RESULT()
 	if (nowdb_dbresult_closeRow((nowdb_dbrow_t)r)) {
@@ -157,66 +187,108 @@ static int now2lua_closeRow(lua_State *lu) {
 	return 1;
 }
 
-// result type
-// now2lua_rtype
+/* ------------------------------------------------------------------------
+ * result type
+ * receives the result returns the result type
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_rtype(lua_State *lu) {
 	RESULT()
 	lua_pushinteger(lu, (int64_t)nowdb_dbresult_type(r));
 	return 1;
 }
 
-// now2lua_errcode
+/* ------------------------------------------------------------------------
+ * error code 
+ * receives the result returns the error code
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_errcode(lua_State *lu) {
 	RESULT()
 	lua_pushinteger(lu, (int64_t)nowdb_dbresult_errcode(r));
 	return 1;
 }
 
-// now2lua_errdetails
+/* ------------------------------------------------------------------------
+ * error details
+ * receives the result and returns the error message
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_errdetails(lua_State *lu) {
 	RESULT()
 	char *s = nowdb_dbresult_details(r);
 	if (s == NULL) {
-		lua_pushstring(lu, "unknown error");
+		lua_pushstring(lu, "no details available");
 	} else {
 		lua_pushstring(lu, s); free(s);
 	}
 	return 1;
 }
 
-// now2lua_curid
-
-// now2lua_fetch
+/* ------------------------------------------------------------------------
+ * fetch
+ * receives a cursor and returns either OK or -1
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_fetch(lua_State *lu) {
 	RESULT()
-	nowdb_dbcur_fetch((nowdb_dbcur_t)r);
-	return 0;
+	if (nowdb_dbcur_fetch((nowdb_dbcur_t)r) != 0) {
+		lua_pushinteger(lu, (int64_t)(-1));
+		return 1;
+	}
+	lua_pushinteger(lu, (int64_t)(NOWDB_OK));
+	return 1;
 }
 
-// now2lua_open
+/* ------------------------------------------------------------------------
+ * open
+ * receives a cursor and returns either OK or -1
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_open(lua_State *lu) {
 	RESULT()
-	nowdb_dbcur_open(r);
-	return 0;
+	if (nowdb_dbcur_open(r) != 0) {
+		lua_pushinteger(lu, (int64_t)(-1));
+		return 1;
+	}
+	lua_pushinteger(lu, (int64_t)(NOWDB_OK));
+	return 1;
 }
 
-// now2lua_nextrow
+/* ------------------------------------------------------------------------
+ * nextrow
+ * receives a cursor or row and returns either OK or -1
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_nextrow(lua_State *lu) {
 	RESULT()
-	nowdb_dbrow_next((nowdb_dbrow_t)r);
-	return 0;
+	if (nowdb_dbrow_next((nowdb_dbrow_t)r) != 0) {
+		lua_pushinteger(lu, (int64_t)(-1));
+		return 1;
+	}
+	lua_pushinteger(lu, (int64_t)(NOWDB_OK));
+	return 1;
 }
 
-// now2lua_countfields
+/* ------------------------------------------------------------------------
+ * countfields
+ * receives a cursor or row and returns the number of fields in the row
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_countfields(lua_State *lu) {
 	RESULT()
 	lua_pushinteger(lu, (int64_t)nowdb_dbrow_count((nowdb_dbrow_t)r));
 	return 1;
 }
 
-// now2lua_field
+/* ------------------------------------------------------------------------
+ * field
+ * receives a row and a number n,
+ * returns the type and the value of the nth field
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_field(lua_State *lu) {
-	int t=0;
+	int t=0,i;
 
 	RESULT()
 	INTEGER(2)
@@ -244,7 +316,7 @@ static int now2lua_field(lua_State *lu) {
 		lua_pushnumber(lu, *(double*)v); break;
 
 	case NOWDB_TYP_BOOL:
-		lua_pushboolean(lu, *(int64_t*)v); break;
+		lua_pushboolean(lu, (int)*(char*)v); break;
 
 	case NOWDB_TYP_NOTHING:
 	default:
@@ -253,16 +325,23 @@ static int now2lua_field(lua_State *lu) {
 	return 2;
 }
 
-// execute
+/* ------------------------------------------------------------------------
+ * execute
+ * receives the database pointer and a statement (a string)
+ * executes the statement against the database
+ * and returns either OK and the result or
+ *                    and error code and an error message
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_execute(lua_State *lu) {
-	char *stmt = NULL;
+	char *str, *stmt = NULL;
 	nowdb_dbresult_t r=NULL;
 	int rc;
 
 	DB();
 	STRING(2); stmt = str;
 
-	rc = nowdb_dbexec_statement(db, stmt, &r); free(stmt);
+	rc = nowdb_dbexec_statement(db, stmt, &r);
 	if (rc != 0 && r == NULL) {
 		EXITERR(nowdb_err_no_mem, "out-of-memory");
 	}
@@ -272,6 +351,12 @@ static int now2lua_execute(lua_State *lu) {
 	return 2;
 }
 
+/* ------------------------------------------------------------------------
+ * release
+ * receives a result and releases this result
+ * does not return anything.
+ * ------------------------------------------------------------------------
+ */
 static int now2lua_release(lua_State *lu) {
 
 	RESULT();
@@ -283,6 +368,10 @@ static int now2lua_release(lua_State *lu) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------------
+ * register all functions
+ * ------------------------------------------------------------------------
+ */
 nowdb_err_t nowdb_registerNow2Lua(lua_State *lu) {
 	lua_register(lu, "now2lua_success", now2lua_success);
 	lua_register(lu, "now2lua_error", now2lua_error);

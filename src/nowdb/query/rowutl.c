@@ -253,7 +253,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		row2[l] = (char)t;
 
 		if (t==NOWDB_TYP_BOOL) {
-			char v = (char)*(uint64_t*)value;
+			char v = (char)*(int64_t*)value;
 			memcpy(row2+l+1, &v, m);
 		} else {
 			memcpy(row2+l+1, value, m);

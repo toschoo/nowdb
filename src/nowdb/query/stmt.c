@@ -1363,12 +1363,12 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
 }
 
 #define LUADESTROYARGS(n,args) \
-	for(int i=0; i<n; i++) { \
-		if (args[i] != NULL) { \
-			if (args[i]->value != NULL) { \
-				free(args[i]->value); \
+	for(int z=0; z<n; z++) { \
+		if (args[z] != NULL) { \
+			if (args[z]->value != NULL) { \
+				free(args[z]->value); \
 			} \
-			free(args[i]); args[i] = NULL; \
+			free(args[z]); args[z] = NULL; \
 		} \
 	} \
 	free(args);
@@ -1414,7 +1414,7 @@ static inline nowdb_err_t execLua(nowdb_scope_t    *scope,
                                   nowdb_qry_result_t *res) {
 	nowdb_err_t err;
 	nowdb_simple_value_t **args=NULL;
-	nowdb_dbresult_t p;
+	nowdb_dbresult_t p=NULL;
 
 	res->resType = NOWDB_QRY_RESULT_NOTHING;
 	res->result  = NULL;
@@ -1426,9 +1426,7 @@ static inline nowdb_err_t execLua(nowdb_scope_t    *scope,
 			return err;
 		}
 		err = getLuaArgs(scope, pd, nowdb_ast_param(ast), args);
-		if (err != NOWDB_OK) {
-			free(args); return err;
-		}
+		if (err != NOWDB_OK) return err;
 	}
 
 	p = nowdb_proc_call(proc, c, f, args);
@@ -1599,6 +1597,8 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		nowdb_proc_updateInterpreter(proc);
 		return err;
 	}
+
+	// fprintf(stderr, "calling f (%s) as %p | %p\n", pd->name, f, pd);
 
 	r = nowdb_proc_call(proc, c, f, args);
 	if (args != NULL) Py_DECREF(args);

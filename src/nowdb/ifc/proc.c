@@ -282,7 +282,7 @@ static inline nowdb_err_t pushvalue(nowdb_proc_t *proc,
 		lua_pushnumber(LUA, *(double*)arg->value); break;
 
 	case NOWDB_TYP_BOOL:
-		lua_pushnumber(LUA, (int)*(int64_t*)arg->value); break;
+		lua_pushboolean(LUA, (int64_t)*(int64_t*)arg->value); break;
 
 	default:
 		LUAERR("unknown value type");
@@ -312,20 +312,30 @@ static void *luacall(nowdb_proc_t           *proc,
 	}
 	if (lua_getglobal(LUA, funname) == 0) {
 		LUAERR("not a global function");
+		lua_settop(LUA, 0);
 		return dberr(err);
 	}
 	for(int i=0; i<argn; i++) {
 		err = pushvalue(proc, args[i]);
-		if (err != NOWDB_OK) return dberr(err);
+		if (err != NOWDB_OK) {
+			lua_settop(LUA, 0);
+			return dberr(err);
+		}
 	}
-	if (lua_pcall(LUA, argn+1, 1, 0) != 0) {
-		return dberr(mkLuaErr(proc, "Error on function call"));
+	if (lua_pcall(LUA, (int)(argn+1), 1, 0) != 0) {
+		nowdb_dbresult_t r = dberr(mkLuaErr(proc,
+		            "Error in stored procedure"));
+		lua_pop(LUA, 1);
+		return r;
 	}
-	if (!lua_isinteger(LUA, 1)) {
+	if (!lua_isinteger(LUA, -1)) {
 		LUAERR("Invalid result");
+		lua_settop(LUA, 0);
 		return dberr(err);
 	}
-	return (nowdb_dbresult_t)lua_tointeger(LUA,1);
+	nowdb_dbresult_t r = (nowdb_dbresult_t)lua_tointeger(LUA,-1);
+	lua_pop(LUA, 1);
+	return r;
 }
 
 /* ------------------------------------------------------------------------
@@ -333,16 +343,10 @@ static void *luacall(nowdb_proc_t           *proc,
  * ------------------------------------------------------------------------
  */
 static nowdb_err_t setLuaDB(nowdb_proc_t *proc) {
-	nowdb_err_t err;
-
-	if (lua_getglobal(LUA, "_nowdb_setDB") == 0) {
-		LUAERR("not a global function: _nowdb_setDB");
-		return err;
-	}
+	lua_getglobal(LUA, "nowdb");
 	lua_pushinteger(LUA, (uint64_t)proc);
-	if (lua_pcall(LUA, 1, 0, 0) != 0) {
-		return mkLuaErr(proc, "Error on _nowdb_setDB");
-	}
+	lua_setfield(LUA, 1, "_db");
+	lua_settop(LUA, 0);
 	return NOWDB_OK;
 }
 
@@ -572,15 +576,9 @@ static inline nowdb_err_t setLuaPath(nowdb_proc_t *proc) {
 	}
 	sprintf(stmt, frm, p);
 	fprintf(stderr, "%s\n", stmt);
-	if (luaL_dostring(LUA, "print(package.path)") != 0) {
-		fprintf(stderr, "cannot print package.path by dostring\n");
-	}
 	if (luaL_dostring(LUA, stmt) != 0) {
 		LUAERR("cannot set LUA_PATH");
 		free(stmt); return err;
-	}
-	if (luaL_dostring(LUA, "print(package.path)") != 0) {
-		fprintf(stderr, "cannot print package.path by dostring\n");
 	}
 	free(stmt);
 	return NOWDB_OK;
@@ -665,8 +663,6 @@ static nowdb_err_t createInterpreter(nowdb_proc_t *proc) {
  */
 static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 	nowdb_err_t err = NOWDB_OK;
-
-	fprintf(stderr, "REINIT\n");
 
 	if (proc == NULL) return NOWDB_OK;
 	if (proc->lib == NULL) return NOWDB_OK;
@@ -914,8 +910,7 @@ static nowdb_err_t loadLuaModule(nowdb_proc_t *proc,
 	sprintf(p, "%s/%s.lua", proc->luapath, mname);
 	int x = luaL_dofile(LUA, p); free(p);
 	if (x != 0) {
-		LUAERR("cannot load module");
-		return err;
+		return mkLuaErr(proc, "cannot load module");
 	}
 
 	*module = calloc(1, sizeof(module_t));
@@ -1113,13 +1108,15 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	if (f != NULL) {
 		ENABLED(&f->pd);
 		*pd  = f->pd;
-		*fun = f->f;
+		*fun = f;
 		*call = f->c;
 		return NOWDB_OK;
 	}
 
 	err = nowdb_scope_getProcedure(proc->scope, fname, pd);
 	if (err != NOWDB_OK) return err;
+
+	// fprintf(stderr, "LOADING %d FUN\n", (*pd)->lang);
 
 	ENABLED(pd);
 
@@ -1130,23 +1127,25 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	if (m == NULL) {
 		err = loadModule(proc, *pd, &m);
 		if (err != NOWDB_OK) {
+			UNLOCK(pd);
 			nowdb_proc_desc_destroy(*pd);
 			free(*pd); *pd = NULL;
-			UNLOCK(pd);
 			return err;
 		}
 	}
 
 	err = loadFun(proc, *pd, m, &f);
 	if (err != NOWDB_OK) {
+		UNLOCK(pd);
 		nowdb_proc_desc_destroy(*pd);
 		free(*pd); *pd = NULL;
-		UNLOCK(pd);
 		return err;
 	}
 
 	*fun = f;
         *call = m->c;
+
+	// fprintf(stderr, "LOADED: %p | %p | %p\n", f, f->pd, *pd);
 
 	UNLOCK(pd);
 	return NOWDB_OK;
@@ -1178,7 +1177,8 @@ void *nowdb_proc_call(nowdb_proc_t *proc, void *call,
 		                     FUN(fun)->pd->argn, args);
 	}
 #else
-	return luacall(proc, fun->funname, fun->pd->argn, args);
+	return luacall(proc, FUN(fun)->funname,
+	                     FUN(fun)->pd->argn, args);
 #endif
 }
 

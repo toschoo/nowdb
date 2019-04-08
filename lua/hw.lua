@@ -18,6 +18,17 @@ function icancount(t)
   end
 end
 
+function slowcount(t)
+  local stmt = string.format("select * from %s", t)
+  local cur = nowdb.execute(stmt)
+  local cnt = 0
+  for row in cur.rows() do
+      cnt = cnt + 1
+  end
+  cur.release()
+  return nowdb.makeresult(nowdb.UINT, cnt)
+end
+
 function timetest()
   local n = nowdb.getnow()
   local t = nowdb.from(n)

@@ -5,6 +5,7 @@ import now
 import nowapi as na
 import random as rnd
 import math
+import sys
 
 def countdb(c,t):
     sql = "select count(*) as cnt from %s" % t
@@ -32,41 +33,41 @@ def price(c,p):
     for row in c.execute(sql):
         return row['price']
 
-def createprocs(c):
-    print "RUNNING 'createprocs'"
+def createprocs(c, lang):
+    print "RUNNING 'createprocs' %s" % lang
 
     c.execute("drop procedure fib if exists").close()
-    c.execute("create procedure db.fib() language python").close()
+    c.execute("create procedure db.fib() language %s" % lang).close()
 
     c.execute("drop procedure fibreset if exists").close()
-    c.execute("create procedure db.fibreset() language python").close()
+    c.execute("create procedure db.fibreset() language %s" % lang).close()
 
     c.execute("drop procedure timetest if exists").close()
-    c.execute("create procedure db.timetest(t time) language python").close()
+    c.execute("create procedure db.timetest(t time) language %s" % lang).close()
 
     c.execute("drop procedure easter if exists").close()
-    c.execute("create procedure db.easter(y uint) language python").close()
+    c.execute("create procedure db.easter(y uint) language %s" % lang).close()
 
     c.execute("drop procedure myfloatadd if exists").close()
-    c.execute("create procedure db.myfloatadd(a float, b float) language python").close()
+    c.execute("create procedure db.myfloatadd(a float, b float) language %s" % lang).close()
 
     c.execute("drop procedure myintadd if exists").close()
-    c.execute("create procedure db.myintadd(a int, b int) language python").close()
+    c.execute("create procedure db.myintadd(a int, b int) language %s" % lang).close()
 
     c.execute("drop procedure myuintadd if exists").close()
-    c.execute("create procedure db.myuintadd(a uint, b uint) language python").close()
+    c.execute("create procedure db.myuintadd(a uint, b uint) language %s" % lang).close()
 
     c.execute("drop procedure mylogic if exists").close()
-    c.execute("create procedure db.mylogic(o text, a bool, b bool) language python").close()
+    c.execute("create procedure db.mylogic(o text, a bool, b bool) language %s" % lang).close()
 
     c.execute("drop procedure mycount if exists").close()
-    c.execute("create procedure db.mycount(t text) language python").close()
+    c.execute("create procedure db.mycount(t text) language %s" % lang).close()
 
     c.execute("drop procedure sayhello if exists").close()
-    c.execute("create procedure db.sayhello() language python").close()
+    c.execute("create procedure db.sayhello() language %s" % lang).close()
 
     c.execute("drop procedure groupbuy if exists").close()
-    c.execute("create procedure db.groupbuy(p uint) language python").close()
+    c.execute("create procedure db.groupbuy(p uint) language %s" % lang).close()
 
     c.execute("drop type unique if exists").close()
     c.execute("create type unique (id uint primary key, desc text)").close()
@@ -86,6 +87,8 @@ def createprocs(c):
 def hellotest(c):
     print "RUNNING TEST 'hellotest'"
 
+    c.execute("exec sayhello()").close()
+    c.execute("exec sayhello()").close()
     c.execute("exec sayhello()").close()
 
 def counttest(c):
@@ -287,6 +290,7 @@ def timetest(c):
 
     x = countdb(c,'buys')
 
+    print("calling 'timetest(now())'")
     for row in c.execute("exec timetest(now())"):
         print('time: %d' % row[0])
         if row[0] != x:
@@ -295,6 +299,7 @@ def timetest(c):
     for row in c.execute("select now() as now"):
         ds = row['now'].strftime(now.TIMEFORMAT)
 
+    print("calling 'timetest(%s)'")
     for row in c.execute("exec timetest('%s')" % ds):
         print('time: %d' % row[0])
         if row[0] != x:
@@ -325,9 +330,17 @@ def fibtest(c):
                 raise db.TestFailed('not the expected fib: %d - %d' % (row[0], fib(i)))
 
 if __name__ == "__main__":
+
+    lang = 'python'
+    if len(sys.argv) > 1:
+       lang = sys.argv[1]
+
+    print("running exectest for language %s" % lang)
+
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
-       createprocs(c)
+       createprocs(c, lang)
+
        hellotest(c)
        timetest(c)
        eastertest(c)

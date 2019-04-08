@@ -2,7 +2,7 @@
 echo "RUNNING TEST BATTERY 'PAPISMOKE'" > log/papismoke.log
 
 export PYTHONPATH=$PYTHONPATH:./test/server
-nohup nowdbd -b rsc -y > log/nowdb.log 2>&1 &
+nohup bin/nowdbd -b rsc -ly > log/nowdb.log 2>&1 &
 if [ $? -ne 0 ]
 then
 	echo "FAILED: cannot run server"
@@ -60,11 +60,20 @@ then
 	exit 1
 fi
 
-echo "RUNNING exec.py" >> log/papismoke.log
-test/papismoke/exec.py >> log/papismoke.log 2>&1
+echo "RUNNING exec.py lua" >> log/papismoke.log
+test/papismoke/exec.py lua >> log/papismoke.log 2>&1
 if [ $? -ne 0 ]
 then
-	echo "FAILED: exec.py failed"
+	echo "FAILED: exec.py lua failed"
+	kill -2 $p
+	exit 1
+fi
+
+echo "RUNNING exec.py python" >> log/papismoke.log
+test/papismoke/exec.py python >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: exec.py pythonn failed"
 	kill -2 $p
 	exit 1
 fi

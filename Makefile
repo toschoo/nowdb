@@ -170,7 +170,7 @@ IFC = include/nowdb/nowdb.h \
 default:	lib 
 
 #all:	default tools tests bench server client
-all:	default tools tests server client
+all:	default tools tests server client 
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
@@ -187,7 +187,7 @@ client_install:	client tools
 
 server:	$(BIN)/nowdbd
 
-client:	$(BIN)/nowclient
+client:	$(BIN)/nowclient lua
 
 tools:	bin/randomfile    \
 	bin/readfile      \
@@ -287,8 +287,19 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/query/rowutl.o \
 			         $(SRL)/nowdbclient.o $(clibs)
 
+rsclua:	rsc/lua/nowdb.lua rsc/lua/db.lua rsc/lua/hw.lua
+
+rsc/lua/nowdb.lua:	lua/nowdb.lua
+			cp lua/nowdb.lua rsc/lua/
+
+rsc/lua/hw.lua:	lua/hw.lua
+		cp lua/hw.lua rsc/lua/
+
+rsc/lua/db.lua:	test/server/db.lua
+		cp test/server/db.lua rsc/lua/
+
 # Lua Client library
-lua:	nowluaifc
+lua:	nowluaifc rsclua
 
 nowluaifc:	$(LUA)/libnowluaifc.so
 
@@ -748,6 +759,7 @@ clean:
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
+	rm -f  $(RSC)/lua/*.lua
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke

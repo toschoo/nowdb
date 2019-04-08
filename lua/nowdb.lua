@@ -152,8 +152,10 @@ local function mkResult(r)
 
   -- get error details
   local function errdetails()
-    if not self.cr then return end
-    return now2lua_errdetails(self.cr)
+    local nodetails = 'no error details available'
+    if not self.cr then return nodetails end
+    local d = now2lua_errdetails(self.cr)
+    return not d and nodetails or d
   end
 
   -- get result type
@@ -165,11 +167,8 @@ local function mkResult(r)
   -- fetch from cursor (if cursor)
   local function fetch()
     if resulttype() ~= nowdb.CURSOR then return nowdb.NOTACUR end
-    local rc = now2lua_fetch(self.cr)
-    rc = (rc == nowdb.OK) and errcode() or rc
-    if rc ~= nowdb.OK then
-       if rc == nowdb.EOF then return rc, nil end
-       return rc, errdetails(self.cr)
+    if now2lua_fetch(self.cr) ~= nowdb.OK then
+       return errcode(), errdetails()
     end
     return nowdb.OK
   end
@@ -181,9 +180,9 @@ local function mkResult(r)
     then
        return nowdb.NOTACUR
     end
-    local rc = now2lua_nextrow(self.cr)
-    rc = (rc == nowdb.OK) and errcode() or rc
-    if rc ~= nowdb.OK then return rc end
+    if now2lua_nextrow(self.cr) ~= nowdb.OK then
+       return nowdb.EOF
+    end
     return nowdb.OK
   end
 
@@ -191,7 +190,9 @@ local function mkResult(r)
   local function open()
     if self.opened then return nowdb.OK end
     if resulttype() ~= nowdb.CURSOR then return nowdb.NOTACUR end
-    now2lua_open(self.cr)
+    if now2lua_open(self.cr) ~= nowdb.OK then
+       return errcode(), errdetails()
+    end
     self.opened = true
     return nowdb.OK
   end
@@ -199,20 +200,26 @@ local function mkResult(r)
   -- iterator (see below)
   local function _rows()
     if not self.opened then 
-       rc = open()
-       if rc ~= nowdb.OK then return nil end
-       fetch()
-       if not ok() then return nil end
+       local rc, msg = open()
+       if rc ~= nowdb.OK then 
+          if rc == nowdb.EOF then return nil end
+          nowdb.raise(rc, msg)
+       end
+       local rc, msg = fetch()
+       if rc ~= nowdb.OK then 
+          if rc == nowdb.EOF then return nil end
+          nowdb.raise(rc, msg)
+       end
     end
     if self.neednext then
        local rc = nextrow()
        if rc ~= nowdb.OK then
-          if rc == nowdb.EOF then
-             if fetch() ~= nowdb.OK then return nil end
-             return self
-          else
-             return nil
+          local rc, msg = fetch()
+          if rc ~= nowdb.OK then
+             if rc == nowdb.EOF then return nil end
+             nowdb.raise(rc, msg)
           end
+          return self
        end
     end
     if not self.neednext then self.neednext = true end
@@ -233,7 +240,10 @@ local function mkResult(r)
 
   -- type conversion is easy
   local function conv(t,v)
-    if t == nowdb.NOTHING then return nil else return v end
+    if t == nowdb.NOTHING then return nil
+    elseif t == nowdb.BOOL then
+      if v == 0 then return false else return true end
+    else return v end
   end
 
   -- get ith field from row (or cursor)
@@ -346,9 +356,9 @@ end
 ---------------------------------------------------------------------------
 function nowdb.error(rc, msg)
    if not rc then return nowdb.success() end
-   if msg == nil then m = "no details available"
+   if msg == nil then m = 'no error details available'
    elseif type(msg) ~= 'string' then
-      nowdb.raise(nowdb.USRERR, "error called with wrong type")
+      nowdb.raise(nowdb.USRERR, 'error called with wrong type')
    end
    local r, m = mkResult(now2lua_error(rc, m))
    if r ~= 0 and not m then return r end
@@ -479,16 +489,35 @@ function nowdb.getnow()
   return n
 end
 
+---------------------------------------------------------------------------
+-- Create time descriptor
+---------------------------------------------------------------------------
+function nowdb.time(year, month, day, hour, min, sec, nano)
+   if not year then nowdb.raise(nowdb.USRERR, 'time without year') end
+   if not month then nowdb.raise(nowdb.USRERR, 'time without month') end
+   if not day then nowdb.raise(nowdb.USRERR, 'time without day') end
+   local t = {
+     year = year, month = month, day = day,
+     hour = not hour and 0 or hour,
+     min  = not min  and 0 or min,
+     sec  = not sec  and 0 or sec,
+     nano = not nano and 0 or nano
+   }
+   return nowdb.from(nowdb.to(t))
+end
+
+---------------------------------------------------------------------------
+-- Create date descriptor
+---------------------------------------------------------------------------
+function nowdb.date(year, month, day)
+  return nowdb.time(year, month, day)
+end
+
 -- internal use only ---
 function _nowdb_caller(callee, ...)
   local ok, r = pcall(callee, ...)
   if not ok then return now2lua_error(nowdb.USRERR, r) end
-  if r == nil then return now2lua_success() end
+  if not r then return now2lua_success() end
   if r.toDB ~= nil then return r.toDB() end
   return now2lua_error(nowdb.USRERR, "unexpected result type")
-end
-
--- internal use only ---
-function _nowdb_setDB(db)
-  nowdb._db = db
 end
