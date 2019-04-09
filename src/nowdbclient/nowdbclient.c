@@ -507,7 +507,8 @@ int nowdb_result_eof(nowdb_result_t res) {
  */
 const char *nowdb_result_details(nowdb_result_t res) {
 	if (res->status == ACK) return "OK";
-	return res->buf;
+	return res->buf; // we should copy the buffer
+	                 // otherwise the error message is not stable!
 }
 
 /* ------------------------------------------------------------------------

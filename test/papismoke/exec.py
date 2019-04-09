@@ -150,6 +150,8 @@ def grouptest(c):
            raise db.TestFailed("ps differs: %f - %f" % (myrow['ps'], row[4]))
         if float(round(1000*myrow['pa']))/1000 != \
            float(round(1000*row[5]))/1000:
+           print("myrow/row for 'pa': %.8f | %.8f" % (float(round(1000*myrow['pa']))/1000, \
+                                                      float(round(1000*row[5]))/1000))
            raise db.TestFailed("ps differs: %f - %f" % (myrow['pa'], row[5]))
         if float(round(1000*myrow['pm']))/1000 != \
            float(round(1000*row[6]))/1000:
@@ -281,6 +283,12 @@ def invalidpars(c):
     try:
        c.execute("exec myfloatadd(pi(), sum(1))")
        raise db.TestFailed("called exec with agg")
+    except Exception as x:
+       print("caught %s" % str(x))
+
+    try:
+       c.execute("exec doesnotexist(1.0, 1.0)")
+       raise db.TestFailed("called exec with non-existing procedure")
     except Exception as x:
        print("caught %s" % str(x))
 

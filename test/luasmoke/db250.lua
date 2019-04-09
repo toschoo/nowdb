@@ -8,21 +8,22 @@ db.STORERANGE = 100
 
 function db.createDB(c,dbname)
   local stmt = "drop schema " .. dbname .. " if exists"
-  local rc, res = c.execute(stmt)
+  local rc, res = c.pexecute(stmt)
   if rc ~= now.OK then
      error("db creation failed: " .. rc .. " (" .. res .. "), stmt: " .. stmt)
   end
-  stmt = "create schema " .. dbname
-  rc, res = c.execute(stmt)
-  if rc ~= now.OK then
-     error("db creation failed: " .. rc .. " (" .. res .. "), stmt: " .. stmt)
-  end
-  rc, res = c.use(dbname)
-  if rc ~= now.OK then
-     error("db creation failed: " .. rc .. " (" .. res .. "), stmt: " .. stmt)
-  end
+  res.release()
 
-  rc, res = c.execute([[create type product ( 
+  stmt = "create schema " .. dbname
+  rc, res = c.pexecute(stmt)
+  if rc ~= now.OK then
+     error("db creation failed: " .. rc .. " (" .. res .. "), stmt: " .. stmt)
+  end
+  res.release()
+
+  c.use(dbname)
+
+  rc, res = c.pexecute([[create type product ( 
                           prod_key uint primary key,
                           prod_desc    text, 
                           prod_cat     uint, 
@@ -31,8 +32,9 @@ function db.createDB(c,dbname)
   if rc ~= now.OK then
      error("cannot create type product")
   end
+  res.release()
 
-  rc, res = c.execute([[create type product2 ( 
+  rc, res = c.pexecute([[create type product2 ( 
                           prod_key uint primary key, 
                           prod_desc    text, 
                           prod_cat     uint, 
@@ -41,16 +43,18 @@ function db.createDB(c,dbname)
   if rc~= now.OK then
      error("cannot create type product")
   end
+  res.release()
    
-  rc, res = c.execute([[create type client ( 
+  rc, res = c.pexecute([[create type client ( 
                           client_key uint primary key,
                           client_name text,
                           birthdate time)]])
   if rc ~= now.OK then
      error("cannot create type client")
   end
+  res.release()
    
-  rc, res = c.execute([[create type store ( 
+  rc, res = c.pexecute([[create type store ( 
                           store_name text primary key, 
                           city text, 
                           address text, 
@@ -58,8 +62,9 @@ function db.createDB(c,dbname)
   if rc ~= now.OK then
      error("cannot create type client")
   end
+  res.release()
    
-  rc, res = c.execute([[create stamped edge buys ( 
+  rc, res = c.pexecute([[create stamped edge buys ( 
                           origin client, 
                           destin product, 
                           quantity uint, 
@@ -67,8 +72,9 @@ function db.createDB(c,dbname)
   if rc ~= now.OK then
      error("cannot create edge buys")
   end
+  res.release()
    
-  rc, res = c.execute([[create stamped edge visits ( 
+  rc, res = c.pexecute([[create stamped edge visits ( 
                           origin client, 
                           destin store, 
                           quantity uint, 
@@ -92,7 +98,7 @@ end
 
 local function randomdate(c, years)
   local y = math.random(6,70) * now.year
-  local rc, n = c.getnow()
+  local n = c.getnow()
   local d = math.random(1,now.year)
   return now.round(n+d-y, now.day)
 end
@@ -100,7 +106,7 @@ end
 local function randomtime(c, days)
   local d = math.random(0,days) * now.day
   local x = math.random(0,now.day)
-  local rc, n = c.getnow()
+  local n = c.getnow()
   return n-(x+d)
 end
 

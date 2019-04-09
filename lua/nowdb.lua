@@ -164,6 +164,17 @@ local function mkResult(r)
     return now2lua_rtype(self.cr)
   end
 
+  -- open cursor
+  local function open()
+    if self.opened then return nowdb.OK end
+    if resulttype() ~= nowdb.CURSOR then return nowdb.NOTACUR end
+    if now2lua_open(self.cr) ~= nowdb.OK then
+       return errcode(), errdetails()
+    end
+    self.opened = true
+    return nowdb.OK
+  end
+
   -- fetch from cursor (if cursor)
   local function fetch()
     if resulttype() ~= nowdb.CURSOR then return nowdb.NOTACUR end
@@ -183,17 +194,6 @@ local function mkResult(r)
     if now2lua_nextrow(self.cr) ~= nowdb.OK then
        return nowdb.EOF
     end
-    return nowdb.OK
-  end
-
-  -- open cursor
-  local function open()
-    if self.opened then return nowdb.OK end
-    if resulttype() ~= nowdb.CURSOR then return nowdb.NOTACUR end
-    if now2lua_open(self.cr) ~= nowdb.OK then
-       return errcode(), errdetails()
-    end
-    self.opened = true
     return nowdb.OK
   end
 
@@ -233,9 +233,7 @@ local function mkResult(r)
     then
        return nowdb.raise(nowdb.NOTAROW, "not a row")
     end
-    local rc, msg = now2lua_countfields(self.cr)
-    if rc ~= nowdbOK then nowdb.raise(rc, msg) end
-    return rc
+    return now2lua_countfields(self.cr)
   end
 
   -- type conversion is easy
@@ -246,7 +244,7 @@ local function mkResult(r)
     else return v end
   end
 
-  -- get ith field from row (or cursor)
+  -- get value of ith field from row (or cursor)
   local function field(i)
     local r = resulttype()
     if r ~= nowdb.CURSOR and r ~= nowdb.ROW
@@ -255,6 +253,17 @@ local function mkResult(r)
     end
     local t, v = now2lua_field(self.cr, i)
     return conv(t,v)
+  end
+
+  -- get type and value of ith field from row (or cursor)
+  local function typedfield(i)
+    local r = resulttype()
+    if r ~= nowdb.CURSOR and r ~= nowdb.ROW
+    then
+       return nowdb.NOTHING, nil
+    end
+    local t, v = now2lua_field(self.cr, i)
+    return t, conv(t,v)
   end
 
   -- add v as type t to the result (which needs to be a row)

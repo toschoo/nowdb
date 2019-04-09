@@ -58,15 +58,8 @@ local function weekday(n)
   end
 end
 
-local rc, n = con.getnow()
-if rc ~= now.OK then
-   error("cannot get now: " .. rc .. " (" .. n .. ")")
-end
-local rc, t = con.fromnow(n)
-if rc ~= now.OK then
-   error("cannot convert from now: " .. rc .. " (" .. t .. ")")
-end
-
+local n = con.getnow()
+local t = con.from(n)
 local f = string.format('%04d-%02d-%02dT%02d:%02d:%02d.%d',
                            t.year, t.month, t.day, 
                            t.hour, t.min, t.sec,
@@ -77,14 +70,10 @@ print(f .. " was a " .. weekday(t.wday) .. ", " .. t.yday .. ". day of the year"
 print(now.timeformat(t))
 print(now.dateformat(t))
 
-local rc, m = con.tonow(t)
-if rc ~= now.OK then
-   error("cannot convert to now: " .. rc .. " (" .. m .. ")")
-end
+local m = con.to(t)
 
 print(string.format("%d ?= %d", n, m))
 
 if n ~= m then
-   error("tonow(fromnow(n)) is not n")
+   error("to(from(n)) is not n")
 end
-

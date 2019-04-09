@@ -49,6 +49,7 @@ setmetatable(now, {__gc=close}) -- close when it goes out of scope
 now.OK = 0
 now.EOF = 8
 now.NOTACUR = -10
+now.NOTAROW = -11
 
 ---------------------------------------------------------------------------
 -- result types
@@ -89,7 +90,7 @@ function now.round(t, d)
 end
 
 function now.timeformat(t)
-  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%d',
+  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%09d',
                        t.year, t.month, t.day, 
                        t.hour, t.min, t.sec, t.nano)
 end
@@ -100,22 +101,24 @@ function now.dateformat(t)
 end
 
 ---------------------------------------------------------------------------
--- Get error code for this guy
+-- Raise error
 ---------------------------------------------------------------------------
+function now.raise(rc, msg)
+  local m = msg or 'now details available'
+  error(string.format("%d: %s", rc, m), 2)
+end
+
+-- internal use only 
 local function errcode(r)
   return cnow_errcode(r)
 end
 
----------------------------------------------------------------------------
--- Get error details of this guy
----------------------------------------------------------------------------
+-- internal use only 
 local function errdetails(r)
   return cnow_errdetails(r)
 end
 
----------------------------------------------------------------------------
--- Quick check: everything healthy?
----------------------------------------------------------------------------
+-- internal use only 
 local function isok(r)
   return (cnow_errcode(r) == now.OK)
 end
@@ -153,7 +156,7 @@ local function makeResult(r)
   end
 
   -- get result type
-  local function resultType()
+  local function resulttype()
     if not self.cr then return now.Nothing end
     return cnow_rtype(self.cr)
   end
@@ -166,7 +169,7 @@ local function makeResult(r)
 
   -- fetch from cursor (if cursor)
   local function fetch()
-    if resultType() ~= now.CURSOR
+    if resulttype() ~= now.CURSOR
     then
        return now.NOTACUR, 'result is not a cursor'
     end
@@ -181,7 +184,7 @@ local function makeResult(r)
 
   -- go to next row
   local function nextrow()
-    local r = resultType()
+    local r = resulttype()
     if r ~= now.CURSOR and r ~= now.ROW
     then
        return now.NOTACUR
@@ -200,12 +203,13 @@ local function makeResult(r)
     if self.neednext then
        local rc = nextrow()
        if rc ~= now.OK then
-          if rc == now.EOF then
-             if fetch() ~= now.OK then return nil end
-             return self
-          else
-             return nil
+          if resulttype() ~= now.CURSOR then return nil end
+          local rc, msg = fetch()
+          if rc ~= now.OK then
+             if rc == now.EOF then return nil end
+             now.raise(rc, msg)
           end
+          return self
        end
     end
     if not self.neednext then self.neednext = true end
@@ -214,28 +218,42 @@ local function makeResult(r)
 
   -- how many fields do we have per row (cursor and row)
   local function countfields()
-    local r = resultType()
+    local r = resulttype()
     if r ~= now.CURSOR and r ~= now.ROW
     then
-       return now.NOTHING, nil
+       now.raise(now.NOTAROW, nil)
     end
     return cnow_countfields(self.cr)
   end
 
   -- type conversion is easy
   local function conv(t,v)
-    if t == now.NOTHING then return nil else return v end
+    if t == now.NOTHING then return nil
+    elseif t == now.BOOL then
+      if v == 0 then return false else return true end
+    else return v end
   end
 
-  -- get ith field from row (or cursor)
+  -- get value of ith field from row (or cursor)
   local function field(i)
-    local r = resultType()
+    local r = resulttype()
+    if r ~= now.CURSOR and r ~= now.ROW
+    then
+       return nil
+    end
+    local t, v = cnow_field(self.cr, i)
+    return conv(t,v)
+  end
+
+  -- get type and value of ith field from row (or cursor)
+  local function typedfield(i)
+    local r = resulttype()
     if r ~= now.CURSOR and r ~= now.ROW
     then
        return now.NOTHING, nil
     end
     local t, v = cnow_field(self.cr, i)
-    return conv(t,v)
+    return t, conv(t,v)
   end
 
   -- release the type.
@@ -256,7 +274,7 @@ local function makeResult(r)
     eof = eof,
     errcode = errcode,
     errdetails = errdetails,
-    resultType = resultType,
+    resulttype = resulttype,
     getid = getid,
     fetch = fetch,
     nextrow = nextrow,
@@ -270,12 +288,14 @@ local function makeResult(r)
     if _rows() == nil then return nil else return cur end
   end
 
+  ------------------------------------------------------------------------
   -- row iterator factory, it is used on a cursor (or row) like:
   --     for row in cur.rows() do
   --         dosomethingwith(row.field(0))
   --         dosomethingelsewith(row.field(1))
   --         ...
   --     end
+  ------------------------------------------------------------------------
   ifc.rows = function()
      return riter, ifc
   end
@@ -308,110 +328,122 @@ function now.connect(srv, port, usr, pwd)
     self.con = nil
   end
 
-  -- execute the statement
+  -- execute the statement (protected)
   -- returns a result or an errorcode and message
-  local function execute(stmt)
+  local function pexecute(stmt)
     local rc, r = cnow_execute(self.con, stmt)
     rc = (rc == now.OK) and errcode(r) or rc
     if rc ~= now.OK then
-       if r == nil then return rc end
-       local msg = (type(r) == 'string') and r or errdetails(r)
-       r.release()
+       if r == nil then return rc, 'no details available' end
+       local msg = ''
+       if type(r) == 'string' then
+          msg = r
+       else
+          msg = errdetails(r)
+          r.release()       
+       end
        return rc, msg
     end
     return now.OK, makeResult(r)
   end
 
-  -- like execute, but may call error
-  local function errexecute(stmt)
-    local rc, r = execute(stmt)
-    if rc ~= now.OK then error(rc .. ": " .. r) end
+  -- like pexecute, but may call error
+  local function execute(stmt)
+    local rc, r = pexecute(stmt)
+    if rc ~= now.OK then now.raise(rc, r) end
     return r
   end
 
-  -- like errexecute, but does not return the result
+  -- like execute, but does not return the result
   local function execute_(stmt)
-    local r = errexecute(stmt)
+    local r = execute(stmt)
     if r ~= nil then r.release() end
   end
 
   -- use this database in this session
   local function use(db)
     local stmt = "use " .. db
-    local rc, r = execute(stmt)
-    if r == nil then return rc end
-    rc = rc == now.OK and r.errcode() or rc
-    if rc ~= now.OK then
-       local msg = (type(r) == 'string') and r or r.errdetails()
-       r.release()
-       return rc, msg
-    end
-    return now.OK
+    local r = execute(stmt)
+    if r then r.release() end
   end
 
-  local function now2then(t)
+  -------------------------------------------------------------------------
+  -- Converts a nowdb timestamp to a time descriptor,
+  -- a table with the fields
+  --  year :
+  --  month: 01 - 12
+  --  day  : 01 - 31
+  --  wday : week day with sunday = 1 and saturday = 6
+  --  yday : day of the year with January, 1, being 1
+  --  hour : 00 - 23
+  --  min  : 00 - 59
+  --  sec  : 00 - 59
+  --  nano :  0 - 999999999
+  --
+  -- The function may raise an error!
+  -------------------------------------------------------------------------
+  local function from(t)
     local frm  = [[select year(%d), month(%d), mday(%d),
                           wday(%d), yday(%d),
                           hour(%d), minute(%d), second(%d),
                           nano(%d)]]
     local stmt = string.format(frm, t, t, t, t, t, t, t, t, t)
-    local rc, cur = execute(stmt)
-    if rc ~= now.OK then
-       return rc, cur
-    end
+    local cur = execute(stmt)
     local r = {}
     for row in cur.rows() do
         r.year = row.field(0)
         r.month = row.field(1)
         r.day = row.field(2)
         r.wday = row.field(3) + 1
-        r.yday = row.field(4)
+        r.yday = row.field(4) + 1
         r.hour = row.field(5)
         r.min = row.field(6)
         r.sec = row.field(7)
         r.nano =row.field(8) 
     end
     cur.release()
-    return now.OK, r
+    return r
   end
 
-  local function then2now(t)
+  -------------------------------------------------------------------------
+  -- Converts a time descriptor to a nowdb timestamp
+  -- The function may raise an error!
+  -------------------------------------------------------------------------
+  local function to(t)
     local frm = "select '%s'"
     local stmt = string.format(frm, now.timeformat(t))
-    local rc, cur = execute(stmt)
-    if rc ~= now.OK then
-       return rc, cur
-    end
+    local cur = execute(stmt)
     for row in cur.rows() do
         r = row.field(0)
     end
     cur.release()
-    return now.OK, r
+    return r
   end
 
+  -------------------------------------------------------------------------
+  -- Gets the current time
+  -- The function may raise an error!
+  -------------------------------------------------------------------------
   local function getnow()
-    local rc, cur = execute("select now()")
-    if rc ~= now.OK then
-       return now.OK, cur
-    end
+    local cur = execute("select now()")
     local n = 0
     for row in cur.rows() do
         n = row.field(0)
     end
     cur.release()
-    return now.OK, n
+    return n
   end
 
   -- the public interface 
   local ifc = {
      close = close,
      use = use, 
+     pexecute = pexecute,
      execute = execute,
-     errexecute = errexecute,
      execute_ = execute_,
      getnow   = getnow,
-     fromnow  = now2then,
-     tonow    = then2now
+     from  = from,
+     to    = to 
   }
 
   ---------------------------------------------------------------
@@ -426,7 +458,7 @@ function now.connect(srv, port, usr, pwd)
   -- the generator may throw an error (i.e. call error)
   ---------------------------------------------------------------
   ifc.rows = function(stmt)
-     return errexecute(stmt).rows()
+     return execute(stmt).rows()
   end
 
   setmetatable(ifc, {__gc=close})

@@ -1,7 +1,8 @@
 #!/usr/bin/env lua
 
 --[[
-Actually, since "test" and "hello" are literal strings, they aren't collected until the enclosing function's prototype gets collected.
+Actually, since "test" and "hello" are literal strings,
+they aren't collected until the enclosing function's prototype gets collected.
 --]]
 
 now = require('now')
@@ -14,7 +15,7 @@ end
 
 local function fastcount(tab)
   local stmt = string.format("select count(*) from %s", tab)
-  local cur = con.errexecute(stmt) 
+  local cur = con.execute(stmt) 
   local n = 0
   for row in  cur.rows() do
       print(string.format("% 8s: % 5d", tab, row.field(0)))
@@ -27,7 +28,7 @@ end
 local function slowcount(tab)
   local stmt = string.format("select * from %s", tab)
   local cnt=0
-  local cur = con.errexecute(stmt)
+  local cur = con.execute(stmt)
   for row in cur.rows() do cnt = cnt + 1 end
   cur.release()
   return cnt
