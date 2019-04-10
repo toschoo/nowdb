@@ -1,3 +1,5 @@
+local unid = require('unid')
+local recache = require('recache')
 
 function sayhello()
   print("hello, db is " .. nowdb._db)
@@ -42,4 +44,25 @@ function timetest()
   res.add2row(nowdb.TEXT, nowdb.timeformat(t))
   res.closerow()
   return res
+end
+
+function testunique()
+  unid.create('myuni')
+  for i = 1,10 do
+      print(string.format("%03d: %04d", i, unid.get('myuni')))
+  end
+  unid.drop('myuni')
+end
+
+function testrecache()
+  local pld = {}
+  pld[1] = {['name']='field_1', ['type']=nowdb.UINT}
+  local proc = {}
+  proc[1] = {['ptype']=nowdb.UINT, ['pvalue']=tostring(1)}
+  proc[2] = {['ptype']=nowdb.TEXT, ['pvalue']='test'}
+  proc[3] = {['ptype']=nowdb.FLOAT, ['pvalue']=tostring(38.0)}
+  proc[4] = {['ptype']=nowdb.FLOAT, ['pvalue']=tostring(-8.0)}
+  recache.create('mycache', proc, pld)
+  recache.withcache('mycache', sayhello, {[1]=1,[2]='test',[3]=38.0,[4]=-8.0})
+  recache.drop('mycache')
 end

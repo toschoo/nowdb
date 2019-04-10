@@ -84,6 +84,25 @@ nowdb.day    = 24*nowdb.hour
 nowdb.year   = 365*nowdb.day
 
 ---------------------------------------------------------------------------
+-- Typename
+---------------------------------------------------------------------------
+function nowdb.nowtypename(t)
+  if t == nowdb.TEXT then return 'text'
+  elseif t == nowdb.DATE then return 'date'
+  elseif t == nowdb.TIME then return 'time'
+  elseif t == nowdb.UINT then return 'uint'
+  elseif t == nowdb.INT then return 'int'
+  elseif t == nowdb.FLOAT then return 'float'
+  elseif t == nowdb.BOOL then return 'bool' end
+end
+
+---------------------------------------------------------------------------
+-- type from name
+---------------------------------------------------------------------------
+function nowdb.typename(t)
+end
+
+---------------------------------------------------------------------------
 -- Round time to 'd' (e.g. day | hour | minute | scecond)
 ---------------------------------------------------------------------------
 function nowdb.round(t, d)
@@ -435,6 +454,30 @@ end
 function nowdb.execute_(stmt)
   local r = nowdb.execute(stmt)
   if r ~= nil then r.release() end
+end
+
+---------------------------------------------------------------------------
+-- Similar to execute,
+-- but returns the result as an array representing one row
+---------------------------------------------------------------------------
+function nowdb.execute1(stmt)
+  local r = {}
+  local cur = nowdb.execute(stmt)
+  for row in cur.rows() do
+    for i = 1, row.countfields() do
+        r[i]=row.field(i-1)
+    end
+    cur.release()
+    return r
+  end
+  nowdb.raise(nowdb.EOF, 'no results in execute1')
+end
+
+---------------------------------------------------------------------------
+-- Similar to execute1, but returns only one single value
+---------------------------------------------------------------------------
+function nowdb.execone(stmt)
+  return nowdb.execute1(stmt)[1]
 end
 
 ---------------------------------------------------------------------------
