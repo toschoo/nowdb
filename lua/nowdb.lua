@@ -218,21 +218,25 @@ local function mkResult(r)
 
   -- iterator (see below)
   local function _rows()
-    if not self.opened then 
+    local r = resulttype()
+    if r == nowdb.CURSOR and not self.opened then 
        local rc, msg = open()
        if rc ~= nowdb.OK then 
           if rc == nowdb.EOF then return nil end
+          if rc == nowdb.NOTACUR then return nil end
           nowdb.raise(rc, msg)
        end
        local rc, msg = fetch()
        if rc ~= nowdb.OK then 
           if rc == nowdb.EOF then return nil end
+          if rc == nowdb.NOTACUR then return nil end
           nowdb.raise(rc, msg)
        end
     end
     if self.neednext then
        local rc = nextrow()
        if rc ~= nowdb.OK then
+          if r ~= nowdb.CUR then return nil end
           local rc, msg = fetch()
           if rc ~= nowdb.OK then
              if rc == nowdb.EOF then return nil end
@@ -339,6 +343,7 @@ local function mkResult(r)
     nextrow = nextrow,
     countfields = countfields,
     field = field,
+    typedfield = typedfield,
     add2row = add2row,
     closerow = closerow,
     release = release
@@ -346,6 +351,11 @@ local function mkResult(r)
 
   -- row iterator:
   local function riter(cur)
+     if resulttype() ~= nowdb.CURSOR
+     and resulttype() ~= nowdb.ROW
+     then
+       return nil
+     end
     if _rows() == nil then return nil else return cur end
   end
 
