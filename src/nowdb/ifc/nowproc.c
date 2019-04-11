@@ -661,6 +661,11 @@ void *nowdb_dbrow_field(nowdb_dbrow_t p, int field, int *type) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
 			if (i < 0) break;
+
+		} else if (ROW(p)->buf[i] == NOWDB_TYP_BOOL ||
+                           ROW(p)->buf[i] == NOWDB_TYP_NOTHING) {
+			i+=2;
+
 		} else {
 			i+=9;
 		}

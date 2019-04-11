@@ -79,12 +79,13 @@ function testrecache()
   pld[1] = {['name']='field_1', ['type']=nowdb.FLOAT}
   recache.setDebug(true)
   recache.create('mycache', pld)
-  local valid = function(rid) return true end
+  -- local valid = recache.isvalid
+  local valid = recache.expiresinseconds(30)
   local generator = nowdb.cocursor("select price from visits")
   cur = recache.withcache('mycache', valid, generator, {1,'test',38.0,-8.0})
   print("RESULT:")
   for row in cur.rows() do
       print(string.format("| %.4f |", row.field(0)))
   end
-  recache.drop('mycache')
+  -- recache.drop('mycache')
 end

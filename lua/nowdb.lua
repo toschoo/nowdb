@@ -476,6 +476,19 @@ function nowdb.cocursor(stmt)
 end
 
 ---------------------------------------------------------------------------
+-- Row iterator over a coroutine
+-- which can be used in conjunction with cocursor
+---------------------------------------------------------------------------
+function nowdb.corows(producer)
+  local citer = function()
+     if coroutine.status(producer) == 'dead' then return nil end
+     local _, row = coroutine.resume(producer)
+     return row
+  end
+  return citer, producer
+end
+
+---------------------------------------------------------------------------
 -- Like execute, but does not return the result.
 -- This may be convenient for statements where the result is not relevant,
 -- e.g. DDL and DML 

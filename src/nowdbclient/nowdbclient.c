@@ -668,7 +668,7 @@ void *nowdb_row_field(nowdb_row_t p, int field, int *type) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
 		} else if (ROW(p)->buf[i] == NOWDB_BOOL ||
-                         ROW(p)->buf[i] == NOWDB_NOTHING) {
+                           ROW(p)->buf[i] == NOWDB_NOTHING) {
 			i+=2;
 		} else {
 			i+=9;
