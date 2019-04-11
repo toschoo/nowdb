@@ -54,6 +54,18 @@ function testunique()
   unid.drop('myuni')
 end
 
+function testeof()
+  nowdb.execute_([[create type myemptytype (
+                     id uint primary key)
+                   if not exists]])
+  local cur = nowdb.execute("select * from myemptytype")
+  for row in cur.rows() do
+      print("empty: " .. row.field(0))
+  end
+  cur.release()
+  nowdb.execute_("drop type myemptytype")
+end
+
 local function generate()
   local cur = nowdb.execute("select price from visits")
   for row in cur.rows() do
@@ -65,18 +77,14 @@ end
 function testrecache()
   local pld = {}
   pld[1] = {['name']='field_1', ['type']=nowdb.FLOAT}
-  local proc = {}
-  proc[1] = {['ptype']=nowdb.UINT, ['pvalue']=tostring(1)}
-  proc[2] = {['ptype']=nowdb.TEXT, ['pvalue']='test'}
-  proc[3] = {['ptype']=nowdb.FLOAT, ['pvalue']=tostring(38.0)}
-  proc[4] = {['ptype']=nowdb.FLOAT, ['pvalue']=tostring(-8.0)}
-  recache.create('mycache', proc, pld)
+  recache.setDebug(true)
+  recache.create('mycache', pld)
   local valid = function(rid) return true end
-  local generator = coroutine.create(generate)
-  cur = recache.withcache('mycache', valid, generator, {[1]=1,[2]='test',[3]=38.0,[4]=-8.0})
+  local generator = nowdb.cocursor("select price from visits")
+  cur = recache.withcache('mycache', valid, generator, {1,'test',38.0,-8.0})
   print("RESULT:")
   for row in cur.rows() do
-      print(string.format("%d | %d | %.4f", row.field(0), row.field(1), row.field(2)))
+      print(string.format("| %.4f |", row.field(0)))
   end
   recache.drop('mycache')
 end

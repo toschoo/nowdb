@@ -334,6 +334,7 @@ function now.connect(srv, port, usr, pwd)
     local rc, r = cnow_execute(self.con, stmt)
     rc = (rc == now.OK) and errcode(r) or rc
     if rc ~= now.OK then
+       if rc == nowdb.EOF then return rc, mkResult(r) end
        if r == nil then return rc, 'no details available' end
        local msg = ''
        if type(r) == 'string' then
@@ -350,7 +351,10 @@ function now.connect(srv, port, usr, pwd)
   -- like pexecute, but may call error
   local function execute(stmt)
     local rc, r = pexecute(stmt)
-    if rc ~= now.OK then now.raise(rc, r) end
+    if rc ~= now.OK then 
+       if rc == nowdb.EOF then return r end
+       now.raise(rc, r)
+    end
     return r
   end
 

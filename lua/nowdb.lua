@@ -45,6 +45,8 @@ nowdb.OK = 0
 nowdb.EOF = 8
 nowdb.NOMEM = 1
 nowdb.TOOBIG = 5
+nowdb.KEYNOF = 26
+nowdb.DUPKEY = 27
 nowdb.NOTACUR = -10
 nowdb.NOTAROW = -11
 nowdb.USRERR  =  74
@@ -236,7 +238,7 @@ local function mkResult(r)
     if self.neednext then
        local rc = nextrow()
        if rc ~= nowdb.OK then
-          if r ~= nowdb.CUR then return nil end
+          if r ~= nowdb.CURSOR then return nil end
           local rc, msg = fetch()
           if rc ~= nowdb.OK then
              if rc == nowdb.EOF then return nil end
@@ -433,7 +435,8 @@ function nowdb.pexecute(stmt)
   local rc, r = now2lua_execute(nowdb._db, stmt)
   rc = (rc == nowdb.OK) and errcode(r) or rc
   if rc ~= nowdb.OK then
-     if r == nil then return rc, "no error details available" end
+     if rc == nowdb.EOF then return rc, mkResult(r) end
+     if r == nil then return rc, "no details available" end
      local msg = ''
      if type(r) == 'string' then
         msg = r 
@@ -452,8 +455,24 @@ end
 ---------------------------------------------------------------------------
 function nowdb.execute(stmt)
   local rc, r = nowdb.pexecute(stmt)
-  if rc ~= nowdb.OK then nowdb.raise(rc, r) end
+  if rc ~= nowdb.OK then 
+     if rc == nowdb.EOF then return r end
+     nowdb.raise(rc, r)
+  end
   return r
+end
+
+---------------------------------------------------------------------------
+-- Wraps execute in a coroutine producer
+---------------------------------------------------------------------------
+function nowdb.cocursor(stmt)
+  local cur = nowdb.execute(stmt)
+  return coroutine.create(function()
+    for row in cur.rows() do
+        coroutine.yield(row)
+    end 
+    cur.release()
+  end)
 end
 
 ---------------------------------------------------------------------------
@@ -470,7 +489,7 @@ end
 -- Similar to execute,
 -- but returns the result as an array representing one row
 ---------------------------------------------------------------------------
-function nowdb.execute1(stmt)
+function nowdb.onerow(stmt)
   local r = {}
   local cur = nowdb.execute(stmt)
   for row in cur.rows() do
@@ -486,8 +505,8 @@ end
 ---------------------------------------------------------------------------
 -- Similar to execute1, but returns only one single value
 ---------------------------------------------------------------------------
-function nowdb.execone(stmt)
-  return nowdb.execute1(stmt)[1]
+function nowdb.onevalue(stmt)
+  return nowdb.onerow(stmt)[1]
 end
 
 ---------------------------------------------------------------------------
