@@ -185,7 +185,7 @@ client_install:	client tools
 		cp -r pynow /usr/local/
 		cp -r include/nowdb /usr/local/include/
 
-server:	$(BIN)/nowdbd
+server:	$(BIN)/nowdbd lua
 
 client:	$(BIN)/nowclient lua
 

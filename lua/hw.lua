@@ -74,7 +74,7 @@ local function generate()
   cur.release()
 end
 
-function testrecache()
+function testcache()
   local pld = {}
   pld[1] = {['name']='field_1', ['type']=nowdb.FLOAT}
   recache.setDebug(true)
@@ -82,10 +82,25 @@ function testrecache()
   -- local valid = recache.isvalid
   local valid = recache.expiresinseconds(30)
   local generator = nowdb.cocursor("select price from visits")
-  cur = recache.withcache('mycache', valid, generator, {1,'test',38.0,-8.0})
-  print("RESULT:")
-  for row in cur.rows() do
-      print(string.format("| %.4f |", row.field(0)))
-  end
-  -- recache.drop('mycache')
+  return recache.withcache('mycache', generator, valid, {1,'test',38.0,-8.0})
+end
+
+function teststatic()
+  local pld = {}
+  pld[1] = {['name']='field_1', ['type']=nowdb.UINT}
+  pld[2] = {['name']='field_2', ['type']=nowdb.FLOAT}
+  recache.setDebug(true)
+  recache.create('mystatic', pld)
+  local generator = nowdb.cocursor("select quantity, price from visits")
+  return recache.staticresult('mystatic', generator)
+end
+
+function testtmp()
+  local pld = {}
+  pld[1] = {['name']='field_1', ['type']=nowdb.UINT}
+  pld[2] = {['name']='field_2', ['type']=nowdb.FLOAT}
+  recache.setDebug(true)
+  recache.create('mytemp', pld)
+  local generator = nowdb.cocursor("select quantity, price from visits")
+  return recache.tempresult('mytemp', generator)
 end

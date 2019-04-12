@@ -408,6 +408,8 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 	}
 	qr->row = tmp;
 	ROW(row)->res.result = qr;
+	ROW(row)->sz = qr->sz;
+	ROW(row)->buf = qr->row;
 	return 0;
 }
 
@@ -444,6 +446,8 @@ int nowdb_dbresult_closeRow(nowdb_dbrow_t row) {
 
 	nowdb_row_addEOR(qr->row, &qr->sz);
 	ROW(row)->res.result = qr;
+	ROW(row)->sz = qr->sz;
+	ROW(row)->buf = qr->row;
 	return 0;
 }
 
@@ -629,6 +633,7 @@ int nowdb_dbrow_count(nowdb_dbrow_t p) {
 	int i;
 	int f=0;
 
+	if (ROW(p)->buf == NULL) return 0;
 	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != NOWDB_EOR;)  {
 		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
 			i = findEndOfStr(ROW(p)->buf,
