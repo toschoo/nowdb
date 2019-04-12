@@ -311,6 +311,21 @@ local function mkResult(r)
     if rc ~= nowdb.OK then nowdb.raise(rc, msg) end
   end
 
+  -- transform a row into an array
+  -- the function returns two arrays:
+  -- the values and the types
+  -- if you are not interested in the types,
+  -- you may safely ignore the second return value
+  local function row2array()
+    if resulttype() ~= nowdb.ROW then nowdb.raise(nowdb.NOTAROW, "not a row") end
+    local vs = {}
+    local ts = {}
+    for i = 1, row.countfields() do
+        ts[i], vs[i] = row.typedfield(i-1)
+    end
+    return vs, ts
+  end
+
   -- release the type.
   -- This may be left to the gc; however,
   -- since there is no control over when
@@ -348,6 +363,7 @@ local function mkResult(r)
     typedfield = typedfield,
     add2row = add2row,
     closerow = closerow,
+    row2array = row2array,
     release = release
   }
 
@@ -425,6 +441,22 @@ function nowdb.makeresult(t,v)
 end
 
 ---------------------------------------------------------------------------
+-- Create a row result from an array
+-- the first parameter must be an array
+-- containing the nowdb types
+-- for the values in the second array (vals).
+-- typs and vals of course must have the same length
+---------------------------------------------------------------------------
+function nowdb.array2row(typs, vals)
+  local row = nowdb.makerow()
+  for i = 1, #vals do
+      row.add2row(typs[i], vals[i])
+  end
+  row.closerow()
+  return row
+end
+
+---------------------------------------------------------------------------
 -- Executes the statement 'stmt'
 -- return an error code and the result
 -- if the error code is not 'OK',
@@ -482,7 +514,8 @@ end
 function nowdb.corows(producer)
   local citer = function()
      if coroutine.status(producer) == 'dead' then return nil end
-     local _, row = coroutine.resume(producer)
+     local ok, row = coroutine.resume(producer)
+     if not ok then nowdb.raise(nowdb.USRERR, row) end
      return row
   end
   return citer, producer
@@ -512,14 +545,14 @@ function nowdb.onerow(stmt)
     cur.release()
     return r
   end
-  nowdb.raise(nowdb.EOF, 'no results in execute1')
 end
 
 ---------------------------------------------------------------------------
--- Similar to execute1, but returns only one single value
+-- Calls onerow and returns the first value
 ---------------------------------------------------------------------------
 function nowdb.onevalue(stmt)
-  return nowdb.onerow(stmt)[1]
+  local r = nowdb.onerow(stmt)
+  if not r then return nil else return r[1] end
 end
 
 ---------------------------------------------------------------------------
