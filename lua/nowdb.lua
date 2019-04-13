@@ -95,13 +95,25 @@ function nowdb.nowtypename(t)
   elseif t == nowdb.UINT then return 'uint'
   elseif t == nowdb.INT then return 'int'
   elseif t == nowdb.FLOAT then return 'float'
-  elseif t == nowdb.BOOL then return 'bool' end
+  elseif t == nowdb.BOOL then return 'bool'
+  elseif t == nowdb.NOTHING then return 'null' end
 end
 
 ---------------------------------------------------------------------------
--- type from name
+-- Type from name
 ---------------------------------------------------------------------------
-function nowdb.typename(t)
+function nowdb.nowtypebyname(t)
+  if lower(t) == 'text' then return nowdb.TEXT
+  elseif lower(t) == 'date' then return nowdb.TIME
+  elseif lower(t) == 'time' then return nowdb.TIME
+  elseif lower(t) == 'uint' then return nowdb.UINT
+  elseif lower(t) == 'uinteger' then return nowdb.UINT
+  elseif lower(t) == 'int' then return nowdb.INT
+  elseif lower(t) == 'integer' then return nowdb.INT
+  elseif lower(t) == 'float' then return nowdb.FLOAT
+  elseif lower(t) == 'bool' then return nowdb.BOOL
+  elseif lower(t) == 'null' then return nowdb.NOTHING
+  elseif lower(t) == 'nil' then return nowdb.NOTHING end
 end
 
 ---------------------------------------------------------------------------
