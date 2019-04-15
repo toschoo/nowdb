@@ -80,6 +80,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/scope/procman.o  \
+      $(SRC)/scope/ipc.o      \
       $(SRC)/scope/dml.o      \
       $(SRC)/index/index.o    \
       $(SRC)/index/compare.o  \
@@ -136,6 +137,7 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/scope/loader.h   \
       $(SRC)/scope/procman.h  \
       $(SRC)/scope/dml.h      \
+      $(SRC)/scope/ipc.h      \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \

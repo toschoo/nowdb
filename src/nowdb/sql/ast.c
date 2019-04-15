@@ -112,6 +112,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_FETCH: ASTCALLOC(0);
 	case NOWDB_AST_CLOSE: ASTCALLOC(0);
 	case NOWDB_AST_EXEC: ASTCALLOC(1);
+	case NOWDB_AST_LOCK: ASTCALLOC(2);
+	case NOWDB_AST_UNLOCK: ASTCALLOC(2);
 
 	case NOWDB_AST_TARGET: ASTCALLOC(1);
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
@@ -210,6 +212,8 @@ static inline char *tellType(int ntype, int stype) {
 	case NOWDB_AST_FETCH: return "fetch";
 	case NOWDB_AST_CLOSE: return "close";
 	case NOWDB_AST_EXEC: return "execute";
+	case NOWDB_AST_LOCK: return "lock";
+	case NOWDB_AST_UNLOCK: return "unlock";
 
 	case NOWDB_AST_TARGET:
 		switch(stype) {
@@ -222,6 +226,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_EDGE: return "edge";
 		case NOWDB_AST_PROC: return "procedure";
 		case NOWDB_AST_MODULE: return "module";
+		case NOWDB_AST_MUTEX: return "lock";
+		case NOWDB_AST_QUEUE: return "queue";
 		default: return "unknown target";
 		}
 
@@ -252,6 +258,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_TYPE: return "as type";
 		case NOWDB_AST_LANG: return "language";
 		case NOWDB_AST_ERRORS: return "error file";
+		case NOWDB_AST_MODE: return "option mode";
+		case NOWDB_AST_TIMEOUT: return "option timeout";
 		default: return "unknown option";
 		}
 
@@ -426,6 +434,8 @@ static inline int addmisc(nowdb_ast_t *n,
 	case NOWDB_AST_FETCH: ADDKID(0);
 	case NOWDB_AST_CLOSE: ADDKID(0);
 	case NOWDB_AST_EXEC: ADDKID(0);
+	case NOWDB_AST_LOCK: ADDKID(0);
+	case NOWDB_AST_UNLOCK: ADDKID(0);
 	case NOWDB_AST_SELECT: ADDKID(0);
 	default: return -1;
 	}
@@ -779,6 +789,19 @@ static inline int addexec(nowdb_ast_t *n,
 }
 
 /* -----------------------------------------------------------------------
+ * Add kid to exec (parameters)
+ * -----------------------------------------------------------------------
+ */
+static inline int addlock(nowdb_ast_t *n,
+                          nowdb_ast_t *k) {
+	switch(k->ntype) {
+	case NOWDB_AST_TARGET: ADDKID(0);
+	case NOWDB_AST_OPTION: ADDKID(1);
+	default: return -1;
+	}
+}
+
+/* -----------------------------------------------------------------------
  * Add kid to target (module)
  * -----------------------------------------------------------------------
  */
@@ -827,6 +850,9 @@ int nowdb_ast_add(nowdb_ast_t *n, nowdb_ast_t *k) {
 	case NOWDB_AST_COMPARE: return addcompare(n,k);
 
 	case NOWDB_AST_EXEC: return addexec(n,k);
+
+	case NOWDB_AST_LOCK:
+	case NOWDB_AST_UNLOCK: return addlock(n,k);
 
 	case NOWDB_AST_TARGET: return addtrg(n,k);
 	case NOWDB_AST_ON:       return -1;
@@ -959,7 +985,11 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	case NOWDB_AST_UPDATE: return ast->kids[0];
 	case NOWDB_AST_DELETE: return ast->kids[0];
 
+	case NOWDB_AST_LOCK:
+	case NOWDB_AST_UNLOCK: return ast->kids[0];
+
 	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
+
 
 	default: return NULL;
 	}
@@ -1152,6 +1182,10 @@ nowdb_ast_t *nowdb_ast_option(nowdb_ast_t *ast, int option) {
 		return nowdb_ast_option(ast->kids[1], option);
 
 	case NOWDB_AST_DECL:
+		return nowdb_ast_option(ast->kids[1], option);
+
+	case NOWDB_AST_LOCK:
+	case NOWDB_AST_UNLOCK:
 		return nowdb_ast_option(ast->kids[1], option);
 
 	case NOWDB_AST_OPTION:

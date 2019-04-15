@@ -75,9 +75,10 @@
 (?i:INDEX)		return NOWDB_SQL_INDEX;
 (?i:VERTEX)		return NOWDB_SQL_VERTEX;
 (?i:PROCEDURE)		return NOWDB_SQL_PROCEDURE;
-
 (?i:EDGE)		return NOWDB_SQL_EDGE;
 (?i:TYPE)		return NOWDB_SQL_TYPE;
+(?i:LOCK)		return NOWDB_SQL_LOCK;
+(?i:UNLOCK)		return NOWDB_SQL_UNLOCK;
 (?i:TEXT)		return NOWDB_SQL_TEXT;
 (?i:DATE)		return NOWDB_SQL_DATE;
 (?i:TIME)		return NOWDB_SQL_TIME;
@@ -127,6 +128,7 @@
 (?i:EXISTS)		return NOWDB_SQL_EXISTS;
 
 (?i:AS)			return NOWDB_SQL_AS;
+(?i:FOR)		return NOWDB_SQL_FOR;
 
 (?i:DISK)		return NOWDB_SQL_DISK;
 (?i:HDD)		return NOWDB_SQL_HDD;
@@ -153,6 +155,8 @@
 (?i:ENCRYPTION)		return NOWDB_SQL_ENCRYPTION;
 
 (?i:ERRORS)		return NOWDB_SQL_ERRORS;
+
+(?i:TIMEOUT)		return NOWDB_SQL_TIMEOUT;
 
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;

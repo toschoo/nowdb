@@ -131,6 +131,8 @@
 #define NOWDB_AST_FETCH  5002
 #define NOWDB_AST_CLOSE  5003
 #define NOWDB_AST_EXEC   5004
+#define NOWDB_AST_LOCK   5005
+#define NOWDB_AST_UNLOCK 5006
 
 /* -----------------------------------------------------------------------
  * Generic targets
@@ -155,6 +157,8 @@
 #define NOWDB_AST_EDGE     10110
 #define NOWDB_AST_PROC     10111
 #define NOWDB_AST_MODULE   10112
+#define NOWDB_AST_MUTEX    10113
+#define NOWDB_AST_QUEUE    10114
 
 /* -----------------------------------------------------------------------
  * Options
@@ -174,6 +178,8 @@
 #define NOWDB_AST_PK       10211
 #define NOWDB_AST_LANG     10212
 #define NOWDB_AST_ERRORS   10213
+#define NOWDB_AST_MODE     10214
+#define NOWDB_AST_TIMEOUT  10215
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:

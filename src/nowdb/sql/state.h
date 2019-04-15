@@ -294,6 +294,38 @@ typedef struct {
 	nowdbsql_state_pushAst(nowdbres, m);
 
 /* ------------------------------------------------------------------------
+ * Make a MISC statement representing 'LOCK' or 'UNLOCK'
+ * Parameters:
+ * - p: parameters
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_LOCK(L,o,P) \
+	NOWDB_SQL_CHECKSTATE(); \
+	nowdb_ast_t *z; \
+	nowdb_ast_t *l; \
+	NOWDB_SQL_CREATEAST(&z, o, 0); \
+	nowdb_ast_setValue(z, NOWDB_AST_V_STRING, L); \
+	if (P != NULL) {\
+		NOWDB_SQL_ADDKID(z, P); \
+	} \
+	NOWDB_SQL_CREATEAST(&l, NOWDB_AST_MISC, 0); \
+	NOWDB_SQL_ADDKID(l, z); \
+	nowdbsql_state_pushAst(nowdbres, l);
+
+/* ------------------------------------------------------------------------
+ * Make an option
+ * - A: the ast to create
+ * - o: the option subcode
+ * - t: the value type
+ * - v: the value
+ * ------------------------------------------------------------------------
+ */
+#define NOWDB_SQL_MAKE_OPTION(A,o,t,v) \
+	NOWDB_SQL_CHECKSTATE(); \
+	NOWDB_SQL_CREATEAST(&A, NOWDB_AST_OPTION, o); \
+	nowdb_ast_setValue(A, t, v);
+
+/* ------------------------------------------------------------------------
  * Create and add an option to an ast 
  * Parameters:
  * - C: the ast to add to
