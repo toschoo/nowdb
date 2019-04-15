@@ -598,8 +598,8 @@ nowdb_err_t nowdb_index_man_register(nowdb_index_man_t  *iman,
 	                  FALSE, OBJECT, "index descriptor NULL");
 
 	s = strnlen(desc->name, 4097);
-	if (s > 4096) return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
-	                                 "index name too long (max: 4096)");
+	if (s >= 4096) return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
+	                                  "index name too long (max: 4095)");
 	/* lock ! */
 	err = nowdb_lock_write(&iman->lock);
 	if (err != NOWDB_OK) return err;

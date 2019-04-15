@@ -140,7 +140,7 @@ nowdb_err_t nowdb_file_init(nowdb_file_t   *file,
 		                                      "path is NULL");
 	}
 	size_t s = strnlen(path, NOWDB_MAX_PATH+1);
-	if (s == 0 || s > NOWDB_MAX_PATH) {
+	if (s == 0 || s >= NOWDB_MAX_PATH) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		             "path too small or too big (max: 4096)");
 	}

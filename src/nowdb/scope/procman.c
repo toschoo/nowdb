@@ -190,8 +190,8 @@ nowdb_err_t nowdb_procman_init(nowdb_procman_t *pm,
 	}
 
 	s = strnlen(base, 4097);
-	if (s > 4096) {
-		INVALID("base path too long (max: 4096)");
+	if (s >= 4096) {
+		INVALID("base path too long (max: 4095)");
 		nowdb_procman_destroy(pm);
 		return err;
 	}

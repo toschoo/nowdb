@@ -846,7 +846,7 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 		memcpy(&v->roleid, buf+off, 4); off+=4;
 		memcpy(&v->vid, buf+off, 1); off+=1;
 		s = strnlen(buf+off, 4097);
-		if (s > 4096) {
+		if (s >= 4096) {
 			free(v);
 			return nowdb_err_get(nowdb_err_catalog,
 		         FALSE, OBJECT, "vertex name too long");
@@ -890,7 +890,7 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->pk, buf+off, 1); off+=1;
 		s = strnlen(buf+off, 4097);
-		if (s > 4096) {
+		if (s >= 4096) {
 			free(p);
 			return nowdb_err_get(nowdb_err_catalog,
 		         FALSE, OBJECT, "property name too long");
@@ -933,7 +933,7 @@ static nowdb_err_t loadPedge(ts_algo_list_t   *list,
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->off, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
-		if (s > 4096) {
+		if (s >= 4096) {
 			free(p);
 			return nowdb_err_get(nowdb_err_catalog,
 		         FALSE, OBJECT, "property name too long");
@@ -1022,7 +1022,7 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 		memcpy(&e->size, buf+off, 4); off+=4;
 		memcpy(&e->ctrl, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
-		if (s > 4096) {
+		if (s >= 4096) {
 			free(e);
 			return nowdb_err_get(nowdb_err_catalog,
 		         FALSE, OBJECT, "edge name too long");

@@ -308,7 +308,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 
 	/* path */
 	s = strnlen(path, NOWDB_MAX_PATH+1);
-	if (s >= NOWDB_MAX_NAME) {
+	if (s >= NOWDB_MAX_PATH) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                 "path too long (max: 4096)");
 	}
@@ -317,7 +317,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                            "allocating scope path");
 	}
-	strcpy(scope->path, path);
+	strncpy(scope->path, path, s); scope->path[s] = 0;
 
 	/* storage catalog */
 	scope->strgpath = nowdb_path_append(scope->path, STORECAT);

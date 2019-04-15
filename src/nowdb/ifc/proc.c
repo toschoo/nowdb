@@ -572,13 +572,17 @@ static inline nowdb_err_t setLuaPath(nowdb_proc_t *proc) {
 		fprintf(stderr, "LUA_PATH: %s\n", p);
 	}
 
-	stmt = malloc(strlen(frm) + strnlen(p, 1024) + 1);
+	size_t s = strnlen(p, 1025);
+	if (s >= 1024) {
+		INVALID("LUA_PATH too long (max: 1024)");
+	}
+
+	stmt = malloc(strlen(frm) + s + 1);
 	if (stmt == NULL) {
 		NOMEM("allocating lua path");
 		return err;
 	}
 	sprintf(stmt, frm, p);
-	fprintf(stderr, "%s\n", stmt);
 	if (luaL_dostring(LUA, stmt) != 0) {
 		LUAERR("cannot set LUA_PATH");
 		free(stmt); return err;

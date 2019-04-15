@@ -170,7 +170,7 @@ static char *describe(nowdb_err_t err, char *indent, char term) {
 	len += strlen(o);
 
 	if (err->info != NULL) {
-		len += strnlen(err->info, NOWDB_MAX_NAME);
+		len += strlen(err->info);
 	}
 	len++; /* '\0' */
 	

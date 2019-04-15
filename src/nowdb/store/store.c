@@ -372,8 +372,8 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                      "base is NULL");
 	}
-	s = strnlen(base, NOWDB_MAX_PATH-4);
-	if (s > NOWDB_MAX_PATH - 3) {
+	s = strnlen(base, NOWDB_MAX_PATH-3);
+	if (s >= NOWDB_MAX_PATH - 4) {
 		nowdb_rwlock_destroy(&store->lock);
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 		                                     "path too long");
@@ -386,7 +386,7 @@ nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                            "allocating store path");
 	}
-	strcpy(store->path, base);
+	strncpy(store->path, base, s); store->path[s] = 0;
 
 	/* catalog */
 	store->catalog = nowdb_path_append(store->path, "catalog");
