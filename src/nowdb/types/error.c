@@ -56,13 +56,18 @@ static inline nowdb_err_t errget(nowdb_errcode_t errcode,
 	err->errcode = errcode;
 	if (object != NULL) strncpy(err->object, object, 7);
 	if (info != NULL) {
-		int l = strnlen(info, NOWDB_MAX_NAME);
+		int l = strnlen(info, NOWDB_MAX_NAME+1);
+		if (l >= NOWDB_MAX_NAME) {
+			nowdb_errman_release(err);
+			return NULL;
+		}
 		err->info = malloc(l+1);
 		if (err->info == NULL) {
 			nowdb_errman_release(err);
 			return NULL;
 		}
-		strcpy(err->info, info); err->info[l] = 0;
+		strncpy(err->info, info, NOWDB_MAX_NAME-1);
+		err->info[l] = 0;
 	}
 	return err;
 }
