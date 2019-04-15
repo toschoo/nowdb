@@ -66,7 +66,7 @@ static inline nowdb_err_t errget(nowdb_errcode_t errcode,
 			nowdb_errman_release(err);
 			return NULL;
 		}
-		strncpy(err->info, info, NOWDB_MAX_NAME-1);
+		strncpy(err->info, info, l);
 		err->info[l] = 0;
 	}
 	return err;

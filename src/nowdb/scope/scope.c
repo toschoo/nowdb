@@ -901,13 +901,12 @@ static inline nowdb_err_t findContext(nowdb_scope_t  *scope,
 	s = strnlen(name, NOWDB_MAX_NAME+1);
 	if (s >= NOWDB_MAX_NAME) return nowdb_err_get(nowdb_err_invalid,
 	                     FALSE, OBJECT, "name too long (max: 255)");
-	fprintf(stderr, "searching %s (size: %u)\n", name, s);
 	search.name = malloc(s+1); /* here a slab could be very useful */
 	if (search.name == NULL) {
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                           "allocating name string");
 	}
-	strncpy(search.name, name, NOWDB_MAX_NAME);
+	strncpy(search.name, name, s);
 	search.name[s] = 0;
 
 	*ctx = ts_algo_tree_find(&scope->contexts, &search);
