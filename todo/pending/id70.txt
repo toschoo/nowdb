@@ -1,0 +1,4 @@
+eliminate nullrecord
+--------------------
+benchmark header-based fullscan vs. fullscan
+benchmark header-based insert vs simple insert
