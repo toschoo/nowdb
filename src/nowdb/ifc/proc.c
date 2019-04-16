@@ -80,13 +80,11 @@ static char *OBJECT = "proc";
  */
 static inline nowdb_err_t mkLuaErr(nowdb_proc_t *proc, char *m) {
 	nowdb_err_t err;
-	char *msg = NULL; 
+	const char *msg = NULL; 
 
-	/*
 	if (lua_isstring(LUA, -1)) {
-		msg = strdup(lua_tostring(LUA,-1));
+		msg = lua_tostring(LUA,-1);
 	}
-	*/
 	if (msg == NULL) { 
 		LUAERR(m);
 	} else {
@@ -95,10 +93,10 @@ static inline nowdb_err_t mkLuaErr(nowdb_proc_t *proc, char *m) {
 		char *desc = malloc(s);
 		if (desc == NULL) {
 			NOMEM("allocating error descriptor");
-			free(msg); return err;
+			return err;
 		}
 		sprintf(desc, "%s: %s", m, msg);
-		LUAERR(desc); free(desc); free(msg);
+		LUAERR(desc); free(desc);
 	}
 	return err;
 }
