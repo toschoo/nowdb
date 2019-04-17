@@ -5,7 +5,7 @@
  * Currently contains:
  * - read/write locks
  * - events
- * - queues
+ * - queues (queues should be part of the model!)
  * TODO:
  * - locks: should we iplement deadlock detection (easy, but some
  *          overhead on locking...)?
@@ -57,6 +57,12 @@ nowdb_err_t nowdb_ipc_init(nowdb_ipc_t *ipc, char *path);
 nowdb_err_t nowdb_ipc_load(nowdb_ipc_t *ipc);
 
 /* ------------------------------------------------------------------------
+ * Close IPC Manager
+ * ------------------------------------------------------------------------
+ */
+void nowdb_ipc_close(nowdb_ipc_t *ipc);
+
+/* ------------------------------------------------------------------------
  * Destroy IPC Manager
  * ------------------------------------------------------------------------
  */
@@ -66,20 +72,20 @@ void nowdb_ipc_destroy(nowdb_ipc_t *ipc);
  * Create lock
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_ipc_lock_create(nowdb_ipc_t *ipc, char *name);
+nowdb_err_t nowdb_ipc_createLock(nowdb_ipc_t *ipc, char *name);
 
 /* ------------------------------------------------------------------------
  * Destroy Lock
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_ipc_lock_drop(nowdb_ipc_t *ipc, char *name);
+nowdb_err_t nowdb_ipc_dropLock(nowdb_ipc_t *ipc, char *name);
 
 /* ------------------------------------------------------------------------
  * Lock
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
-                           char mode,      uint32_t tmo);
+                           char mode, int tmo);
 
 /* ------------------------------------------------------------------------
  * Unlock

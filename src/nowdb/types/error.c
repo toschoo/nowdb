@@ -317,6 +317,8 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_lua: return "lua api error";
 	case nowdb_err_unk_symbol: return "unknown symbol";
 	case nowdb_err_usrerr: return "error in stored procedure";
+	case nowdb_err_selflock: return "selflock detected";
+	case nowdb_err_deadlock: return "deadlock detected";
 	default: return "unknown";
 	}
 }

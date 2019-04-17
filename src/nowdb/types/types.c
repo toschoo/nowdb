@@ -80,13 +80,13 @@ int nowdb_strtoval(char *str, nowdb_type_t t, void *value) {
 	case NOWDB_TYP_INT:
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_DATE:
-		i = strtol(str, &tmp, 10);
+		i = strtoll(str, &tmp, 10);
 		if (*tmp != 0) return -1;
 		memcpy(value, &i, 8);
 		break;
 
 	case NOWDB_TYP_UINT:
-		u = strtoul(str, &tmp, 10);
+		u = strtoull(str, &tmp, 10);
 		if (*tmp != 0) return -1;
 		memcpy(value, &u, 8);
 		break;

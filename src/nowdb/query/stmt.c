@@ -996,6 +996,27 @@ static nowdb_err_t dropProc(nowdb_ast_t  *op,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: create lock
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createLock(nowdb_ast_t  *op,
+                              nowdb_ast_t *trg,
+                          nowdb_scope_t *scope)  {
+	fprintf(stderr, "create lock\n");
+	return nowdb_scope_createLock(scope, trg->value);
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: drop lock
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropLock(nowdb_ast_t  *op,
+                                  char *name,
+                        nowdb_scope_t *scope)  {
+	return nowdb_scope_dropLock(scope, name);
+}
+
+/* -------------------------------------------------------------------------
  * Helper: copy value
  * -------------------------------------------------------------------------
  */
@@ -1358,6 +1379,56 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
 		r->row = row;
 		res->resType = NOWDB_QRY_RESULT_ROW;
 		res->result = r;
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: handle lock/unlock
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
+                                     nowdb_ast_t        *op,
+                                     void               *lib,
+                                     nowdb_qry_result_t *res) {
+	nowdb_err_t  err;
+	nowdb_ast_t *o;
+	char *name;
+	char mode = NOWDB_IPC_WLOCK;
+	int64_t tmo = -1;
+
+	if (lib == NULL) {
+		INVALID("no session"); return err;
+	}
+
+	if (op->value == NULL) {
+		INVALIDAST("no target name in ast");
+	}
+
+	name = op->value;
+	if (strnlen(name, NOWDB_MAX_NAME+1) >= NOWDB_MAX_NAME) {
+		INVALIDAST("lock name too long");
+	}
+
+	// check whether we are holding the lock
+
+	if (op->ntype == NOWDB_AST_LOCK) {
+		o = nowdb_ast_option(op, NOWDB_AST_MODE);
+		if (o != NULL) {
+			if (strcasecmp(o->value, "READING") == 0)
+				mode = NOWDB_IPC_RLOCK;
+		}
+		o = nowdb_ast_option(op, NOWDB_AST_TIMEOUT);
+		if (o != NULL) {
+			if (nowdb_ast_getInt(o, &tmo) != 0) {
+				INVALIDAST("timeout is not a valid number");
+			}
+		}
+		err = nowdb_ipc_lock(scope->ipc, name, mode, tmo);
+		// add lock to session
+	} else {
+		err = nowdb_ipc_unlock(scope->ipc, name);
+		// remove lock from session
 	}
 	return err;
 }
@@ -1916,6 +1987,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:
 			return createProc(op, trg, scope);
+		case NOWDB_AST_MUTEX:
+			return createLock(op, trg, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -1935,6 +2008,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:
 			return dropProc(op, trg->value, scope);
+		case NOWDB_AST_MUTEX:
+			return dropLock(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -2321,6 +2396,12 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		res->resType = NOWDB_QRY_RESULT_NOTHING;
 		res->result = NULL;
 		return handleSelect(scope, op, res);
+
+	case NOWDB_AST_LOCK:
+	case NOWDB_AST_UNLOCK:
+		res->resType = NOWDB_QRY_RESULT_NOTHING;
+		res->result = NULL;
+		return handleLock(scope, op, rsc, res);
 
 	default: INVALIDAST("invalid operation in AST");
 	}

@@ -714,12 +714,12 @@ static inline nowdb_err_t getConstValue(nowdb_type_t *typ,
 		break;
 
 	case NOWDB_TYP_UINT:
-		**(uint64_t**)value = (uint64_t)strtoul(str, &tmp, 10);
+		**(uint64_t**)value = (uint64_t)strtoull(str, &tmp, 10);
 		break;
 
 	case NOWDB_TYP_TIME:
 	case NOWDB_TYP_INT:
-		**(int64_t**)value = (int64_t)strtol(str, &tmp, 10);
+		**(int64_t**)value = (int64_t)strtoll(str, &tmp, 10);
 		break;
 
 	case NOWDB_TYP_NOTHING:

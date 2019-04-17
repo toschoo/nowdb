@@ -4,6 +4,7 @@
  */
 #include <nowdb/scope/ipc.h>
 #include <nowdb/io/dir.h>
+#include <nowdb/task/task.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -19,11 +20,20 @@ static char *catalogue = "ipc";
 #define NOMEM(m) \
 	{err = nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, m);}
 
+#define DUPKEY(m) \
+	{err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, m);}
+
+#define KEYNOF(m) \
+	{err = nowdb_err_get(nowdb_err_key_not_found, FALSE, OBJECT, m);}
+
 #define L 1
 #define V 2
 #define Q 3
 
 #define FREE 0
+
+#define TINYDELAY 10000000
+#define DELAYUNIT 1000000
 
 /* ------------------------------------------------------------------------
  * Lock
@@ -32,13 +42,14 @@ static char *catalogue = "ipc";
 typedef struct {
 	nowdb_lock_t lock; // protect this structure
  	pthread_t   owner; // session id
+	int       readers; // number of readers holding the lock
 	char        *name; // name of this lock
 	char        state; // state free -> rlock|wlock -> free
         ts_algo_list_t  q; // do we need to guarantee order?
 } lock_t;
 
 /* ------------------------------------------------------------------------
- * Lock
+ * Make lock
  * ------------------------------------------------------------------------
  */
 static lock_t *mkLock(char *name, nowdb_err_t *err) {
@@ -53,8 +64,11 @@ static lock_t *mkLock(char *name, nowdb_err_t *err) {
 	if (*err != NOWDB_OK) return NULL;
 
 	l->state = FREE;
+	l->readers = 0;
 
 	ts_algo_list_init(&l->q);
+
+	return l;
 }
 
 /* ------------------------------------------------------------------------
@@ -67,7 +81,6 @@ void destroyLock(lock_t *lock) {
 		free(lock->name); lock->name = NULL;
 	}
 	ts_algo_list_destroy(&lock->q);
-	ts_algo_list_init(&lock->q);
 	nowdb_lock_destroy(&lock->lock);
 }
 
@@ -221,38 +234,41 @@ static nowdb_err_t mkFile(char *path) {
  * Helper: load thing
  * ------------------------------------------------------------------------
  */
-static nowdb_err_t loadThing(nowdb_ipc_t *ipc, uint32_t s,
+static nowdb_err_t loadThing(nowdb_ipc_t *ipc, uint32_t sz,
                                  uint32_t *off, char *buf) {
 	ts_algo_tree_t *t;
 	nowdb_err_t err=NOWDB_OK;
 	thing_t *thing;
+	uint32_t s = 0;
 	
 	thing = calloc(1,sizeof(thing_t));
 	thing->t = buf[*off]; (*off)++;
 
-	while(*off < s) {
-		if (buf[*off] == 0) break;
+	while(s < sz) {
+		if (buf[*off+s] == 0) break;
 		s++;
+		
 	}
 	if (s == 0) {
 		free(thing->ptr); free(thing);
 		INVALID("No name in IPC operation");
 	}
-	if (*off >= 0) {
+	if (s >= sz) {
 		free(thing->ptr); free(thing);
 		INVALID("Unterminated string in IPC catalogue");
 	}
-	s++; thing->name = malloc(s);
+	thing->name = malloc(s+1);
 	if (thing->name == NULL) {
 		free(thing);
 		NOMEM("allocating ipc operation");
 		return err;
 	}
-	memcpy(thing->name, buf+(*off), s); *off+=s; (*off)++;
-	fprintf(stderr, "loading %s\n", thing->name);
+	memcpy(thing->name, buf+(*off), s);
+	thing->name[s] = 0; (*off)+=s; (*off)++;
 	switch(thing->t) {
 	case L: thing->ptr = mkLock(thing->name, &err);
 	        t = ipc->things; break;
+	default: t = NULL;
 	}
 	if (thing->ptr == NULL) {
 		free(thing->name); free(thing);
@@ -325,7 +341,7 @@ static nowdb_err_t writeBuf(nowdb_ipc_t      *ipc,
 		if (THING(run->cont)->name != NULL) { // should not be null!
 			size_t s = strlen(THING(run->cont)->name);
 			memcpy(buf+off, THING(run->cont)->name, s);
-			off += s; buf[off] = 0; s++;
+			off += s; buf[off] = 0; off++;
 		}
 	}
 	return nowdb_writeFileWithBkp(ipc->base, ipc->path, buf, sz);
@@ -366,17 +382,17 @@ static nowdb_err_t writeFile(nowdb_ipc_t *ipc) {
 	}
 	s = computeSize(list);
 	if (s == 0) {
-		free(list);
+		ts_algo_list_destroy(list); free(list);
 		return nowdb_err_get(nowdb_err_panic,
 		       FALSE, OBJECT, "size != count");
 	}
-	buf = malloc(s);
+	buf = calloc(1,s);
 	if (buf == NULL) {
 		NOMEM("allocating ipc buffer");
 		free(list); return err;
 	}
 	err = writeBuf(ipc, list, s, buf);
-	free(list); free(buf);
+	ts_algo_list_destroy(list); free(list); free(buf);
 	return err;
 }
 
@@ -385,7 +401,30 @@ static nowdb_err_t writeFile(nowdb_ipc_t *ipc) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_ipc_load(nowdb_ipc_t *ipc) {
+	nowdb_err_t err;
+
+	if (ipc->things == NULL) {
+		ipc->things = ts_algo_tree_new(thingnamecompare, NULL,
+		                               noupdate,
+		                               thingdestroy,
+		                               thingdestroy);
+	}
+	if (ipc->things == NULL) {
+		NOMEM("allocating tree of ipc operators");
+		return err;
+	}
 	return loadFile(ipc);
+}
+
+/* ------------------------------------------------------------------------
+ * Close IPC Manager
+ * ------------------------------------------------------------------------
+ */
+void nowdb_ipc_close(nowdb_ipc_t *ipc) {
+	if (ipc->things != NULL) {
+		ts_algo_tree_destroy(ipc->things);
+		free(ipc->things); ipc->things = NULL;
+	}
 }
 
 /* ------------------------------------------------------------------------
@@ -415,32 +454,190 @@ void nowdb_ipc_destroy(nowdb_ipc_t *ipc) {
  * Create lock
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_ipc_lock_create(nowdb_ipc_t *ipc, char *name) {
-	// check tree
-	// if exists exit
-	// otherwise
-	// mkLock
-	// insert
-	// write file
-	return NOWDB_OK;
+nowdb_err_t nowdb_ipc_createLock(nowdb_ipc_t *ipc, char *name) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	thing_t pattern;
+	thing_t  *thing;
+
+	err = nowdb_lock_write(&ipc->lock);
+	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(ipc->things, &pattern);
+	if (thing != NULL) {
+		DUPKEY(name);
+		goto unlock;
+	}
+	thing = calloc(1,sizeof(thing_t));
+	if (thing == NULL) {
+		NOMEM("allocating thing");
+		goto unlock;
+	}
+	thing->t = L;
+	thing->name = strdup(name);
+	if (thing->name == NULL) {
+		free(thing);
+		NOMEM("allocating lock name");
+		goto unlock;
+	}
+	thing->ptr = mkLock(thing->name, &err);
+	if (thing->ptr == NULL) {
+		free(thing->name); free(thing);
+		if (err != NOWDB_OK) return err;
+		NOMEM("allocating lock");
+		goto unlock;
+	}
+	if (ts_algo_tree_insert(ipc->things, thing) != TS_ALGO_OK) {
+		thingdestroy(NULL, (void**)&thing);
+		NOMEM("tree.insert");
+		goto unlock;
+	}
+	err = writeFile(ipc);
+	if (err != NOWDB_OK) {
+		ts_algo_tree_delete(ipc->things, thing);
+		goto unlock;
+	}
+unlock:
+	err2 = nowdb_unlock_write(&ipc->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
 }
 
 /* ------------------------------------------------------------------------
- * Destroy Lock
+ * Drop Lock
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_ipc_lock_drop(nowdb_ipc_t *ipc, char *name);
+nowdb_err_t nowdb_ipc_dropLock(nowdb_ipc_t *ipc, char *name) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	thing_t pattern;
+	thing_t  *thing;
+
+	err = nowdb_lock_write(&ipc->lock);
+	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(ipc->things, &pattern);
+	if (thing == NULL) {
+		KEYNOF(name);
+		goto unlock;
+	}
+	ts_algo_tree_delete(ipc->things, thing);
+	err = writeFile(ipc);
+unlock:
+	err2 = nowdb_unlock_write(&ipc->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Lock
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
-                           char mode, uint32_t tmo);
+                           char mode, int tmo) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2=NOWDB_OK;
+	thing_t pattern, *t;
+	lock_t *l;
+	nowdb_time_t delay = TINYDELAY;
+	nowdb_time_t wmo = tmo*DELAYUNIT;
+	char locked = 0;
+	pthread_t myself = pthread_self();
+
+	/* we should set an "in-use" marker here!
+	*/
+
+	pattern.name = name;
+	t = ts_algo_tree_find(ipc->things, &pattern);
+	if (t == NULL) {
+		KEYNOF(name); return err;
+	}
+	l = t->ptr;
+	for(;;) {
+
+		err = nowdb_lock(&l->lock);
+		if (err != NOWDB_OK) return err;
+
+		locked = 1;
+
+		if (l->state == FREE) {
+			l->state = mode;
+			l->owner = myself;
+			if (mode == NOWDB_IPC_RLOCK) l->readers++;
+			break;
+		}
+		if (pthread_equal(l->owner, myself)) {
+			err = nowdb_err_get(nowdb_err_selflock,
+			                   FALSE, OBJECT, name);
+			break;
+		}
+		if (l->state == NOWDB_IPC_RLOCK &&
+		    mode     == NOWDB_IPC_RLOCK) {
+			l->owner = myself;
+			l->readers++;
+			break;
+		}
+
+		if (wmo == 0) {
+			err = nowdb_err_get(nowdb_err_timeout,
+			                 FALSE, OBJECT, name);
+			break;
+		}
+
+		err = nowdb_unlock(&l->lock);
+		if (err != NOWDB_OK) return err;
+
+		locked = 0;
+
+		err = nowdb_task_sleep(delay);
+		if (err != NOWDB_OK) break;
+
+		if (wmo < 0) continue;
+		if (delay > wmo) wmo = 0; else wmo -= delay;
+	}
+	if (locked) {
+		err2 = nowdb_unlock(&l->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err;
+			return err2;
+		}
+	}
+	return err;
+}
 
 /* ------------------------------------------------------------------------
  * Unlock
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_ipc_unlock(nowdb_ipc_t *ipc, char *name);
+nowdb_err_t nowdb_ipc_unlock(nowdb_ipc_t *ipc, char *name) {
+	nowdb_err_t err=NOWDB_OK;
+	thing_t pattern, *t;
+	lock_t *l;
+
+	pattern.name = name;
+	t = ts_algo_tree_find(ipc->things, &pattern);
+	if (t == NULL) {
+		KEYNOF(name); return err;
+	}
+	l = t->ptr;
+
+	err = nowdb_lock(&l->lock);
+	if (err != NOWDB_OK) return err;
+
+	if (l->state == NOWDB_IPC_RLOCK) l->readers--;
+
+	if (l->readers == 0) {
+		l->state = FREE;
+		l->owner = (pthread_t)0;
+	}
+	return nowdb_unlock(&l->lock);
+}
 

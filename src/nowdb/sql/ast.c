@@ -990,7 +990,6 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 
 	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
 
-
 	default: return NULL;
 	}
 }
@@ -1277,7 +1276,7 @@ int nowdb_ast_getUInt(nowdb_ast_t *node, uint64_t *value) {
 		*value = (uint64_t)(node->value);
 		return 0;
 	}
-	*value = strtoul(node->value, &end, 10);
+	*value = strtoull(node->value, &end, 10);
 	if (*end != 0) return -1;
 	return 0;
 }
@@ -1294,7 +1293,7 @@ int nowdb_ast_getInt(nowdb_ast_t *node, int64_t *value) {
 		*value = (int64_t)(node->value);
 		return 0;
 	}
-	*value = strtol(node->value, &end, 10);
+	*value = strtoll(node->value, &end, 10);
 	if (*end != 0) return -1;
 	return 0;
 }

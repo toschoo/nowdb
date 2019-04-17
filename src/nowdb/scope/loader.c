@@ -688,7 +688,7 @@ static inline int toInt(nowdb_csv_t *csv, char *data,
 		memcpy(target, &n, sizeof(uint64_t)); return 0;
 	}
 	if (tohlp(csv, data, len, 0) != 0) return -1;
-	n = strtol(csv->hlp, &tmp, 10);
+	n = strtoull(csv->hlp, &tmp, 10);
 	if (*tmp != 0) return -1;
 	memcpy(target, &n, sizeof(uint64_t));
 	return 0;
@@ -706,7 +706,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 		memcpy(target, &n, sizeof(uint64_t)); return 0;
 	}
 	if (tohlp(csv, data, len, 64) != 0) return -1;
-	n = (uint32_t)strtol(csv->hlp+64, &tmp, 10);
+	n = (uint32_t)strtoul(csv->hlp+64, &tmp, 10);
 	if (*tmp != 0) return -1;
 	memcpy(target, &n, sizeof(uint32_t));
 	return 0;
@@ -863,11 +863,11 @@ static inline char getValueAsType(nowdb_loader_t    *ldr,
 		break;
 
 	case NOWDB_TYP_INT:
-		STROX(int64_t, strtol);
+		STROX(int64_t, strtoll);
 		break;
 		
 	case NOWDB_TYP_UINT:
-		STROX(uint64_t, strtoul);
+		STROX(uint64_t, strtoull);
 		break;
 
 	default: return -1;
