@@ -1002,8 +1002,17 @@ static nowdb_err_t dropProc(nowdb_ast_t  *op,
 static nowdb_err_t createLock(nowdb_ast_t  *op,
                               nowdb_ast_t *trg,
                           nowdb_scope_t *scope)  {
-	fprintf(stderr, "create lock\n");
-	return nowdb_scope_createLock(scope, trg->value);
+	nowdb_err_t err;
+	err = nowdb_scope_createLock(scope, trg->value);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err->errcode == nowdb_err_dup_key) {
+		nowdb_ast_t *o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -1013,7 +1022,17 @@ static nowdb_err_t createLock(nowdb_ast_t  *op,
 static nowdb_err_t dropLock(nowdb_ast_t  *op,
                                   char *name,
                         nowdb_scope_t *scope)  {
-	return nowdb_scope_dropLock(scope, name);
+	nowdb_err_t err;
+	err = nowdb_scope_dropLock(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err->errcode == nowdb_err_key_not_found) {
+		nowdb_ast_t *o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+	}
+	return err;
 }
 
 /* -------------------------------------------------------------------------
@@ -1389,7 +1408,7 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
  */
 static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
                                      nowdb_ast_t        *op,
-                                     void               *lib,
+                                     void              *proc,
                                      nowdb_qry_result_t *res) {
 	nowdb_err_t  err;
 	nowdb_ast_t *o;
@@ -1397,7 +1416,7 @@ static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
 	char mode = NOWDB_IPC_WLOCK;
 	int64_t tmo = -1;
 
-	if (lib == NULL) {
+	if (proc == NULL) {
 		INVALID("no session"); return err;
 	}
 
@@ -1410,9 +1429,11 @@ static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
 		INVALIDAST("lock name too long");
 	}
 
-	// check whether we are holding the lock
+	char holds = nowdb_proc_holdsLock(proc, name);
 
 	if (op->ntype == NOWDB_AST_LOCK) {
+		if (holds) return nowdb_err_get(nowdb_err_selflock,
+		                               FALSE, OBJECT, name);
 		o = nowdb_ast_option(op, NOWDB_AST_MODE);
 		if (o != NULL) {
 			if (strcasecmp(o->value, "READING") == 0)
@@ -1425,10 +1446,16 @@ static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
 			}
 		}
 		err = nowdb_ipc_lock(scope->ipc, name, mode, tmo);
-		// add lock to session
+		if (err == NOWDB_OK) {
+			err = nowdb_proc_addLock(proc, name);
+		}
 	} else {
+		if (!holds) return nowdb_err_get(nowdb_err_doesnothold,
+		                                   FALSE, OBJECT, name);
 		err = nowdb_ipc_unlock(scope->ipc, name);
-		// remove lock from session
+		if (err == NOWDB_OK) {
+			nowdb_proc_removeLock(proc, name);
+		}
 	}
 	return err;
 }

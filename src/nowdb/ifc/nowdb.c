@@ -1645,11 +1645,11 @@ void *nowdb_session_entry(void *session) {
 		// was stop set while we were busy?
 		stop = getStop(ses);
 
-		if (stop < 0) break;
-		if (stop == 2) break;
-
 		// leave session
 		leaveSession(ses,stop);
+
+		if (stop < 0) break;
+		if (stop == 2) break;
 
 		// set state waiting
 		if (setWaiting(ses) < 0) {

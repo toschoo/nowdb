@@ -319,6 +319,7 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_usrerr: return "error in stored procedure";
 	case nowdb_err_selflock: return "selflock detected";
 	case nowdb_err_deadlock: return "deadlock detected";
+	case nowdb_err_doesnothold: return "session does not hold the lock";
 	default: return "unknown";
 	}
 }

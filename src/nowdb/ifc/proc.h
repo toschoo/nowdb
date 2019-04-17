@@ -32,15 +32,16 @@
  * ------------------------------------------------------------------------
  */
 typedef struct nowdb_proc_t {
-	void              *lib;    /* server lib                */
-	nowdb_scope_t     *scope;  /* current scope             */
-	nowdb_dml_t       *dml;    /* dml helper                */
-	nowdbsql_parser_t *parser; /* string parser             */
-	ts_algo_tree_t    *mods;   /* imported modules          */
-	ts_algo_tree_t    *funs;   /* loaded functions          */
+	void              *lib;    // server lib
+	nowdb_scope_t     *scope;  // current scope
+	nowdb_dml_t       *dml;    // dml helper
+	nowdbsql_parser_t *parser; // string parser
+	ts_algo_tree_t    *mods;   // imported modules
+	ts_algo_tree_t    *funs;   // loaded functions
+	ts_algo_tree_t    *locks;  // locks hold by this session
 #ifdef _NOWDB_WITH_PYTHON
-	PyThreadState     *pyIntp; /* Python interpreter thread */
-	PyObject          *nowmod; /* the 'nowdb' module        */
+	PyThreadState     *pyIntp; // Python interpreter thread
+	PyObject          *nowmod; // the 'nowdb' module
 #endif
 	char              *luapath; // path where lua code resides
 	char              *nowpath; // path to nowdb.lua
@@ -104,6 +105,24 @@ void *nowdb_proc_getInterpreter(nowdb_proc_t *proc);
  * ------------------------------------------------------------------------
  */
 void nowdb_proc_updateInterpreter(nowdb_proc_t *proc);
+
+/* ------------------------------------------------------------------------
+ * Session holds this lock
+ * ------------------------------------------------------------------------
+ */
+char nowdb_proc_holdsLock(nowdb_proc_t *proc, char *name);
+
+/* ------------------------------------------------------------------------
+ * Add lock to session
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_proc_addLock(nowdb_proc_t *proc, char *name);
+
+/* ------------------------------------------------------------------------
+ * Remove lock from session
+ * ------------------------------------------------------------------------
+ */
+void nowdb_proc_removeLock(nowdb_proc_t *proc, char *name);
 
 /* ------------------------------------------------------------------------
  * Load callable function (and the caller)

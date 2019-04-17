@@ -41,7 +41,6 @@ static char *catalogue = "ipc";
  */
 typedef struct {
 	nowdb_lock_t lock; // protect this structure
- 	pthread_t   owner; // session id
 	int       readers; // number of readers holding the lock
 	char        *name; // name of this lock
 	char        state; // state free -> rlock|wlock -> free
@@ -550,7 +549,6 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
 	nowdb_time_t delay = TINYDELAY;
 	nowdb_time_t wmo = tmo*DELAYUNIT;
 	char locked = 0;
-	pthread_t myself = pthread_self();
 
 	/* we should set an "in-use" marker here!
 	*/
@@ -570,22 +568,14 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
 
 		if (l->state == FREE) {
 			l->state = mode;
-			l->owner = myself;
 			if (mode == NOWDB_IPC_RLOCK) l->readers++;
-			break;
-		}
-		if (pthread_equal(l->owner, myself)) {
-			err = nowdb_err_get(nowdb_err_selflock,
-			                   FALSE, OBJECT, name);
 			break;
 		}
 		if (l->state == NOWDB_IPC_RLOCK &&
 		    mode     == NOWDB_IPC_RLOCK) {
-			l->owner = myself;
 			l->readers++;
 			break;
 		}
-
 		if (wmo == 0) {
 			err = nowdb_err_get(nowdb_err_timeout,
 			                 FALSE, OBJECT, name);
@@ -636,7 +626,6 @@ nowdb_err_t nowdb_ipc_unlock(nowdb_ipc_t *ipc, char *name) {
 
 	if (l->readers == 0) {
 		l->state = FREE;
-		l->owner = (pthread_t)0;
 	}
 	return nowdb_unlock(&l->lock);
 }

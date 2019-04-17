@@ -72,7 +72,6 @@ typedef struct {
 	ts_algo_list_node_t *node; /* where to find us                    */
 	char                 *buf; /* result buffer                       */
 	ts_algo_tree_t   *cursors; /* open cursors                        */
-	ts_algo_tree_t     *locks; /* locks we are holding                */
 	nowdb_proc_t        *proc; /* stored procedure interface          */
 	uint64_t            curid; /* next free cursorid                  */
 	uint32_t            bufsz; /* result buffer size                  */

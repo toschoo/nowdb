@@ -149,6 +149,25 @@ static void moduledestroy(void *rsc, void **n) {
 }
 
 /* -----------------------------------------------------------------------
+ * compare string (locks!)
+ * -----------------------------------------------------------------------
+ */
+static ts_algo_cmp_t stringcompare(void *rsc, void *one, void *two) {
+	int x = strcasecmp(one, two);
+	if (x < 0) return ts_algo_cmp_less;
+	if (x > 0) return ts_algo_cmp_greater;
+	return ts_algo_cmp_equal;
+}
+
+/* -----------------------------------------------------------------------
+ * destroy string
+ * -----------------------------------------------------------------------
+ */
+static void stringdestroy(void *rsc, void **n) {
+	free(*n); *n = NULL;
+}
+
+/* -----------------------------------------------------------------------
  * generic no update
  * -----------------------------------------------------------------------
  */
@@ -779,6 +798,18 @@ nowdb_err_t nowdb_proc_create(nowdb_proc_t **proc,
 		return err;
 	}
 
+	(*proc)->locks = ts_algo_tree_new(
+		             &stringcompare, NULL,
+		             &noupdate,
+		             &stringdestroy,
+		             &stringdestroy);
+	if ((*proc)->locks == NULL) {
+		nowdb_proc_destroy(*proc);
+		free(*proc); *proc = NULL;
+		NOMEM("tree.create");
+		return err;
+	}
+
 	/* create new (sub-)interpreter */
 	err = createInterpreter(*proc);
 	if (err != NOWDB_OK) {
@@ -826,7 +857,37 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
 		ts_algo_tree_destroy(proc->funs);
 		free(proc->funs); proc->funs = NULL;
 	}
+	if (proc->locks != NULL) {
+		ts_algo_tree_destroy(proc->locks);
+		free(proc->locks); proc->locks = NULL;
+	}
 	destroyInterpreter(proc);
+}
+
+/* ------------------------------------------------------------------------
+ * Free locks still hold
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t freelocks(nowdb_proc_t *proc) {
+	nowdb_err_t err = NOWDB_OK;
+	ts_algo_list_t *list;
+	ts_algo_list_node_t *run;
+	nowdb_scope_t *scope = proc->scope;
+
+	if (scope == NULL) return NOWDB_OK;
+	if (proc->locks->count <= 0) return NOWDB_OK;
+
+	list = ts_algo_tree_toList(proc->locks);
+	if (list == NULL) {
+		NOMEM("tree.toList");
+		return err;
+	}
+	for(run=list->head; run!=NULL; run=run->nxt) {
+		err = nowdb_ipc_unlock(scope->ipc, run->cont);
+		if (err != NOWDB_OK) break;
+	}
+	ts_algo_list_destroy(list); free(list);
+	return err;
 }
 
 /* ------------------------------------------------------------------------
@@ -834,6 +895,24 @@ void nowdb_proc_destroy(nowdb_proc_t *proc) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_proc_reinit(nowdb_proc_t *proc) {
+	nowdb_err_t err;
+	if (proc->locks != NULL) {
+		err = freelocks(proc);
+		if (err != NOWDB_OK) return err;
+		ts_algo_tree_destroy(proc->locks);
+		free(proc->locks); proc->locks = NULL;
+	}
+	proc->locks = ts_algo_tree_new(
+		             &stringcompare, NULL,
+		             &noupdate,
+		             &stringdestroy,
+		             &stringdestroy);
+	if (proc->locks == NULL) {
+		nowdb_proc_destroy(proc);
+		free(proc); proc = NULL;
+		NOMEM("tree.create");
+		return err;
+	}
 	return reinitInterpreter(proc);
 }
 
@@ -871,6 +950,53 @@ nowdb_dml_t *nowdb_proc_getDML(nowdb_proc_t *proc) {
 void *nowdb_proc_getLib(nowdb_proc_t *proc) {
 	if (proc == NULL) return NULL;
 	return proc->lib;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: get lock
+ * ------------------------------------------------------------------------
+ */
+static inline char *getLock(nowdb_proc_t *proc, char *name) {
+	char *lock;
+	lock = ts_algo_tree_find(proc->locks, name);
+	return lock;
+}
+
+/* ------------------------------------------------------------------------
+ * Check if session holds lock
+ * ------------------------------------------------------------------------
+ */
+char nowdb_proc_holdsLock(nowdb_proc_t *proc, char *name) {
+	return (getLock(proc, name) != NULL);
+}
+
+/* ------------------------------------------------------------------------
+ * Add Lock to session
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_proc_addLock(nowdb_proc_t *proc, char *name) {
+	nowdb_err_t err;
+	if (getLock(proc, name) != NULL) {
+		return nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, name);
+	}
+	char *lock = strdup(name);
+	if (lock == NULL) {
+		NOMEM("duplicating lock name"); return err;
+	}
+	if (ts_algo_tree_insert(proc->locks, lock) != TS_ALGO_OK) {
+		NOMEM("tree.insert");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Remove Lock from session
+ * ------------------------------------------------------------------------
+ */
+void nowdb_proc_removeLock(nowdb_proc_t *proc, char *name) {
+	if (getLock(proc, name) == NULL) return;
+	ts_algo_tree_delete(proc->locks, name);
 }
 
 /* ------------------------------------------------------------------------
