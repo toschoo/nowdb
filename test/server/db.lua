@@ -156,11 +156,11 @@ function locktest(lk)
         "LOCKED for '%s' set timeout = %d", m, t))
       ipc.unlock(lk)
 
-      ipc.withlock(lk, m, function()
+      ipc.withlock(lk, m, tmo, function()
          print("with lock!")
       end)
 
-      ipc.withxlock(lk, function()
+      ipc.withxlock(lk,tmo,function()
          print("with xlock!")
       end)
   end
@@ -170,5 +170,51 @@ end
 function uniquetest(nm)
   unid.create(nm)
   return nowdb.makeresult(nowdb.UINT, unid.get(nm))
+end
+
+local function modvisits(m)
+  local stmt = string.format(
+    [[select origin, destin, stamp, quantity, price
+        from visits where origin %% %d = 0]], m)
+  -- print("EXECUTING: " .. stmt)
+  local rc, cur = nowdb.pexecute(stmt)
+  if rc ~= nowdb.OK then
+     if rc == nowdb.EOF then return end
+     nowdb.raise(rc, cur)
+  end
+  for row in cur.rows() do
+      coroutine.yield(row)
+  end
+  cur.release()
+end
+
+local function createifnotexists(nm)
+  local pld = {}
+  pld[1] = {['type'] = nowdb.UINT,
+            ['name'] = 'client'}
+  pld[2] = {['type'] = nowdb.TEXT,
+            ['name'] = 'store'}
+  pld[3] = {['type'] = nowdb.TIME,
+            ['name'] = 'visit'}
+  pld[4] = {['type'] = nowdb.UINT,
+            ['name'] = 'quantity'}
+  pld[5] = {['type'] = nowdb.FLOAT,
+            ['name'] = 'paid'}
+  recache.create(nm, pld)
+end
+
+function recachetest(nm,m,v)
+   createifnotexists(nm)
+   local co = coroutine.create(function()
+     modvisits(m)
+   end)
+   local valid = function(rid)
+     return v
+   end
+   return recache.withcache(nm, co, valid, {m})
+end
+
+function dropcache(nm)
+  recache.drop(nm)
 end
 

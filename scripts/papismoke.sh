@@ -69,11 +69,20 @@ then
 	exit 1
 fi
 
+echo "RUNNING exec2.py" >> log/papismoke.log
+test/papismoke/exec2.py >> log/papismoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: exec2.py python failed"
+	kill -2 $p
+	exit 1
+fi
+
 echo "RUNNING exec.py python" >> log/papismoke.log
 test/papismoke/exec.py python >> log/papismoke.log 2>&1
 if [ $? -ne 0 ]
 then
-	echo "FAILED: exec.py pythonn failed"
+	echo "FAILED: exec.py python failed"
 	kill -2 $p
 	exit 1
 fi

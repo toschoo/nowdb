@@ -42,6 +42,12 @@ def createprocs(c, lang):
     c.execute("drop procedure uniquetest if exists").close()
     c.execute("create procedure db.uniquetest(u text) language %s" % lang).close()
 
+    c.execute("drop procedure recachetest if exists").close()
+    c.execute("create procedure db.recachetest(name text, m uint, v bool) language %s" % lang).close()
+
+    c.execute("drop procedure dropcache if exists").close()
+    c.execute("create procedure db.dropcache(name text) language %s" % lang).close()
+
 def locktest(c):
     print("RUNNING 'locktest'")
 
@@ -60,6 +66,85 @@ def uniquetest(c):
           if s == len(us):
              db.TestFailed("value not unique: %d" % row[0])
 
+def recachetest(c):
+    print("RUNNING 'recachetest'")
+
+    # modulo 3
+    stmt = "select count(*) as cnt from visits where origin%3 = 0"
+    cnt = 0
+    with c.execute(stmt) as cur:
+         for row in cur:
+             cnt = row['cnt']
+
+    # fill cache for modulo 3
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 3, false)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt, x))
+    
+    # reuse cache for modulo 3
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 3, true)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt, x))
+
+    # insert one more
+    c.execute("insert into visits (origin, destin, stamp, quantity, price) \
+                           values (3,'cachetest10',now(), 1, 3.5)").close()
+
+    # reuse cache for modulo 3
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 3, true)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt, x))
+
+    # modulo 2
+    stmt = "select count(*) as cnt from visits where origin%2 = 0"
+    cnt2 = 0
+    with c.execute(stmt) as cur:
+         for row in cur:
+             cnt2 = row['cnt']
+    x = 0
+
+    # fill cache for modulo 2
+    with c.execute("exec recachetest('cachetest10', 2, false)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt2:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt2, x))
+
+    # reuse cache for modulo 2
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 2, true)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt2:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt2, x))
+
+    # reuse cache for modulo 3
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 3, true)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt, x))
+
+    # refill cache for modulo 3
+    x = 0
+    with c.execute("exec recachetest('cachetest10', 3, false)") as cur:
+         for row in cur:
+             x+=1
+    if x != cnt+1:
+       raise db.TestFailed("counts differ: %d != %d" % (cnt+1, x))
+
+    c.execute("exec dropcache('cachetest10')").close()
+
 if __name__ == "__main__":
 
     print("running exectest for language lua")
@@ -70,7 +155,7 @@ if __name__ == "__main__":
 
        locktest(c)
        uniquetest(c)
-       # recache
+       recachetest(c)
 
        for i in range(10):
            pass
