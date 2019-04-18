@@ -11,7 +11,6 @@
 #include <stdio.h>
 
 static char *OBJECT = "ipc";
-
 static char *catalogue = "ipc";
 
 #define INVALID(m) \
@@ -28,7 +27,6 @@ static char *catalogue = "ipc";
 
 #define L 1
 #define V 2
-#define Q 3
 
 #define FREE 0
 
@@ -126,7 +124,6 @@ static void thingdestroy(void *ignore, void **n) {
 		switch(THING(*n)->t) {
 		case L: destroyLock(THING(*n)->ptr); break;
 		case V: break; // nowdb_ipc_event_destroy(THING(*n)->ptr); break;
-		case Q: break; // nowdb_ipc_queue_destroy(THING(*n)->ptr); break;
 		}
 		free(THING(*n)->ptr); THING(*n)->ptr = NULL;
 	}
@@ -246,7 +243,6 @@ static nowdb_err_t loadThing(nowdb_ipc_t *ipc, uint32_t sz,
 	while(s < sz) {
 		if (buf[*off+s] == 0) break;
 		s++;
-		
 	}
 	if (s == 0) {
 		free(thing->ptr); free(thing);
@@ -290,7 +286,6 @@ static nowdb_err_t loadThing(nowdb_ipc_t *ipc, uint32_t sz,
 static nowdb_err_t loadThings(nowdb_ipc_t *ipc, uint32_t s, char *buf) {
 	nowdb_err_t err=NOWDB_OK;
 	uint32_t off=0;
-
 	while(off < s) {
 		err = loadThing(ipc, s, &off, buf);
 		if (err != NOWDB_OK) break;
@@ -537,6 +532,35 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get lock
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getlock(nowdb_ipc_t *ipc, char *name,
+                                                 lock_t **lock) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	thing_t pattern, *thing;
+
+	err = nowdb_lock_read(&ipc->lock);
+	if (err != NOWDB_OK) return err;
+
+	pattern.name = name;
+	thing = ts_algo_tree_find(ipc->things, &pattern);
+	if (thing == NULL) {
+		KEYNOF(name);
+		goto unlock;
+	}
+	*lock = thing->ptr;
+unlock:
+	err2 = nowdb_unlock_read(&ipc->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Lock
  * ------------------------------------------------------------------------
  */
@@ -544,21 +568,16 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
                            char mode, int tmo) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_err_t err2=NOWDB_OK;
-	thing_t pattern, *t;
-	lock_t *l;
 	nowdb_time_t delay = TINYDELAY;
 	nowdb_time_t wmo = tmo*DELAYUNIT;
 	char locked = 0;
+	lock_t *l=NULL;
 
 	/* we should set an "in-use" marker here!
 	*/
 
-	pattern.name = name;
-	t = ts_algo_tree_find(ipc->things, &pattern);
-	if (t == NULL) {
-		KEYNOF(name); return err;
-	}
-	l = t->ptr;
+	err = getlock(ipc, name, &l);
+	if (err != NOWDB_OK) return err;
 	for(;;) {
 
 		err = nowdb_lock(&l->lock);
@@ -609,15 +628,10 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
  */
 nowdb_err_t nowdb_ipc_unlock(nowdb_ipc_t *ipc, char *name) {
 	nowdb_err_t err=NOWDB_OK;
-	thing_t pattern, *t;
-	lock_t *l;
+	lock_t *l=NULL;
 
-	pattern.name = name;
-	t = ts_algo_tree_find(ipc->things, &pattern);
-	if (t == NULL) {
-		KEYNOF(name); return err;
-	}
-	l = t->ptr;
+	err = getlock(ipc, name, &l);
+	if (err != NOWDB_OK) return err;
 
 	err = nowdb_lock(&l->lock);
 	if (err != NOWDB_OK) return err;

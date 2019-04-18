@@ -47,9 +47,13 @@ nowdb.NOMEM = 1
 nowdb.TOOBIG = 5
 nowdb.KEYNOF = 26
 nowdb.DUPKEY = 27
+nowdb.TIMEOUT = 36
 nowdb.NOTACUR = -10
 nowdb.NOTAROW = -11
 nowdb.USRERR  =  74
+nowdb.SELFLOCK = 75
+nowdb.DEADLOCK = 76
+nowdb.NOTMYLOCK = 77
 
 ---------------------------------------------------------------------------
 -- result types

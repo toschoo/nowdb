@@ -32,7 +32,7 @@
  */
 typedef struct {
 	nowdb_rwlock_t  lock;   // protect this structure
-	char           *base;   // path that contains ipc catalogue
+	char           *base;   // path that contains the ipc catalogue
 	char           *path;   // path to ipc catalogue
 	ts_algo_tree_t *things; // tree of ipc operators
 	ts_algo_list_t *free;   // list nodes for free

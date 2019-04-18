@@ -54,7 +54,17 @@ INT = 5
 UINT = 6
 BOOL = 9
 
+OK = 0
 EOF = 8
+NOMEM = 1
+TOOBIG = 5
+KEYNOF = 26
+DUPKEY = 27
+TIMEOUT = 36
+USRERR  =  74
+SELFLOCK =  75 
+DEADLOCK =  76
+NOTMYLOCK =  77
 
 utc = tzutc()
 
@@ -223,7 +233,7 @@ class Connection:
 
     def execute(self, stmt):
         '''
-        executes an sql statement agains the database.
+        executes an sql statement against the database.
         It returns a polymorphic 'result' (see below).
         '''
         if type(stmt) != str:
@@ -234,6 +244,31 @@ class Connection:
             return Result(r)
         else:
             raise ClientError(x)
+
+    def rexecute(self, stmt):
+        '''
+        executes an sql statement against the database.
+        On success, it returns a polymorphic 'result' (see below).
+        If the result indicates an error condition,
+        the result is released and a DBError exception is raised.
+        '''
+        r = self.execute(stmt)
+        if r.ok():
+           return r
+        else:
+          c = r.code()
+          d = r.details()
+          r.release()
+          raise DBError(c, d)
+
+    def rexecute_(self, stmt):
+        '''
+        executes an sql statement against the database.
+        On error, the result is released and a DBError exception is raised.
+        On success, the result is released and nothing is returned.
+        '''
+        r = self.rexecute(stmt)
+        r.release()
 
 # ---- result
 class Result:
