@@ -144,6 +144,8 @@ function nowdb.dateformat(t)
                        t.year, t.month, t.day)
 end
 
+-- time- and dateformat for time (not descriptor)
+
 ---------------------------------------------------------------------------
 -- Raise error
 ---------------------------------------------------------------------------
@@ -475,7 +477,7 @@ end
 ---------------------------------------------------------------------------
 -- Executes the statement 'stmt'
 -- return an error code and the result
--- if the error code is not 'OK',
+-- if the error code is not 'OK' and not 'EOF',
 -- then the result is a string describing the error details
 -- otherwise, the result is the result of the statement
 ---------------------------------------------------------------------------
@@ -654,6 +656,63 @@ end
 ---------------------------------------------------------------------------
 function nowdb.date(year, month, day)
   return nowdb.time(year, month, day)
+end
+
+-- implementation of nowdb.bracket
+local function brack(before, after, body)
+  local x = before()
+  local t = table.pack(pcall(body,x))
+  after(x)
+  return t
+end
+
+---------------------------------------------------------------------------
+-- The bracket function executes the 'body' function with a local resource.
+-- It guarantees that, when 'before' succeeded, 'after' will be called
+-- even if 'body' failed (which is called using pcall), e.g.
+--
+--   local function openfile()
+--     return io.open('myfile')
+--   end
+--   local function closefile(f)
+--     f:close()
+--   end
+--   a = nowdb.bracket(openfile, closefile, function(f)
+--       local x = 0
+--       for c in f:lines() do x = x + 1 end
+--       return x
+--   end)
+--
+-- Bracket passes no arguments to 'before' and
+-- expects one return value from 'before';
+-- this return value is passed both to 'after' and 'body'
+-- (nothing else is passed to either of them).
+-- 
+-- If an error is raised in 'body', it is reraised
+-- (after calling 'after', of course).
+-- Errors raised in 'before' or 'after' are passed through,
+-- i.e. if 'before' fails, 'after' is not called.
+---------------------------------------------------------------------------
+function nowdb.bracket(before, after, body)
+  local t = brack(before, after, body)
+  if t[1] then
+     return select(2, table.unpack(t))
+  else
+     error(t[2])
+  end
+end
+
+---------------------------------------------------------------------------
+-- The function pbracket behaves like bracket,
+-- except that, it returns all return values from the pcall,
+-- i.e. it will not reraise errors that occurred in 'body',
+--      but will return a boolean value indicating whether there was
+--      an error in 'body'. If 'body' succeeded,
+--      true and all return values from 'body' are returned,
+--      otherwise false and the error message are returned.
+---------------------------------------------------------------------------
+function nowdb.pbracket(before, after, body)
+  return table.unpack(brack(before, after, body))
 end
 
 -- internal use only ---

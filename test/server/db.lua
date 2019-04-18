@@ -1,3 +1,7 @@
+local ipc = require('ipc')
+local unid = require('unid')
+local recache = require('recache')
+
 function sayhello()
   print('hello')
 end
@@ -138,5 +142,33 @@ function fib()
   local f = _fibn1 + _fibn2
   _fibn1, _fibn2 = _fibn2, f
   return nowdb.makeresult(nowdb.UINT, _fibn1)
+end
+
+function locktest(lk)
+  math.randomseed(os.time())
+  ipc.createlock(lk)
+  for i = 1,10 do
+      local m = 'w'
+      if math.random(1,2) == 1 then m = 'r' end
+      local t = math.random(0,10) * 100
+      ipc.lock(lk,m,t)
+      print(string.format(
+        "LOCKED for '%s' set timeout = %d", m, t))
+      ipc.unlock(lk)
+
+      ipc.withlock(lk, m, function()
+         print("with lock!")
+      end)
+
+      ipc.withxlock(lk, function()
+         print("with xlock!")
+      end)
+  end
+  ipc.droplock(lk)
+end
+
+function uniquetest(nm)
+  unid.create(nm)
+  return nowdb.makeresult(nowdb.UINT, unid.get(nm))
 end
 
