@@ -1247,7 +1247,12 @@ nowdb_err_t nowdb_proc_loadFun(nowdb_proc_t     *proc,
 	err = nowdb_scope_getProcedure(proc->scope, fname, pd);
 	if (err != NOWDB_OK) return err;
 
-	// fprintf(stderr, "LOADING %d FUN\n", (*pd)->lang);
+	/*
+	fprintf(stderr, "LOADING %d FUN %s (%d/%d)\n",
+	                     (*pd)->lang, (*pd)->name,
+	                            proc->funs->count,
+                                    proc->mods->count);
+	*/
 
 	ENABLED(pd);
 

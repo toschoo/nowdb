@@ -148,3 +148,12 @@ def fib():
     _fibn1 = _fibn2
     _fibn2 = f
     return nd.makeReturnValue(nd.UINT, _fibn1)
+
+def emptytable():
+  nd.execute("create type myemptytype( \
+                   id uint primary key) \
+                   if not exists")
+  with nd.execute("select * from myemptytype") as cur:
+      for row in cur:
+          print("this row does not exist")
+

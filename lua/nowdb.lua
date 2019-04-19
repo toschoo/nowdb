@@ -120,31 +120,8 @@ function nowdb.nowtypebyname(t)
   elseif lower(t) == 'nil' then return nowdb.NOTHING end
 end
 
----------------------------------------------------------------------------
--- Round time to 'd' (e.g. day | hour | minute | scecond)
----------------------------------------------------------------------------
-function nowdb.round(t, d)
-  return d*math.floor(t/d)
-end
-
----------------------------------------------------------------------------
--- Format time descriptor according to canonical time format
----------------------------------------------------------------------------
-function nowdb.timeformat(t)
-  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%09d',
-                       t.year, t.month, t.day, 
-                       t.hour, t.min, t.sec, t.nano)
-end
-
----------------------------------------------------------------------------
--- Format time descriptor according to canonical date format
----------------------------------------------------------------------------
-function nowdb.dateformat(t)
-  return string.format('%04d-%02d-%02d',
-                       t.year, t.month, t.day)
-end
-
--- time- and dateformat for time (not descriptor)
+-- unknown error message
+local unkmsg = 'no details available'
 
 ---------------------------------------------------------------------------
 -- Raise error
@@ -191,7 +168,7 @@ local function mkResult(r)
 
   -- get error details
   local function errdetails()
-    local nodetails = 'no error details available'
+    local nodetails = unkmsg
     if not self.cr then return nodetails end
     local d = now2lua_errdetails(self.cr)
     return not d and nodetails or d
@@ -430,7 +407,7 @@ end
 ---------------------------------------------------------------------------
 function nowdb.error(rc, msg)
    if not rc then return nowdb.success() end
-   if msg == nil then m = 'no error details available'
+   if msg == nil then m = unkmsg
    elseif type(msg) ~= 'string' then
       nowdb.raise(nowdb.USRERR, 'error called with wrong type')
    end
@@ -477,7 +454,7 @@ end
 ---------------------------------------------------------------------------
 -- Executes the statement 'stmt'
 -- return an error code and the result
--- if the error code is not 'OK' and not 'EOF',
+-- if the error code is not 'OK'
 -- then the result is a string describing the error details
 -- otherwise, the result is the result of the statement
 ---------------------------------------------------------------------------
@@ -485,8 +462,7 @@ function nowdb.pexecute(stmt)
   local rc, r = now2lua_execute(nowdb._db, stmt)
   rc = (rc == nowdb.OK) and errcode(r) or rc
   if rc ~= nowdb.OK then
-     if rc == nowdb.EOF then return rc, mkResult(r) end
-     if r == nil then return rc, "no details available" end
+     if r == nil then return rc, unkmsg end
      local msg = ''
      if type(r) == 'string' then
         msg = r 
@@ -506,7 +482,7 @@ end
 function nowdb.execute(stmt)
   local rc, r = nowdb.pexecute(stmt)
   if rc ~= nowdb.OK then 
-     if rc == nowdb.EOF then return r end
+     if rc == nowdb.EOF then return nowdb.error(rc, nil) end
      nowdb.raise(rc, r)
   end
   return r
@@ -574,6 +550,15 @@ function nowdb.onevalue(stmt)
 end
 
 ---------------------------------------------------------------------------
+-- Round time to 'd' (e.g. day | hour | minute | scecond)
+---------------------------------------------------------------------------
+function nowdb.round(t, d)
+  return d*math.floor(t/d)
+end
+
+-- time- and dateformat for time (not descriptor)
+
+---------------------------------------------------------------------------
 -- Converts a nowdb timestamp to a time descriptor,
 -- a table with the fields
 --  year :
@@ -608,6 +593,23 @@ function nowdb.from(t)
   }
   row.release()
   return r
+end
+
+---------------------------------------------------------------------------
+-- Format time descriptor according to canonical time format
+---------------------------------------------------------------------------
+function nowdb.timeformat(t)
+  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%09d',
+                       t.year, t.month, t.day, 
+                       t.hour, t.min, t.sec, t.nano)
+end
+
+---------------------------------------------------------------------------
+-- Format time descriptor according to canonical date format
+---------------------------------------------------------------------------
+function nowdb.dateformat(t)
+  return string.format('%04d-%02d-%02d',
+                       t.year, t.month, t.day)
 end
 
 ---------------------------------------------------------------------------

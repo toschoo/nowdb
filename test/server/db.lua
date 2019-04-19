@@ -144,6 +144,17 @@ function fib()
   return nowdb.makeresult(nowdb.UINT, _fibn1)
 end
 
+function emptytable()
+  nowdb.execute_([[create type myemptytype(
+                       id uint primary key)
+                   if not exists]])
+  cur = nowdb.execute([[select * from myemptytype]])
+  for row in cur.rows() do
+      print("this row does not exist")
+  end
+  cur.release()
+end
+
 function locktest(lk)
   math.randomseed(os.time())
   ipc.createlock(lk)

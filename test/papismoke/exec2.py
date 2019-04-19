@@ -149,6 +149,8 @@ if __name__ == "__main__":
 
     print("running exectest for language lua")
 
+    rnd.seed()
+
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
        createprocs(c, 'lua')

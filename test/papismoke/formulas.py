@@ -37,6 +37,9 @@ def fibotest(c, n):
     fibonacci(c,k,1,1,n)
 
 if __name__ == "__main__":
+
+    random.seed()
+
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
         fibotest(c,55)

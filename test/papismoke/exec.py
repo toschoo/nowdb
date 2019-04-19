@@ -36,6 +36,9 @@ def price(c,p):
 def createprocs(c, lang):
     print "RUNNING 'createprocs' %s" % lang
 
+    c.execute("drop procedure emptytable if exists").close()
+    c.execute("create procedure db.emptytable() language %s" % lang).close()
+
     c.execute("drop procedure fib if exists").close()
     c.execute("create procedure db.fib() language %s" % lang).close()
 
@@ -90,6 +93,13 @@ def hellotest(c):
     c.execute("exec sayhello()").close()
     c.execute("exec sayhello()").close()
     c.execute("exec sayhello()").close()
+
+def emptytest(c):
+    print "RUNNING TEST 'emptytest'"
+
+    c.execute("exec emptytable()").close()
+    c.execute("exec emptytable()").close()
+    c.execute("exec emptytable()").close()
 
 def counttest(c):
     print "RUNNING TEST 'counttest'"
@@ -148,10 +158,8 @@ def grouptest(c):
         if float(round(1000*myrow['ps']))/1000 != \
            float(round(1000*row[4]))/1000:
            raise db.TestFailed("ps differs: %f - %f" % (myrow['ps'], row[4]))
-        if float(round(1000*myrow['pa']))/1000 != \
-           float(round(1000*row[5]))/1000:
-           print("myrow/row for 'pa': %.8f | %.8f" % (float(round(1000*myrow['pa']))/1000, \
-                                                      float(round(1000*row[5]))/1000))
+        if round(1000*myrow['pa'])+1 < round(1000*row[5]) or \
+           round(1000*myrow['pa'])-1 > round(1000*row[5]):
            raise db.TestFailed("ps differs: %f - %f" % (myrow['pa'], row[5]))
         if float(round(1000*myrow['pm']))/1000 != \
            float(round(1000*row[6]))/1000:
@@ -339,6 +347,8 @@ def fibtest(c):
 
 if __name__ == "__main__":
 
+    rnd.seed()
+
     lang = 'python'
     if len(sys.argv) > 1:
        lang = sys.argv[1]
@@ -350,6 +360,7 @@ if __name__ == "__main__":
        createprocs(c, lang)
 
        hellotest(c)
+       emptytest(c)
        timetest(c)
        eastertest(c)
        fibtest(c)

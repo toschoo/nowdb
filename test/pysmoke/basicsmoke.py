@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
 import now
+import random
 import db
 
 if __name__ == '__main__':
+
+    random.seed()
+
     with now.Connection("localhost", "55505", None, None) as c:
 
 	nump = 100

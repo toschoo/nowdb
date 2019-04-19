@@ -231,6 +231,9 @@ def testNoneIsNull(c):
                 db.TestFailed("too many or not enough rows: %d" % cnt)
 
 if __name__ == '__main__':
+
+    rnd.seed()
+
     with now.Connection("localhost", "55505", None, None) as c:
         with c.execute("use db100") as r:
              if not r.ok():

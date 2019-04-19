@@ -49,6 +49,9 @@ def compare(df,d):
        raise db.TestFailed('50% differs')
 
 if __name__ == '__main__':
+
+   rnd.seed()
+
    with na.connect('localhost', '55505', None, None, 'db150') as con:
         buys = pd.read_sql('select origin, price, quantity from buys', con)
         gbbuys = buys.groupby(by=['origin'])
