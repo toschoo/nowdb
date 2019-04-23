@@ -1,5 +1,5 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * ========================================================================
  * Collection of scopes + threadpool
  * ========================================================================
@@ -17,6 +17,9 @@ static char *OBJECT = "lib";
 #define BUFSIZE 0x101000
 #define MAXROW  0x1000
 #define HDRSIZE 16
+
+// number of sessions maintained
+#define THREADHOLD 15
 
 #define INVALID(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
@@ -188,6 +191,7 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 	}
 
 	(*lib)->nthreads = nthreads;
+	(*lib)->lthreads = THREADHOLD; // default
 	(*lib)->loglvl   = loglvl;
 
 	(*lib)->lock = calloc(1, sizeof(nowdb_rwlock_t));
@@ -366,18 +370,32 @@ static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
  * Destroy all sessions
  * -----------------------------------------------------------------------
  */
-static void destroySessionList(ts_algo_list_t *list) {
+static void destroySessionList(ts_algo_list_t *list, char all) {
 	ts_algo_list_node_t *runner, *tmp;
 	nowdb_session_t *ses;
 
 	runner=list->head;
 	while(runner!=NULL) {
 		ses = runner->cont;
+		if (!all && ses->alive) {
+			runner=runner->nxt; continue;
+		}
 		nowdb_session_destroy(ses); free(ses);
 		tmp = runner->nxt;
 		ts_algo_list_remove(list, runner);
 		free(runner); runner = tmp;
 	}
+}
+
+/* -----------------------------------------------------------------------
+ * Regular cleanup
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_buryTheDead(nowdb_t *lib) {
+	nowdb_err_t err = nowdb_lock_write(lib->lock);
+	if (err != NOWDB_OK) return err;
+	destroySessionList(lib->fthreads, 0);
+	return nowdb_unlock_write(lib->lock);
 }
 
 /* -----------------------------------------------------------------------
@@ -389,7 +407,7 @@ void nowdb_library_close(nowdb_t *lib) {
 		nowdb_close(); return;
 	}
 	if (lib->uthreads != NULL) {
-		destroySessionList(lib->uthreads);
+		destroySessionList(lib->uthreads, 1);
 		free(lib->uthreads); lib->uthreads = NULL;
 	}
 	if (lib->lock != NULL) {
@@ -399,7 +417,7 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->fthreads != NULL) {
 		fprintf(stderr, "destroy free threads\n");
-		destroySessionList(lib->fthreads);
+		destroySessionList(lib->fthreads, 1);
 		free(lib->fthreads); lib->fthreads = NULL;
 	}
 	if (lib->lock != NULL) {
@@ -638,6 +656,8 @@ nowdb_err_t nowdb_session_create(nowdb_session_t **ses,
 		free(*ses); *ses = NULL;
 		return err;
 	}
+	// we could create the threads detached in the first place
+	pthread_detach((*ses)->task);
 	return NOWDB_OK;
 }
 
@@ -897,10 +917,12 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 			return err;
 		}
 	}
+	/*
 	err = nowdb_task_join(ses->task);
 	if (err != NOWDB_OK) { // what to do?
 		LOGERRMSG(err);
 	}
+	*/
 	return NOWDB_OK;
 }
 
@@ -1525,11 +1547,27 @@ static void runSession(nowdb_session_t *ses) {
 }
 
 /* -----------------------------------------------------------------------
+ * check if above threshold
+ * -----------------------------------------------------------------------
+ */
+static inline char aboveThreshold(nowdb_t *lib) {
+#ifdef _NOWDB_WITH_PYTHON
+	if (lib->pyEnabled) return 0;
+#endif
+	/*
+	fprintf(stderr, "THRESHOLD: %d | %d\n", lib->fthreads->len,
+	                                        lib->lthreads);
+	*/
+	return (lib->fthreads->len > lib->lthreads);
+}
+
+/* -----------------------------------------------------------------------
  * leave session
  * -----------------------------------------------------------------------
  */
-static void leaveSession(nowdb_session_t *ses, int stop) {
+static void leaveSession(nowdb_session_t *ses, int *stop) {
 	nowdb_err_t err;
+	nowdb_t *lib=ses->lib;
 
 	// free resources
 	if (ses->parser != NULL) {
@@ -1551,25 +1589,26 @@ static void leaveSession(nowdb_session_t *ses, int stop) {
 		ses->istream = -1;
 	}
 
-	if (stop == 2) return;
+	if (*stop == 2) return;
 
 	// move session from used to free list
 	// LOGMSG("locking ses->lib\n");
-	err = nowdb_lock_write(LIB(ses->lib)->lock);
+	err = nowdb_lock_write(lib->lock);
 	if (err != NOWDB_OK) {
 		SETERR();
 		return;
 	}
 
-	if (LIB(ses->lib)->uthreads->head != NULL) {
-		ts_algo_list_remove(LIB(ses->lib)->uthreads, ses->node);
-		addNode(LIB(ses->lib)->fthreads, ses->node);
+	if (lib->uthreads->head != NULL) {
+		ts_algo_list_remove(lib->uthreads, ses->node);
+		if (aboveThreshold(lib)) *stop = 3;
+		addNode(lib->fthreads, ses->node);
 		fprintf(stderr, "used: %d, free: %d\n",
-	                LIB(ses->lib)->uthreads->len,
-	                LIB(ses->lib)->fthreads->len);
+	                lib->uthreads->len,
+	                lib->fthreads->len);
 	}
 
-	err = nowdb_unlock_write(LIB(ses->lib)->lock);
+	err = nowdb_unlock_write(lib->lock);
 	if (err != NOWDB_OK) {
 		SETERR();
 		return;
@@ -1593,7 +1632,7 @@ void *nowdb_session_entry(void *session) {
 	nowdb_session_t *ses = session;
 	sigset_t s;
 	int sig, x;
-	int stop;
+	int stop=0;
 
 	sigemptyset(&s);
         sigaddset(&s, SIGUSR1);
@@ -1646,10 +1685,10 @@ void *nowdb_session_entry(void *session) {
 		stop = getStop(ses);
 
 		// leave session
-		leaveSession(ses,stop);
+		leaveSession(ses,&stop);
 
 		if (stop < 0) break;
-		if (stop == 2) break;
+		if (stop >= 2) break;
 
 		// set state waiting
 		if (setWaiting(ses) < 0) {
@@ -1662,7 +1701,7 @@ void *nowdb_session_entry(void *session) {
 		// tell master that we are free
 		SIGNALEOS();
 	}
+	// we should lock here, ...
 	ses->alive = 0;
-	// fprintf(stderr, "terminating\n");
 	return NULL;
 }

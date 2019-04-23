@@ -582,6 +582,12 @@ int runServer(int argc, char **argv) {
 			} else {
 				srv.ses_ended++; 
 			}
+			err = nowdb_buryTheDead(srv.lib);
+			if (err != NOWDB_OK) {
+				nowdb_err_print(err);
+				nowdb_err_release(err);
+				rc = EXIT_FAILURE;
+			}
 			break;
 
 		// user wants us to terminate
@@ -596,6 +602,7 @@ int runServer(int argc, char **argv) {
 			fprintf(stderr, "unknown signal: %d\n", sig);
 		}
 		if (global_stop) break;
+		if (rc) break;
 	}
 
 	// stop listener
