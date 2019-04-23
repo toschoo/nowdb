@@ -215,6 +215,7 @@ local function createifnotexists(nm)
 end
 
 function recachetest(nm,m,v)
+   -- recache.setDebug(true)
    createifnotexists(nm)
    local co = coroutine.create(function()
      modvisits(m)

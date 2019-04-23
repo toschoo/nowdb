@@ -19,7 +19,11 @@ static char *OBJECT = "lib";
 #define HDRSIZE 16
 
 // number of sessions maintained
-#define THREADHOLD 15
+#define THREADHOLD 32
+
+#define DEAD  0
+#define ALIVE 1
+#define DYING 2
 
 #define INVALID(s) \
 	return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT, s);
@@ -190,8 +194,11 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		return err;
 	}
 
-	(*lib)->nthreads = nthreads;
 	(*lib)->lthreads = THREADHOLD; // default
+	(*lib)->nthreads = nthreads;
+	if ((*lib)->nthreads <= (*lib)->lthreads) {
+		(*lib)->nthreads = (*lib)->lthreads + 1;
+	}
 	(*lib)->loglvl   = loglvl;
 
 	(*lib)->lock = calloc(1, sizeof(nowdb_rwlock_t));
@@ -339,6 +346,8 @@ static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
 		x = list->len;
 		t = list->head != NULL;
 
+		if (x > 0) fprintf(stderr, "alive: %d\n", ((nowdb_session_t*)(list->head->cont))->alive);
+
 		err = nowdb_unlock_read(lib->lock);
 		if (err != NOWDB_OK) return err;
 		
@@ -385,17 +394,6 @@ static void destroySessionList(ts_algo_list_t *list, char all) {
 		ts_algo_list_remove(list, runner);
 		free(runner); runner = tmp;
 	}
-}
-
-/* -----------------------------------------------------------------------
- * Regular cleanup
- * -----------------------------------------------------------------------
- */
-nowdb_err_t nowdb_buryTheDead(nowdb_t *lib) {
-	nowdb_err_t err = nowdb_lock_write(lib->lock);
-	if (err != NOWDB_OK) return err;
-	destroySessionList(lib->fthreads, 0);
-	return nowdb_unlock_write(lib->lock);
 }
 
 /* -----------------------------------------------------------------------
@@ -669,6 +667,8 @@ static void addNode(ts_algo_list_t      *list,
                     ts_algo_list_node_t *node) {
 
 	node->nxt = list->head;
+	node->prv = NULL;
+	if (list->last == NULL) list->last = list->head;
 	if (node->nxt != NULL) node->nxt->prv = node;
 	list->head = node;
 	list->len++;
@@ -704,12 +704,19 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 			free(*ses); *ses = NULL;
 			free(n); continue;
 		}
+		if ((*ses)->alive != ALIVE) {
+			if (lib->fthreads->len == 0) {
+				n = NULL; break;
+			}
+			ts_algo_list_degrade(lib->fthreads, n);
+			continue;
+		}
 		break;
 	}
 
 	// shall we allow ad-hoc threads?
 	// shall we enforce a limit on living threads?
-	if (lib->fthreads->len == 0) {
+	if (n == NULL) {
 		if (lib->nthreads > 0 &&
 		    lib->nthreads < lib->uthreads->len) {
 			err = nowdb_err_get(nowdb_err_no_rsc,
@@ -745,10 +752,8 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 		goto unlock;
 	}
 
-	if (n != NULL) {
-		ts_algo_list_remove(lib->fthreads, n);
-		addNode(lib->uthreads, n);
-	}
+	ts_algo_list_remove(lib->fthreads, n);
+	addNode(lib->uthreads, n);
 
 unlock:
 	err2 = nowdb_unlock_write(lib->lock);
@@ -867,7 +872,7 @@ static int setWaiting(nowdb_session_t *ses) {
  */
 nowdb_err_t nowdb_session_run(nowdb_session_t *ses) {
 	if (ses == NULL) INVALID("session is NULL");
-	if (ses->alive == 0) INVALID("session is dead");
+	if (ses->alive != ALIVE) INVALID("session is dead");
 	return signalSession(ses);
 }
 
@@ -881,7 +886,7 @@ nowdb_err_t nowdb_session_stop(nowdb_session_t *ses) {
 	nowdb_err_t err;
 
 	if (ses == NULL) INVALID("session is NULL");
-	if (ses->alive == 0) return NOWDB_OK;
+	if (ses->alive != ALIVE) return NOWDB_OK;
 
 	if (setStop(ses, 1) != 0) {
 		ses->alive = 0;
@@ -906,7 +911,7 @@ nowdb_err_t nowdb_session_shutdown(nowdb_session_t *ses) {
 
 	if (ses == NULL) INVALID("session is NULL");
 
-	if (ses->alive) {
+	if (ses->alive == ALIVE) {
 		if (setStop(ses, 2) != 0) {
 			ses->alive = 0;
 			return ses->err;
@@ -1274,7 +1279,7 @@ static int fetch(nowdb_session_t    *ses,
 	scur->count += cnt;
 
 	// debugging...
-	if (osz < 9) {
+	if (osz < 2) {
 		fprintf(stderr, "fetched: %u / %lu\n",
 		                    osz, scur->count);
 	}
@@ -1464,7 +1469,7 @@ static void runSession(nowdb_session_t *ses) {
 
 	if (ses == NULL) return;
 	if (ses->err != NOWDB_OK) return;
-	if (ses->alive == 0) return;
+	if (ses->alive != ALIVE) return;
 	
 	LOGMSG("SESSION STARTED");
 
@@ -1601,7 +1606,9 @@ static void leaveSession(nowdb_session_t *ses, int *stop) {
 
 	if (lib->uthreads->head != NULL) {
 		ts_algo_list_remove(lib->uthreads, ses->node);
-		if (aboveThreshold(lib)) *stop = 3;
+		if (aboveThreshold(lib)) {
+			*stop = 3; ses->alive = DYING;
+		}
 		addNode(lib->fthreads, ses->node);
 		fprintf(stderr, "used: %d, free: %d\n",
 	                lib->uthreads->len,
@@ -1613,7 +1620,6 @@ static void leaveSession(nowdb_session_t *ses, int *stop) {
 		SETERR();
 		return;
 	}
-	// fprintf(stderr, "left session\n");
 }
 
 #define SIGNALEOS() \
