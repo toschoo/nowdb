@@ -1643,10 +1643,11 @@ void *nowdb_session_entry(void *session) {
 
 	sigset_t t;
 	sigemptyset(&t);
-	sigaddset(&s, SIGUSR1);
-	sigaddset(&s, SIGINT);
-	sigaddset(&s, SIGABRT);
-	sigaddset(&s, SIGTERM);
+
+	sigaddset(&t, SIGUSR1);
+	sigaddset(&t, SIGINT);
+	sigaddset(&t, SIGABRT);
+	sigaddset(&t, SIGTERM);
 
 	x = pthread_sigmask(SIG_BLOCK, &t, NULL);
 	if (x != 0) {
