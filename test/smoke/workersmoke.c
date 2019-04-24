@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <time.h>
 
-
 #define DELAY   1000000
 #define PERIOD 10000000
 #define TMO  1000000000
