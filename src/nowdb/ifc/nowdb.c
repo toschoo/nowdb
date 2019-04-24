@@ -346,8 +346,6 @@ static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
 		x = list->len;
 		t = list->head != NULL;
 
-		if (x > 0) fprintf(stderr, "alive: %d\n", ((nowdb_session_t*)(list->head->cont))->alive);
-
 		err = nowdb_unlock_read(lib->lock);
 		if (err != NOWDB_OK) return err;
 		
