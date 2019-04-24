@@ -228,11 +228,11 @@ unlock:
 		} else {
 			struct timespec tv;
 			tv.tv_sec = 0;
-			if (q->delay > NPERSEC) {
-				tv.tv_sec = q->delay/NPERSEC;
-				tv.tv_nsec = q->delay - tv.tv_sec * NPERSEC;
+			if (tmo > NPERSEC) {
+				tv.tv_sec = tmo/NPERSEC;
+				tv.tv_nsec = tmo - tv.tv_sec * NPERSEC;
 			} else {
-				tv.tv_nsec = q->delay;
+				tv.tv_nsec = tmo;
 			}
 			int x = sigtimedwait(&q->six, NULL, &tv);
 			if (x == EAGAIN) s=0; // timeout

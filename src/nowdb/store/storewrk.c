@@ -33,7 +33,7 @@
  * Sorter Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SORTPERIOD     500000000l
+#define SORTPERIOD    5000000000l
 #define SORTTIMEOUT 300000000000l
 
 #define NOMEM(x) \
