@@ -80,6 +80,8 @@ nowdb_bool_t testHelloJob() {
 	nowdb_err_t    err;
 	struct timespec t1, t2;
 
+	fprintf(stderr, "testHelloJob\n");
+
 	err = nowdb_worker_init(&wrk, "test", 1, PERIOD,
 	                        &hellojob, NULL,
 	                        &drainer, NULL);
@@ -122,6 +124,8 @@ nowdb_bool_t testPrintCont() {
 	nowdb_wrk_message_t *msg;
 	nowdb_worker_t wrk;
 	nowdb_err_t    err;
+
+	fprintf(stderr, "testPrintJob\n");
 
 	err = nowdb_worker_init(&wrk, "test", 1, PERIOD,
 	                        &hellojob, NULL,
@@ -199,6 +203,18 @@ nowdb_bool_t test2tasks() {
 	fibo_t fibo;
 	uint32_t *f, *rcv=NULL;
 	uint32_t f1 = 1;
+	sigset_t six;
+
+	fprintf(stderr, "test2tasks\n");
+
+	sigemptyset(&six);
+        sigaddset(&six, SIGUSR1);
+
+	int x = pthread_sigmask(SIG_SETMASK, &six, NULL);
+	if (x != 0) {
+		fprintf(stderr, "cannot set sigmask\n");
+		return FALSE;
+	}
 
 	fibs = malloc(sizeof(uint32_t) * 20);
 	if (fibs == NULL) {

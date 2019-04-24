@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <signal.h>
 
 #define DELAY 1000000
 
@@ -548,6 +549,11 @@ nowdb_bool_t test2tasks() {
 
 int main() {
 	int rc = EXIT_SUCCESS;
+
+	sigset_t six;
+	sigemptyset(&six);
+	sigaddset(&six, SIGUSR1);
+	pthread_sigmask(SIG_SETMASK, &six, NULL);
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "nowdb_err_init failed\n");

@@ -7,6 +7,8 @@
 #include <nowdb/task/worker.h>
 #include <stdio.h>
 
+#include <signal.h>
+
 /* ------------------------------------------------------------------------
  * DELAY is used for the queue (which will check for messages
  *       every 'DELAY' nanoseconds, i.e. every 50ms).
@@ -17,6 +19,8 @@
 #define MINOR 10000000
 
 static nowdb_wrk_message_t stopmsg = {0,NULL,NULL};
+
+static char *OBJECT = "worker";
 
 /* ------------------------------------------------------------------------
  * Report errors
@@ -68,8 +72,18 @@ static void *wrkentry(void *p) {
 	nowdb_job_t job;
 	char stop;
 	uint32_t idx;
+	sigset_t six;
 
 	job = wrk->job;
+
+	sigemptyset(&six);
+        sigaddset(&six, SIGUSR1);
+
+	int x = pthread_sigmask(SIG_SETMASK, &six, NULL);
+	if (x != 0) {
+		return nowdb_err_getRC(nowdb_err_sigset, x,
+		                         OBJECT, "setmask");
+	}
 
 	/* lock to obtain and set running */
 	err = nowdb_lock(&wrk->lock);
@@ -319,6 +333,8 @@ nowdb_err_t nowdb_worker_stop(nowdb_worker_t *wrk,
 	/* lock to check if we are already stopped */
 	err = nowdb_lock(&wrk->lock);
 	if (err != NOWDB_OK) return err;
+
+	// fprintf(stderr, "stopping worker %s\n", wrk->name);
 
 	wrk->stop = 1;
 

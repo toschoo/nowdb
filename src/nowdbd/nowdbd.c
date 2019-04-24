@@ -248,6 +248,7 @@ static volatile sig_atomic_t global_stop;
  * -----------------------------------------------------------------------
  */
 void stophandler(int sig) {
+	fprintf(stderr, "STOP HANDLER!\n");
 	global_stop = 1;
 }
 

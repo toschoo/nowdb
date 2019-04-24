@@ -15,6 +15,8 @@
 
 #include <tsalgo/list.h>
 #include <stdint.h>
+#include <pthread.h>
+#include <signal.h>
 
 /* ------------------------------------------------------------------------
  * Queue is infinite
@@ -33,12 +35,14 @@ typedef void (*nowdb_queue_drain_t)(void **message);
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_lock_t         lock;  /* Exclusive lock                   */
-	nowdb_bool_t       closed;  /* closed for enqueue               */
-	ts_algo_list_t       list;  /* the queue content                */
-	int                   max;  /* max messages                     */
-	nowdb_time_t        delay;  /* delay between checking the queue */
-	nowdb_queue_drain_t drain;  /* callback to free messages        */
+	nowdb_lock_t         lock;  // Exclusive lock
+	nowdb_bool_t       closed;  // closed for enqueue
+	ts_algo_list_t       list;  // the queue content
+	int                   max;  // max messages
+	nowdb_time_t        delay;  // delay between checking the queue
+	nowdb_queue_drain_t drain;  // callback to free messages
+	sigset_t              six;  // blocking and waiting for
+	ts_algo_list_t    readers;  // currently reading
 } nowdb_queue_t;
 
 /* ------------------------------------------------------------------------
