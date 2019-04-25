@@ -1,9 +1,7 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * ========================================================================
  * Queue: inter-thread communication
- * ========================================================================
- *
  * ========================================================================
  */
 #ifndef nowdb_queue_decl
@@ -83,7 +81,8 @@ nowdb_err_t nowdb_queue_close(nowdb_queue_t *q);
 /* ------------------------------------------------------------------------
  * Writes 'message' to the end of the queue (last in / last out)
  * If the queue is already full (contains more than max messages),
- * the calling thread blocks.
+ * the calling thread blocks and uses the delay parameter, which
+ * was passed in on initialising, to schedule look-ups.
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_queue_enqueue(nowdb_queue_t *q, void *message);
@@ -102,6 +101,10 @@ nowdb_err_t nowdb_queue_enqueuePrio(nowdb_queue_t *q, void *message);
  * tmo < 0: blocks forever
  * tmo = 0: returns immediately
  * tmo > 0: blocks tmo nanoseconds
+ * dequeue does not use the delay parameter,
+ * but uses the timout directly to perform a sigtimedwait,
+ * waiting for the signal SIGUSR1. This signal shall therefore be
+ * blocked by threads reading from a queue.
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_queue_dequeue(nowdb_queue_t *q, 

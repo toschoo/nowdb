@@ -76,8 +76,12 @@ static void *wrkentry(void *p) {
 
 	job = wrk->job;
 
+	// block all of the relevant signals
 	sigemptyset(&six);
         sigaddset(&six, SIGUSR1);
+        sigaddset(&six, SIGINT);
+        sigaddset(&six, SIGTERM);
+        sigaddset(&six, SIGUSR2);
 
 	int x = pthread_sigmask(SIG_SETMASK, &six, NULL);
 	if (x != 0) {

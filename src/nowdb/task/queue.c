@@ -1,5 +1,5 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * ========================================================================
  * Queue: inter-thread communication
  * ========================================================================
@@ -60,8 +60,8 @@ nowdb_err_t nowdb_queue_init(nowdb_queue_t *q, int max,
 void nowdb_queue_destroy(nowdb_queue_t *q) {
 	if (q == NULL) return;
 	ts_algo_list_destroy(&q->list);
-	nowdb_lock_destroy(&q->lock);
 	ts_algo_list_destroy(&q->readers);
+	nowdb_lock_destroy(&q->lock);
 }
 
 /* ------------------------------------------------------------------------
@@ -93,6 +93,9 @@ nowdb_err_t nowdb_queue_shutdown(nowdb_queue_t *q) {
 
 	q->closed = TRUE;
 	drainme(q);
+
+	ts_algo_list_destroy(&q->readers);
+	ts_algo_list_init(&q->readers);
 
 	return nowdb_unlock(&q->lock);
 }
@@ -149,6 +152,10 @@ nowdb_err_t nowdb_queue_close(nowdb_queue_t *q) {
 	return nowdb_unlock(&q->lock);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: remove current thread from readers
+ * ------------------------------------------------------------------------
+ */
 static inline void removereader(nowdb_queue_t *q) {
 	ts_algo_list_node_t *run;
 	nowdb_task_t me = pthread_self();
@@ -160,6 +167,10 @@ static inline void removereader(nowdb_queue_t *q) {
 	ts_algo_list_remove(&q->readers, run); free(run);
 }
 
+/* ------------------------------------------------------------------------
+ * Helper: signal *all* readers
+ * ------------------------------------------------------------------------
+ */
 static inline void signalreaders(nowdb_queue_t *q) {
 	ts_algo_list_node_t *run;
 	for(run=q->readers.head; run!=NULL; run=run->nxt) {
@@ -184,11 +195,33 @@ static inline nowdb_err_t block(nowdb_queue_t *q,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	char first=1;
+	struct timespec tv;
 
+	// convert timeout to timespec (reader only)
+	if (what == EMPTY && tmo >= 0) {
+		if (tmo >= NPERSEC) {
+			tv.tv_sec = tmo/NPERSEC;
+			tv.tv_nsec = tmo - tv.tv_sec * NPERSEC;
+		} else {
+			tv.tv_sec = 0;
+			tv.tv_nsec = tmo;
+		}
+	}
+
+	// until condition (~FULL or ~EMTPY) is true or
+	// timeout expired
 	for(;;) {
-		err = nowdb_lock(&q->lock);
-		if (err != NOWDB_OK) return err;
+		err2 = nowdb_lock(&q->lock);
+		if (err2 != NOWDB_OK) {
+			err2->cause = err; return err2;
+		}
 
+		// error on waiting in the previous round
+		if (err != NOWDB_OK) {
+			removereader(q); goto unlock;
+		}
+
+		// tell the world we are waiting (in case of reader)
 		if (first && what == EMPTY) {
 			first=0;
 			if (ts_algo_list_append(&q->readers,
@@ -198,6 +231,7 @@ static inline nowdb_err_t block(nowdb_queue_t *q,
 			}
 		}
 		
+		// condition is true (mainain the lock!)
 		if (what == FULL) {
 			if (q->max <= 0 ||
 			    q->max >  q->list.len) return NOWDB_OK;
@@ -210,6 +244,8 @@ static inline nowdb_err_t block(nowdb_queue_t *q,
 			}
 		}
 		if (err != NOWDB_OK) goto unlock;
+
+		// timeout
 		if (tmo == 0 || (tmo > 0 && s <= 0)) {
 			if (what == FULL) removereader(q);
 			err = nowdb_err_get(nowdb_err_timeout,
@@ -221,24 +257,19 @@ unlock:
 			err2->cause = err; return err2;
 		}
 		if (err != NOWDB_OK) return err;
+
+		// writer poll, reader wait for a signal
 		if (what == FULL) {
 			err = nowdb_task_sleep(q->delay);
-			if (err != NOWDB_OK) return err;
+			if (err != NOWDB_OK) continue;
 			if (tmo > 0) s-=q->delay;
 		} else {
-			struct timespec tv;
-			tv.tv_sec = 0;
-			if (tmo > NPERSEC) {
-				tv.tv_sec = tmo/NPERSEC;
-				tv.tv_nsec = tmo - tv.tv_sec * NPERSEC;
-			} else {
-				tv.tv_nsec = tmo;
-			}
-			int x = sigtimedwait(&q->six, NULL, &tv);
-			if (x == EAGAIN) s=0; // timeout
+			int x = tmo>=0?sigtimedwait(&q->six, NULL, &tv):
+			               sigwaitinfo(&q->six, NULL);
+			if (errno == EAGAIN) s=0; // timeout
 			else if (x < 0) {
 				err = nowdb_err_get(nowdb_err_sigwait,
-				                   TRUE, OBJECT, NULL);
+				              TRUE, OBJECT, "dequeue");
 			}
 		}
 	}
