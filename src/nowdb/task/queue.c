@@ -267,6 +267,7 @@ unlock:
 			int x = tmo>=0?sigtimedwait(&q->six, NULL, &tv):
 			               sigwaitinfo(&q->six, NULL);
 			if (errno == EAGAIN) s=0; // timeout
+			else if (errno == EINTR) continue;
 			else if (x < 0) {
 				err = nowdb_err_get(nowdb_err_sigwait,
 				              TRUE, OBJECT, "dequeue");
