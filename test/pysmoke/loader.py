@@ -138,6 +138,10 @@ def createTypes(c):
                 raise db.TestFailed('cannot enter nirvana')
 
 def createEdges(c):
+    c.rexecute_("drop storage mystore if exists")
+    with c.execute("create small storage mystore") as r:
+         if not r.ok():
+            raise db.TestFailed('cannot create mystore')
     with c.execute("drop edge dvcsns if exists") as r:
          if not r.ok():
             raise db.TestFailed('cannot drop dvcsns')
@@ -153,7 +157,8 @@ def createEdges(c):
                            origin device, \
                            destin nirvana, \
                            temp   float, \
-                           revo   float)") as r:
+                           revo   float) \
+                      storage=mystore") as r:
          if not r.ok():
             raise db.TestFailed('cannot create measure')
 
@@ -172,12 +177,14 @@ def load(c):
             raise db.TestFailed('cannot load measure %s' % r.details())
 
 def testNoneIsNull(c):
+    print("RUNNING 'testNoneIsNull'")
+    print("DEVICES")
     for i in range(len(dvc)):
         k = rnd.randint(0,len(dvc)-1)
         with c.execute("select key, desc from device where key = %d" % dvc[k].key) as cur:
              cnt = 0
              for row in cur:
-                 print("%d: %s" % (row.field(0), row.field(1)))
+                 print("%d: '%s'" % (row.field(0), row.field(1)))
                  if row.field(0) != dvc[k].key:
                     db.TestFailed('wrong key: %d' % k)
                  if (row.field(1) is None and \
@@ -189,11 +196,13 @@ def testNoneIsNull(c):
              if cnt != 1:
                 db.TestFailed("too many or not enough rows: %d" % cnt)
 
+    print("SENSORS")
     for i in range(len(sns)):
         k = rnd.randint(0,len(sns)-1)
         with c.execute("select key, info from sensor where key = %d" % sns[k].key) as cur:
              cnt = 0
              for row in cur:
+                 print("%d: '%s'" % (row.field(0), row.field(1)))
                  if row.field(0) != sns[k].key:
                     db.TestFailed('wrong key: %d' % k)
                  if (row.field(1) is None and \
@@ -205,7 +214,7 @@ def testNoneIsNull(c):
              if cnt != 1:
                 db.TestFailed("too many or not enough rows: %d" % cnt)
 
-    for i in range(len(tdg)/2):
+    for i in range(len(tdg)/50):
         k = rnd.randint(0,len(tdg)-1)
         with c.execute("select origin, temp, revo \
                           from measure \
@@ -230,9 +239,22 @@ def testNoneIsNull(c):
              if cnt != 1:
                 db.TestFailed("too many or not enough rows: %d" % cnt)
 
+def testCount(c,mx):
+
+    print("RUNNING 'testCount'")
+
+    with c.execute("select count(*) from measure") as cur:
+         for row in cur:
+             if row.field(0) != mx:
+                db.TestFailed("wrong count: %d | %d" % (row.field(0), mx))
+
+    # not much yet...
+
 if __name__ == '__main__':
 
     rnd.seed()
+
+    ms = 50000
 
     with now.Connection("localhost", "55505", None, None) as c:
         with c.execute("use db100") as r:
@@ -244,10 +266,11 @@ if __name__ == '__main__':
         createSensors(100)
         createDevices(10)
         createDvcSns()
-        createMeasures(1000)
+        createMeasures(ms)
 
         load(c)
 
         testNoneIsNull(c)
+        testCount(c, ms)
 
         print("PASSED")
