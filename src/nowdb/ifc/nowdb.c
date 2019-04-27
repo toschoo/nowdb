@@ -693,7 +693,7 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
                               int istream,
                               int ostream,
                               int estream) {
-	ts_algo_list_node_t *n;
+	ts_algo_list_node_t *n, *p=NULL;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
@@ -713,13 +713,16 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 			free(*ses); *ses = NULL;
 			free(n); continue;
 		}
+		// what if all sessions are about to die?
 		if ((*ses)->alive != ALIVE) {
-			if (lib->fthreads->len == 0) {
+			// check if we made a full turn: all dying
+			if (p == NULL) p=n; else if (p == n) {
 				n = NULL; break;
 			}
 			ts_algo_list_degrade(lib->fthreads, n);
 			continue;
 		}
+		fprintf(stderr, "HOUSEKEEPING\n");
 		break;
 	}
 
@@ -1718,6 +1721,7 @@ void *nowdb_session_entry(void *session) {
 		SIGNALEOS();
 	}
 	// we should lock here, ...
+	// LOGMSG("SESSION EXITS");
 	ses->alive = 0;
 	return NULL;
 }

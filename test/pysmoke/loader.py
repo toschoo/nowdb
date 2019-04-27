@@ -243,10 +243,29 @@ def testCount(c,mx):
 
     print("RUNNING 'testCount'")
 
+    with c.execute("select count(*) from sensor") as cur:
+         for row in cur:
+             if row.field(0) != len(sns):
+                db.TestFailed("wrong count for sensor: %d | %d" \
+                                             % (row.field(0), mx))
+
+    with c.execute("select count(*) from device") as cur:
+         for row in cur:
+             if row.field(0) != len(dvc):
+                db.TestFailed("wrong count for device: %d | %d" \
+                                           % (row.field(0), mx))
+
+    with c.execute("select count(*) from dvcsns") as cur:
+         for row in cur:
+             if row.field(0) != len(edg):
+                db.TestFailed("wrong count for dvcsns: %d | %d" \
+                                            % (row.field(0), mx))
+
     with c.execute("select count(*) from measure") as cur:
          for row in cur:
-             if row.field(0) != mx:
-                db.TestFailed("wrong count: %d | %d" % (row.field(0), mx))
+             if row.field(0) != len(tdg):
+                db.TestFailed("wrong count for tedge: %d | %d" \
+                                           % (row.field(0), mx))
 
     # not much yet...
 
