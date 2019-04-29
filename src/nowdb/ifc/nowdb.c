@@ -722,7 +722,7 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 			ts_algo_list_degrade(lib->fthreads, n);
 			continue;
 		}
-		fprintf(stderr, "HOUSEKEEPING\n");
+		// fprintf(stderr, "HOUSEKEEPING\n");
 		break;
 	}
 
@@ -1622,9 +1622,11 @@ static void leaveSession(nowdb_session_t *ses, int *stop) {
 			*stop = 3; ses->alive = DYING;
 		}
 		addNode(lib->fthreads, ses->node);
+		/*
 		fprintf(stderr, "used: %d, free: %d\n",
 	                lib->uthreads->len,
 	                lib->fthreads->len);
+		*/
 	}
 
 	err = nowdb_unlock_write(lib->lock);
