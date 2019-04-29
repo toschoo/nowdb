@@ -1,0 +1,5 @@
+write store catalog
+-------------------
+store catalog is currently written
+only on open and close;
+it should be written periodically
