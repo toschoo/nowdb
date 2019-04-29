@@ -225,6 +225,7 @@ nowdb_err_t nowdb_file_makeWriter(nowdb_file_t *file) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_file_makeSpare(nowdb_file_t *file) {
+	// fprintf(stderr, "%d -> spare\n", file->id);
 	nowdb_err_t err = nowdb_file_makeWriter(file);
 	if (err != NOWDB_OK) return err;
 	file->ctrl |= NOWDB_FILE_SPARE;

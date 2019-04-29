@@ -329,6 +329,7 @@ static nowdb_err_t stopSessions(nowdb_t *lib) {
 
 /* -----------------------------------------------------------------------
  * Wait until there are not more sessions ongoing
+ * what = 2 is never used!
  * -----------------------------------------------------------------------
  */
 #define DELAY 10000000l
@@ -357,9 +358,12 @@ static nowdb_err_t waitSessions(nowdb_t *lib, int what) {
 		i--;
 
 		if (i==0) {
+			// used sessions to free sessions
 			if (what == 1) {
 				err = stopSessions(lib);
 				if (err != NOWDB_OK) return err;
+
+			// end threads of free sessions
 			} else {
 				err = killSessions(lib);
 				if (err != NOWDB_OK) return err;
@@ -384,8 +388,14 @@ static void destroySessionList(ts_algo_list_t *list, char all) {
 	runner=list->head;
 	while(runner!=NULL) {
 		ses = runner->cont;
-		if (!all && ses->alive) {
-			runner=runner->nxt; continue;
+		if (ses->alive) {
+			if (all) {
+				NOWDB_IGNORE(nowdb_session_shutdown(ses));
+				NOWDB_IGNORE(nowdb_task_sleep(DELAY));
+			} else {
+				runner=runner->nxt;
+			}
+			continue;
 		}
 		nowdb_session_destroy(ses); free(ses);
 		tmp = runner->nxt;
@@ -408,7 +418,7 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->lock != NULL) {
 		NOWDB_IGNORE(killSessions(lib));
-		// NOWDB_IGNORE(waitSessions(lib,2));
+		NOWDB_IGNORE(nowdb_task_sleep(DELAY));
 		NOWDB_IGNORE(nowdb_lock_write(lib->lock));
 	}
 	if (lib->fthreads != NULL) {
@@ -475,6 +485,7 @@ nowdb_err_t nowdb_library_shutdown(nowdb_t *lib) {
 
 	err = waitSessions(lib, 1);
 	if (err != NOWDB_OK) return err;
+
 
 	return NOWDB_OK;
 }
@@ -682,7 +693,7 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
                               int istream,
                               int ostream,
                               int estream) {
-	ts_algo_list_node_t *n;
+	ts_algo_list_node_t *n, *p=NULL;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 
@@ -702,13 +713,16 @@ nowdb_err_t nowdb_getSession(nowdb_t *lib,
 			free(*ses); *ses = NULL;
 			free(n); continue;
 		}
+		// what if all sessions are about to die?
 		if ((*ses)->alive != ALIVE) {
-			if (lib->fthreads->len == 0) {
+			// check if we made a full turn: all dying
+			if (p == NULL) p=n; else if (p == n) {
 				n = NULL; break;
 			}
 			ts_algo_list_degrade(lib->fthreads, n);
 			continue;
 		}
+		// fprintf(stderr, "HOUSEKEEPING\n");
 		break;
 	}
 
@@ -1608,9 +1622,11 @@ static void leaveSession(nowdb_session_t *ses, int *stop) {
 			*stop = 3; ses->alive = DYING;
 		}
 		addNode(lib->fthreads, ses->node);
+		/*
 		fprintf(stderr, "used: %d, free: %d\n",
 	                lib->uthreads->len,
 	                lib->fthreads->len);
+		*/
 	}
 
 	err = nowdb_unlock_write(lib->lock);
@@ -1707,6 +1723,7 @@ void *nowdb_session_entry(void *session) {
 		SIGNALEOS();
 	}
 	// we should lock here, ...
+	// LOGMSG("SESSION EXITS");
 	ses->alive = 0;
 	return NULL;
 }

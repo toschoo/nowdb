@@ -3,8 +3,6 @@
  * ========================================================================
  * Store: a collection of files
  * ========================================================================
- *
- * ========================================================================
  */
 #ifndef nowdb_store_decl
 #define nowdb_store_decl
@@ -267,6 +265,14 @@ nowdb_err_t nowdb_store_getWaiting(nowdb_store_t *store,
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_store_releaseWaiting(nowdb_store_t *store,
+                                       nowdb_file_t  *file);
+
+/* ------------------------------------------------------------------------
+ * Release pending:
+ * removes the pending file and creates a new one
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releasePending(nowdb_store_t *store,
                                        nowdb_file_t  *file);
 
 /* ------------------------------------------------------------------------

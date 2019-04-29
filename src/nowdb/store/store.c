@@ -584,7 +584,7 @@ unlock:
  * Helper: create file
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t createFile(nowdb_store_t *store) {
+static inline nowdb_err_t createFile(nowdb_store_t *store, nowdb_fileid_t reuse) {
 	nowdb_file_t *file;
 	nowdb_err_t    err;
 	nowdb_fileid_t fid;
@@ -592,8 +592,8 @@ static inline nowdb_err_t createFile(nowdb_store_t *store) {
 
 	err = makeFileName(store, fname);
 	if (err != NOWDB_OK) return err;
-	
-	fid = getFileId(store);
+
+	fid = reuse>0?reuse:getFileId(store);
 
 	err = makeFile(store, &file, fname, fid);
 	if (err != NOWDB_OK) return err;
@@ -617,7 +617,7 @@ static inline nowdb_err_t createFile(nowdb_store_t *store) {
  */
 static inline nowdb_err_t createSpares(nowdb_store_t *store) {
 	while (store->spares.len < MIN_SPARES) {
-		nowdb_err_t err = createFile(store);
+		nowdb_err_t err = createFile(store,0);
 		if (err != NOWDB_OK) return err;
 	}
 	return NOWDB_OK;
@@ -632,7 +632,7 @@ static inline nowdb_err_t getWriter(nowdb_store_t *store) {
 	nowdb_err_t err = NOWDB_OK;
 
 	if (store->writer != NULL) return NOWDB_OK;
-	if (store->spares.len < 1) err = createFile(store);
+	if (store->spares.len < 1) err = createFile(store,0);
 	if (err != NOWDB_OK) return err;
 	node = store->spares.head;
 	ts_algo_list_remove(&store->spares, node);
@@ -658,6 +658,23 @@ static inline nowdb_err_t makeSpare(nowdb_store_t *store,
 		                                   "readers toList");
 	}
 	return nowdb_file_makeSpare(file);
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: make a new spare
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t newSpare(nowdb_store_t *store,
+                                   nowdb_file_t  *file) {
+	nowdb_fileid_t fid = file->id;
+
+	NOWDB_IGNORE(nowdb_file_close(file));
+	NOWDB_IGNORE(nowdb_file_remove(file));
+	nowdb_file_destroy(file); free(file);
+	if (store->spares.len < MIN_SPARES) {
+		return createFile(store, fid);
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
@@ -1908,6 +1925,31 @@ nowdb_err_t nowdb_store_donate(nowdb_store_t *store, nowdb_file_t *file) {
 
 	file->used = FALSE;
 	err = makeSpare(store, file);
+
+	err2 = nowdb_unlock_write(&store->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
+ * Release file: not pending any more
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_store_releasePending(nowdb_store_t *store,
+                                       nowdb_file_t *file) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	STORENULL();
+	FILENULL();
+
+	err = nowdb_lock_write(&store->lock);
+	if (err != NOWDB_OK) return err;
+
+	file->used = FALSE;
+	err = newSpare(store, file);
 
 	err2 = nowdb_unlock_write(&store->lock);
 	if (err2 != NOWDB_OK) {

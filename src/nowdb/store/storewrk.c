@@ -1,5 +1,5 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * ========================================================================
  * Workers for stores
  * ========================================================================
@@ -26,14 +26,14 @@
  * Sync Worker Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SYNCPERIOD    500000000l
+#define SYNCPERIOD   1000000000l
 #define SYNCTIMEOUT 10000000000l
 
 /* ------------------------------------------------------------------------
  * Sorter Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SORTPERIOD     500000000l
+#define SORTPERIOD    5000000000l
 #define SORTTIMEOUT 300000000000l
 
 #define NOMEM(x) \
@@ -592,15 +592,21 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	/* erase waiting... */
+	// release pending
+	err = nowdb_store_releasePending(store, src);
+	if (err != NOWDB_OK) return err;
+
+	// erase waiting... 
+	/*
 	err = nowdb_file_erase(src);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	/* ...and donate it */
+	// ...and donate it 
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
+	*/
 
 	return NOWDB_OK;
 }
