@@ -65,11 +65,16 @@ export LUA\_PATH=/lua/?.lua
 export LUA\_CPATH=/lua/?.so
 }
 
-This sets the search paths for Lua modules
-and additional C libraries imported by Lua
+\cmdline{
+export NOWDB\_LUA\_PATH=$\star$:/lua
+} 
+
+These lines sets the search paths for the Lua interpreter
+(for Lua modules and C libraries imported by Lua modules)
+and for \term{toplevel} modules imported directly by \nowdb\
 (we will discuss that later).
 
-Then the script starts the daemon iself:
+Then the script starts the daemon itself:
 
 \cmdline{
 nowdbd -b /dbs -l 2>/log/nowdbd.log
@@ -153,10 +158,10 @@ will refuse to accept more if this number is reached.
 The default value for this parameter is 128;
 
 It should be noted that, up to a certain threshold
-(which is currently not configurable) sessions are
+(which is not configurable) sessions are
 reused, that is, sessions enter a connection pool
 from which they are fetched, when new connection
-requests are received.
+requests arrive.
 
 \item \tech{-q} runs in quiet mode
 (\ie\ no debug messages are printed to standard error);
@@ -174,7 +179,7 @@ queries to the server. There is a tool to do this from the command line
 called \term{nowclient}. Here is a usage example:
 
 \cmdline{
-nowclient -d retail -Q "select count(*) from sales where customer=12345"
+nowclient -d retail -Q "select count(*) from buys where customer=12345"
 }
 
 In this form, the client will try to connect to a server
@@ -190,7 +195,7 @@ to standard output, \eg:
 \cmdline{
 executing "use retail" \\
 OK \\
-executing "select count(*) from sales where customer=12345" \\
+executing "select count(*) from buys where customer=12345" \\
 59
 }
 \end{minipage}
@@ -241,7 +246,7 @@ The following command processes the same query as the one above,
 but uses standard input instead of the options \tech{-d} and \tech{-Q}:
 
 \cmdline{
-echo "use retail;select count(*) from sales where customer=12345;" $| \backslash$ \\
+echo "use retail;select count(*) from buys where customer=12345;" $| \backslash$ \\
 \hspace*{2cm} nowclient
 }
 
@@ -389,20 +394,18 @@ Every database has two internal storage containers,
 one for types and one for edges. If no storage
 is indicated in a table (\ie\ type or edge) definition,
 the table goes in either of these storage containers,
-depending on their type.
+depending on its type.
 
 The next block defines an \term{stamped} edge.
 Edges are links between vertices. Regular edges
 have only two fields, namely: \term{origin}
-or \term{destination} (which is usually abbreviated
+and \term{destination} (which is usually abbreviated
 to \term{destin} or even \term{dest}).
 A regular edge would be created by a statement of the form:
 
 \begin{sqlcode}
 \begin{lstlisting}
-create edge from_a_to_b (
-  origin a,
-  destin b) 
+create edge from_a_to_b (origin a, destin b) 
 \end{lstlisting}
 \end{sqlcode}
 
@@ -410,16 +413,17 @@ where $a$ and $b$ are vertex types.
 
 Stamped edges have at least one additional field,
 namely \term{timestamp} (which is usually abbreviated
-to \term{stamp}). This field needs not to be mentioned
+to \term{stamp}). This field does not need not to be mentioned
 in the edge definition (in fact, it \emph{must} not be
 mentioned). Furthermore, stamped edges may have an
 arbitrary number of user-defined fields.
 (Well, not really arbitrary: there is a maximum number
 of 99 fields).
-
 The edge `buys' defined above has two user-defined
-attributes: quantity, a \term{uint}, and
-price, a \term{float}. \term{Origin} is of type
+attributes: `quantity', a \term{uint}, and
+`price', a \term{float}.
+
+The \term{origin} of buys is of type
 \term{client} and \term{destin} is of type \term{product}.
 We could, thus, read this definition as a sentence
 that says something like: ``client buys product'' or,
@@ -433,12 +437,11 @@ This is the fundamental idea of \nowdb.
 
 The definition of 'buys' contains a \term{storage} option.
 This is the way to tell \nowdb\ that we want this table 
-to be stored in a particular storage. Without that option,
-it goes into one of the default storages. The edge 'buys',
+to be stored in a particular storage. The edge 'buys',
 hence, goes into the storage 'sales' (which might or
 might not contain also other tables).
 
-You may note that we have not created indices.
+You may have noticed that we have not created indices.
 It is possible to define indices on any field
 or combination of fields as in a relational
 database using the conventional \term{create index}
@@ -447,31 +450,43 @@ for details). Some indices, however, are created
 and managed internally, in particular
 
 \begin{itemize}
-\item The primary key of every type is powered by an index
-\item Every edge (stamped or not) has an index on origin and
+\item the primary key of every type is powered by an index
+\item every edge (stamped or not) has an index on origin and
 \item an index on destination.
 \end{itemize}
 
-Thanks to these indices, any query on vertices using
-the primary key and on edges involving origin or destination
+Thanks to these indices, queries on vertices using
+the primary key or on edges involving origin or destination
 are fast.
 Data access through indices
 depends mainly on the size of the result set
-and only marginally on the size of the table in questions.
+and only marginally on the size of the table in question.
 One can therefore expect sub-millisecond response time for
 queries containing tens of thousands of elements in the result set.
 Obviously, processing time grows with the size of the result set.
-But it does not grow in the size of the table itself.
-Querying the data of a specific origin or destination in an edge
+But it does not grow proportionally
+in the size of the table itself.
+Querying the data of a specific origin or destination
 is not significantly slower with a table containing
 hundreds of millions or even billions of rows compared to a small
-table with less than a million edges.
+table with thousands or hundreds of thousands of rows.
 
 The storage engine additionally favours queries
-on edges going \emph{forward}, \ie\ querying the origin.
+on edges going \emph{forward}, \ie\
+searching destinations for a known origin.
 Those queries need less disk \acronym{i/o} than queries
-with other search criteria. More details on query
-and data optimisation can be found in chapter \ref{chpt_opt}.
+with other search criteria.
+Searching \emph{backwards} needs more disk \acronym{i/o},
+but is still faster than searching with criteria
+that do not involve either origin or destination,
+\eg\ queries that involve user-defined indices.
+The worst, of course, is a \term{fullscan}, especially
+on large tables. In such cases, restricting the
+result set by time can accelerate the query
+significantly.
+More details on query
+and data optimisation
+can be found in chapter \ref{chpt_opt}.
 
 In the final section,
 the script loads data from three different \acronym{csv}s
@@ -534,8 +549,8 @@ We can also name the attributes explicitly, like:
 
 \begin{sqlcode}
 \begin{lstlisting}
-insert into product values (prod_key, prod_desc, prod_price)
-                      (100002, 'Candy Cigarettes, 20', 2.49);
+insert into product (prod_key, prod_desc, prod_price)
+             values (100002, 'Candy Cigarettes, 20', 2.49);
 \end{lstlisting}
 \end{sqlcode}
 
@@ -735,11 +750,13 @@ Popeye the Sailor
 
 Much more typical for \nowdb, however,
 is to use vertices together with edges. Edges connect vertices
-and can therefore be seen as the `relations' in \nowdb.
-What we typically want is either to find the vertex
-at the other end of the edge (\eg\ find the destination
-for a given origin) or to look at edges with the attributes
-of the vertices added to them.
+and can therefore be seen as `relations' in \nowdb.
+What we typically want is to combine attributes
+of vertices and of edges.
+For instance, we may want to look at the attributes
+of the destination for a known origin;
+or we want to look at edges with the attributes
+of both vertices, origin and destin, added to them.
 
 Both patterns are, in \sql, instances of \term{joins}.
 An instance of the first pattern would be:
@@ -754,24 +771,24 @@ select stamp, prod_desc, prod_price
 
 \begin{minipage}{\textwidth}
 \begin{verbatim}
-|---------------------+----------------------+------------|
-| stamp               | product              | prod_price |
-|---------------------+----------------------+------------|
-| 1929-01-17T09:35:12 | Spinach, 450g net    | 1.9900     |
-| 1929-01-19T10:15:01 | Spinach, 450g net    | 1.9900     |
-| 1929-01-20T17:12:55 | Spinach, 450g net    | 1.9900     |
-| 1929-01-22T08:27:32 | Spinach, 450g net    | 1.9900     |
-| 1929-01-25T12:09:59 | Spinach, 450g net    | 1.9900     |
-| 1929-01-26T21:19:44 | Spinach, 450g net    | 1.9900     |
-| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900     |
-|---------------------+----------------------+------------|
+|---------------------+----------------------+--------|
+| stamp               | product              | price  |
+|---------------------+----------------------+--------|
+| 1929-01-17T09:35:12 | Spinach, 450g net    | 1.9900 |
+| 1929-01-19T10:15:01 | Spinach, 450g net    | 1.9900 |
+| 1929-01-20T17:12:55 | Spinach, 450g net    | 1.9900 |
+| 1929-01-22T08:27:32 | Spinach, 450g net    | 1.9900 |
+| 1929-01-25T12:09:59 | Spinach, 450g net    | 1.9900 |
+| 1929-01-26T21:19:44 | Spinach, 450g net    | 1.9900 |
+| 1929-01-22T08:27:51 | Candy Cigarettes, 20 | 2.4900 |
+|---------------------+----------------------+--------|
 \end{verbatim}
 \end{minipage}
 
 Note the difference in the price column.
 In the previous query we used \term{price} of buys,
 which (as you may have realised)
-is the multiplication of the product price and quantity.
+is the multiplication of product price and quantity.
 Here, however, we use the value in \term{prod\_price}
 which is the base price of one unit of that product.
 
@@ -796,9 +813,6 @@ select destin, count(*), sum(prod_price)
 |---------+-------+---------|
 \end{verbatim}
 \end{minipage}
-
-Note again the sum of the price which, here,
-is just the sum of the base price per unit of the product.
 
 The point about the first joining pattern
 is that it joins only one of the two vertices
@@ -832,10 +846,34 @@ The result of this query would be:
 \end{verbatim}
 \end{minipage}
 
+The joining patterns where the attributes of vertices
+are directly integrated with edges are so common
+and for the graph model so natural that there is
+another way to do this which does not look like
+relational joins at all, namely \term{paths}.
+Indeed, edges form paths through the graph
+and we can use them directly to walk from
+vertex to vertex without further indication
+of how to follow links.
+
+\comment{to be continued}
+
 \ignore{
-syntactic sugar:
-paths
+
+Syntactically a path is a list of alternating
+edges and vertices separated by dots
+(starting either from an edge or a vertex),
+\eg:
+
+\begin{sqlcode}
+\begin{lstlisting}
+select buys.price
+  from client
+ where client_key = 12345
+\end{lstlisting}
+\end{sqlcode}
 }
+
 
 \section{The Python Client(s)}
 Until here we always used the client \emph{tool}
@@ -849,10 +887,10 @@ that is available in different languages, among others
 C, \CC, Go, Python and Lua.
 
 For Python, there are in fact
-two \acronym{api}s. One is very close to underlying
+two \acronym{api}s. One is very close to the underlying
 C implementation and, hence, very simple and very fast.
 The other complies with the Python DB \acronym{api}
-\acronym{pep} 248; it is much slower than the simple
+\acronym{pep} 249; it is much slower than the simple
 one, but also more convenient and, most importantly,
 it can be used with other Python modules such as Pandas.
 
@@ -882,8 +920,9 @@ with now.Connection("localhost", "55505", None, None) as c:
           print "cannot use retail: %s" % r.details()
           exit(1)
 
-   with c.execute("select count(*), sum(weight), avg(weight) \
-                     from sales where edge='buys'") as cur:
+   with c.execute("select count(*), sum(quantity), \
+                                    avg(quantity)  \
+                     from buys") as cur:
        if not cur.ok():
           print "ERROR: %s" % cur.details()
           exit(1)
@@ -915,7 +954,15 @@ that they can be used inside a \term{with} statement.
 the result) are freed before the control leaves
 the \term{with}-block even if an exception is raised.
 
-The program then executes a query.
+There is no harm in using results without a \term{with} statement.
+The Python garbage collector (\acronym{gc}) will invoke the method
+that internally frees all C resources related to results.
+However, the programmer has little control over when
+the \acronym{gc} is invoked. It is therefore good style
+to use \term{with} blocks. This guarantees that all resources
+are freed as soon as the program does not need them anymore.
+
+The program above then executes a query.
 This time the execution returns a \term{cursor} (`cur').
 The program checks whether the cursor is
 in a good state. The statement may have
@@ -926,32 +973,45 @@ and exits with return code 1.
 
 Otherwise, if the result was fine,
 it iterates over the cursor
-printing for each row the fields 1-3.
-Cursors, indeed, are iterators
+printing for each row the fields 0-2.
+Cursors are iterators
 that allow simple iteration using \term{for}.
+The \term{for} statement additionally frees
+the resources related to \term{row} results
+as soon as possible. It, hence, fulfills
+a similar function as the \term{with} statement.
+
+There is a convenience interface that
+eliminates the explicit error handling
+present in the code above.
+It is called \term{rexecute}
+where the `r' stands for \term{raise}
+indicating that errors will be raised
+and not returned.
+Indeed, whenever the result is not \acronym{ok},
+\term{rexecute} raises an error.
+This way, only positive results are finally
+passed on to the caller.
 
 \begin{minipage}{\textwidth}
 Here is an example of an \term{insert} statement
+using the \term{rexecute} interface
 (we assume that the connection, `c', was already established):
 
 \begin{python}
 \begin{lstlisting}
-with c.execute("insert into edge (edge, origin, product, timestamp) \
-                                 ('complains', 9000001, 100002, \
+with c.rexecute("insert into buys (origin, product, timestamp) \
+                           values (9000001, 100002, \
                                   '1929-01-23T08:45:00')") as rep:
-       if not rep.ok():
-          print "ERROR: %s" % cur.details()
-          exit(1)
-       else:
-          print "rows affected: %d" % rep.affected()
-          print "running time : %d" % rep.runTime()
+     print "rows affected: %d" % rep.affected()
+     print "running time : %d" % rep.runTime()
 \end{lstlisting}
 \end{python}
 \end{minipage}
 
 In the case of data manipulation (\acronym{dml})
 or data loading (\acronym{dll}) statements,
-the result (if there was not error) is a report
+the result (if there was no error) is a report
 A report has the methods \term{affected()},
 which indicates the number of rows affected by this statement,
 \term{runTime()},
@@ -960,49 +1020,53 @@ and \term{errors()},
 which, in the case of \term{load},
 indicates the number of rows that resulted in an error.
 
-For more details on the Python client,
-please refer to chapter \ref{chpt_pythonclient}.
-The other client \acronym{api}s are described
-in chapters \ref{chpt_ccpp}, \ref{chpt_goclient} and
-\ref{chpt_luaclient}.
+In many cases, however, the programmer is not really interested
+in the result. She only wants to know if the statement was
+successful. For this very common use case, there is a convenient
+interface implemented on top of \term{rexecute} which is called
+\term{rexecute\_}. The underscore indicates that the function
+does not return a result at all and the `r', as for \term{rexecute},
+indicates that errors are raised.
+We can therefore simplify the code above to  
 
-\section{Python in the Database}
+\begin{minipage}{\textwidth}
+\begin{python}
+\begin{lstlisting}
+c.rexecute_("insert into buys (origin, product, timestamp) \
+           values (9000001, 100002, '1929-01-23T08:45:00')")
+\end{lstlisting}
+\end{python}
+\end{minipage}
+
+For more details on the Python client
+and on the \acronym{pep} 249 compliant \acronym{api}
+please refer to chapter \ref{chpt_pythonclient}.
+The underlying C client \acronym{api} is described in
+chapter \ref{chpt_ccpp}.
+Client \acronym{api}s for other languages are described
+in language-specific documentations.
+
+\section{Lua in the Database}
 Like many other databases,
 \nowdb\ supports
 stored procedures and stored functions,
-\ie\ code that is executed within the database.
-This code can be written in several languages.
-Currently Python and Lua are supported.
-\comment{Lua is not yet available.}
-
-The major advantage of Python is the huge
-number of libraries available,
-in particular for mathematics,
-data science and machine learning.
-But the poor design of the Python interpreter
-imposes some limitations in concurrency.
-(Please refer to chapter \ref{chpt_pythonemb}
-for details.)
-It is therefore recommended to use Python
-in the database where it is strongest,
-\ie\ for higher math and data science.
-For `normal' \acronym{dba}
-jobs or simple computations that do not require
-sophisticated math libraries, the use one of
-the light-weight languages,
-such as Lua, is recommended.
+\ie\ user code that is executed within the database.
+The main server-side language
+for implementing stored procedures and
+stored functions is Lua.
 
 The difference between stored procedures
 and stored functions is that stored functions
 run inside an \sql\ context. They
 can be used in a \term{select} clause,
-for instance. They are not allowed, however,
-to execute whatever they want.
-In a \term{select} clause,
+for instance. They are limited, however,
+in what they are allowed to do.
+In a \term{select} clause, for instance,
 they are not allowed to
-execute \term{updates} or \term{inserts} for instance.
+execute \acronym{ddl}, \acronym{dll} or \acronym{dml}
+statements.
 It would indeed be very strange when
-a \term{select} would change the database.
+a query would change the database.
 
 Stored procedures, on the other hand,
 cannot run in \sql\ context. They are
@@ -1010,8 +1074,7 @@ executed explicitly by the \term{exec}
 statement. In exchange for this limitation,
 they get a lot of power:
 stored procedures are allowed to run
-any \sql\ code they (or their programmers)
-like to including \acronym{dml}, \acronym{dll}
+any \sql\ code including \acronym{dml}, \acronym{dll}
 and even \acronym{ddl}.
 
 Stored procedures are composed of two
@@ -1021,12 +1084,12 @@ The interface defines how the procedure is
 to be called; the implementation defines
 what it does.
 
-The interface is create by the \sql\ statement
+The interface is created by the \sql\ statement
 \term{create procedure}, \eg:
 
 \begin{sqlcode}
 \begin{lstlisting}
-create procedure sales.revenue(pClient uint, pDay time) language python
+create procedure sales.revenue(pClient uint, pDay time) language lua 
 \end{lstlisting}
 \end{sqlcode}
 
@@ -1036,23 +1099,34 @@ called `revenue' that takes two arguments:
 \item $pClient$ which is an unsigned integer and
 \item $pDay$ which is a timestamp.
 \end{itemize}
-Furthermore, the procedure is written in Python and
+Furthermore, the procedure is written in Lua and
 it lives in the module `sales'.
 The statement does not define a return value for the procedure.
 But all procedures in \nowdb\ return a \term{result type},
-that is polymorphic type that
+polymorphic type that
 can be either a status, a report, a row or a cursor.
 
-The module `sales' must be located in a directory that is
-known to the Python interpreter. Typically, it will
-be in a directory in the \acronym{pythonpath}.
-Note that the \acronym{pythonpath} must be set
-in the environment of the server before it is started.
-This is actually a security feature:
-it is not possible to smuggle executable code
-into the database. To get code to run in the database
-context one needs control over the filesystem.
-The database does not introduce a new attack vector.
+The \term{toplevel} module `sales',
+which contains the Lua code that implements
+the procedure `revenue',
+must be located in a directory
+\nowdb\ knows about, namely 
+in a path in the environment variable
+\tech{NOWDB\_LUA\_PATH}.
+The entries in this variable have the form:
+\term{db}:\term{path},
+where \term{db} is the name of a database
+and \term{path} a common \acronym{unix} path.
+Entries are separated by semicolon, \eg:
+
+\cmdline{
+export NOWDB\_LUA\_PATH="retail:/opt/retail/lua;otherdb:/my/path/to/lua"
+}
+
+Modules imported into toplevel modules via \term{require}
+are regularly handled by the Lua interpreter, \ie\
+they must be located in a directory in the regular
+Lua path.
 
 Once the function $revenue$ is created
 and its code is accessible to the database, it
