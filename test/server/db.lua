@@ -230,3 +230,34 @@ function dropcache(nm)
   recache.drop(nm)
 end
 
+function revenue(day)
+  local td = nowdb.round(day, nowdb.day)
+  local tm = td + nowdb.day
+  local stmt = string.format(
+    [[select origin, sum(price) from buys
+       where  stamp >= %d
+         and stamp <  %d
+       group by origin]], td, tm)
+
+  local mx = {0,0,0,0,0,0}
+  local cur = nowdb.execute(stmt)
+  for row in cur.rows() do
+      local x = row.field(1)
+      if x > mx[2] then
+         mx[1] = row.field(0)
+         mx[2] = x
+      elseif x > mx[4] then
+         mx[3] = row.field(0)
+         mx[4] = x
+      elseif x > mx[6] then 
+         mx[5] = row.field(0)
+         mx[6] = x
+      end
+  end
+  cur.release()
+  local typs = {nowdb.UINT, nowdb.FLOAT,
+                nowdb.UINT, nowdb.FLOAT,
+                nowdb.UINT, nowdb.FLOAT}
+  return nowdb.array2row(typs, mx)
+end
+

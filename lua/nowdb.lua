@@ -671,7 +671,7 @@ end
 ---------------------------------------------------------------------------
 -- The bracket function executes the 'body' function with a local resource.
 -- It guarantees that, when 'before' succeeded, 'after' will be called
--- even if 'body' failed (which is called using pcall), e.g.
+-- even if 'body' fails (which is called using pcall), e.g.
 --
 --   local function openfile()
 --     return io.open('myfile')

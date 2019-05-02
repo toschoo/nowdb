@@ -686,9 +686,9 @@ and would obtain for the grouping query used above:
 The disadvantage of the \tech{csvkit} package is that
 it is somewhat slow compared to the native \nowdb\ tools.
 For this reason, there is a more complete client tool
-for \nowdb\ (which can be downloaded at xxx).
+for \nowdb\ (which can be downloaded at \comment{xxx}).
 This tool comes with a much larger feature set
-and is described in another document.
+and is described in \comment{another document}.
 
 Here is a more typical time series query illustrating
 the advantage of the pretty printer:
@@ -1089,21 +1089,18 @@ The interface is created by the \sql\ statement
 
 \begin{sqlcode}
 \begin{lstlisting}
-create procedure sales.revenue(pClient uint, pDay time) language lua 
+create procedure sales.revenue(pDay time) language lua 
 \end{lstlisting}
 \end{sqlcode}
 
 This statement defines the interface of a procedure
-called `revenue' that takes two arguments:
-\begin{itemize}
-\item $pClient$ which is an unsigned integer and
-\item $pDay$ which is a timestamp.
-\end{itemize}
+called `revenue' that takes one argument, a timestamp
+called `pDay'.
 Furthermore, the procedure is written in Lua and
 it lives in the module `sales'.
 The statement does not define a return value for the procedure.
-But all procedures in \nowdb\ return a \term{result type},
-polymorphic type that
+But all procedures in \nowdb\ return a
+polymorphic \term{result type} that
 can be either a status, a report, a row or a cursor.
 
 The \term{toplevel} module `sales',
@@ -1134,7 +1131,7 @@ can be executed by an \term{exec} statement:
 
 \begin{sqlcode}
 \begin{lstlisting}
-exec revenue(9000001, '1929-01-25')
+exec revenue('1929-01-25')
 \end{lstlisting}
 \end{sqlcode}
 
@@ -1142,148 +1139,162 @@ exec revenue(9000001, '1929-01-25')
 Let's look into the module \term{sales}
 to see how the procedure is implemented:
 
-\begin{python}
+\begin{lua}
 \begin{lstlisting}
-import nowdb
-import datetime
+function revenue(day)
+  local td = nowdb.round(day, nowdb.day)
+  local tm = td + nowdb.day
+  local stmt = string.format(
+    [[select origin, sum(price) from buys
+       where stamp >= %d
+         and stamp <  %d
+       group by origin]], td, tm)
 
-def revenue(pClient, pDay):
-  try:
-
-    today = nowdb.now2dt(pDay)
-    tom = today + timedelta(days=1)
-
-    stmt = "select sum(weight2) from sales "
-    stmt += "where edge = 'buys'"
-    stmt += "  and origin =" + str(pClient)
-    stmt += "  and timestamp >= " + today.strftime(nowdb.TIMEFORMAT)
-    stmt += "  and timestamp <  " + tom.strftime(nowdb.TIMEFORMAT)
-
-    with nowdb.execute(stmt) as c:
-
-      if not c.ok():
-        return nowdb.makeError(c.code(), c.details()).toDB()
-
-      r = makeRow()
-      for row in c: # there is only one row
-         r.add2row(INT, row.field(0))
-
-      return r.toDB()
-
-  except Exception as x:
-    return nowdb.makeError(USRERR, str(x)).toDB()
-
-def cleanup():
-  pass
-
+  local mx = {0,0,0,0,0,0}
+  local cur = nowdb.execute(stmt)
+  for row in cur.rows() do
+      local x = row.field(1)
+      if x > mx[2] then
+         mx[1] = row.field(0)
+         mx[2] = x
+      elseif x > mx[4] then
+         mx[3] = row.field(0)
+         mx[4] = x
+      elseif x > mx[6] then 
+         mx[5] = row.field(0)
+         mx[6] = x
+      end
+  end
+  cur.release()
+  local typs = {nowdb.UINT, nowdb.FLOAT,
+                nowdb.UINT, nowdb.FLOAT,
+                nowdb.UINT, nowdb.FLOAT}
+  return nowdb.array2row(typs, mx)
+end
 \end{lstlisting}
-\end{python}
+\end{lua}
 \end{minipage}
 
-First, we import the module \term{nowdb}.
-This is the equivalent to the \term{now} module
-that we imported on client side.
-Note, however, that on server side
-it is necessary to import the module in this format,
-\ie: \term{import nowdb}, not: \term{from nowdb import $\dots$}
-Otherwise, \nowdb\ would not be able to initialise the module.
-In that case, the database would issue an error 
-and not execute the procedure.
+First, we may note that there are no imports.
+Indeed, the basic \nowdb\ functionality is
+present in the global table \tech{nowdb}.
+All functions and constants defined in
+this table can be used just like the functionality
+in the Lua standard packages (\term{string},
+\term{table}, \term{os}, \etc).
 
-The module is initialised, by the way, when the session
-terminates (or when the module is first loaded into a session).
-This means
-that each session, \ie\ each connection to the database,
-has its own view of the module. This allows for
-global variables, which will have the same lifetime
-as the session itself.
+We, hence, come immediately to the definition
+of the function \term{revenue}, which implements
+the procedure of the same name.
 
-Next step in the module is
-the definition of the function \term{revenue} with two parameters.
-The database will pass the parameters according to the type
-information in the interface: the first parameter
-will be passed as unsigned integer and the second
-will be passed as timestamp.
+The function, first, defines two local variables
+\term{td} (for ``today'') and \term{tm} (for ``tomorrow'').
+The variable \term{td} is derived from the parameter
+by means of the \term{nowdb.round} function, which
+takes two parameters: the first is a \term{time},
+the second is a time unit to which we want to round.
+The \term{nowdb} package defines several such units,
+namely second, minute, hour and day.
+The \term{round} function provides a simple means
+to round a time down to one of those units.
+But, caution: the function is indeed quite simple.
+It does not take care of leap seconds and other
+subtleties related to time arithmetic. If such
+functionalities are needed, it is better to work
+directly with the \acronym{sql} time functions
+that actually are aware of more subtle implications
+of the notion of time.
 
-The entire code of the procedure is encapsulated
-in a \term{try/execpt}-block. This, indeed, is
-good practice, since otherwise
-an exception would terminate the procedure without
-passing a result back to the database and without
-detailed error information.
+The variable \term{tm} is then derived from \term{td}
+by just adding one more day.
 
-In the \term{except}-part, we create
-an error with error code `user error' and
-the exception string as detailed information.
-Notice that we call the $toDB()$ method
-and that we in fact return the result of that
-method, not the result itself.
-The purpose of the method is to separate
-the C part and the Python part of the result.
-The C part goes back to the database,
-the Python part stays in the Python world
-to be collected by the Python garbage collector.
-Returning a result without calling its $toDB()$
-method would pass Python stuff
-to the database which would not know how to handle
-that.
+Both variables are used in the following
+\acronym{sql} statement, which sums up the prices
+paid ``today'' grouped by clients (\term{origin}).
 
-The main logic of the function
-is in the \term{try}-part.
-We start by converting the \nowdb-timestamp
-into the Python \term{datetime} object \term{today}
-using the \term{now2dt} function
-(which, by the way,
-is also available on client side).
-By adding one day to \term{today} we get
-\term{tom}(orrow).
+Then we create an array with six elements, the local
+variable \term{mx}, and, by means of the \term{nowdb.execute}
+function, the cursor \term{cur}, which holds the result
+of the query.
+The function \term{execute} behaves similar to
+the \term{rexecute} function we saw in the Python client.
+That is, it returns the result of the statement passed in
+if no error occurred during execution.
+Otherwise, it ``raises'' an error, \ie\ it calls the Lua
+\term{error} function.
+The \nowdb\ environment ensures that this error is
+caught and returned to the client as proper result type.
+This can also be done explicitly in user code by means
+of the \term{nowdb.error} function, which expects an
+error code and an error messages and returns a result
+representing an error. This, however, is rarely necessary.
+More typical in error handling is to ``raise'' an error
+using the \term{nowdb.raise} function, which, likewise,
+expects an error code and an error message, but does
+not create an error result, but calls Lua's
+\term{error} function creating a string composed
+of error code and error message.
 
-With these values and the \term{pClient}
-variable, we construct an \sql\ statement,
-which is then passed to the \term{execute}
-function. Notice that on server-side,
-\term{execute} is not a method of another
-object or class like \term{connection}.
-Indeed, we already are inside the database.
-We don't need a connection to talk to it.
+Cursor results have a \term{rows} method.
+This is a generator that can be used to
+iterate over all rows in the cursor.
+In the \term{for}-loop, we compare the current
+value of $field(1)$, that is the sum of the price
+for this client, with the value stored in
+\term{mx[2], mx[4]} and \term{mx[6]}. In other words,
+we are searching for the three clients with
+highest revenue for this day and store these
+client ids in \term{mx[1]}, \term{mx[3]} and
+\term{mx[5]} respectively.
 
-Since the \sql\ statement
-is a \term{select}, the result we get
-back is a cursor. We check that the cursor
-is \acronym{ok} and, if so, we work on
-its rows using a \term{for} loop.
-In fact, we have only
-one row -- since we issued a \term{count}
-without a \term{group by} clause.
+At the end, after the loop, we release the cursor.
+This is not strictly necessary, since the Lua \acronym{gc}
+will release all C resources associated with results.
+However, it is good style to release results when they
+are not needed anymore. The Lua \acronym{gc} does not
+know about the C resources and this may lead to a situation
+where a lot of memory is allocated in a session,
+before the \acronym{gc} is invoked.
+Explicit release is in particular
+a good policy for long-running sessions.
 
-From the cursor row, we create a new row
-using the \term{makeRow} function
-and add the first (and only) field 
-of the cursor's row to it as integer. This row
-is returned to the database (using,
-of course, its $toDB()$-method).
+As for the Python \term{for}-block,
+The Lua iterator releases row results internally;
+it is therefore not necessary to release
+the rows allocated in the loop explicitly.
+The \nowdb\ environment handles this internally.
 
-Note that we could have returned the cursor itself --
-since a cursor is also a result type and, as such,
-a valid object to be returned by a stored procedure.
-We return the row only for the purpose of illustrating
-how rows can be created in Python.
-\comment{The whole example is quite trivial to be honest.}
+Finally, \term{revenue} returns the result
+of a call to \term{nowdb.array2row}.
+This function expects two arguments:
+a list of \nowdb\ types and an array with
+values corresponding to these types.
+The types are \term{uints}, representing the
+client key values in the \term{mx} array,
+and \term{floats}, representing the revenue
+for this day for this client.
 
-The database will then send the result,
-that is the row we created,
-back to the caller (the \term{exec} statement),
-which, in its turn, can handle this result.
-When we call the \term{exec} statement
-from \term{nowclient} like this:
+\term{nowdb.array2row} creates a row result
+using the array and the types. Internally,
+it calls the \term{nowdb.makerow} function
+and, for each element in the array, it calls
+the method \term{add2row} provided for row results.
+This method expects two parameters:
+a \nowdb\ type and a corresponding value.
+Finally, it closes the result by calling
+the \term{closerow} method.
+
+When we call \term{revenue} from the client like
 
 \cmdline{
-nowclient -d retail -Q "exec revenue(9000001, '1929-01-25')"
+nowclient -d retail -Q "exec revenue('1929-01-22')"
 }
 
-the result would look like this:
+the result would look something like this
+(assuming that we have loaded much more
+clients and buys into our retail database):
 \begin{verbatim}
-1.9900
+9000004;1837.45;9000012;17.00;9000035;1486.57
 \end{verbatim}
 
 \begin{minipage}{\textwidth}
@@ -1294,44 +1305,147 @@ the result as row, \eg:
 \begin{python}
 \begin{lstlisting}
 with Connection("127.0.0.1", "55505", None, None) as c:
-  with c.execute("exec revenue(9000001, '1929-01-25')") as row:
-    if not row.ok():
-       print "ERROR: %s" % row.details()
-       exit(1)
-    print "revenue from client 9000001: %d" % row.field(0)
+  with c.rexecute("exec revenue('1929-01-22')") as row:
+    print("revenue from client %d: %.2f" % (row.field(0), row.field(1)))
+    print("revenue from client %d: %.2f" % (row.field(2), row.field(3)))
+    print("revenue from client %d: %.2f" % (row.field(4), row.field(5)))
 \end{lstlisting}
 \end{python}
 \end{minipage}
 
-But we have to come back to the server side once again.
-There is still a detail that we have not discussed,
-namely the $cleanup()$ function at the end of the module.
-Modules may (but do not need to) contain this
-function. If it is present in the module, it is automatically
-called by the database when the session terminates.
-For simple code like the one we used
-here for illustration, it is not necessary to have a cleanup
-function. 
+The execution environment of server-side Lua
+is the session. Each session has its own
+Lua interpreter and all packages are loaded
+into this interpreter. Programs running
+in different sessions cannot communicate
+directly with each other.
+However, there are inter-session
+communication means like locks, events and
+queues for advanced use-cases.
 
-A cleanup is necessary, whenever result types
-(cursors, rows, \etc) are stored in global variables.
-It is completely legal to store data in global variables.
-When the session terminates, the database will reload
-the module, so that the next session will start with
-fresh instances of those variables. However, when
-global variables are holding result types, the underlying
-C part of these variables must be released.
-Since the database has no knowledge on what is stored
-in global variables, the user needs to provide code
-to release this memory.
+Another consequence of the equation
+$session = interpreter$ is that the scope
+of all global variables (\ie\ the \term{global table}
+in Lua speech) and of chunk-wide local
+variables is the lifetime of the session
+from connect to disconnect.
+The following simple module defining an iterative
+Fibonacci function illustrates this behaviour:
 
-One interesting use case is \term{functional cursors}.
-Functional cursors behave like normal cursors,
-but they can use the power of the embedded language
-to enrich results
-using functionality
-not available in \sql.
-This is discussed in chapter \ref{chpt_pythonemb}.
+\begin{lua}
+\begin{lstlisting}
+local _fibn1 = 0
+local _fibn2 = 1
+
+function fibreset()
+  _fibn1 = 0
+  _fibn2 = 1
+end
+
+function fib()
+  local f = _fibn1 + _fibn2
+  _fibn1, _fibn2 = _fibn2, f
+  return nowdb.makeresult(nowdb.UINT, _fibn1)
+end
+\end{lstlisting}
+\end{lua}
+
+The module defines two local (but module-wide)
+variables \term{\_fibn1} and \term{\_fibn2},
+which are initialised to 0 and 1 respectively.
+
+The function \term{fibreset}, which takes no
+parameters, resets the variables to these
+initial values.
+
+The function \term{fib}, which takes no parameters either,
+computes the next Fibonacci number as
+\term{\_fibn1} $+$ \term{\_fibn2} and
+``shifts'' the module-wide variables one step
+up in the Fibonacci sequence, namely to
+the values \term{\_fibn2}, which is now
+the new value for \term{\_fibn1}, and \term{f},
+which is the new value for \term{\_fibn2}.
+Finally, it returns the row result created by
+the convenience function \term{nowdb.makeresult},
+which creates a row with a single value.
+
+When we create the interfaces for these procedures,
+we can call \term{fib} like this:
+
+\cmdline{
+nowclient -d retail -Q "exec fib()"
+}
+
+which returns $1$.
+
+Repeated execution of the command above will always return the same, \eg:
+
+\cmdline{
+nowclient -q -d retail -Q "exec fib()"\\
+1\\
+nowclient -q -d retail -Q "exec fib()"\\
+1\\
+nowclient -q -d retail -Q "exec fib()"\\
+1
+}
+
+This is, because each call creates a new session, which
+initialises the variables to their starting values 0 and 1.
+To show the start of the Fibonacci sequence we can do:
+
+\cmdline{
+echo "exec fib(); exec fib(); exec fib(); $\backslash$\\
+\hspace*{1cm} exec fib(); exec fib(); exec fib();" |$\backslash$\\
+nowclient -q -d retail
+}
+
+\begin{minipage}{\textwidth}
+Now we see:
+
+1\\
+1\\
+2\\
+3\\
+5\\
+8
+\end{minipage}
+
+and to vary a bit:
+
+\cmdline{
+echo "exec fib(); exec fib(); exec fib(); $\backslash$\\
+\hspace*{1cm} exec fib(); exec fib(); exec fib(); $\backslash$\\
+\hspace*{1cm} exec fibreset(); $\backslash$\\
+\hspace*{1cm} exec fib(); exec fib(); exec fib();" |$\backslash$\\
+nowclient -q -d retail
+}
+
+\begin{minipage}{\textwidth}
+for which we get:
+
+1\\
+1\\
+2\\
+3\\
+5\\
+8\\
+1\\
+1\\
+2.
+\end{minipage}
+
+The \nowdb\ module provides many more functions than discussed here,
+such as time functions, more error handling and safe execution and
+convenience functions for cursors and rows. For more details,
+please refer to chapter \ref{chpt_luaemb}. There are also
+support modules providing more advanced functionality such as
+\acronym{ipc} (inter-session communication),
+unique identifiers, result caching, virtual cursors,
+\term{numpy}-like number processing,
+basic statistics, statistical sampling, feature extraction
+and so on. These support modules are described
+\comment{in another document}.
 
 \section{What's Next?}
 This chapter was only a brief introduction
@@ -1339,21 +1453,24 @@ to some important features and the general flavour
 of \nowdb. The remainder of this manual will
 discuss the main features more deeply.
 
-The next chapter discusses the \nowdb\ \sql\ dialect.
+The next chapter discusses data modelling with
+\nowdb\ $graph+timeseries$ approach.
+
+The following chapter specifies the \nowdb\ \sql\ dialect.
 
 Chapters \ref{chpt_nowdbd} and \ref{chpt_clienttool}
 present the command line tools \tech{nowdbd}
 and \tech{nowclient} respectively.
 
-Chapters \ref{chpt_ccpp} -- \ref{chpt_luaclient}
-discuss the available native clients in different
-languages and \ref{chpt_llc} presents the low-level
-C \acronym{api} mainly used to implement
-native clients.
+Chapters \ref{chpt_llc} and \ref{chpt_pythonclient}
+discuss the native clients in C and Python respectively.
+Other clients are available, for instance for
+\CC, Lua and Go; but those are described in separate
+documentation sets.
 
-The next two chapters, \ref{chpt_pythonemb} and
-\ref{chpt_luaemb}, present the server-side
-language bindings at more depth.
+The next chapter, \ref{chpt_luaemb} presents the server-side
+language bindings for Lua at more depth. Server-side Python
+is again defined in \comment{another document}.
 
 Chapter \ref{chpt_install} provides detailed information
 on installation of server and client on different
@@ -1371,5 +1488,4 @@ for application designers and \acronym{dba}s.
 
 Finally, the appendix \ref{chpt_errors} lists server-side
 error codes.
-
 
