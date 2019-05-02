@@ -1,0 +1,93 @@
+\section{Outline}
+The \nowdb\ Lua environment lives in a session.
+When a client connects
+(and the Lua support
+is activated in the \nowdb\ daemon),
+the Lua interpreter for this session is initialised
+and the Lua standard modules 
+as well as the main Lua module are loaded
+into the session.
+Further modules, in particular the toplevel modules
+containing the user code for stored procedures,
+are loaded when needed, that is, on the first
+execution of a specific stored procedure.
+
+The main Lua module defines the table 
+\term{nowdb} which contains all
+functions and constants defined by
+the \nowdb\ Lua environment.
+This table is a global variable,
+so that this functionality is immediately available
+when the session starts.
+It is not necessary to import this module explicitly
+in user code.
+
+In order to find the user-defined Lua code,
+\nowdb\ inspects the environment variable
+\tech{NOWDB\_LUA\_PATH}. \nowdb\ expects
+this variable to contain
+semicolon-separated definitions of the form
+
+\tech{db:path}
+
+where \term{db} is the name of a database and
+\term{path} is an ordinary \acronym{posix} path.
+\nowdb\ will then search for a specific module
+in the path given for the database currently
+in use (defined by the most recent
+\sql\ \keyword{use} statement).
+
+For instance, if a procedure in database \term{mydb}
+was created as
+
+\keyword{create procedure} \identifier{mymodule.myprocedure}()
+\keyword{language} \identifier{lua}
+
+\nowdb\ will search for the key \term{mydb} in
+\tech{NOWDB\_LUA\_PATH} and search in the \term{path}
+indicated after the colon for a file called
+\term{mymodule.lua}.
+
+It is possible to define a wildcard that matches all databases.
+The wildcard is \tech{*}, \eg:
+
+\tech{*:/path/to/lua}
+
+If such an entry exists in \tech{NOWDB\_LUA\_PATH},
+modules will be searched here \emph{and} in the path given
+for the database currently in use.
+
+The rationale for providing a wildcard is that
+new databases may be created on the fly in an already
+running \nowdb\ daemon with an environment variable
+that does not yet contain the name of this new database.
+Toplevel modules for such new databases
+should then be stored in the wildcard path.
+
+An issue with the approach is that names
+of toplevel modules must be unqiue;
+if modules with the same name exist
+in the wildcard path and in a database-specific path,
+one of those will be shadowed by the other.
+In general, the database-specific path will be always
+searched first and the module found first will be
+loaded.
+
+\ignore{
+what happens when I first use one database and then
+the other potentially with equally named modules?
+}
+
+\section{Execute}
+Once the session has started the \nowdb\ functionality
+is available just like that of standard modules.
+
+\section{Results}
+\subsection{Status and Error Handling}
+\subsection{Reports}
+\subsection{Rows}
+\subsection{Cursors}
+
+\section{Time}
+
+\section{Lua Support Modules}

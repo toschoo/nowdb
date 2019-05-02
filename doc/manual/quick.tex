@@ -1054,6 +1054,11 @@ stored procedures and stored functions,
 The main server-side language
 for implementing stored procedures and
 stored functions is Lua.
+Another option is Python,
+but the \nowdb\ Lua environment
+provides better performance,
+better integration and more support
+packages for database development.
 
 The difference between stored procedures
 and stored functions is that stored functions
@@ -1066,7 +1071,7 @@ they are not allowed to
 execute \acronym{ddl}, \acronym{dll} or \acronym{dml}
 statements.
 It would indeed be very strange when
-a query would change the database.
+a query would suddenly change the database.
 
 Stored procedures, on the other hand,
 cannot run in \sql\ context. They are
@@ -1097,15 +1102,15 @@ This statement defines the interface of a procedure
 called `revenue' that takes one argument, a timestamp
 called `pDay'.
 Furthermore, the procedure is written in Lua and
-it lives in the module `sales'.
+is implemented in the Lua module `sales'.
 The statement does not define a return value for the procedure.
 But all procedures in \nowdb\ return a
 polymorphic \term{result type} that
 can be either a status, a report, a row or a cursor.
 
 The \term{toplevel} module `sales',
-which contains the Lua code that implements
-the procedure `revenue',
+which needs to contain a global function called `revenue'
+that accepts one parameter,
 must be located in a directory
 \nowdb\ knows about, namely 
 in a path in the environment variable
@@ -1119,6 +1124,24 @@ Entries are separated by semicolon, \eg:
 \cmdline{
 export NOWDB\_LUA\_PATH="retail:/opt/retail/lua;otherdb:/my/path/to/lua"
 }
+
+The drawback of using an environment variable
+to define the Lua path is of course that no paths
+can be added interactively through \acronym{sql}.
+On the other hand, declining this possibility 
+eliminates a whole range of security concerns related
+to executable code in the database server.
+In fact, there is currently no way to inject
+Lua code into the database
+if this option is 
+\emph{not explicitly configured}.
+There is a dynamic interpreter that can
+be called through a predefined interface
+and allows executing any Lua code sent
+to the server. But this interpreter
+must be set up explicitly and should not
+be used for database servers that are
+directly reachable from the internet.
 
 Modules imported into toplevel modules via \term{require}
 are regularly handled by the Lua interpreter, \ie\
@@ -1183,11 +1206,8 @@ this table can be used just like the functionality
 in the Lua standard packages (\term{string},
 \term{table}, \term{os}, \etc).
 
-We, hence, come immediately to the definition
-of the function \term{revenue}, which implements
-the procedure of the same name.
-
-The function, first, defines two local variables
+The function revenue starts with
+the definition of two local variables
 \term{td} (for ``today'') and \term{tm} (for ``tomorrow'').
 The variable \term{td} is derived from the parameter
 by means of the \term{nowdb.round} function, which
@@ -1216,6 +1236,7 @@ Then we create an array with six elements, the local
 variable \term{mx}, and, by means of the \term{nowdb.execute}
 function, the cursor \term{cur}, which holds the result
 of the query.
+
 The function \term{execute} behaves similar to
 the \term{rexecute} function we saw in the Python client.
 That is, it returns the result of the statement passed in
@@ -1235,16 +1256,16 @@ not create an error result, but calls Lua's
 \term{error} function creating a string composed
 of error code and error message.
 
-Cursor results have a \term{rows} method.
-This is a generator that can be used to
-iterate over all rows in the cursor.
-In the \term{for}-loop, we compare the current
+Cursor results have a \term{rows} method,
+a generator that can be used to initialise
+a \term{for}-loop over all rows in the cursor.
+In this \term{for}-loop, we compare the current
 value of $field(1)$, that is the sum of the price
 for this client, with the value stored in
 \term{mx[2], mx[4]} and \term{mx[6]}. In other words,
 we are searching for the three clients with
-highest revenue for this day and store these
-client ids in \term{mx[1]}, \term{mx[3]} and
+greatest revenue for this day and store these
+client keys in \term{mx[1]}, \term{mx[3]} and
 \term{mx[5]} respectively.
 
 At the end, after the loop, we release the cursor.
@@ -1262,7 +1283,6 @@ As for the Python \term{for}-block,
 The Lua iterator releases row results internally;
 it is therefore not necessary to release
 the rows allocated in the loop explicitly.
-The \nowdb\ environment handles this internally.
 
 Finally, \term{revenue} returns the result
 of a call to \term{nowdb.array2row}.
@@ -1306,9 +1326,9 @@ the result as row, \eg:
 \begin{lstlisting}
 with Connection("127.0.0.1", "55505", None, None) as c:
   with c.rexecute("exec revenue('1929-01-22')") as row:
-    print("revenue from client %d: %.2f" % (row.field(0), row.field(1)))
-    print("revenue from client %d: %.2f" % (row.field(2), row.field(3)))
-    print("revenue from client %d: %.2f" % (row.field(4), row.field(5)))
+    print("1) client %d: %.2f" % (row.field(0), row.field(1)))
+    print("2) client %d: %.2f" % (row.field(2), row.field(3)))
+    print("3) client %d: %.2f" % (row.field(4), row.field(5)))
 \end{lstlisting}
 \end{python}
 \end{minipage}
@@ -1325,8 +1345,8 @@ queues for advanced use-cases.
 
 Another consequence of the equation
 $session = interpreter$ is that the scope
-of all global variables (\ie\ the \term{global table}
-in Lua speech) and of chunk-wide local
+of all global variables (\ie\ Lua's \term{global table})
+and chunk-wide local
 variables is the lifetime of the session
 from connect to disconnect.
 The following simple module defining an iterative
@@ -1392,7 +1412,7 @@ nowclient -q -d retail -Q "exec fib()"\\
 
 This is, because each call creates a new session, which
 initialises the variables to their starting values 0 and 1.
-To show the start of the Fibonacci sequence we can do:
+To show more of the Fibonacci sequence we can do:
 
 \cmdline{
 echo "exec fib(); exec fib(); exec fib(); $\backslash$\\
@@ -1435,16 +1455,17 @@ for which we get:
 2.
 \end{minipage}
 
-The \nowdb\ module provides many more functions than discussed here,
-such as time functions, more error handling and safe execution and
+The \nowdb\ module provides many more functions,
+such as time services,
+more error handling and safe execution and
 convenience functions for cursors and rows. For more details,
 please refer to chapter \ref{chpt_luaemb}. There are also
 support modules providing more advanced functionality such as
 \acronym{ipc} (inter-session communication),
 unique identifiers, result caching, virtual cursors,
-\term{numpy}-like number processing,
+\term{NumPy}-like number processing,
 basic statistics, statistical sampling, feature extraction
-and so on. These support modules are described
+and so on. The support modules are described
 \comment{in another document}.
 
 \section{What's Next?}
