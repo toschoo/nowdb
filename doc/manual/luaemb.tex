@@ -53,9 +53,10 @@ The wildcard is \tech{*}, \eg:
 
 \tech{*:/path/to/lua}
 
-If such an entry exists in \tech{NOWDB\_LUA\_PATH},
-modules will be searched here \emph{and} in the path given
-for the database currently in use.
+If such an entry exists 
+in \tech{NOWDB\_LUA\_PATH},
+but not an entry for the current database,
+then modules will be searched in this path.
 
 The rationale for providing a wildcard is that
 new databases may be created on the fly in an already
@@ -64,13 +65,17 @@ that does not yet contain the name of this new database.
 Toplevel modules for such new databases
 should then be stored in the wildcard path.
 
-An issue with the approach is that names
-of toplevel modules must be unqiue;
-if modules with the same name exist
-in the wildcard path and in a database-specific path,
-one of those will be shadowed by the other.
-In general, the database-specific path will be always
-searched first and the module found first will be
+An issue with this approach is that names
+of toplevel modules in the wildcard path must be unqiue;
+this is not true for modules of different
+databases living in different paths.
+When the session switches from one database to the other,
+by issuing a new \keyword{use} statement,
+the modules of the old database will be unloaded.
+
+In general, database-specific paths are always 
+searched before the wildcard path
+and the first module found will be
 loaded.
 
 \ignore{
@@ -79,13 +84,433 @@ the other potentially with equally named modules?
 }
 
 \section{Execute}
-Once the session has started the \nowdb\ functionality
-is available just like that of standard modules.
+Most interactions with the \nowdb\ server
+are performed by one of the varieties of
+the \term{execute} function.
+The most fundamental is \term{nowdb.execute},
+which receives a string containing an \sql\ statement,
+returns a result or raises an error (\ie\ calls
+the Lua \term{error} function), \eg:
+
+\begin{lua}
+\begin{lstlisting}
+local cur = nowdb.execute([[select * from product]])
+\end{lstlisting}
+\end{lua}
+
+In some situations, it might be inconvenient
+that a function raises an error.
+For this cases, there is a protected
+variant called \term{nowdb.pexecute}.
+It also expects an \sql\ statement
+as input, but returns two return values:
+an error code and a result or string.
+If the error code is \term{nowdb.OK},
+the second return value
+is a polymorphic result type
+(a status, report, cursor or row).
+Otherwise, it is a string describing
+the error with more details, \eg:
+
+\begin{lua}
+\begin{lstlisting}
+local ok, cur = nowdb.pexecute([[select * from product]])
+if ok ~= nowdb.OK then
+   -- error handling
+end
+-- handle cursor
+\end{lstlisting}
+\end{lua}
+
+Another variant of \term{execute} is
+the function \term{nowdb.execute\_}.
+This is a convenience interface for
+situations where the programmer does
+not want to deal with a result at all.
+The function returns no result, but
+raises an error if something goes wrong.
+typical use cases may be:
+
+\begin{lua}
+\begin{lstlisting}
+nowdb.execute_([[create type product(
+                   key uint primary key,
+                   desc       text,
+                   base_price float)]])
+
+nowdb.execute_([[insert into product (key, desc, base_price)
+                             values  (1010, 'cool product', 1.49)]])
+\end{lstlisting}
+\end{lua}
+
+Often queries can only have one result row or even
+just one value. In such cases, the functions above
+are not convenient, because they force the programmer
+to write all the boilerplate code for cursors.
+There are two functions to handle this kind of
+situations: \term{nowdb.onerow} and
+\term{nowdb.onevalue}.
+
+\term{nowdb.onerow} accepts an \sql\ statement
+and returns a Lua array representing one
+result row, \eg:
+
+\begin{lua}
+\begin{lstlisting}
+local r = nowdb.onerow([[select * from product where key = 12345]])
+\end{lstlisting}
+\end{lua}
+
+where $r$ is a Lua array.
+If no data are available for the specific query,
+the array is empty.
+
+\term{nowdb.onevalue} behaves like \term{onerow},
+but returns only one single value, \eg:
+
+\begin{lua}
+\begin{lstlisting}
+local d = nowdb.onevalue([[select desc from product where key = 12345]])
+\end{lstlisting}
+\end{lua}
+
+where $d$ is a single Lua value.
+
+Both functions raise an error when something goes wrong.
+
+One might be tempted to write code like this
+
+\begin{lua}
+\begin{lstlisting}
+local p = nowdb.onevalue([[select pi()]])
+\end{lstlisting}
+\end{lua}
+
+This, however, would fail, since queries
+that have only a projection clause (\ie\ no \term{from} close)
+do not produce a cursor, but a row (see chapter \ref{chpt_sql}).
+\term{onerow} and \term{onevalue}, however, expect
+statements that produce a cursor and fail otherwise.
+The correct way to write the above code is
+
+\begin{lua}
+\begin{lstlisting}
+local r = nowdb.execute([[select pi()]])
+local p = r.field(0)
+r.release()
+\end{lstlisting}
+\end{lua}
+
+Since this is a lot of boilerplate,
+there is a function to handle such cases,
+namely \term{nowdb.eval} which evaluates
+an \sql\ expression. It expects a string that
+contains only the expression, \eg\
+$pi()$, $1+2$, $now()$, \etc\
+The above code can therefore be written as
+
+\begin{lua}
+\begin{lstlisting}
+local p = nowdb.eval('pi()')
+\end{lstlisting}
+\end{lua}
 
 \section{Results}
+The \term{execute} functions return
+a polymorphic result type (see dynamic types
+in chapter \ref{chpt_sql}).
+A result always has the following methods:
+\begin{itemize}
+\item \term{resulttype}()
+      returns a numeric code indicating
+      the type of this specific result.
+      Result types are:
+      \begin{itemize}
+      \item \term{nowdb.NOTHING}
+      \item \term{nowdb.STATUS}
+      \item \term{nowdb.REPORT}
+      \item \term{nowdb.ROW}
+      \item \term{nowdb.CURSOR}
+      \end{itemize}
+\item \term{ok}()
+      returns a boolean indicating whether
+      the result represents an error condition;
+      if the return value is $true$,
+      the result does not represent an error,
+      otherwise, it does.
+      The programmer can then inspect the error code
+      and the error details method discussed in the
+      following subsection.
+\item \term{release}()
+      releases the C resources associated with the result.
+      It is not strictly necessary to release these resources
+      explicitly, since the Lua \acronym{gc} takes care of that.
+      However, it is a good policy to release results as soon
+      as they are not needed anymore; The \acronym{gc} is not
+      aware of the size of the C resources and may decide to
+      postpone the next cycle although there is already
+      a lot of unused memory on the C side.
+\end{itemize}
+
 \subsection{Status and Error Handling}
+The simplest result type is
+the status which represents an error condition.
+It is provide two methods, namely
+\term{errcode}() and \term{errdetails}().
+The former returns a numeric error condition (see appendix
+\ref{chpt_errors}), the latter a string
+describing the details of the error.
+Important error codes that are often used to
+decide on how to proceed in the code are
+
+\begin{itemize}
+\item \term{nowdb}.\acronym{ok}: successful completion;
+\item \term{nowdb}.\acronym{eof}: no more data available;
+\item \term{nowdb}.\acronym{nomem}: the server ran out of memory;
+\item \term{nowdb}.\acronym{toobig}: the requested resource is too big;
+\item \term{nowdb}.\acronym{keynof}: key not found;
+\item \term{nowdb}.\acronym{dupkey}: duplicated key;
+\item \term{nowdb}.\acronym{timeout}: a timeout occurred;
+\item \term{nowdb}.\acronym{notacur}: a cursor method was invoked on a result,
+                            that is not a cursor;
+\item \term{nowdb}.\acronym{notarow} a row method was invoked on a result,
+                            that is not a row;
+\item \term{nowdb}.\acronym{usrerr}: error in user code;
+\item \term{nowdb}.\acronym{selflock}: attempt to acquire a lock that the caller
+                             is currently holding;
+\item \term{nowdb}.\acronym{deadlock}: deadlock detected;
+\item \term{nowdb}.\acronym{notmylock}: attempt to release a lock that the caller
+                              is currently not holding;
+\end{itemize}
+
+The programmer may decide to return an error result from
+her function. That is not strictly necessary:
+if the user-defined function does not return anything,
+\nowdb\ will send \term{nowdb.OK} back to the client.
+If user code raises an error, \nowdb\ will convert
+this error into an error message which is sent back
+to the client with error code \term{nowdb}.\acronym{usrerr}.
+
+For explicit error handling
+the environment provides functions to
+create status codes, namely:
+
+\term{nowdb.success}() creates a status with error code
+\term{nowdb}.\acronym{ok};
+\term{nowdb.error}(rc, msg) creates a status with error code $rc$ and
+error message $msg$.
+
+The programmer can use the function
+\term{nowdb.raise}(rc, msg) to immediately terminate
+execution. The client will then receive an error
+with the error code \acronym{usrerr} and a message string
+that contains the error code $rc$ and the message $msg$.
+In some situations, it may be preferrable
+to explicitly return an error status, since in that case
+the calling client receives the intended numerical
+error code instead of \acronym{usrerr}.
+
+To ease program flow in face of exceptions,
+there are the function \term{nowdb.bracket} and
+\term{nowdb.pbracket}.
+The functions take three arguments,
+which are all functions themselves, called
+\term{before}, \term{after} and \term{body}.
+Ignoring details of parameter passing
+(which in fact is bit more complex),
+the implementation of \term{pbracket} looks
+like the code snippet:
+
+\begin{lua}
+\begin{lstlisting}
+function nowdb.bracket(before, after, body)
+  local r = before()
+  local ok, t = pcall(body,r)
+  after(r)
+  return ok, t
+end
+\end{lstlisting}
+\end{lua}
+
+Typically $before$ is a function that obtains a resource
+and $after$ closes this resource. $body$ is a function
+that runs between $before$ and $after$ using the resource.
+$bracket$ guarantees that $after$ is called
+even when $body$ fails. A use case may be:
+
+\begin{lua}
+\begin{lstlisting}
+local function before() 
+  nowdb.execute_("lock mylock")
+end
+local function after()
+  nowdb.execute_("unlock mylock")
+end
+local k = nowdb.bracket(before, after, function()
+  local x = nowdb.onevalue([[select max(key) from mytable]])
+  nowdb.execute_(string.format(
+        [[insert into mytable (key) values (%d)]], x+1))
+  return x
+end)
+\end{lstlisting}
+\end{lua}
+
+In this code segment, $bracket$ is used to obtain
+and increment a unique key from a table.
+The resource in this case is a lock held in the database and
+just represented by the state $nil$, \ie\
+$before$ does not return a value and $after$ and $body$
+do not expect values. The point is, however,
+that the lock is released independent of $body$
+raising an exception or not.
+
+The difference between $bracket$ and $pbracket$ is
+that $pbracket$ returns all return values from \term{pcall}
+including the leading boolean ($ok$);
+$bracket$, by contrast, removes the Boolean
+and reraises the error in case the Boolean was $false$
+
 \subsection{Reports}
+\comment{tbc}
+
 \subsection{Rows}
+Row results represent single lines of a result set.
+They appear naturally with cursors which provide
+methods to iterate through the the rows of a result set
+and this is basically the only way where they
+appear on client side. On server-side there are two
+other occasions where rows appear:
+a stored procedure may return a row (or bunch of rows).
+On client side, this is not the case, because \nowdb\
+transforms rows into cursors before they are sent to
+the client. On the server, however, rows are returned in
+their ``raw'' form.
+The second occasion is projections
+without a \keyword{from} clause.
+
+A row contains one or more typed values.
+There two methods that provide access to these values:
+\term{field} and \term{typedfield}.
+
+Both take on argument, namely the index of the field
+starting to count from 0. the difference is that
+\term{field} returns only the value at that position
+in the row. \term{typedfield}, by contrast,
+returns a \nowdb\ type code and the field.
+The \nowdb\ type codes are:
+
+\begin{itemize}
+\item \term{nowdb}.\acronym{nothing}
+\item \term{nowdb}.\acronym{text}
+\item \term{nowdb}.\acronym{date}
+\item \term{nowdb}.\acronym{time}
+\item \term{nowdb}.\acronym{float}
+\item \term{nowdb}.\acronym{int}
+\item \term{nowdb}.\acronym{uint}
+\item \term{nowdb}.\acronym{bool}
+\end{itemize}
+
+Here is a simple usage example:
+
+\begin{lua}
+\begin{lstlisting}
+local row = nowdb.execute("select pi(), e()")
+print(string.format(
+  [[pi is            : %.8f
+    Euler's number is: %.8f]],
+  row.field(0), row.field(1)))
+row.release()
+\end{lstlisting}
+\end{lua}
+
+The method \term{countfields}() returns
+the number of fields in a row.
+Here is a usage example that also
+illustrates the use of \term{typedfield}:
+
+\begin{lua}
+\begin{lstlisting}
+for i in 0, row.countfields() do
+  local t, v = row.typedfield(i)
+  print(string.format(
+    "field %d is of type %d", i, t))
+end
+\end{lstlisting}
+\end{lua}
+
+Rows are also an important means to return 
+results back to the calling client.
+A row is created with the function
+\term{nowdb.makerow}, which takes
+no arguments and returns an empty row.
+
+The method \term{add2row} can
+be used to add a value to the row.
+The method takes two arguments:
+the first is the \nowdb\ type of the value
+the second is the value itself.
+A row is closed (\ie\ an \term{end-of-row} marker
+is inserted) with the method
+\term{closerow}, which takes no arguments
+and returns nothing.
+
+The following code snippet is an example:
+
+\begin{lua}
+\begin{lstlisting}
+function getconstants()
+  local row = nowdb.makerow()
+  row.add2row(nowdb.FLOAT, 2.718281828)
+  row.add2row(nowdb.FLOAT, 3.141592653)
+  row.closerow()
+  return row
+end
+\end{lstlisting}
+\end{lua}
+
+A very common use case is to create a row from
+an array. There is a special function to do this:
+\term{nowdb.array2row}, which takes two arguments
+and returns a row.
+
+The first argument is an array of \nowdb\ types,
+the second argument is an array of values.
+The two arrays shall have the same number
+of elements, otherwise, an error is raised.
+The function creates a row and adds the values
+with the matching type in the first array, \eg:
+
+\begin{lua}
+\begin{lstlisting}
+function getconstants()
+  local r = {2.718281828, 3.141592653}
+  return nowdb.array2row({nowdb.FLOAT, nowdb.FLOAT}, r)
+end
+\end{lstlisting}
+\end{lua}
+
+The inverse of \term{array2row} is the row method
+\term{row2array}, which receives a row and returns
+two arrays: the first containing the values,
+the second containing the types.
+The following code example, hence, is
+somewhat pointless, but it illustrates the
+behaviour:
+
+\begin{lua}
+\begin{lstlisting}
+local row = getconstants() -- constants in row
+local vs, ts = row.row2array() -- row to arrays
+return nowdb.array2row(ts, vs) -- arrays back to row
+\end{lstlisting}
+\end{lua}
+
+Another convenience interface is \term{nowdb.makeresult},
+which creates a row from a single value. The function
+takes two arguments, the type and the value itself
+and returns a row containing this value as its
+only field.
+
 \subsection{Cursors}
 
 \section{Time}

@@ -443,6 +443,9 @@ end
 -- typs and vals of course must have the same length
 ---------------------------------------------------------------------------
 function nowdb.array2row(typs, vals)
+  if #typs ~= #vals then
+     nowdb.raise(nowdb.USRERR, "types and value do not match")
+  end
   local row = nowdb.makerow()
   for i = 1, #vals do
       row.add2row(typs[i], vals[i])
@@ -547,6 +550,17 @@ end
 function nowdb.onevalue(stmt)
   local r = nowdb.onerow(stmt)
   if not r then return nil else return r[1] end
+end
+
+---------------------------------------------------------------------------
+-- Evaluates an sql expression
+---------------------------------------------------------------------------
+function nowdb.eval(expr)
+  local ok, r = nowdb.pexecute(string.format("select %s", expr))
+  if ok ~= nowdb.OK then nowdb.raise(ok, r) end
+  local x = r.field(0)
+  r.release()
+  return x
 end
 
 ---------------------------------------------------------------------------
