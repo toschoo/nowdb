@@ -261,3 +261,131 @@ function revenue(day)
   return nowdb.array2row(typs, mx)
 end
 
+function gettimeseries(ts, fld, k, t0, t1)
+  local stmt = string.format(
+    [[select stamp/%d, %s from %s
+       where origin = %d
+         and stamp >= %d and stamp < %d
+       ]], nowdb.hour, fld, ts, k, t0, t1)
+  print(stmt)
+  local s = {}
+  local cur = nowdb.execute(stmt)
+  local i = 1
+  for row in cur.rows() do
+      s[i] = {x=row.field(0), y=row.field(1)}
+      i = i + 1
+  end
+  cur.release()
+  table.sort(s, function(left, right)
+    return left.x < right.x
+  end)
+  return s
+end
+
+function integral(ts, fld, k, t0, t1)
+  local t = gettimeseries(ts, fld, k, t0, t1)
+  local x = 0
+  local x_1 = 0
+  local x_2 = 0
+  local first = true
+  for _, v in pairs(t) do
+      if not first then
+         x_2 = x_1
+      end
+      x_1 = v.x
+      if not first then
+         local d = x_1 - x_2
+         x = x + d*v.y
+      else
+         first = false
+      end
+  end
+  return nowdb.makeresult(nowdb.FLOAT, x)
+end
+
+function diffs(ts, fld, k, t0, t1)
+  local t = gettimeseries(ts, fld, k, t0, t1)
+  local y_1 = 0
+  local y_2 = 0
+  local first = true
+  for _, v in pairs(t) do
+      print(tostring(v.x) .. ": " .. tostring(v.y))
+      if not first then
+         y_1 = y_2
+      end
+      y_2 = v.y
+      if not first then
+         local d = y_2 - y_1
+         nowdb.execute_(string.format(
+           [[insert into babbage (origin, destin, stamp, diff)
+                          values (%d, 0, %d, %f)
+           ]], k, v.x, d))
+      else
+         first = false
+      end
+  end
+  return nowdb.execute(string.format(
+         [[select * from babbage
+            where origin = %d]], k))
+end
+
+function integral2(ts, fld, k, t0, t1)
+  local stmt = string.format(
+    [[select stamp/%d, %s from %s
+       where origin = %d
+         and stamp >= %d and stamp < %d
+       order by stamp
+       ]], nowdb.hour, fld, ts, k, t0, t1)
+  local cur = nowdb.execute(stmt)
+  local x_1 = 0
+  local x_2 = 0
+  local x = 0
+  local first = true
+  for row in cur.rows() do
+      if not first then 
+         x_2 = x_1
+      end
+      x_1 = row.field(0)
+      if not first then
+         local d = x_2 - x_1
+         local y = row.field(1)
+         x = x + d*y
+      else
+         first = false
+      end
+  end
+  cur.release()
+  return nowdb.makeresult(nowdb.FLOAT, x)
+end
+
+function differences(ts, fld, k, t0, t1)
+  local stmt = string.format(
+    [[select stamp/%d, %s from %s
+       where origin = %d
+         and stamp >= %d and stamp < %d
+       order by stamp
+       ]], nowdb.hour, fld, ts, k, t0, t1)
+  local y_1 = 0
+  local y_2 = 0
+  local first = true
+  local cur = nowdb.execute(stmt)
+  for row in cur.rows() do
+      if not first then
+         y_1 = y_2
+      end
+      y_2 = row.field(1)
+      if not first then
+         local d = y_2 - y_1
+         nowdb.execute_(string.format(
+           [[insert into babbage (origin, destin, stamp, diff)
+                          values (%d, 0, %d, %f)
+           ]], k, row.field(0), d))
+      else
+         first = false
+      end
+  end
+  return nowdb.execute(string.format(
+         [[select * from babbage
+            where origin = %d]], k))
+end
+

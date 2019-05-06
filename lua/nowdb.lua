@@ -116,6 +116,7 @@ function nowdb.nowtypebyname(t)
   elseif lower(t) == 'integer' then return nowdb.INT
   elseif lower(t) == 'float' then return nowdb.FLOAT
   elseif lower(t) == 'bool' then return nowdb.BOOL
+  elseif lower(t) == 'boolean' then return nowdb.BOOL
   elseif lower(t) == 'null' then return nowdb.NOTHING
   elseif lower(t) == 'nil' then return nowdb.NOTHING end
 end
@@ -578,7 +579,7 @@ end
 --  year :
 --  month: 01 - 12
 --  day  : 01 - 31
---  wday : week day with sunday = 1 and saturday = 6
+--  wday : week day with sunday = 1 and saturday = 7
 --  yday : day of the year with January, 1, being 1
 --  hour : 00 - 23
 --  min  : 00 - 59
@@ -613,9 +614,15 @@ end
 -- Format time descriptor according to canonical time format
 ---------------------------------------------------------------------------
 function nowdb.timeformat(t)
-  return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%09d',
-                       t.year, t.month, t.day, 
-                       t.hour, t.min, t.sec, t.nano)
+  if t.nano then
+     return string.format('%04d-%02d-%02dT%02d:%02d:%02d.%09d',
+                          t.year, t.month, t.day, 
+                          t.hour, t.min, t.sec, t.nano)
+  else
+     return string.format('%04d-%02d-%02dT%02d:%02d:%02d',
+                          t.year, t.month, t.day, 
+                          t.hour, t.min, t.sec)
+  end
 end
 
 ---------------------------------------------------------------------------

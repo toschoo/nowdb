@@ -1,5 +1,53 @@
 \section{Outline}
-The \nowdb\ Lua environment lives in a session.
+\ignore{
+- why lua
+- what it provides
+- how it works
+}
+The main server interface
+besides \sql\ is Lua.
+While \sql\ is intentionally kept simple in \nowdb,
+it is in fact a mere data access language
+without control structures and variables,
+Lua is a full-fledged (but still simple)
+programming language that can be used to
+implement complex processing logic.
+The fact that the Lua environment is hosted
+on the server implies that the overhead
+for communicating with the storage engine
+and getting data in and out is very small
+compared to the client/server round-trip.
+Typical use cases for server-side Lua programming
+are therefore:
+
+\begin{itemize}
+\item implementing complex queries that require
+      repeated data access or complex joins;
+\item building algorithms that are beyond simple queries
+      like path finding or recommendation engines; 
+\item data preparation for data science tasks
+      like grouping, statistical sampling or
+       feature extraction; 
+\item background tasks to compute statistics or
+      perform housekeeping and backups
+      and other \acronym{dba} jobs;
+\item active server tasks like publish and subscribe,
+      monitoring or alerts;
+\item tasks that depend on in-memory state.
+\end{itemize}
+
+The server-side \acronym{api} is similar
+to its client-side cousins. It provides
+an interface to execute \sql\ statements with
+a number of convenience interfaces for common
+use cases; a polymorphic result type
+to communicate \sql\ results from the database
+to user code and
+from user code to the client; services for
+time manipulation and error handling routines.
+
+The \nowdb\ Lua environment itself
+lives in the session.
 When a client connects
 (and the Lua support
 is activated in the \nowdb\ daemon),
@@ -438,7 +486,21 @@ end
 \end{lstlisting}
 \end{lua}
 
-Rows are also an important means to return 
+There are two helper functions to convert
+type code into type strings and vice versa,
+namely \term{nowdb.nowtypename},
+which expects a type code and returns a string
+(\eg\ \term{nowdb}. \acronym{float} is converted
+to 'float') and
+\term{nowdb.nowtypebyname}, which expects
+a string and, if this string is recognised
+as the name of the type, returns the corresponding
+type code; valid type strings are
+'text', 'date', 'time', 'uint', 'uinteger',
+'int', 'integer', 'float', 'bool', 'boolean',
+'null' and 'nil'.
+
+Rows are an important means to return 
 results back to the calling client.
 A row is created with the function
 \term{nowdb.makerow}, which takes
@@ -509,10 +571,397 @@ Another convenience interface is \term{nowdb.makeresult},
 which creates a row from a single value. The function
 takes two arguments, the type and the value itself
 and returns a row containing this value as its
-only field.
+only field. A very common use case for this function is to
+to communicate a single value back to the calling client.
+Here is a, perhaps, somewhat artificial example:
+
+\begin{lua}
+\begin{lstlisting}
+function integral(ts, fld, k, t0, t1)
+  local stmt = string.format(
+    [[select stamp/%d, %s from %s
+       where origin = %d
+         and stamp >= %d and stamp < %d
+       order by stamp
+    ]], nowdb.hour, fld, ts, k, t0, t1)
+  local cur = nowdb.execute(stmt)
+  local x_1 = 0
+  local x_2 = 0
+  local x = 0
+  local first = true
+  for row in cur.rows() do
+      if not first then x_1 = x_2 end
+      x_2 = row.field(0)
+      if not first then
+         local d = x_2 - x_1
+         local y = row.field(1)
+         x = x + d*y
+      else
+         first = false
+      end
+  end
+  cur.release()
+  return nowdb.makeresult(nowdb.FLOAT, x)
+end
+\end{lstlisting}
+\end{lua}
+
+The function computes an approximation
+to the area under the curve
+formed by the time series `ts' with origin $k$
+and timestamp as the $x$-value and field 'fld'
+as the $y$-value.
 
 \subsection{Cursors}
+Cursors are iterators over data in the database,
+either a vertex type or an edge.
+A successful execution of a \keyword{select}
+statement almost always returns a cursor;
+the only exception being projections without
+a \keyword{from} statement.
+
+The main functionality provided by cursors
+is the \term{rows} method, an iterator factory
+for the rows in the
+result set of the statement.
+The basic pattern is
+
+\begin{lua}
+\begin{lstlisting}
+local cur = nowdb.execute(stmt)
+for row in cur.rows()
+    -- do something
+end
+cur.release()
+\end{lstlisting}
+\end{lua}
+
+A more elaborate example is the \term{integral}
+function in the previous section.
+
+Internally, \term{rows} uses the methods
+\term{open}, which starts the iteration,
+\term{fetch}, which obtains the next bunch
+of rows from the storage engine and
+\term{nextrow}, which advances to
+the next row within the current bunch of rows.
+For user code, it is rarely necessary to use
+these methods directly, but it may be useful
+in some situations.
+
+The simple pattern above can be built from
+these building blocks in the following way:
+
+\begin{lua}
+\begin{lstlisting}
+local cur = nowdb.execute(stmt)
+local rc, msg = cur.open()
+if rc ~= nowdb.OK then nowdb.raise(rc, msg) end
+rc, msg = cur.fetch()
+if rc ~= nowdb.OK then
+   nowdb.raise(rc, msg)
+end
+while true do
+  -- do something
+  -- use row methods (field, typedfield, etc.)
+  -- to obtain access to data
+  local rc = cur.nextrow()
+  if rc ~= nowdb.OK then
+     local rc, msg = cur.fetch()
+     if rc == nowdb.EOF then break end
+     if rc ~= nowdb.OK then
+        nowdb.raise(rc, msg)
+     end
+  end
+end
+cur.release()
+\end{lstlisting}
+\end{lua}
+
+\term{open} and \term{fetch} return an error code
+and, if this error code is not \term{nowdb}.\acronym{ok},
+an error message. The methods have effect on
+the internal state of the cursor, but do not return
+the state directly. In fact, the \term{row} methods
+like \term{field} and \term{typedfield} can be called
+directly on the cursor.
+
+Data are immediately available,
+when the cursor was opened and \term{fetch}
+was called on it.
+The internal offset which points to the current row
+within the bunch of row no held by the cursor is
+incremented with the method \term{nextrow}.
+The method returns either
+\term{nowdb}.\acronym{eof},
+\term{nowdb}.\acronym{notacur},
+or \term{nowdb}.\acronym{ok}.
+Details are not available for this method.
+
+\begin{minipage}{\textwidth}
+The logic, hence, is:
+\begin{enumerate}
+\item open
+\item fetch
+\item process the data
+\item nextrow until \acronym{eof}
+\item if \acronym{eof} then fetch
+\item if \acronym{eof} again, terminate the process
+\item otherwise, go to step 3 
+\end{enumerate}
+\end{minipage}
+
+Contrary to rows, cursors cannot be created
+``out of thin air''; cursors can only be created
+as results of a \keyword{select} statement.
+But they can be returned to the calling client.
+Here is a simple difference engine that
+illustrates this technique:
+
+\begin{lua}
+\begin{lstlisting}
+function differences(ts, fld, k, t0, t1)
+  local stmt = string.format(
+    [[select stamp/%d, %s from %s
+       where origin = %d
+         and stamp >= %d and stamp < %d
+       order by stamp
+       ]], nowdb.hour, fld, ts, k, t0, t1)
+  local y_1 = 0
+  local y_2 = 0
+  local first = true
+  local cur = nowdb.execute(stmt)
+  for row in cur.rows() do
+      if not first then
+         y_1 = y_2
+      end
+      y_2 = row.field(1)
+      if not first then
+         local d = y_2 - y_1
+         nowdb.execute_(string.format(
+           [[insert into babbage (origin, destin, stamp, diff)
+                          values (%d, 0, %d, %f)
+           ]], k, row.field(0), d))
+      else
+         first = false
+      end
+  end
+  return nowdb.execute(string.format(
+         [[select * from babbage
+            where origin = %d]], k))
+end
+\end{lstlisting}
+\end{lua}
+
+It may not be satisfactory in many cases
+that we have to store the results in another table,
+before we can pass them back to the client.
+Instead, we would like to emulate a cursor, so that
+the client code can iterate over the results
+generated by the server as if it was a single cursor.
+
+In such cases, we use the cursor to maintain state,
+while each fetch from the client would trigger
+additional computations over the data produced
+by the cursor. This behaviour is implemented
+in the \nowdb\ Lua support package (see section
+\ref{sec_luasupp}). But it can also be built
+directly from the \nowdb\ module.
+The main building block is coroutines and,
+indeed, there is a convenience interface
+for \term{execute} that we have not yet mentioned,
+namely \term{nowdb.cocursor}.
+The function accepts an \sql\ statement and
+returns a coroutine that yields a single row
+on each \term{resume}.
+
+We could iterate over all rows like this:
+
+\begin{lua}
+\begin{lstlisting}
+local co = nowdb.cocursor(stmt)
+while true do
+  if coroutine.status(co) == 'dead' then break end
+  ok, row = coroutine.resume(co)
+  if not ok then nowdb.raise(nowdb.USRERR, row) end
+  -- do something with row
+end
+\end{lstlisting}
+\end{lua}
+
+There is a function that does exactly this:
+\term{nowdb.corows}. This function returns
+and iterator, so that we can simplify to:
+
+\begin{lua}
+\begin{lstlisting}
+local co = nowdb.cocursor(stmt)
+for row in nowdb.corows(co) do
+  -- do something with row
+end
+\end{lstlisting}
+\end{lua}
+
+Assuming that the producer as well as some of the other variables
+are held in a module-wide variable,
+we could implement a \term{fetch} for the difference engine
+that works roughly like this:
+
+\begin{lua}
+\begin{lstlisting}
+function fetchbabbage()
+  local y_1 = 0
+  local res = nowdb.makerow()
+  for i = 1,100 do
+    if coroutine.status(co) == 'dead' then break end
+    ok, row = coroutine.resume(co)
+    if not ok then nowdb.raise(nowdb.USRERR, row) end
+    if not first then
+       y_1 = y_2
+    end
+    y_2 = row.field(1)
+    if not first then
+       local d = y_2 - y_1
+       res.add2row(nowdb.UINT, k)
+       res.add2row(nowdb.TIME, row.field(0))
+       res.add2row(nowdb.FLOAT, d)
+       res.closerow()
+    end
+  end
+  return res
+end
+\end{lstlisting}
+\end{lua}
+
+The function creates a bunch of
+up to hundred rows each time it is called
+and sends them to the client.
+The rows are computed in the same way
+as in the previous implementation of
+the difference engine;
+the variables $y\_2$, $first$ and
+the coroutine \term{co} are stored
+in a module-wide variable.
+Of course, in production code,
+that state would be stored
+in a Lua table with some kind
+of key to identify the query
+currently processed. But that
+is not essential for the point
+here: that we can emulate cursors
+using global or module-wide state.
 
 \section{Time}
+The \nowdb\ Lua \acronym{api}
+provides services to convert
+data from \nowdb\ format to
+the Lua time format (which is also
+used in the \term{os} module)
+and back to the \nowdb\ format.
+The conversion functions are
+called \term{nowdb.from} and \term{nowdb.to};
 
-\section{Lua Support Modules}
+\term{nowdb.from} expects a \nowdb\ timestamp,
+\ie\ an integer, and returns a Lua table with
+the fields
+
+\begin{itemize}
+\item year: the year as 4-digit number;
+\item month: the month (1--12);
+\item day: the day of th month (1--31);
+\item wday: the day of the week starting at sunday with 1;
+\item yday: the day of the year starting with January, 1, as 1;
+\item hour: the hour of the day (0--23);
+\item min: the minute of the hour (0--59);
+\item sec: the second of the minute (0--60);
+\item nano: the nanosecond of the second (0--999999999).
+\end{itemize}
+
+The opposite conversion \term{nowdb.to} expects
+such a table and returns a \nowdb\ timestamp.
+Note that the table must have all fields
+(except \term{wday}, \term{yday} and \term{nano}), otherwise,
+an error will be raised.
+
+Lua time tables can be created on the fly
+by \term{nowdb.time} or \term{nowdb.date}.
+\term{nowdb.time} expects up to seven parameters:
+\term{year}, \term{month}, \term{day},
+\term{hour}, \term{minute}, \term{second}
+and \term{nano}, but only the first three
+are mandatory. The \term{nowdb.date} function
+is just a wrapper around \term{nowdb.date} and
+equivalent to \term{nowdb.time} with only
+the first three parameters.
+
+Lua time tables can also be transformed into time or date
+strings using one of the functions
+\term{nowdb.timeformat} or
+\term{nowdb.dateformat}.
+The first function converts the timestamp
+into a canonical time string and the latter
+converts it into a canonical date string.
+\term{timeformat} expects all fields in the
+table to be present (with the same exception
+as \term{nowdb.to});
+for \term{dateformat} only \term{year},
+\term{month} and \term{day} are necessary.
+
+The function \term{nowdb.getnow}() returns
+the current system time as \nowdb\ timestamp
+(as always in \acronym{utc}).
+
+\nowdb\ timestamps can be rounded by use of
+\term{nowdb.round}, which expects a \nowdb\ timestamp
+and a unit (which is an unsigned integer)
+and returns a new \nowdb\ timestamp.
+Time units are
+\term{nowdb.second},
+\term{nowdb.minute},
+\term{nowdb.hour},
+\term{nowdb.day} and
+\term{nowdb.year}.
+Care should be taken with larger units;
+This function is not aware of leap seconds
+and other time subtleties. If precision is needed,
+\sql\ should be used to perform time arithmetic.
+
+\section{Lua Support Modules}\label{sec_luasupp}
+The \nowdb\ Lua Support Package is a collection
+of useful modules to extend the server-side
+scripting capabilities and to ease common tasks.
+The collection contains currently:
+
+\begin{itemize}
+\item The \acronym{ipc} Module:
+      a collection of inter-session
+      communication means, in particular
+      \begin{itemize} 
+      \item locking
+      \item events and
+      \item queues
+      \end{itemize} 
+\item Unique Identifiers:
+      services to obtain and manage unique identifiers.
+
+\item The Result Cache Library:
+      services for result caches with various
+      expiration strategies;
+
+\item Virtual Cursors:
+      a module to ease stateful computation and,
+      in particular, cursor-like processing (request-and-fetch).
+      \comment{not yet...}
+       
+\item Numnow:
+      Is a Lua implementation of NumPy
+      base on the open source project Lunum.
+      \comment{not yet...}
+\item Stats
+      \comment{not yet...}
+\item The Sampling Library
+      \comment{not yet...}
+\item Feature Extraction
+      \comment{not yet...}
+\end{itemize}
+
