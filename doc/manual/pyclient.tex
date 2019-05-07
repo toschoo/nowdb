@@ -1,23 +1,16 @@
 \section{Outline}
-The python client consists of a bunch
-of modules all starting with prefix \term{now}.
-The main module which defines
+The python client implements
+a simple yet powerful and quite fast
+\acronym{api} to interact
+with the the \nowdb\ server.
+It lives in the module \term{now.py} and provides
 the \term{Connection} and the \term{Result} class
-is actually called just \tech{now.py}.
-Support functions (which are also available
-for server-side python) are defined in
-\tech{nowutil.py}.
+as well as a number of handy support functions.
 
-The modules use the package \term{dateutil}
-which must be installed on the system in order
-to use the \term{now} modules.
+The module uses the package \term{dateutil}
+which must be installed on the system.
 (Please refer to chapter
 \ref{chpt_install} for details.)
-
-A client program needs to import at least
-the \term{now} module. The import may have
-any form (\ie\ \term{import now} or
-\term{from now import}).
 
 \section{Connections}
 The \term{Connection} class represents
@@ -52,10 +45,31 @@ a port number or a known service name.
 
 \subsubsection{execute(statement)}
 The method sends the string \term{statement} to the database
-and waits for the database response.
-The method returns an instance of the \term{Result} class
+and waits for the response.
+It returns an instance of the \term{Result} class
 or, on internal errors, raises one of the exceptions
 \term{ClientError} or \term{DBError}.
+
+\subsubsection{Variants}
+There are two variants of the \term{execute} method,
+namely \term{rexecute} and \term{rexecute\_}.
+\term{rexecute} suppresses error results.
+If the result does not represent an error,
+it returns the result just like \term{execute} does.
+Otherwise, it releases the result and raises
+an exception instead (the leading 'r' stands
+for `raise').
+
+\term{rexecute\_} is intended for situations
+where the result as such is not interesting,
+for instance, when issuing a \acronym{ddl} or
+\acronym{dml} statement.
+The function always releases the result;
+if it is an error,
+\term{rexecute\_} would raise an exception,
+just like \term{rexecute};
+otherwise, it terminates properly,
+but does not return anything.
 
 \subsubsection{close()}
 The method closes the connection and
@@ -66,15 +80,16 @@ the exception \term{ClientError} is raised.
 
 \subsubsection{Resource Manager}
 \term{Connection} is a \term{resource manager}.
-The method \term{close} is therefore
-rarely necessary. Instead, \term{Connection} can
+It is therefore rarely necessary to call
+\term{close} directly in user code.
+Instead, \term{Connection} can
 be used with the \term{with} statement, \ie:
 
 \begin{python}
 \begin{lstlisting}
 with Connection("localhost", "55505", None, None) as conn:
     # here goes your code
-    # refer to the connect as 'conn'
+    # refer to the connection as 'conn'
 \end{lstlisting}
 \end{python}
 
@@ -98,19 +113,22 @@ if the instance does not represent
 an error and \term{False} otherwise.
 
 \subsubsection{release()}
-The method releases the C objects
-allocated with the \term{Result} object.
-Since \term{Result} is a resource manager,
-it is rarely necessary to use it explicitly.
-
-\subsubsection{Resource Manager}
-Result is a resource manager.
-\term{Result} can therefore
-be used with the \term{with} statement, \eg:
+The method releases the C resources
+allocated together with the \term{Result} object.
+It is not strictly necessary to call
+this method in user code, since the
+Python \acronym{gc} would invoke it anyway.
+However, it is a good policy
+to release resources as soon as
+they are not needed anymore.
+Yet again, \term{Result} is a resource manager
+and can be used in \term{with} statements,
+which call release internally, when leaving
+the block, \eg:
 
 \begin{python}
 \begin{lstlisting}
-with conn.execute("select count(*) from sales") as cur:
+with conn.execute("select count(*) from buys") as cur:
     # here goes your code
     # 'conn' is a previously created connection
     # 'cur' is the result and
@@ -155,7 +173,7 @@ of rows, which can be obtained by means of
 the method \term{row()}.
 Note that the first bulk of rows
 is available immediately after
-Cursor creation.
+the Cursor has been created.
 
 \subsubsection{row()}
 The method obtains the current
@@ -164,9 +182,11 @@ It returns a \term{Row} result.
 
 \subsubsection{close()}
 The method closes the cursor;
-the method is usually not called directly,
-but implicitly, when the cursor was
-created by means of a \term{with} statement.
+internally, this method is called
+wherever, for other results, \term{release}
+would be called, that is, by the \acronym{gc}
+and when leaving the \term{with} statement
+for which the cursor was created.
 
 \subsubsection{eof()}
 The method returns \term{True}
@@ -184,9 +204,6 @@ Instead a \term{for}-loop  can be used, \eg:
 \begin{python}
 \begin{lstlisting}
 with conn.execute("select * from sales") as cur:
-    if not cur.ok():
-        print "ERROR: %s " % cur.details()
-        return
     for row in cur:
         # process cursor
         # row holds a single row
@@ -228,24 +245,7 @@ the method returns \term{False}.
 Note that, working with a cursor
 as iterator, it is not necessary
 to use this method. The iterator
-produces single rows.
-The main use case of \term{nextRow()}
-is for user-defined procedures that
-return bulks of rows. An example
-for this usage is:
-
-\begin{python}
-\begin{lstlisting}
-with conn.execute("exec myproc()") as row:
-    if not row.ok():
-        print "ERROR: %s " % row.details()
-        return
-    while True:
-        # use row.field(n) to access fields
-        if not row.nextRow():
-            break
-\end{lstlisting}
-\end{python}
+already produces single rows.
 
 \subsection{Reports}
 If the result is a report,
@@ -271,10 +271,10 @@ A usage example is
 \begin{lstlisting}
 with conn.execute("load '/opt/import/client.csv into client") as rep:
     if not rep.ok():
-        print "ERROR: %s " % rep.details()
+        print("ERROR: %s " % rep.details())
         return
-    print "affected: %d, errors: %d, running time: %dus" % 
-             (rep.affected(), rep.errors(), rep.runTime())
+    print("affected: %d, errors: %d, running time: %dus" % 
+             (rep.affected(), rep.errors(), rep.runTime()))
 \end{lstlisting}
 \end{python}
 
@@ -296,10 +296,6 @@ The function \term{explain} returns
 a description of the error code passed in.
 
 \section{Support Functions}\label{sec_supp}
-Support functions are provided by module
-\term{nowutil}. Currently the following
-support functions are available:
-
 \subsubsection{dt2now(dt)}
 The function expects a \term{datetime}
 object and converts it to a \nowdb\ timestamp.
@@ -309,7 +305,7 @@ The function expects a \nowdb\ timestamp
 and converts it to a \term{datetime} object.
 
 \subsubsection{utc}
-This is a global variable defined in \term{nowutil}.
+This is a global variable defined in \term{now.py}.
 It is the \acronym{utc} timezone object needed
 for many datetime constructors and conversion functions.
 It is provided for convenience.

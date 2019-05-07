@@ -1,0 +1,97 @@
+\section{Outline}
+The \nowdb\ \acronym{db api} implements
+\acronym{pep} 249, the Python \acronym{db api}.
+Its structure is similar to the simple \acronym{api},
+but there are some differences.
+It is in some cases more convenient to use
+than the simple \acronym{api}, but, more importantly,
+it can be used with Python packages that rely on
+\acronym{pep} 249, in particular \term{Pandas}.
+The main disadvantage of this \acronym{api} is
+that it is significantly slower
+than the simple \acronym{api}
+when it comes to cursors with many results.
+
+The \acronym{api} provides a Connection class,
+a Cursor class (which differs conceptionally
+from cursors in the simple \acronym{api}),
+a rich set of exceptions and type constructors
+to address database-specific types,
+in particular timestamps.
+
+\section{Connections}
+Connection is conceptionally equivalent
+to the Connection class in the simple \acronym{api}
+and can be used in exactly the same way (\eg\
+as a resource manager).
+There is a difference in the constructor
+\term{connect}, which expects one more argument:
+a database name. If this argument is given,
+connect, on success, issues a \term{use} statement.
+Example:
+
+\begin{python}
+\begin{lstlisting}
+with connect("localhost", "55505", "", "", "retail") as conn:
+    # here goes your code
+    # refer to the connection as 'conn'
+\end{lstlisting}
+\end{python}
+
+When execution leaves the \term{with} block,
+the connection's \term{close} method is invoked,
+which works exactly as for the simple \acronym{api}.
+
+A peculiarity of the Connection class is the \term{cursor}() method,
+which creates and returns a cursor object.
+The cursor concept is quite different in this \acronym{api}.
+A cursor is a dedicated means to execute \sql\ statements
+against the database. \acronym{pep} 249 does not foresee
+an \term{execute} method as the \nowdb\ simple \acronym{api};
+instead statements are executed through a cursor.
+However, we provide such a method for convenience.
+Internally, it creates a cursor, executes the statement
+through this cursor and finally returns it to the caller
+or, on error, raises an exception.
+
+The \term{execute} method accepts up to three arguments:
+the statement (which is mandatory), parameters to this
+statement (which is optional) and the row format (which, too,
+is optional).
+
+Parameters are added to the statement according
+to the usual way this is done in Python using
+format characters (\%s, \%d, \etc).
+The row format is relevant only for \term{select}
+statements and can be one of three:
+
+\begin{itemize}
+\item dictrow: 
+      the rows in the result set will be presented as dictionaries
+      with the \emph{name} of the fields as keys.
+      The names are derived from the statement as follows:
+      \begin{itemize}
+      \item for a project clause of the form \keyword{select} *,
+            the names of the fields are obtained from the database via
+            the \term{describe} statement;
+      \item fields that have an alias
+            (\keyword{select} \identifier{x} \keyword{as} \identifier{y})
+            are named after the alias;
+      \item fields that have no alias, are named as they are selected.
+            For instance, the expression \keyword{count}(*) is
+            literally called ``count(*)''; 
+      \end{itemize}
+\item tuplerow:
+      the rows are presented as tuples and can be referred to by their index
+      starting, as usual, from 0.
+\item listrow:
+      the rows are presented as lists and can be referred to by their index.
+\end{itemize}
+
+
+
+\section{Cursors}
+
+\section{Exceptions}
+
+\section{Type Constructors}
