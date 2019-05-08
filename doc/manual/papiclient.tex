@@ -39,14 +39,14 @@ with connect("localhost", "55505", "", "", "retail") as conn:
 \end{python}
 
 When execution leaves the \term{with} block,
-the connection's \term{close} method is invoked,
+the connection's \term{close} method is invoked internally,
 which works exactly as for the simple \acronym{api}.
 
 A peculiarity of the Connection class is the \term{cursor}() method,
 which creates and returns a cursor object.
 The cursor concept is quite different in this \acronym{api}.
-A cursor is a dedicated means to execute \sql\ statements
-against the database. \acronym{pep} 249 does not foresee
+A cursor is a dedicated means to execute \sql\ statements.
+\acronym{pep} 249 does not foresee
 an \term{execute} method as the \nowdb\ simple \acronym{api};
 instead statements are executed through a cursor.
 However, we provide such a method for convenience.
@@ -59,19 +59,22 @@ the statement (which is mandatory), parameters to this
 statement (which is optional) and the row format (which, too,
 is optional).
 
-Parameters are added to the statement according
-to the usual way this is done in Python using
-format characters (\%s, \%d, \etc).
+The parameters argument is expected to be a list of parameters
+that will be added to the statement according
+to usual string formatting in Python.
+\comment{We will need server-side parameter binding in the future.}
+
 The row format is relevant only for \term{select}
-statements and can be one of three:
+statements and can be either:
 
 \begin{itemize}
-\item dictrow: 
+\item \term{dictrow}: 
       the rows in the result set will be presented as dictionaries
       with the \emph{name} of the fields as keys.
-      The names are derived from the statement as follows:
+      This is the default row format.
+      The field names are derived from the statement as follows:
       \begin{itemize}
-      \item for a project clause of the form \keyword{select} *,
+      \item for a projection clause of the form \keyword{select} *,
             the names of the fields are obtained from the database via
             the \term{describe} statement;
       \item fields that have an alias
@@ -81,17 +84,188 @@ statements and can be one of three:
             For instance, the expression \keyword{count}(*) is
             literally called ``count(*)''; 
       \end{itemize}
-\item tuplerow:
+\item \term{tuplerow}:
       the rows are presented as tuples and can be referred to by their index
       starting, as usual, from 0.
-\item listrow:
+\item \term{listrow}:
       the rows are presented as lists and can be referred to by their index.
 \end{itemize}
 
+A basic usage example for \term{execute} is
 
+\begin{python}
+\begin{lstlisting}
+import nowapi as na
+with na.connect("localhost", "55505", "", "", "retail") as c:
+  # cursor is an iterator
+  for row in c.execute("select client_key as k,\
+                               client_name as n \
+                          from client"):
+      print("%d: %s" % (row[k], row[n]))
+\end{lstlisting}
+\end{python}
+
+An example involving Pandas is:
+
+\begin{python}
+\begin{lstlisting}
+import nowapi as na
+import pandas as pd
+with na.connect("localhost", "55505", "", "", "retail") as c:
+  sales = pd.read_sql("select origin, stamp, quanity, price \
+                         from buys", c)
+  # do something with dataframe 'sales'
+\end{lstlisting}
+\end{python}
 
 \section{Cursors}
+A cursor is a device to send \sql\ statements to the database.
+The \term{execute} method of the Connection class is just a
+convenience interface that internally creates and uses a
+cursor to execute a statement. The explicit way to handle statements
+is to create a cursor by means of the method \term{cursor}, \eg:
+
+\begin{python}
+\begin{lstlisting}
+import nowapi as na
+with na.connect("localhost", "55505", "", "", "retail") as c:
+  cur = c.cursor()
+  # do something with 'cur'
+\end{lstlisting}
+\end{python}
+
+Cursors provide the \term{close} method, which
+will finally be called by the \acronym{gc},
+but, since cursors bind resources on the server,
+they should be closed
+as soon as possible.
+However, cursors are resource managers.
+They can, thus, be used in a \term{with} statement
+which will close the cursor when leaving the block.
+As we have seen, they are also iterators.
+When used as iterator, the cursor is closed
+after the final iteration.
+There is, hence, rarely the need to call \term{close}
+explicitly.
+
+The Cursor class provides methods to
+execute statements and fetch rows from result sets.
+The \term{execute} method takes up to two arguments:
+the \sql\ statement and a list of parameters.
+It does not accept the row format argument like
+the Connection method. Instead the row format
+must be set explicitly set \emph{before} \term{execute}
+is called. For this purpose Cursor provides the
+method \term{setRowFormat} which accepts on argument,
+namely the row format. If the row format is not set,
+it defaults to \term{dictrow}.
+
+The rows can be fetched from the cursor by either
+\term{fetchone},
+\term{fetchmany} or
+\term{fetchall}.
+The method \term{fetchone} returns the next row
+in the cursor according to the defined row format.
+\term{fetchmany} returns a list of the next $n$ rows,
+where $n$ is passed in as parameter. If \term{fetchmany}
+is called without parameter, $n$ defaults to 1.
+Finally, \term{fetchall} fetches all rows at once.
+
+As a rationale to provide these methods,
+the \acronym{pep} 249 specification refers
+to performance reasons. It should be noted
+that, in the \nowdb\ implementation of
+\acronym{pep} 249, \term{fetchmany} has no performance
+advantage over \term{fetchone}.
+The method does not send a \term{fetch}
+to the database for each row.
+This is already handled in the underlying
+C library, which always receives a bunch of rows
+from which single rows are then fetched locally
+in the client.
+
+Furthermore, since Cursor is an iterator,
+there is no need to use these methods at all;
+the common \term{for} loop implements an optimal
+row fetching mechanism.
+
+In general, processing cursors with this \acronym{api}
+is slower than with the simple one.
+The reason is that \acronym{pep} 249 forces
+database clients to transform all rows into Python
+data types, \viz\ dictionaries or tuples,
+which is very expensive and, in most cases,
+not necessary.
+Using the values directly to compute the final result
+is often much more efficient.
+This leads to the somewhat paradoxical situation
+that we create expensive Python data objects
+in order to create Pandas data structures (like series and
+dataframes), which we want to use because they
+are much faster than native Python objects in the first place.
+
+Cursors have two attributes that provide information
+about the data. The most important is the \term{description},
+a list of tuples of the form (field name, type code)
+where \term{field name} is the chosen name of the $nth$ field
+and the type code the \nowdb\ type of the $nth$ field if
+$n$ is the $nth$ element in the list.
+
+The description is available, when a \acronym{dql} statement
+has been executed and \term{None} otherwise.
+
+The second attribute is the \term{rowcount}, which
+is $-1$ if no statements has been executed.
+For a \acronym{dml} statement, \term{rowcount}
+reflects the number of affected rows;
+for a \acronym{dql} statement, \term{rowcount} shall,
+according to \acronym{pep} 249, reflect
+the number of rows in the result set.
+Here, the \nowdb\ implementation deviates from the specification.
+The \term{rowcount} is not written immediately after
+executing the statement. At this time the \term{rowcount}
+is not yet known. Instead, the value is incremented
+as the user goes along fetching rows from the cursor.
 
 \section{Exceptions}
+In the \acronym{db api}, errors are  always
+communicated as exception. The Specification
+foresees a rich hierarchy of exceptions, which
+is completely implemented in the \nowdb\ client,
+but not all are actually raised. This section
+discusses the exceptions that are currently used.
+
+\subsection{Error}
+This is the base class for other exceptions
+and is not raised itself.
+
+\subsection{InterfaceError}
+This exception is raised for errors on the level
+of the \acronym{api}, \eg\ parameter errors, missing
+connection, fetching from cursor that was not executed, \etc\
+
+\subsection{DatabaseError}
+This exception is raised for errors in the database server.
+The errors may be related to \sql\ parsing errors,
+data inconsistency (\eg\ duplicated key) or non-existing
+entities (\eg\ inserting into a non-existing table).
+
+\subsection{InternalError}
+This is a ``panic'' error and indicates a software bug in \nowdb.
+
+\subsection{NotSupportedError}
+The requested feature is not available.
 
 \section{Type Constructors}
+The \acronym{pep} 249 specification foresees a number
+of type conversions to deal with types that are specific
+for the database in question.
+The \nowdb\ client implements the constructors
+\term{Date} and \term{Timestamp}.
+Both create a \acronym{utc} \term{datetime} object that can be used
+as parameters in the \term{execute} variants.
+
+\term{Date} expects three integer arguments:
+year, month and day of month;
+\term{Timestamp} expects six arguments:
+year, month, day, hour, minute and second.
