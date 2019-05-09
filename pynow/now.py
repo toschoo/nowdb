@@ -188,7 +188,6 @@ class Connection:
     close() is called on leaving the scope of the with statment.
    
     A connection can be shared between threads.
-
     '''
     def __init__(self, addr, port, usr, pwd):
         if type(addr) != str or \
@@ -247,7 +246,7 @@ class Connection:
 
     def rexecute(self, stmt):
         '''
-        executes an sql statement against the database.
+        executes an sql statement.
         On success, it returns a polymorphic 'result' (see below).
         If the result indicates an error condition,
         the result is released and a DBError exception is raised.
@@ -263,12 +262,35 @@ class Connection:
 
     def rexecute_(self, stmt):
         '''
-        executes an sql statement against the database.
+        executes an sql statement.
         On error, the result is released and a DBError exception is raised.
         On success, the result is released and nothing is returned.
         '''
         r = self.rexecute(stmt)
         r.release()
+
+    def oneRow(self, stmt):
+        '''
+        executes an sql statement (which is assumed to result in a cursor). 
+        On error, the result is released and a DBError exception is raised.
+        On success, the cursor is released and
+        its first row is returned as a list.
+        '''
+        r = []
+        for row in self.rexecute(stmt):
+            for i in range(row.count()):
+                r.append(row.field(i))
+            break
+        return r
+
+    def oneValue(self, stmt):
+        '''
+        executes an sql statement (which is assumed to result in a cursor). 
+        On error, the result is released and a DBError exception is raised.
+        On success, the cursor is released and
+        the first value of its first row is returned.
+        '''
+        return self.oneRow(stmt)[0]
 
 # ---- result
 class Result:
@@ -356,18 +378,22 @@ class Result:
     def __next__(self):
         x = self.rType()
         if x != CURSOR and x != ROW:
+            self.release()
             raise StopIteration
 
         if not self.ok():
+            self.release()
             raise StopIteration
 
         if self.needNext:
             if self.rw is None:
+               self.release()
                raise StopIteration
             if not self.rw.nextRow():
                 self.rw.release()
                 self.rw = None
                 if x != CURSOR:
+                   self.release()
                    raise StopIteration
                 self.fetch()
                 if not self.ok():
@@ -375,6 +401,7 @@ class Result:
                     d = self.details()
 
                     if x == EOF:
+                       self.release()
                        raise StopIteration
 
                     raise DBError(x, d)
@@ -481,7 +508,6 @@ class Result:
                for row cur:
                    (t,v) = row.field(0)
                    print("value %s is of type %d" % (t,v))
-        
         '''
         x = self.rType()
         if x != CURSOR and x != ROW:

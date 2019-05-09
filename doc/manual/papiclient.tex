@@ -10,12 +10,13 @@ it can be used with Python packages that rely on
 The main disadvantage of this \acronym{api} is
 that it is significantly slower
 than the simple \acronym{api}
-when it comes to cursors with many results.
+when it comes to queries with large result sets.
 
-The \acronym{api} provides a Connection class,
+The \acronym{api} lives in the module \term{nowapi.py}
+and provides a Connection class,
 a Cursor class (which differs conceptionally
 from cursors in the simple \acronym{api}),
-a rich set of exceptions and type constructors
+a rich exception hierarchy and type constructors
 to address database-specific types,
 in particular timestamps.
 
@@ -47,15 +48,16 @@ which creates and returns a cursor object.
 The cursor concept is quite different in this \acronym{api}.
 A cursor is a dedicated means to execute \sql\ statements.
 \acronym{pep} 249 does not foresee
-an \term{execute} method as the \nowdb\ simple \acronym{api};
-instead statements are executed through a cursor.
+an \term{execute} method as part of the Connection class
+like the simple \acronym{api};
+instead statements are executed through cursors.
 However, we provide such a method for convenience.
 Internally, it creates a cursor, executes the statement
 through this cursor and finally returns it to the caller
 or, on error, raises an exception.
 
 The \term{execute} method accepts up to three arguments:
-the statement (which is mandatory), parameters to this
+the statement (which is mandatory), a list of parameters for this
 statement (which is optional) and the row format (which, too,
 is optional).
 
@@ -63,6 +65,16 @@ The parameters argument is expected to be a list of parameters
 that will be added to the statement according
 to usual string formatting in Python.
 \comment{We will need server-side parameter binding in the future.}
+A simple example is:
+
+\begin{python}
+\begin{lstlisting}
+with connect("localhost", "55505", "", "", "retail") as c:
+     with c.execute("select count(*) from buys \
+                      where stamp >= '%s'", ['2018-10-01']) as cur:
+       # process cursor here
+\end{lstlisting}
+\end{python}
 
 The row format is relevant only for \term{select}
 statements and can be either:
@@ -85,13 +97,13 @@ statements and can be either:
             literally called ``count(*)''; 
       \end{itemize}
 \item \term{tuplerow}:
-      the rows are presented as tuples and can be referred to by their index
+      the rows are presented as tuples and can be referenced by their index
       starting, as usual, from 0.
 \item \term{listrow}:
-      the rows are presented as lists and can be referred to by their index.
+      the rows are presented as lists and can be referenced by their index.
 \end{itemize}
 
-A basic usage example for \term{execute} is
+A basic usage example is
 
 \begin{python}
 \begin{lstlisting}
@@ -105,7 +117,7 @@ with na.connect("localhost", "55505", "", "", "retail") as c:
 \end{lstlisting}
 \end{python}
 
-An example involving Pandas is:
+And an example involving Pandas:
 
 \begin{python}
 \begin{lstlisting}
@@ -154,9 +166,9 @@ The \term{execute} method takes up to two arguments:
 the \sql\ statement and a list of parameters.
 It does not accept the row format argument like
 the Connection method. Instead the row format
-must be set explicitly set \emph{before} \term{execute}
+must be set explicitly \emph{before} \term{execute}
 is called. For this purpose Cursor provides the
-method \term{setRowFormat} which accepts on argument,
+method \term{setRowFormat} which accepts one argument,
 namely the row format. If the row format is not set,
 it defaults to \term{dictrow}.
 
@@ -195,22 +207,21 @@ The reason is that \acronym{pep} 249 forces
 database clients to transform all rows into Python
 data types, \viz\ dictionaries or tuples,
 which is very expensive and, in most cases,
-not necessary.
+unnecessary.
 Using the values directly to compute the final result
 is often much more efficient.
 This leads to the somewhat paradoxical situation
-that we create expensive Python data objects
-in order to create Pandas data structures (like series and
+that we create expensive Python objects
+in order to create Pandas structures (like series and
 dataframes), which we want to use because they
 are much faster than native Python objects in the first place.
 
 Cursors have two attributes that provide information
 about the data. The most important is the \term{description},
-a list of tuples of the form (field name, type code)
-where \term{field name} is the chosen name of the $nth$ field
-and the type code the \nowdb\ type of the $nth$ field if
+a list of tuples of the form (field name, type code).
+\term{field name} is the chosen name of the $nth$ field
+and the type code the \nowdb\ type of the $nth$ field where
 $n$ is the $nth$ element in the list.
-
 The description is available, when a \acronym{dql} statement
 has been executed and \term{None} otherwise.
 
@@ -229,7 +240,7 @@ as the user goes along fetching rows from the cursor.
 
 \section{Exceptions}
 In the \acronym{db api}, errors are  always
-communicated as exception. The Specification
+communicated as exceptions. The specification
 foresees a rich hierarchy of exceptions, which
 is completely implemented in the \nowdb\ client,
 but not all are actually raised. This section
@@ -242,7 +253,7 @@ and is not raised itself.
 \subsection{InterfaceError}
 This exception is raised for errors on the level
 of the \acronym{api}, \eg\ parameter errors, missing
-connection, fetching from cursor that was not executed, \etc\
+connection, fetching from a cursor that has not yet been executed, \etc\
 
 \subsection{DatabaseError}
 This exception is raised for errors in the database server.
@@ -268,4 +279,16 @@ as parameters in the \term{execute} variants.
 \term{Date} expects three integer arguments:
 year, month and day of month;
 \term{Timestamp} expects six arguments:
-year, month, day, hour, minute and second.
+year, month, day, hour, minute and second,
+for instance:
+
+\begin{python}
+\begin{lstlisting}
+import nowapi as na
+with na.connect("localhost", "55505", "", "", "retail") as c:
+  for row in c.execute("select * from buys \
+                         where stamp = '%s'", \
+                       [Date(2018, 1, 15)]):
+    # process rows here
+\end{lstlisting}
+\end{python}

@@ -1,5 +1,5 @@
 \section{Outline}
-The python client implements
+The Python client implements
 a simple yet powerful and quite fast
 \acronym{api} to interact
 with the the \nowdb\ server.
@@ -14,10 +14,7 @@ which must be installed on the system.
 
 \section{Connections}
 The \term{Connection} class represents
-a \acronym{tcp/ip} connection to the
-database. It provides the following 
-methods:
-\subsubsection{\_\_init\_\_}
+a \acronym{tcp/ip} connection to the database.
 The constructor takes four arguments,
 which are all strings:
 \begin{itemize}
@@ -42,6 +39,9 @@ a port number or a known service name.
 \item Password:
 \comment{currently not used}
 \end{itemize}
+
+The Connection class provides the following 
+methods:
 
 \subsubsection{execute(statement)}
 The method sends the string \term{statement} to the database
@@ -70,6 +70,66 @@ if it is an error,
 just like \term{rexecute};
 otherwise, it terminates properly,
 but does not return anything.
+
+\subsubsection{Single Row Results}
+Many \sql\ statements return per definition
+only one row. This is true for statements
+of the form 
+
+\begin{sqlcode}
+\begin{lstlisting}
+select count(*), sum(quantity), sum(price) from buys
+\end{lstlisting}
+\end{sqlcode}
+
+or
+
+\begin{sqlcode}
+\begin{lstlisting}
+select now()
+\end{lstlisting}
+\end{sqlcode}
+
+The \term{execute} statement (or one of its variants),
+however, would force the programmer to write some
+boilerplate code to obtain this single row, \eg:
+
+\begin{python}
+\begin{lstlisting}
+for row in c.rexecute("select count(*), sum(quantity) from buys"):
+    cnt = row.field(0) # see below for details
+    sm  = row.field(1)
+# use cnt and sm
+\end{lstlisting}
+\end{python}
+
+For this special use case, there is the method \term{oneRow}:
+it receives an \sql\ statement, executes it and handles
+the result as a cursor (see below). If it is not a cursor
+(or when an error occurs),
+the function will raise an exception.
+Otherwise, it obtains the first row of this cursor
+and appends all the fields in this row to a list.
+It releases the cursor and then returns the list.
+The above code can thus be simplified to
+
+\begin{python}
+\begin{lstlisting}
+row = c.oneRow("select count(*), sum(quantity) from buys")
+# use row[0] and row[1]
+\end{lstlisting}
+\end{python}
+
+To go even further: a subset of queries that return only
+one row return only one single value. For such such cases,
+there is yet another convenience interface, namely \term{oneValue},
+which is implemented as
+
+\begin{python}
+\begin{lstlisting}
+return self.oneRow[0]
+\end{lstlisting}
+\end{python}
 
 \subsubsection{close()}
 The method closes the connection and
@@ -203,10 +263,21 @@ Instead a \term{for}-loop  can be used, \eg:
 
 \begin{python}
 \begin{lstlisting}
-with conn.execute("select * from sales") as cur:
+with conn.execute("select * from buys") as cur:
     for row in cur:
-        # process cursor
-        # row holds a single row
+        # process row 
+\end{lstlisting}
+\end{python}
+
+When using a cursor as an iterator
+it is automatically released immediately
+before the iteration ends.
+The above code can therefore be simplified to:
+
+\begin{python}
+\begin{lstlisting}
+for row in conn.execute("select * from buys"):
+    # process row
 \end{lstlisting}
 \end{python}
 
@@ -232,6 +303,31 @@ with nanosecond precision.
 It can be converted to \term{datetime} with \term{now2dt}
 (please refer to section \ref{sec_supp}
 for details).
+
+\subsubsection{typedField(n)}
+The method is similar to \term{field},
+but returns additionally the \nowdb\ type
+of the $nth$ field, \eg:
+
+\begin{python}
+\begin{lstlisting}
+for row in conn.execute("select * from buys"):
+    (t,v) = row.typedField(0)
+    # t is the type, v is the value
+\end{lstlisting}
+\end{python}
+
+\subsubsection{count()}
+The method returns the number of fields in the row, \eg:
+
+\begin{python}
+\begin{lstlisting}
+for row in conn.execute("select * from buys"):
+    for i in range(row.count()):
+        (t,v) = row.typedField(i)
+        print("field %d of type %d: %s" % (i, t, v))
+\end{lstlisting}
+\end{python}
 
 \subsubsection{nextRow()}
 The method advances to the next row.
@@ -319,7 +415,7 @@ in the \term{datetime}
 
 \begin{python}
 \begin{lstlisting}
-    stmt = "select count(*) from sales\
+    stmt = "select count(*) from buys \
              where timestamp = '" + tp.strftime(TIMEFORMAT) + "'"
 \end{lstlisting}
 \end{python}
