@@ -139,7 +139,7 @@ Another way is a host language
 that provides means to pass \sql\ statements
 to the database and means to receive
 and interpret the results produced by such statements.
-For \nowdb, Python, C, Go and Lua (\comment{Go and Lua not yet})
+For \nowdb, Python, C, Go and Lua
 are available as host languages.
 
 The protocol that defines how data are exchanged
@@ -1188,16 +1188,16 @@ be applied to any kind of expression.
 For instance,
 \identifier{sum}(1) is equivalent to
 \identifier{count}($\ast$) and
-\identifier{avg}(\keyword{weight}$^{\wedge}2$) would compute
+\identifier{avg}(\identifier{price}$^{\wedge}2$) would compute
 the average of the squares of the values
-of field \keyword{weight}.
+of field \identifier{price}.
 
 Aggregates can also be part of expressions.
 The formula 
-\identifier{sum}(\keyword{weight})
+\identifier{sum}(\identifier{weight})
 / \identifier{count}($\ast$),
 for instance, would be equivalent to
-\identifier{avg}(\keyword{weight}).
+\identifier{avg}(\identifier{weight}).
 
 \subsubsection{count}
 The function counts the values in a set.
@@ -1234,9 +1234,10 @@ The return type depends on the type of the input field.
 
 Example:
 
-\keyword{select} \identifier{sum}(\keyword{weight}) \keyword{from} \identifier{sales}
+\keyword{select} \identifier{sum}(\identifier{weight})
+  \keyword{from} \identifier{sales}
 
-produces the sum of the values in the weight fields
+produces the sum of the values in the weight field
 for the whole table \identifier{sales}.
 
 \subsubsection{max and min}
@@ -1248,8 +1249,8 @@ The arguments must be numeric.
 The return type depends on the type of the input field.
 Example:
 
-\keyword{select} \identifier{max}(\keyword{weight}),
-                 \identifier{min}(\keyword{weight})
+\keyword{select} \identifier{max}(\identifier{weight}),
+                 \identifier{min}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \subsubsection{spread}
@@ -1263,7 +1264,7 @@ The return type depends on the type of the input field.
 
 Example:
 
-\keyword{select} \identifier{spread}(\keyword{weight})
+\keyword{select} \identifier{spread}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \subsubsection{avg}
@@ -1284,7 +1285,7 @@ The return type is \keyword{float}.
 
 Example:
 
-\keyword{select} \identifier{avg}(\keyword{weight})
+\keyword{select} \identifier{avg}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \subsubsection{median}
@@ -1298,7 +1299,7 @@ The return type is \keyword{float}.
 
 Example:
 
-\keyword{select} \identifier{median}(\keyword{weight})
+\keyword{select} \identifier{median}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \comment{
@@ -1315,7 +1316,7 @@ It finds the most frequent value in the result set.
 The argument may be of any type.
 The return type depends on the type of the input field.
 
-\keyword{select} \identifier{mode}(\keyword{weight})
+\keyword{select} \identifier{mode}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \comment{
@@ -1337,7 +1338,7 @@ the arithmetic mean (\ie\ \identifier{avg}).
 The argument must be numeric.
 The return type is \keyword{float}.
 
-\keyword{select} \identifier{stddev}(\keyword{weight})
+\keyword{select} \identifier{stddev}(\identifier{weight})
 \keyword{from} \identifier{sales}
 
 \comment{
@@ -1363,7 +1364,7 @@ The return type is \keyword{float}
 Example:
 
 \keyword{select} \identifier{integral}(
-\keyword{stamp}, \keyword{weight})
+\keyword{stamp}, \identifier{weight})
 \keyword{from} \identifier{sales}
 }
 
@@ -1375,8 +1376,6 @@ this would be used with \keyword{having}, \eg:
 }
 
 \section{Data Definition}
-\comment{Syntax diagrams will be provided in another document}
-
 \subsection{Schema}
 The keywords
 \term{schema}, \term{database} and \term{scope}
@@ -1438,31 +1437,31 @@ in such a situation.
 
 % \subsubsection{ALTER}
 
-\subsection{Table}
+\subsection{Storage}
 \subsubsection{CREATE}
-The \term{create table} statement
-creates a new storage entity for edges
+The \term{create storage} statement
+creates a new storage entity for edges and types
 physically on disk.
 
 The simplest form is:
 
-\keyword{create table} \identifier{mytable}
+\keyword{create storage} \identifier{mystorage}
 
-The keyword table may be decorated
+The keyword \keyword{storage} may be decorated
 with a sizing option:
 
-\keyword{create big table} \identifier{mytable}
+\keyword{create big storage} \identifier{mystorage}
 
 Valid sizing keywords are:
 \keyword{tiny, small, medium, big, large, huge}.
 
-Sizing keywords affect the allocation units
+Sizing keywords affect the allocation unit
 of disk space. The concrete meaning is not
 part of this specification and may change
 in the future.
 
 It is also possible to add options to
-to a \term{create table} statement.
+to a \term{create storage} statement.
 Options have the general form
 
 \term{\keyword{set} option = value, option = value}.
@@ -1506,35 +1505,33 @@ makes sense on small tables
 that are known never to grow beyond some megabyte in size
 (or beyond some million edges).
 
-An example of a \term{create table} statement with options is
+An example of a \term{create storage} statement with options is
 
-\keyword{create table} \identifier{mytable}
+\keyword{create storage} \identifier{mystorage}
 \keyword{set} \keyword{stress} = \keyword{constant},
               \keyword{compression} = 'zstd'
 
 \subsubsection{DROP}
-The \term{drop table} statement removes
-an existing storage entity for edges
+The \term{drop storage} statement removes
+an existing storage entity
 physically from disk.
 It has the form:
 
-\keyword{drop table} \identifier{mytable}
+\keyword{drop storage} \identifier{mystorage}
 
 % \subsubsection{ALTER}
 
 \subsection{Type}
-\term{Types} are user-defined types
-stored as vertices in the database.
+\term{Types} are user-defined vertex types.
 The syntax resembles very much
 the \term{create table} syntax
 in traditional \sql:
 
 \begin{minipage}{\textwidth}
-\keyword{create type} \identifier{product} \{ \\
+\keyword{create type} \identifier{product} ( \\
 \hspace*{1cm}\identifier{prod\_key} \keyword{uint} \keyword{primary key}, \\
 \hspace*{1cm}\identifier{prod\_desc} \keyword{text}, \\
-\hspace*{1cm}\identifier{prod\_price} \keyword{float} \\
-\}
+\hspace*{1cm}\identifier{prod\_price} \keyword{float})
 \end{minipage}
 
 This creates a type called \term{product}
@@ -1552,16 +1549,30 @@ that is primary key must be either
 
 The order in which attributes are declared
 determines the \term{canonical} order for this type.
-The canonical order plays a role for the \term{insert}
-statement.
+
+The \keyword{create type} statement has an optional
+\keyword{storage} clause of the form
+
+\keyword{storage} = \identifier{mystorage}.
+
+The \keyword{storage} clause comes after the
+attribute definition, \eg\
+
+\begin{minipage}{\textwidth}
+\keyword{create type} \identifier{client} ( \\
+\hspace*{1cm}\identifier{client\_key} \keyword{uint} \keyword{primary key}, \\
+\hspace*{1cm}\identifier{client\_name} \keyword{text} \\
+) \keyword{storage} = \identifier{client\_store}
+\end{minipage}
+
+The storage clause defines the storage
+that manages this specific vertex type.
+If no storage clause is given, the vertex type
+is managed by the default storage for vertices.
 
 \subsubsection{DROP}
 The \term{drop type} statement removes a type
-from the database. \comment{
-At the moment, drop type removes only the type definition,
-not the corresponding data;
-in the future, that will certainly change.
-}
+from the database.
 It has the form:
 
 \keyword{drop type} \identifier{product}
@@ -1570,82 +1581,71 @@ It has the form:
 \subsubsection{CREATE}
 The \term{create edge} statement defines the layout
 of a specific edge type in the database.
-Example:
 
-\keyword{create edge} \identifier{buys} \{ \\
-\hspace*{1cm} \keyword{origin} \identifier{client} \keyword{as} \identifier{client}, \\
-\hspace*{1cm} \keyword{destin} \identifier{product} \keyword{as} \identifier{product}, \\
-\hspace*{1cm} \keyword{label} \keyword{text}, \\
-\hspace*{1cm} \keyword{weight} \keyword{int} \keyword{as} \identifier{quantity}, \\
-\hspace*{1cm} \keyword{weight2} \keyword{float} \keyword{as} \identifier{paid} \\
-\}
+There are two variants of the \keyword{create edge} clause.
+The simple variant defines a simple edge, which may only
+have two fields: \keyword{origin} and \keyword{destin}, \eg:
 
-Edges have seven fields (in canonical order):
-\keyword{edge},
-\keyword{origin}, \keyword{destin},
-\keyword{label}, \keyword{timestamp},
-\keyword{weight} and \keyword{weight2}.
+\keyword{create edge} \identifier{prod\_category} ( \\
+\hspace*{1cm}\keyword{origin} \identifier{product}, \\
+\hspace*{1cm}\keyword{destin} \identifier{category})
 
-The type of the field `edge' is predefined.
-It is always a string and corresponds to the
-name of that edge (\eg\ `buys').
-The reason that it exists at all
-is that edges of different types can be stored
-in the same table.
-This makes especially sense for groups of edges
-with few instances or for groups of edges
-that are often read together.
-Think for instance of \term{follow} and \term{unfollow}
-in a social media application.
-We might want to read \term{follow} and \term{unfollow}
-events together ordered by timestamp to determine
-what the current state is.
-
-Likewise is the type of the timestamp predefined
-and cannot be changed.
-
-All other types can be defined.
 The types of \keyword{origin} and \keyword{destin}
-are usually vertex \keyword{type}s, since they refer
+are vertex types, since they refer
 to vertices which are connected by this specific edge.
 Stored in the database is the value of the primary key
-of the specific type (\ie\ \keyword{uint} for product).
+of the specific type (\eg\ \keyword{uint} for product).
 
-But they also may have static types, namely
-\keyword{uint} or \keyword{text}.
+Edges can also be \term{stamped}.
+Stamped edges have additionally to the fields
+\keyword{origin} and \keyword{destin}
+a field \keyword{timestamp} of type \term{time}.
+This field does not need to and must not be defined.
+It is always the third field of a stamped edge.
 
-The field \keyword{label} as well may be of type
-\keyword{uint} or \keyword{text}.
+A stamped edge can additionally have up to 99
+user-defined fields of any static type.
+Here is an example:
 
-The fields \keyword{weight} and \keyword{weight2}
-may have any static type.
+\keyword{create stamped edge} \identifier{buys} ( \\
+\hspace*{1cm} \keyword{origin} \identifier{client}, \\
+\hspace*{1cm} \keyword{destin} \identifier{product}, \\
+\hspace*{1cm} \identifier{quantity} \keyword{uint}, \\
+\hspace*{1cm} \identifier{paid} \keyword{float})
 
-Fields that are not mentioned in the edge definition
-are invisible and cannot be used.
+This edge has five fields (in canonical order):
+origin, destin, stamp, quantity and paid. 
 
-\comment{
-Some aspects of the design are centred around the idea
-that it should be possible to insert \textit{ad-hoc}
-data, in particular edges,
-that were not previously defined in terms of \acronym{ddl}.
-More recent design decisions (like the one above)
-foreclose this possibility.
-This is still an ongoing design process and
-some details may change...
-}
-
-It is also possible to rename edge fields
+It is possible to rename the fields origin and destin
 according to their real purpose in a concrete
-application (\eg\ naming \keyword{weight} \identifier{quantity}).
-All fields that may appear in an edge definition
-may be renamed in this way.
+application (\eg\ naming \identifier{origin} \identifier{client}).
+This is done by adding an \keyword{as} clause
+to the attribute definition, \eg:
+
+\keyword{origin} \identifier{client} \keyword{as} \identifier{client}
+
+The corresponding field can then be referenced as either
+\keyword{origin} or \identifier{client}.
 \comment{Not yet available!}
 
+The \keyword{create edge} and \keyword{create stamped edge}
+statements have an optional
+\keyword{storage} clause of the form
+
+\keyword{storage} = \identifier{mystorage}.
+
+The \keyword{storage} clause comes after the attribute definitions.
+
+It defines the storage
+that manages this specific edge type.
+If no storage clause is given, the edge
+is managed by the default storage for edges.
+
 \subsubsection{DROP}
-The \term{drop edge} statement removes an edge definition,
-but not the data described by this definition,
+The \term{drop edge} statement removes the edge
+(definition and data)
 from the database.
-It has the form:
+It has the form (for both simple and stamped edges):
 
 \keyword{drop edge} \identifier{buys}
 
@@ -1658,18 +1658,24 @@ It has the form:
 \keyword{create index} \identifier{myidx} \keyword{on} \identifier{mytable}
 (\identifier{field1}, \identifier{field2})
 
+where \identifier{mytable} may be a vertex type or an edge.
 The fields (``field1'', ``field2'', \etc)
-are edge fields. Any combination of fields
+are user-defined fields or edge fields.
+Any combination of fields
 can be used in index definitions.
 It is not recommended, however,
 to create indices on fields that are defined as \keyword{float}
-or \keyword{time} (\eg\ \keyword{timestamp}).
+or \keyword{time} (\eg\ \keyword{stamp}).
 
 \comment{
 There will be the possibility to define indices over ranges
 of \keyword{float} fields and periods
 of \keyword{time} fields. But that is not yet available.
 }
+
+\nowdb\, internally, creates some standard indices,
+namely on the primary key of vertices and on origin
+and destin of edges.
 
 The \keyword{index} keyword can be decorated with a sizing
 indication, \eg:
@@ -1688,13 +1694,6 @@ when the index
 has many data points per key.
 More details on this can be found in \ref{chpt_sizing}.
 
-\comment {
-Vertices have one internal index which is created
-when the database is created.
-It will be possible in the future to define
-indices on vertex attributes.
-}
-
 \subsubsection{DROP}
 The \term{drop index} statement removes an index physically from disk.
 Example:
@@ -1704,7 +1703,7 @@ Example:
 \subsection{Procedure}
 \subsubsection{CREATE}
 The \term{create procedure} statement
-creates procedure interface in the database.
+creates a procedure interface in the database.
 It has the form:
 
 \keyword{create procedure} \identifier{mymodule}.\identifier{myfun}(
@@ -1721,8 +1720,7 @@ The definition then simplifies to
 Any number of parameters is allowed and parameters may have
 any static type.
 
-Known languages are \identifier{python} and \identifier{lua}.
-\comment{Lua is not yet available.}
+Known languages are \identifier{lua} and \identifier{python}.
 
 \subsubsection{DROP}
 The \term{drop procedure} statement
@@ -1732,6 +1730,27 @@ It has the form:
 \keyword{drop procedure} \identifier{myfun}
 
 \subsection{Function}
+\comment{Not yet available}
+
+\subsection{Lock}
+\subsubsection{CREATE}
+The \term{create lock} statement
+creates a lock in the database.
+It has the form:
+
+\keyword{create lock} \identifier{mylock}.
+
+\subsubsection{DROP}
+The \term{drop lock} statement
+drops a lock from the database.
+It has the form:
+
+\keyword{drop lock} \identifier{mylock}
+
+\subsection{Event}
+\comment{Not yet available}
+
+\subsection{Queue}
 \comment{Not yet available}
 
 \subsection{Period}
@@ -1763,7 +1782,7 @@ The syntax is:
 
 \begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
-\keyword{where timestamp between} $[$'2018-01-01', '2018-04-01'$[$
+\keyword{where stamp between} $[$'2018-01-01', '2018-04-01'$[$
 \end{minipage}
 
 This would drop all data files of table `mytable'
@@ -1787,7 +1806,7 @@ time windows):
 
 \begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
-\keyword{where timestamp between}
+\keyword{where stamp between}
 $[$\identifier{dawn}(), '2018-04-01'$[$
 \end{minipage}
 
@@ -1806,19 +1825,15 @@ won't grow (except when the periods themselves grow).
 \section{Data Manipulation}
 \subsection{Insert}
 The \term{insert} statement inserts one or more rows
-to a given table or type.
+into a given table.
 The basic form is
 
 \keyword{insert into} \identifier{mytable} 
                       (\identifier{myfield1},
                        \identifier{myfield2})
-                      (value1, value2)
+     \keyword{values} (value1, value2)
 
 where `value1' and so on are expressions.
-The \term{insert} statement, however,
-does not allow for fields as expressions,
-since it would not be clear where the fields
-should come from.
 
 A more concrete example is
 
@@ -1826,65 +1841,46 @@ A more concrete example is
                       (\identifier{prod\_key},
                        \identifier{prod\_desc},
                        \identifier{prod\_price})
-                      (100001, 'Spinach', 1.99)
+     \keyword{values} (100001, 'Spinach', 1.99)
 
-For an edge, this would be:
+For a stamped edge, this would be:
 
 \begin{minipage}{\textwidth}
-\keyword{insert into} \identifier{sales} 
-                      (\keyword{edge},
-                       \keyword{origin},
+\keyword{insert into} \identifier{buys} 
+                      (\keyword{origin},
                        \keyword{destin},
-                       \keyword{timestamp},
-                       \keyword{weight},
-                       \keyword{weight2})
+                       \keyword{stamp},
+                       \identifier{quantity},
+                       \identifier{price})
                       (\\
-\hspace*{2.99cm}       'buys', 9000001, 100001,
+\hspace*{2.99cm}       9000001, 100001,
                        '1929-01-22T08:53:22',
                        3, $3\ast 1.99$)
 \end{minipage}
 
 When the list of values is complete,
-\ie\ covers all fields in the type or table,
+\ie\ covers all fields in the table,
 and respects the canonical order,
 a shorthand form can be used, \eg:
 
 \keyword{insert into} \identifier{product} 
-                      (100001, 'Spinach', 1.99)
-
-Note that, for the shorthand form on edges,
-typeable edge fields which were not declared
-in the edge definition, must be inserted with
-\acronym{null}, \eg:
-
-\begin{minipage}{\textwidth}
-\keyword{insert into} \identifier{sales} 
-                      ('buys', 9000001, 100001,
-                       \acronym{null},
-                       '1929-01-22T08:53:22',
-                       3, 5.97)
-\end{minipage}
-
-where the fourth position is \acronym{null} and represents
-the label which was not defined.
-\comment{For the time being, please use 0 instead of \acronym{null}.}
+     \keyword{values} (100001, 'Spinach', 1.99)
 
 It is also possible \comment{(not yet!)} to insert data from
 a query, \eg:
 
 \begin{minipage}{\textwidth}
-\keyword{insert into} \identifier{sales} ( \\
-                      \keyword{edge},
+\keyword{insert into} \identifier{buys} ( \\
                       \keyword{origin},
                       \keyword{destin},
-                      \keyword{timestamp},
-                      \keyword{weight},
-                      \keyword{weight2}) (\\
-\hspace*{0.2cm}\keyword{select} 'buys', \keyword{origin}, 
+                      \keyword{stamp},
+                      \identifier{quantity},
+                      \identifier{price}) (\\
+\hspace*{0.2cm}\keyword{select} \keyword{origin}, 
                          \keyword{destin},
-                         \keyword{timestamp},
-                         \keyword{weight},
-                         \keyword{weight2} \\
+                         \keyword{stamp},
+                         \identifier{quantity},
+                         \identifier{price} \\
 \hspace*{0.35cm}\keyword{from} \identifier{another\_table} \\
 \hspace*{0.2cm}\keyword{where} $\dots$)
 \end{minipage}
@@ -1911,7 +1907,7 @@ is not so much database methodology, but data science.
 
 \nowdb\ does also not enforce the relation between
 vertex type and edge. That is, one can insert edges
-to which no corresponding vertex exist.
+to which no corresponding vertex exists.
 The reason is that the life cycles of timeseries data
 and master data are often not in sync.
 For one, timeseries data may arrive, before the
@@ -1955,7 +1951,7 @@ to make update available :-(}
 
 \subsection{Delete}
 The \term{delete} statement eliminates single
-data points from tables or types.
+data points from tables.
 Its general form is
 
 \keyword{delete from} \identifier{mytable} \keyword{where} $\dots$
@@ -1970,10 +1966,7 @@ please refer to the \acronym{dql} section.
 
 It is worth mentioning that delete
 does not physically remove data from disk.
-It marks the corresponding rows as deleted,
-so they won't be selected by other statements.
-
-\comment{delete still has bugs and is therefore not yet available :-(}
+It marks the corresponding rows as deleted.
 
 \section{Data Loading}
 \subsection{Create}
@@ -1995,7 +1988,6 @@ Its general form is
 \keyword{load} '/path/to/datafile' \keyword{into} \identifier{mytype\_or\_edge}
 
 The \term{load} statement has optional \term{use} and \term{ignore} clauses
-\comment{we also need a clause to add options to a user-defined loader}:
 
 \keyword{use loader} \identifier{myformat}
 
@@ -2016,23 +2008,17 @@ or:
 
 which means that the data source has a header and that the loader
 will use this header to determine how to load the columns in the data source.
-Note that vertices always require a header, while edges
-must not use a header. If the data file actually has a header
-and edges are to be loaded, the \term{ignore} clause must be used:
+If the data file has a header, but the user decides not to use it,
+the \term{ignore} clause can be used:
 
 \keyword{ignore header}
 
 This will ignore the first line of the \acronym{csv}.
 
-Here is a complete example for the default loader and vertices:
+Here is a complete example for the default loader:
 
 \keyword{load} '/opt/import/client.csv'
 \keyword{into} \identifier{client} \keyword{use header}
-
-and for edges:
-
-\keyword{load} '/opt/import/transactions.csv'
-\keyword{into} \identifier{sales}
 
 The \term{load} statement returns a report on success
 that indicates how many rows have been loaded,
@@ -2109,8 +2095,8 @@ The following are, for instance, valid \term{select} clauses:
 \keyword{select} \identifier{true} \\
 \keyword{select} 'X' \\
 \keyword{select} 3.14159 \\
-\keyword{select} \identifier{sum}(\keyword{weight}) $/$ 42 \\
-\keyword{select} \identifier{count}(*), \identifier{sum}(\keyword{weight})
+\keyword{select} \identifier{sum}(\identifier{weight}) $/$ 42 \\
+\keyword{select} \identifier{count}(*), \identifier{sum}(\identifier{weight})
 \end{minipage}
 
 The first three clauses may appear pointless.
@@ -2125,9 +2111,9 @@ on \term{insert}, namely:
 
 \keyword{select} 'buys', \keyword{origin},
                          \keyword{destin}, 
-                         \keyword{timestamp}, 
-                         \keyword{weight},
-                         \keyword{weight2}
+                         \keyword{stamp}, 
+                         \identifier{weight},
+                         \identifier{weight2}
 
 where a constant expression, namely 'buys',
 is combined with a number of fields.
@@ -2143,11 +2129,11 @@ by the \acronym{dql} statement.
 The following are valid \term{select} clauses:
 
 \keyword{select} \identifier{count}($\ast$) \\
-\keyword{select} \identifier{sum}(\keyword{weight}) \\
-\keyword{select} \identifier{sum}(\identifier{log}(\keyword{weight})) \\
-\keyword{select} \identifier{avg}((\keyword{weight} $+$
-                                   \keyword{weight2}) $/$ 2) \\
-\keyword{select} \identifier{stddev}(\keyword{weight})
+\keyword{select} \identifier{sum}(\identifier{weight}) \\
+\keyword{select} \identifier{sum}(\identifier{log}(\identifier{weight})) \\
+\keyword{select} \identifier{avg}((\identifier{weight} $+$
+                                   \identifier{weight2}) $/$ 2) \\
+\keyword{select} \identifier{stddev}(\identifier{weight})
 
 The freedom of the \term{select} clause
 is restricted by other clauses, in particular
@@ -2165,21 +2151,21 @@ of a \term{from} clause is
 
 \keyword{from} \identifier{mytable}
 
-The identifier must refer to a table or a type.
+The identifier must refer to an edge or a type.
 Valid \term{from} clauses are for instance:
 
-\keyword{from} \identifier{sales} \\
+\keyword{from} \identifier{buys} \\
 \keyword{from} \identifier{product} \\
 \keyword{from} \identifier{client}
 
 Here is a first example of a complete \acronym{dql} statement:
 
-\keyword{select} 'buys', \keyword{origin},
-                         \keyword{destin}, 
-                         \keyword{timestamp}, 
-                         \keyword{weight},
-                         \keyword{weight2}
-\keyword{from} \identifier{sales}
+\keyword{select} \keyword{origin},
+                 \keyword{destin}, 
+                 \keyword{stamp}, 
+                 \identifier{quantity},
+                 \identifier{price}
+\keyword{from} \identifier{buys}
 
 It is possible to define an alias for the data source:
 
@@ -2325,7 +2311,7 @@ is a Boolean expression).
 Example:
 
 \keyword{where} \identifier{destin} = 100001
-\keyword{and} \identifier{timestamp} $\le$ '2018-04-01'
+\keyword{and} \identifier{stamp} $\le$ '2018-04-01'
 
 Before we look at more interesting cases,
 let's assume the following set of data:
@@ -2350,17 +2336,17 @@ let's assume the following set of data:
 Here is a tricky \keyword{where} clause:
 
 \keyword{where} \identifier{destin} = 100001
-\keyword{and} \identifier{timestamp} $<$ '2018-04-01'
-\keyword{or} \identifier{timestamp} $\ge$ '2018-05-01'
+\keyword{and} \identifier{stamp} $<$ '2018-04-01'
+\keyword{or} \identifier{stamp} $\ge$ '2018-05-01'
 
 \keyword{or} has precedence over \keyword{and}.
 Both, \keyword{or} and \keyword{and}, bind to the left,
 \ie\ the first operand is the one in front of the operator.
 
 That means, here, that \keyword{or} is at the top-level:
-The clause selects all rows that have \keyword{timestamp}
+The clause selects all rows that have \keyword{stamp}
 $\ge$ May, 1, and those that have \keyword{destination} $100001$
-and \keyword{timestamp} less than April, 1.
+and \keyword{stamp} less than April, 1.
 In other words, what we see is
 
 \begin{minipage}{\textwidth}
@@ -2384,8 +2370,8 @@ To force another binding, parentheses can be used:
 
 \begin{minipage}{\textwidth}
 \keyword{where} \keyword{destin} = 100001 \\
-\hspace*{0.45cm}\keyword{and} (\keyword{timestamp} $<$ '2018-04-01'
-\keyword{or} \keyword{timestamp} $\ge$ '2018-05-01')
+\hspace*{0.45cm}\keyword{and} (\keyword{stamp} $<$ '2018-04-01'
+\keyword{or} \keyword{stamp} $\ge$ '2018-05-01')
 \end{minipage}
 
 This clause would now select all rows
@@ -2409,8 +2395,8 @@ Equivalent to this second clause is
 
 \keyword{where} \identifier{destin} = 100001 \\
 \hspace*{0.45cm}\keyword{and} \keyword{not} 
-(\keyword{timestamp} $\ge$ '2018-04-01'
-\keyword{and} \keyword{timestamp} $<$ '2018-05-01')
+(\keyword{stamp} $\ge$ '2018-04-01'
+\keyword{and} \keyword{stamp} $<$ '2018-05-01')
 
 \keyword{or} and \keyword{and} have precedence
 over \keyword{not}; \keyword{not} binds to the right,
@@ -2421,11 +2407,11 @@ like this:
 
 \keyword{where} \identifier{destin} = 100001 \\
 \hspace*{0.45cm}\keyword{and} \keyword{not} 
-\keyword{timestamp} $\ge$ '2018-04-01'
-\keyword{and} \keyword{timestamp} $<$ '2018-05-01'
+\keyword{stamp} $\ge$ '2018-04-01'
+\keyword{and} \keyword{stamp} $<$ '2018-05-01'
 
 we would select all rows that have \keyword{destination}
-$100001$ and not a \keyword{timestamp} greater April
+$100001$ and not a \keyword{stamp} greater April
 and that are before May, hence:
 
 \begin{minipage}{\textwidth}
@@ -2742,3 +2728,6 @@ A concrete example with parameters may be
 \keyword{exec} \identifier{revenue}(9000001, '2018-05-01')
 
 The result of the statement depends on the procedure.
+
+\subsection{Lock}
+\subsection{Unlock}
