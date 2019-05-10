@@ -2052,21 +2052,27 @@ than the statements we have seen so far.
 
 A \acronym{dql} statement consists of at least
 a \term{select} clause (also called \term{projection} clause)
-and a \term{from} clause, which in itself may contain
+and, in most cases, a \term{from} clause,
+which in itself may contain
 a \term{join} clause.
-It may additionally contain
+The \acronym{dql} may additionally contain
 a \term{where} clause,
 a \term{group} clause and
 an \term{order} clause.
+\comment{having, limit, sample}
 
 \subsection{Select Clause}
 The basic form of a \term{select} clause is
 
 \keyword{select} \identifier{expression}, \identifier{expression}, $\dots$
 
-Where any expression is allowed.
-If the expression involves a field,
-it must be a field of the entity (edge or type)
+If the statement has a \term{from} clause,
+any expression is allowed.
+If it consists only of the \term{select} clause,
+fields are not allowed.
+
+If the expression involves fields,
+it must be fields of the entity (edge or type)
 referenced in the \term{from} clause.
 If all fields of that entity are selected,
 the statement can be simplified to
@@ -2095,8 +2101,8 @@ The following are, for instance, valid \term{select} clauses:
 \keyword{select} \identifier{true} \\
 \keyword{select} 'X' \\
 \keyword{select} 3.14159 \\
-\keyword{select} \identifier{sum}(\identifier{weight}) $/$ 42 \\
-\keyword{select} \identifier{count}(*), \identifier{sum}(\identifier{weight})
+\keyword{select} \identifier{sum}(\identifier{price}) $/$ \identifier{count}($\ast$)\\
+\keyword{select} \identifier{count}($\ast$), \identifier{sum}(\identifier{price})
 \end{minipage}
 
 The first three clauses may appear pointless.
@@ -2105,18 +2111,7 @@ There are, however, very common use cases
 for selecting constant values, in particular
 in combination with the \keyword{exists} operator,
 but also for \acronym{dql} used within an
-\term{insert} statement. A concrete example
-of the latter already appeared in the section
-on \term{insert}, namely:
-
-\keyword{select} 'buys', \keyword{origin},
-                         \keyword{destin}, 
-                         \keyword{stamp}, 
-                         \identifier{weight},
-                         \identifier{weight2}
-
-where a constant expression, namely 'buys',
-is combined with a number of fields.
+\term{insert} statement.
 
 The \term{select} clause may also contain aggregates,
 which are applied to partitions of the result set.
@@ -2129,11 +2124,11 @@ by the \acronym{dql} statement.
 The following are valid \term{select} clauses:
 
 \keyword{select} \identifier{count}($\ast$) \\
-\keyword{select} \identifier{sum}(\identifier{weight}) \\
-\keyword{select} \identifier{sum}(\identifier{log}(\identifier{weight})) \\
-\keyword{select} \identifier{avg}((\identifier{weight} $+$
-                                   \identifier{weight2}) $/$ 2) \\
-\keyword{select} \identifier{stddev}(\identifier{weight})
+\keyword{select} \identifier{sum}(\identifier{price}) \\
+\keyword{select} \identifier{sum}(\identifier{log}(\identifier{price})) \\
+\keyword{select} \identifier{avg}((\identifier{price} $+$
+                                   \identifier{price}) $/$ 2) \\
+\keyword{select} \identifier{stddev}(\identifier{price})
 
 The freedom of the \term{select} clause
 is restricted by other clauses, in particular
@@ -2142,7 +2137,45 @@ In the \term{select} clause, only
 those fields may appear that are actually
 part of the entity chosen in the \term{from} clause.
 The interdependencies with the \term{group} clause
-are more subtle and will be discussed there.
+are more subtle and will be discussed later.
+
+A meaningful example of a \acronym{dql} statement
+that consists only of a \term{select} clause is:
+
+\keyword{select} \identifier{now}()
+
+which obtains the current time.
+In a \term{select} clause without a \term{from} clause
+fields, obviously, have no meaning.
+Thus, only constants, functions
+and operators are allowed.
+
+There is a subtle difference between \term{select}-only
+statements and ``complete'' \acronym{dql} statements.
+Complete \acronym{dql} statements always result in a
+cursor, while \term{select}-only statements result
+in a single row. This has no impact on queries sent
+from a client, since rows are always wrapped into
+a cursor before they are sent to the client.
+In server-side programming, however, this is a difference
+(see chapter \ref{chpt_luaemb}).
+
+It is also possible to define an alias for fields
+in the \term{select} clause by means of
+the \keyword{as} keyword, \eg:
+
+\keyword{select} \identifier{count}($\ast$) \keyword{as} \identifier{cnt}
+
+The effect is that some clients
+(see for example chapter \ref{chpt_papiclient})
+can refer to columns in a cursor by the alias,
+\eg\
+
+\begin{python}
+\begin{lstlisting}
+print(mycursor['cnt'])
+\end{lstlisting}
+\end{python}
 
 \subsection{From Clause}
 The \term{from} clause determines the data source
@@ -2169,9 +2202,9 @@ Here is a first example of a complete \acronym{dql} statement:
 
 It is possible to define an alias for the data source:
 
-\keyword{from} \identifier{sales} \keyword{as} \identifier{s}
+\keyword{from} \identifier{buys} \keyword{as} \identifier{b}
 
-The table \identifier{sales} can now be referred to as ``s''
+The table \identifier{buys} can now be referred to as ``b''
 in all other clauses.
 This technique is especially interesting in combination
 with joins.
@@ -2185,38 +2218,30 @@ data sources at once, \eg:
 This form is not supported by \nowdb.
 Whenever more than one data source is addressed,
 a join has to be used.
+\comment{However, there are paths which are
+more handy than using joins in many cases.}
 
 \subsection{Join Clause}
-A join combines an edge with a vertex.
-\comment{
-Edges are in fact the way to express
-relations between vertices.
-There is no other way to combine vertices.
-Perhaps, in the future, we need something else.
-Many graph databases offer additional links
-between vertices, which are not edges.
-Usually, these links are used for connections
-that are part of the characteristic of the
-vertex. One could say that such links express
-``o que \'e'', while edges express
-``o que est\'a''.
-}
+A join combines vertices and edges and,
+through edges, vertices with each other.
 The basic form is:
 
 \keyword{join} \identifier{mytype} \keyword{on} \keyword{edgefield}
 
 To make this more concrete:
 
-\keyword{from} \identifier{sales} 
+\keyword{from} \identifier{buys} 
 \keyword{join} \identifier{client} \keyword{on} \keyword{origin}
 
 This would produce an \term{inner join} 
-between \identifier{sales} and \identifier{client}.
+between \identifier{buys} and \identifier{client}.
 Joins in \nowdb\ are in fact always inner joins.
-There are no \term{outer joins}. \comment{Do we need them?}
 In consequence, there is no difference between
 \term{left} and \term{right}; one could say,
 joins in \nowdb\ are \term{abelian}.
+
+A way to emulate outer joins is using \term{paths}
+(see section \ref{subsec_paths} for details).
 
 Since the primary key of a type is known
 and there is always exactly one field
@@ -2227,15 +2252,17 @@ that \keyword{join} \identifier{client} \keyword{on origin}
 joins on \keyword{origin} $=$ \identifier{client\_key}.
 
 Every edge connects two vertices.
-A join, therefore, consists of at most two joins.
+A join, therefore, consists of at most two sub-joins.
 The syntax is straightforward:
 
-\keyword{from} \identifier{sales}
+\begin{minipage}{\textwidth}
+\keyword{from} \identifier{buys}
 \keyword{join} \identifier{client} \keyword{on} \keyword{origin} \\
-\hspace*{2cm}\keyword{join} \identifier{product} \keyword{on} \keyword{destin}
+\hspace*{1.9cm}\keyword{join} \identifier{product} \keyword{on} \keyword{destin}
+\end{minipage}
 
 With this join, all attributes
-from \identifier{sales}, \identifier{client} and \identifier{product}
+from \identifier{buys}, \identifier{client} and \identifier{product}
 are available in all clauses.
 
 It may happen that the joined entities
@@ -2254,11 +2281,13 @@ Example:
 
 Here, using aliases comes in handy, \eg:
 
-\keyword{from} \identifier{sales} \keyword{as} \identifier{s}
+\begin{minipage}{\textwidth}
+\keyword{from} \identifier{buys} \keyword{as} \identifier{b}
 \keyword{join} \identifier{client} \keyword{as} \identifier{c} 
                \keyword{on} \keyword{origin} \\
-\hspace*{2.8cm}\keyword{join} \identifier{product} \keyword{as} \identifier{p}
+\hspace*{2.75cm}\keyword{join} \identifier{product} \keyword{as} \identifier{p}
                               \keyword{on} \keyword{destin}
+\end{minipage}
 
 In the \term{select} clause, we can now refer to fields
 with the alias instead of the full entity name, \eg:
@@ -2267,25 +2296,19 @@ with the alias instead of the full entity name, \eg:
                  \identifier{p}.\identifier{key}
 
 \comment{
-Joins are the very heart of any database technology --
-but it is not easy to get them right with good performance.
-In a first approach I tried to make joins work
-by always using index range scans.
-Unfortunately, it turned out that index range scans
-are not very efficient in most (or at least many) cases.
-I am therefore looking for alternatives.
-There are many, sometimes quite sophisticated, techniques.
-Currently, I am experimenting with cache-based subqueries,
-which looks promising. Joins can therefore be available
-within a short time frame. (And this is indeed one of the most
-urgent items on the to-do list.)
+Joins are not yet available.
 }
 
+\ignore{
 \subsection{Correlation} 
 Correlation combines two or more edges.
 \comment{I believe that correlation is much better placed
 in support libraries of high-level languages than in \sql.
 Some input from an expert would help ;-)}
+}
+
+\subsection{Paths}\label{subsec_paths}
+\comment{tbd}
 
 \subsection{Where Clause}\label{subsec_where}
 The \term{where} clause adds criteria for the selection
@@ -2474,25 +2497,26 @@ The keys used to partition the set
 are defined in the \term{group} clause.
 A simple \term{group} clause could be:
 
-\keyword{group by} \keyword{edge, destin}
+\keyword{group by} \keyword{destin}
 
 This clause would partition the result
-according to \keyword{edge} and \keyword{destin}.
+according to \keyword{destin}.
 
 In the simplest form a statement with
 group clause could look like this:
 
-\keyword{select} \keyword{edge},
-                 \keyword{destin}
-\keyword{from} \identifier{sales}
-\keyword{group by} \keyword{edge, destin}
+\keyword{select} \keyword{destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \keyword{destin}
 
-Let's consider the following set of data
+Let's consider an edge with the
+user-defined field \identifier{category}
+and the following set of data:
 
 \begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------+--------------|
-| edge     | destin  | timestamp    |
+| category | destin  | timestamp    |
 |----------+---------+--------------|
 | 'buys'   | 100001  | '2018-03-15' |
 | 'buys'   | 100002  | '2018-03-15' |
@@ -2506,13 +2530,19 @@ Let's consider the following set of data
 \end{verbatim}
 \end{minipage}
 
-Applied to this set,
-the group above would produce the following output
+We apply the following grouping to this data set
+
+\keyword{select} \identifier{category},
+                 \keyword{destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \identifier{category}, \keyword{destin}
+
+This would produce the following output
 
 \begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------|
-| edge     | destin  |
+| category | destin  |
 |----------+---------|
 | 'buys'   | 100001  |
 | 'buys'   | 100002  |
@@ -2533,24 +2563,24 @@ refer to chapter \ref{chpt_opt}.
 
 The real power of grouping becomes evident
 when we let the database do the processing.
-This is the purpose of aggregate functions
+This is the main purpose of aggregate functions
 (please refer to section \ref{sec_agg} for details).
 
 The aggregate functions go to the \term{select} clause
 behind the grouping keys:
 
-\keyword{select} \keyword{edge},
+\keyword{select} \identifier{category},
                  \keyword{destin},
                  \identifier{count}($\ast$)
-\keyword{from} \identifier{sales}
-\keyword{group by} \keyword{edge, destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \identifier{category}, \keyword{destin}
 
 This would now produce:
 
 \begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------+-------|
-| edge     | destin  | count |
+| category | destin  | count |
 |----------+---------|-------|
 | 'buys'   | 100001  |  4    |
 | 'buys'   | 100002  |  3    |
@@ -2562,50 +2592,51 @@ This would now produce:
 The \term{group} clause has strong interdependencies
 with the \term{select} clause.
 In particular, the \term{select} clause must
-contain precisely those fields mentioned in the
+contain those fields mentioned in the
 \term{group} clause and the order of the fields
 must be identical. The only things allowed in
 the \term{select} clause besides the grouping keys
-are aggregates.
+are aggregates. \comment{Some of these requirements
+will be relaxed in the future.}
 
 The following statements are therefore wrong:
 
-\keyword{select} \keyword{edge}, 
+\keyword{select} \identifier{category}, 
                  \identifier{count}($\ast$)
-\keyword{from} \identifier{sales}
-\keyword{group by} \keyword{edge, destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \keyword{category, destin}
 
 \keyword{select} \keyword{destin},
-                 \keyword{edge}, 
+                 \identifier{category}, 
                  \identifier{count}($\ast$)
-\keyword{from} \identifier{sales}
-\keyword{group by} \keyword{edge, destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \identifier{category}, \keyword{destin}
 
-\keyword{select} \keyword{edge}, 
+\keyword{select} \identifier{category}, 
                  \keyword{destin},
                  'hello world'
-\keyword{from} \identifier{sales}
-\keyword{group by} \keyword{edge, destin}
+\keyword{from} \identifier{buys}
+\keyword{group by} \identifier{category}, \keyword{destin}
 
 Notice that aggregates without grouping
 are applied to the whole result set.
-For instance, to count all rows in \identifier{sales},
+For instance, to count all rows in \identifier{buys},
 one could say:
 
 \keyword{select} \identifier{count}($\ast$)
-\keyword{from} \identifier{sales}
+\keyword{from} \identifier{buys}
 
 The partition to which \identifier{count} is applied here
 is the whole result set.
 
 Syntactically, even this is \acronym{ok}:
 
-\keyword{select} \keyword{edge},
+\keyword{select} \identifier{category},
                  \keyword{destin},
                  \identifier{count}($\ast$)
-\keyword{from} \identifier{sales}
+\keyword{from} \identifier{buys}
 
-The values shown for \keyword{edge} and \keyword{destin},
+The values shown for \identifier{category} and \keyword{destin},
 however, have no relation whatsoever to the \identifier{count}
 result. They correspond
 to any of the rows in the result set,
@@ -2623,14 +2654,6 @@ the index must be defined over the same set of keys
 and the order of the keys must be the same.
 Otherwise, when there is no matching index,
 the query fails with error.
-I do not consider this a huge issue.
-Grouping is an expensive operation and if,
-in an application, grouping is frequently needed,
-it should be considered in database design.
-However, there a some cases where I am concerned
-about performance. In general, the performance
-is good or even fantastic. But there are cases
-that could motivate alternative grouping techniques.
 }
 
 \subsection{Order Clause}
@@ -2638,17 +2661,17 @@ The \term{order} clause sorts the result set
 according to a set of sorting criteria (the \term{order keys}).
 Its simplest form is just:
 
-\keyword{order by} \keyword{edge}, \keyword{destin}
+\keyword{order by} \identifier{category}, \keyword{destin}
 
-which would present the result set (whatever it contains)
-sorted by \keyword{edge} and \keyword{destin}.
+which would present the result set
+sorted by \identifier{category} and \keyword{destin}.
 
 \begin{minipage}{\textwidth}
 The statement
 
-\keyword{select} \keyword{edge}, \keyword{destin}
-\keyword{from} \identifier{sales}
-\keyword{order by} \keyword{edge}, \keyword{destin}
+\keyword{select} \identifier{category}, \keyword{destin}
+\keyword{from} \identifier{buys}
+\keyword{order by} \identifier{category}, \keyword{destin}
 \end{minipage}
 
 applied to the data set already used in section
@@ -2657,7 +2680,7 @@ applied to the data set already used in section
 \begin{minipage}{\textwidth}
 \begin{verbatim}
 |----------+---------+--------------|
-| edge     | destin  | timestamp    |
+| category | destin  | timestamp    |
 |----------+---------+--------------|
 | 'buys'   | 100001  | '2018-03-15' |
 | 'buys'   | 100001  | '2018-04-15' |
@@ -2671,33 +2694,9 @@ applied to the data set already used in section
 \end{verbatim}
 \end{minipage}
 
-Performance considerations are important when dealing with sorting.
-It is therefore recommended to study section \ref{chpt_opt} with care.
-
 \comment{
 Similar to grouping, ordering works only with an index
 that has the same keys in the same order.
-Contrary to the grouping case, for ordering this is not acceptable.
-Ordering is needed over and over again and good sorting
-algorithms must be available in the database.
-Well, the algorithms are there (index sorting, in-memory sorting and
-external sorting). The question is: how to apply them in
-the most efficient manner.
-For instance, index sorting is good when we have a range,
-otherwise it's bad.
-In-memory sorting is good when the result set is small,
-otherwise it's bad.
-External sorting is always bad, but the last resort.
-A special case is ordering by timestamp.
-In a timeseries database, that should always be
-available!!!
-The solution I have in mind is to always create
-an index on timestamp with a micro-period (like 1 hour or
-1 minute). The rows within one micro-period would be
-sorted in memory and, since there are few rows in one
-micro-period, that is fast and does not impact latency.
-The whole query may be slow, but there are always
-data for the caller to make progress.
 }
 
 \subsection{Limit and Sample Clause}
@@ -2730,4 +2729,66 @@ A concrete example with parameters may be
 The result of the statement depends on the procedure.
 
 \subsection{Lock}
+The \term{lock} statement acquires a lock
+for reading or writing. The simplest form is
+
+\keyword{lock} \identifier{mylock}
+
+This would lock \identifier{mylock} for writing.
+This can be done explicitly:
+
+\keyword{lock} \identifier{mylock} \keyword{for writing}
+
+or, for reading:
+
+\keyword{lock} \identifier{mylock} \keyword{for reading}
+
+When locking for reading, the lock is acquired if no session
+is currently holding the lock for writing. That is,
+locking for reading is not exclusive. Many sessions
+may hold the same lock for reading at the same time.
+Locking for writing, however, is exclusive.
+A lock may only be acquired for writing,
+when it is not held by another session
+(for reading or writing) and,
+when a lock is held for writing, no other session
+can acquire this lock for neither reading nor writing.
+
+If a lock is already held, so that the current
+lock request cannot acquire it,
+the session blocks until the lock is released.
+There is no guarantee of any particular order
+in which locks are acquired. If two sessions
+were waiting for the same lock, any of the two
+will acquire the lock when it is released.
+
+The \term{lock} statement allows for specifying
+a timeout by means of an option clause, \eg
+
+\keyword{lock} \identifier{mylock} \keyword{for writing}
+\keyword{set timeout} = 100
+
+The timeout is specified in milliseconds.
+If the timeout expires, the statement fails with
+the error ``timeout expired''.
+If the timeout value is 0, the session will not block
+in case the lock is already held by another session,
+but return immediately with \term{timeout expired}.
+If no option is given, the session blocks until it
+has successfully acquired the lock.
+
+It is not allowed to acquire a lock already held
+by the caller. Attempts to do so are detected and
+the error ``selflock'' is generated.
+Other kinds of deadlocks are currently not detected.
+
 \subsection{Unlock}
+A lock is released by the \term{unlock} statement, \eg:
+
+\keyword{unlock} \identifier{mylock}
+
+If the calling session is not currently holding
+the lock, the statement fails with ``does not hold the lock''.
+Otherwise, the lock is released and immediately
+afterwards acquirable.
+
