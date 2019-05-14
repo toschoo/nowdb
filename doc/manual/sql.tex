@@ -1521,6 +1521,17 @@ It has the form:
 
 % \subsubsection{ALTER}
 
+\subsubsection{SHOW, DESCRIBE}
+The command \keyword{show storages}
+returns a cursor with the names of all
+storages defined in the current database,
+one storage name per row.
+
+The command \keyword{describe} \identifier{mystore}
+returns a cursor with all options set for the storage
+\identifier{mystore}, one option name and value
+per row.
+
 \subsection{Type}
 \term{Types} are user-defined vertex types.
 The syntax resembles very much
@@ -1576,6 +1587,18 @@ from the database.
 It has the form:
 
 \keyword{drop type} \identifier{product}
+
+\subsubsection{SHOW, DESCRIBE}
+The command \keyword{show types}
+returns a cursor with the names of all
+types defined in the current database,
+one type name per row.
+
+\keyword{describe} \identifier{mytype}
+returns a cursor with the attributes
+and attribute types for the vertex type
+\identifier{mytype}, one pair of
+attribute name, type per row.
 
 \subsection{Edge}
 \subsubsection{CREATE}
@@ -1648,6 +1671,19 @@ from the database.
 It has the form (for both simple and stamped edges):
 
 \keyword{drop edge} \identifier{buys}
+
+\subsubsection{SHOW, DESCRIBE}
+The command \keyword{show edges}
+returns a cursor with the names of all
+edges (simple and stamped)
+defined in the current database,
+one edge name per row.
+
+\keyword{describe} \identifier{myedge}
+returns a cursor with the attributes
+and attribute types for the edge 
+\identifier{myedge}, one pair of
+attribute name, type per row.
 
 \subsection{Index}
 \subsubsection{CREATE}
@@ -1729,6 +1765,19 @@ It has the form:
 
 \keyword{drop procedure} \identifier{myfun}
 
+\subsubsection{SHOW, DESCRIBE}
+The command \keyword{show procedures}
+returns a cursor with the names of all
+procedures
+defined in the current database,
+one procedure name per row.
+
+\keyword{describe} \identifier{myproc}
+returns a cursor with the attributes
+and attribute types for the procedure
+\identifier{myproc}, one pair of
+attribute name, type per row.
+
 \subsection{Function}
 \comment{Not yet available}
 
@@ -1746,6 +1795,13 @@ drops a lock from the database.
 It has the form:
 
 \keyword{drop lock} \identifier{mylock}
+
+\subsubsection{SHOW}
+The command \keyword{show locks}
+returns a cursor with the names of all
+lock
+defined in the current database,
+one lock name per row.
 
 \subsection{Event}
 \comment{Not yet available}
