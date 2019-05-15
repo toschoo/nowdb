@@ -354,7 +354,7 @@ into the same storage. This is especially true for sizing
 On the other hand, there are good arguments to
 put objects with very high ingestion load into
 separate storage containers. This is discussed
-with more detail in chapters \ref{chpt_sql} and
+in more detail in chapters \ref{chpt_sql} and
 \ref{chpt_sizing}.
 
 The next two blocks of code create the types
@@ -363,14 +363,10 @@ Types describe vertices.
 Each database has a set
 of vertices that can be connected
 by means of edges to form graphs.
-The graphs structure all data
+These graphs structure the data
 in our specific application.
-The vertex types thus describe the universe of discourse.
-Technically, vertices are stored in
-\term{column-oriented} tables.
-\comment{Well, not entirely true at the moment,
-but it is the direction to go -- sooner or later
-the statement will be true $\dots$}
+The vertex types thus form
+the universe of discourse.
 
 The attribute types used in the script
 are \term{uint}, \term{float} and \term{text}.
@@ -388,7 +384,8 @@ that primary key must consist of only one attribute.
 There are no composed keys like in relational
 databases.
 
-The types are stored in a default storage
+The types created above
+are stored in a default storage
 that is created and managed internally by \nowdb.
 Every database has two internal storage containers,
 one for types and one for edges. If no storage
@@ -413,7 +410,7 @@ where $a$ and $b$ are vertex types.
 
 Stamped edges have at least one additional field,
 namely \term{timestamp} (which is usually abbreviated
-to \term{stamp}). This field does not need not to be mentioned
+to \term{stamp}). This field does not need to be mentioned
 in the edge definition (in fact, it \emph{must} not be
 mentioned). Furthermore, stamped edges may have an
 arbitrary number of user-defined fields.
@@ -437,7 +434,8 @@ This is the fundamental idea of \nowdb.
 
 The definition of 'buys' contains a \term{storage} option.
 This is the way to tell \nowdb\ that we want this table 
-to be stored in a particular storage. The edge 'buys',
+to be stored in a particular storage
+and not in one of the default storages. The edge 'buys',
 hence, goes into the storage 'sales' (which might or
 might not contain also other tables).
 
@@ -544,7 +542,7 @@ insert into product values (100001, 'Spinach, 450g net', 1.99);
 \end{lstlisting}
 \end{sqlcode}
 
-These two statements insert a client and a product respectively.
+These two statements insert a client and a product, respectively.
 We can also name the attributes explicitly, like:
 
 \begin{sqlcode}
@@ -599,10 +597,9 @@ However, it is also possible to define custom
 date and time formats. How to do this is discussed
 in chapter \ref{chpt_sql}.
 
-Worth noticing is also the first date.
-It was on Jan, 17, 1929 that Popeye had his first
-appearance in a newspaper of the \term{King Features}
-Syndicate.
+Worth noticing is also the first date,
+January, 17, 1929, when Popeye had his first
+appearance in an American newspaper.
 
 Now that we have inserted some data
 into our database, we are able to perform $selects$, \eg:
@@ -631,7 +628,7 @@ Or we can ask how much Popeye bought and paid per type of product:
 select destin, count(*), sum(quantity), sum(price)
   from buys
  where origin=9000001 
- group by edge, destin
+ group by destin
 \end{lstlisting}
 \end{sqlcode}
 
@@ -686,7 +683,7 @@ and would obtain for the grouping query used above:
 The disadvantage of the \tech{csvkit} package is that
 it is somewhat slow compared to the native \nowdb\ tools.
 For this reason, there is a more complete client tool
-for \nowdb\ (which can be downloaded at \comment{xxx}).
+for \nowdb\ (which can be downloaded from \comment{xxx}).
 This tool comes with a much larger feature set
 and is described in \comment{another document}.
 
@@ -720,7 +717,8 @@ which, with the same technique as above, shows:
 \end{minipage}
 
 We can also select from vertices,
-but instead of a table, we use the type:
+but instead of the edge \term{buys},
+we use a type:
 
 \begin{sqlcode}
 \begin{lstlisting}
@@ -750,7 +748,7 @@ Popeye the Sailor
 
 Much more typical for \nowdb, however,
 is to use vertices together with edges. Edges connect vertices
-and can therefore be seen as `relations' in \nowdb.
+and can therefore be seen as `relations'.
 What we typically want is to combine attributes
 of vertices and of edges.
 For instance, we may want to look at the attributes
@@ -914,7 +912,7 @@ Anyway, here is a simple Python program:
 \begin{lstlisting}
 import now
 
-with now.Connection("localhost", "55505", None, None) as c:
+with now.Connection('localhost', '55505', 'myusr', 'mypwd') as c:
    with c.execute("use retail") as r:
        if not r.ok():
           print "cannot use retail: %s" % r.details()
@@ -942,8 +940,8 @@ The result of a \term{use} statement is a \term{status}.
 A status is either \acronym{ok} or an error
 whose details can be obtained by means of the method
 \term{details()}, which returns a string.
-Results also support the method \term{code()},
-which would return a numeric error code.
+Status also supports the method \term{code()},
+which would return a numerical error code.
 It is often useful to know the error code to decide
 what to do programmatically (abandon the program,
 retry, try something else, \etc)
@@ -960,7 +958,7 @@ that internally frees all C resources related to results.
 However, the programmer has little control over when
 the \acronym{gc} is invoked. It is therefore good style
 to use \term{with} blocks. This guarantees that all resources
-are freed as soon as the program does not need them anymore.
+are freed as soon as possible.
 
 The program above then executes a query.
 This time the execution returns a \term{cursor} (`cur').
@@ -972,7 +970,7 @@ In that case, the program prints the error details
 and exits with return code 1.
 
 Otherwise, if the result was fine,
-it iterates over the cursor
+the program iterates over the cursor
 printing for each row the fields 0-2.
 Cursors are iterators
 that allow simple iteration using \term{for}.
@@ -980,6 +978,21 @@ The \term{for} statement additionally frees
 the resources related to \term{row} results
 as soon as possible. It, hence, fulfills
 a similar function as the \term{with} statement.
+
+Moreover, the last iteration
+of the \term{for} statement
+frees the cursor resources.
+Strictly speaking, the \term{with} statement
+around the \term{execute} is not really necessary.
+The \term{for} statement already handles
+resource management. We could do it like this:
+
+\begin{python}
+\begin{lstlisting}
+for row in c.execute("..."):
+  # do something with row
+\end{lstlisting}
+\end{python}
 
 There is a convenience interface that
 eliminates the explicit error handling
@@ -990,7 +1003,7 @@ indicating that errors will be raised
 and not returned.
 Indeed, whenever the result is not \acronym{ok},
 \term{rexecute} raises an error.
-This way, only positive results are finally
+This way, only successful results are finally
 passed on to the caller.
 
 \begin{minipage}{\textwidth}
@@ -1042,7 +1055,7 @@ For more details on the Python client
 and on the \acronym{pep} 249 compliant \acronym{api}
 please refer to chapter \ref{chpt_pythonclient}.
 The underlying C client \acronym{api} is described in
-chapter \ref{chpt_ccpp}.
+chapter \ref{chpt_llc}.
 Client \acronym{api}s for other languages are described
 in language-specific documentations.
 
@@ -1058,7 +1071,9 @@ Another option is Python,
 but the \nowdb\ Lua environment
 provides better performance,
 better integration and more support
-packages for database development.
+packages for database development
+and is therefore the recommended
+language to implement procedures and functions.
 
 The difference between stored procedures
 and stored functions is that stored functions
@@ -1198,7 +1213,7 @@ end
 \end{lua}
 \end{minipage}
 
-First, we may note that there are no imports.
+First, you may have noticed that there are no imports.
 Indeed, the basic \nowdb\ functionality is
 present in the global table \tech{nowdb}.
 All functions and constants defined in
@@ -1216,8 +1231,11 @@ the second is a time unit to which we want to round.
 The \term{nowdb} package defines several such units,
 namely second, minute, hour and day.
 The \term{round} function provides a simple means
-to round a time down to one of those units.
-But, caution: the function is indeed quite simple.
+to round a time down to one of those units
+such that the remainder is reduced to 0.
+Rounding down to day means, for instance,
+that hour, minute and second are 0.
+But, caution: the function is quite simple.
 It does not take care of leap seconds and other
 subtleties related to time arithmetic. If such
 functionalities are needed, it is better to work
@@ -1259,8 +1277,8 @@ of error code and error message.
 Cursor results have a \term{rows} method,
 a generator that can be used to initialise
 a \term{for}-loop over all rows in the cursor.
-In this \term{for}-loop, we compare the current
-value of $field(1)$, that is the sum of the price
+In the \term{for}-loop here we compare the current
+value of $field(1)$, which holds the sum of the price
 for this client, with the value stored in
 \term{mx[2], mx[4]} and \term{mx[6]}. In other words,
 we are searching for the three clients with
@@ -1273,7 +1291,7 @@ This is not strictly necessary, since the Lua \acronym{gc}
 will release all C resources associated with results.
 However, it is good style to release results when they
 are not needed anymore. The Lua \acronym{gc} does not
-know about the C resources and this may lead to a situation
+know about the C resources and this may lead to situations
 where a lot of memory is allocated in a session,
 before the \acronym{gc} is invoked.
 Explicit release is in particular
@@ -1320,7 +1338,7 @@ clients and buys into our retail database):
 \begin{minipage}{\textwidth}
 Of course, we can call \term{exec}
 also from a Python client and then handle
-the result as row, \eg:
+the result as cursor or row, \eg:
 
 \begin{python}
 \begin{lstlisting}
@@ -1336,7 +1354,7 @@ with Connection("127.0.0.1", "55505", None, None) as c:
 The execution environment of server-side Lua
 is the session. Each session has its own
 Lua interpreter and all packages are loaded
-into this interpreter. Programs running
+into this local interpreter. Programs running
 in different sessions cannot communicate
 directly with each other.
 However, there are inter-session
@@ -1373,7 +1391,6 @@ end
 The module defines two local (but module-wide)
 variables \term{\_fibn1} and \term{\_fibn2},
 which are initialised to 0 and 1 respectively.
-
 The function \term{fibreset}, which takes no
 parameters, resets the variables to these
 initial values.
@@ -1475,7 +1492,7 @@ of \nowdb. The remainder of this manual will
 discuss the main features more deeply.
 
 The next chapter discusses data modelling with
-\nowdb\ $graph+timeseries$ approach.
+the $graph+timeseries$ approach.
 
 The following chapter specifies the \nowdb\ \sql\ dialect.
 
@@ -1484,14 +1501,14 @@ present the command line tools \tech{nowdbd}
 and \tech{nowclient} respectively.
 
 Chapters \ref{chpt_llc} and \ref{chpt_pythonclient}
-discuss the native clients in C and Python respectively.
-Other clients are available, for instance for
+discuss the native clients in C and Python.
+Other clients are available, for instance
 \CC, Lua and Go; but those are described in separate
 documentation sets.
 
 The next chapter, \ref{chpt_luaemb} presents the server-side
 language bindings for Lua at more depth. Server-side Python
-is again defined in \comment{another document}.
+is discussed in \comment{another document}.
 
 Chapter \ref{chpt_install} provides detailed information
 on installation of server and client on different
