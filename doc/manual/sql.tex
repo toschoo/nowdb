@@ -13,7 +13,7 @@ data models.
 in their turn, consist of clauses.
 A statement is a piece of \sql\ code
 that by itself constitutes a meaningful
-action in the database. Statements are
+action. Statements are
 distinguished in
 
 \begin{itemize}
@@ -21,8 +21,8 @@ distinguished in
 Statements that create, drop or alter entities
 in the database that hold or define
 data
-like tables, types, edges, indices,
-functions or procedures.
+like storages, types, edges, indices,
+procedures, \etc\
 
 \item \acronym{dml}:
 Statements that manipulate data,
@@ -37,7 +37,7 @@ or retrieve large volumes of data from the database.
 Statements that read data from the database.
 
 \item Miscellaneous:
-Statements that do not fall into any
+Statements that do not fall into any of
 those categories, in particular
 \term{use} and \term{exec}.
 \end{itemize}
@@ -62,7 +62,7 @@ clause or an isolated \term{from} clause.
 The smallest executable unit is therefore the statement.
 
 Clauses are made of keywords, identifiers, numbers, text,
-symbols (such as ``$, \dot = ( ) * + -$'') and
+symbols (such as $, \dot = ( ) * + -$) and
 whitespace, \ie\ \acronym{ascii}
 10 (line break),
 13 (carriage return),
@@ -76,18 +76,21 @@ $k$ cannot be an identifier at the same time.
 \sql\ dialects -- and that is a great relief for users,
 because \sql\ has an extraordinary large
 number of keywords which sometimes makes the choice
-of meaningful identifiers a non-trivial task.
+of meaningful identifiers a painful.
 At the time of writing, the \nowdb\ parser
 does not yet relax this rule, but it will do so
 in the future.}
-Keywords are defined by the \sql\ specification,
+Keywords are defined by the \sql\ specification
+and represent syntactic elements for chosing actions
+over entities in the database;
 identifiers are chosen by the user
-and refer to entities in the database,
-such as tables, types, indices, \etc\
+and refer to constant values or
+entities in the database,
+such as edges, types, indices, \etc\
 
 In this specification,
 keywords are typeset in boldface
-(\eg\ \keyword{table});
+(\eg\ \keyword{select});
 identifiers are typeset in italics
 (like `mytable' in 
 ``\keyword{create table} \identifier{mytable}'').
@@ -109,20 +112,14 @@ They must start with an \acronym{ascii}
 Latin alphabetic ($a\dots z$ or $A \dots Z$)
 and must contain only
 alphanumerics or the underscore ($\_$).
-
 Text, by contrast, may contain any
 \acronym{utf}-8 character.
-\comment{It is already possible to store
-\acronym{utf}-8 in the database.
-But comparison and sorting are not yet
-\acronym{utf}-compliant. This is an
-urgent to-do.}
 
 Keywords and identifiers are case-insensitive.
 There is no difference between
 `\acronym{select}', `select' or `Select'
 and so on.
-Text, by contrast, is case-sensitive;
+Text, however, is case-sensitive;
 `hello world' and `hello World'
 are not the same thing!
 
@@ -130,7 +127,7 @@ are not the same thing!
 that needs some kind of framework
 to support it. One way to provide this
 framework is the \nowdb\ client,
-which provides two means to execute
+which provides two ``channels'' to execute
 \sql\ statements in the database,
 \ie\ by means of the \tech{-Q} parameter
 and by means of standard input.
@@ -148,14 +145,14 @@ is not part of this specification.
 Currently, native client and server libraries
 exist that implement this protocol
 without exposing it to the user.
-To support open standards in the future, such as
+To support open standards, such as
 \acronym{odbc} and \acronym{jdbc},
-parts of this protocol must be documented
-and published.
+parts of this protocol
+will probably be documented
+and published in the future
 
 \section{Types}
-A fundamental part of most languages
-is their type system. \nowdb\ \sql\
+\nowdb\ \sql\
 has a very simple type system,
 which is static and safe.
 This type system is used to design
@@ -176,10 +173,11 @@ In the following, we first present
 the Static System and then the Dynamic System.
 
 \subsection{Static Types}
-The static types constitute the \nowdb\ \sql\ type system.
+The static types constitute
+the \nowdb\ \sql\ type system in the strict sense.
 The static types can be used in \sql\ statements.
 Each type is equipped with a declaration form and
-type constructors that create instances of those types.
+type constructors that create instances of this type.
 
 The declaration form is used in \acronym{ddl} statements
 to define types, edges, procedure and functions.
@@ -235,8 +233,8 @@ Examples: $-1, +0, +1$
 \textbf{Unsigned Integer} \\
 Declaration: $uint$, $uinteger$ \\
 Values: $0 \dots 2^{64}-1$  \\
-Constructors: One digit from the range $0\dots 9$
-or one digit from range $1\dots 9$ followed by
+Constructors: One digit in the range $0\dots 9$
+or one digit in range $1\dots 9$ followed by
 a sequence of digits ($0\dots9$). \\
 Examples: $0, 1, 2, 1024$, but not: $01$.
 \end{minipage}
@@ -330,11 +328,9 @@ be used for that purpose, \eg\
 Dynamic types are not used in \sql\ statements,
 but rather describe the return values of \sql\
 statements. As such, they live in the context
-of a host language (C, Python, Lua, \etc).
-Their concrete implementation, therefore,
-depends on that language and any language
-functioning as either client or server-side host
-needs to implement these types.
+of a host language (C, Python, Lua, \etc) and
+the concrete implementation
+depends on that language.
 For more information on concrete implementations
 of dynamic types, please refer to the
 host language \acronym{api} specifications.
@@ -342,10 +338,10 @@ host language \acronym{api} specifications.
 \begin{minipage}{\textwidth}
 \textbf{Status}\\
 Values: \acronym{ok}, \acronym{nok}\\
-In the case of error (\acronym{nok}), \nowdb\ provides:
+The status should additionally provide the values
 \begin{itemize}
-\item an error code
-\item a detailed error message
+\item error code
+\item a detailed error message (only in case of error)
 \end{itemize}
 Error codes together with a brief description
 of their meaning can be found in \ref{chpt_errors}.
@@ -358,7 +354,7 @@ Reports consist of up to three values:
 \item number of affected rows
 (returned by all \acronym{dml} and \acronym{dll} statements)
 \item number of errors
-(returned only by \acronym{dll} statements)
+(returned by all \acronym{dll} and some \acronym{dml} statements)
 \item running time
 (returned by most \acronym{dml} and \acronym{dll} statements)
 \end{itemize}
@@ -376,7 +372,7 @@ which would return a tuple $(value,type)$.
 
 A row result consists of one or many rows.
 The host language shall provide means
-to iterate over rows.
+to iterate over collection of rows.
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -434,7 +430,7 @@ $+, -, /$ and $\times$.
 To enforce a specific order of
 evaluation, parentheses may be used.
 So, if $a$ is a valid expression,
-$(a)$ is as well, for instance
+$(a)$ is too; for instance
 $(a+b)/2$
 is a valid expression.
 
@@ -482,8 +478,8 @@ the expression evaluates to a type error
 and the related \sql\ statement fails.
 
 In some cases, arguments are \term{promoted}
-to other types. Binary operators typically
-expect both operands to be of the same type.
+to other types. Binary operators, for instance,
+usually expect both operands to be of the same type.
 If one differs from the other, one of them
 may be promoted.
 
@@ -525,7 +521,7 @@ a blank before \tech{b}: \tech{a+ b} or to put parentheses
 around it: \tech{a+(b)}.}
 
 Division (/), however, is different in that it
-has different meaning for different numerical types.
+has different meanings for different numerical types.
 For \term{float} values it performs floating point
 division. For integral values (type \term{int} and
 \term{uint}), however, it computes the quotient
@@ -665,7 +661,7 @@ The inverse trigonometric functions
 are defined over the domain $-1\dots 1$.
 For arguments outside of that domain,
 \identifier{asin} and \identifier{acos}
-return $NaN$ (\term{not a number}).
+return $NaN$ (\term{not a number}, see \acronym{ieee}-754).
 The result of all inverse trigonometric functions
 is in the range $-\pi/2\dots\pi/2$.
 
@@ -720,7 +716,7 @@ value to an integral type, the decimal part
 is lost, \eg\ $toint(3.14159)$ is 3.
 
 Converting negative numbers to \term{uint},
-does not preserve value, but the bit pattern.
+does not preserve the value, but the bit pattern.
 $touint(-1)$, for instance, is
 $18446744073709551615$.
 
@@ -745,14 +741,14 @@ of their arguments, but by their result type.
 There are different categories of Boolean
 operators (or functions):
 boolean operators in the strict sense,
-comparisons and special Operators.
+comparisons and special operators.
 
 \paragraph{Boolean Operators in the Strict Sense}
 are \keyword{and}, \keyword{or} and \keyword{not}.
 What makes them strict Boolean operators is
 that their operands must be Boolean values.
 Boolean operators can be used in all clauses
-where expressions can be used.
+where expressions are allowed.
 But they are especially important for the
 \term{where} clause and will be discussed
 in more detail there (please refer to section
@@ -764,7 +760,7 @@ a Boolean value according to the comparison.
 Some comparisons are restricted in terms
 of the types of their arguments;
 others are unlimited. All comparisons, however,
-must always compare values of the same type.
+always compare values of the same type.
 Comparing incompatible values leads to a type error.
 For numeric types, the same promotion rules
 as for arithmetic operators apply.
@@ -795,7 +791,7 @@ is $true$, while `Hello' $=$ `hello'
 is $false$.
 
 Finally, $true = true$ and
-$false = false$ is $true$, while
+$false = false$ are $true$, while
 $true = false$ and $false = true$ are
 $false$.
 
@@ -859,8 +855,7 @@ since \keyword{between} in this form is
 
 \keyword{between} has a special syntax
 for the brackets to indicate
-ex- or inclusiveness. The following
-form would exclude the first:
+ex- or inclusiveness:
 1 \keyword{between} $]1,2]$,
 which would evaluate to $false$
 because, in this form, the first
@@ -972,6 +967,7 @@ The \keyword{when} and \keyword{else} values
 may be of different types.
 For instance:
 
+\begin{minipage}{\textwidth}
 \keyword{case}\\
 \hspace*{1cm}\keyword{when} \identifier{category} $=$ 1
 \keyword{then} 'true' \\
@@ -981,30 +977,38 @@ For instance:
 \keyword{then} true \\
 \hspace*{1cm}\keyword{else} \keyword{null} \\
 \keyword{end}
+\end{minipage}
 
 However, care must be taken when using this feature.
 Often the context where the \keyword{case} expression
 appears requires a certain type, \eg: 
 
+\begin{minipage}{\textwidth}
 \keyword{select} 1 +
 \keyword{case}\\
 \hspace*{2.5cm}\keyword{when} \identifier{category} \keyword{is null}
 \keyword{then} 0 \\
 \hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
 \hspace*{2cm}\keyword{end}
+\end{minipage}
 
 This context expects a numerical value.
+Note that, if the first \keyword{when} is \keyword{true},
+the whole expression will produce a \term{uint};
+otherwise, it will produce a \term{float}.
 Evaluation will fail with a non-numerical value
 like in the following case
 
+\begin{minipage}{\textwidth}
 \keyword{select} 1 +
 \keyword{case}\\
 \hspace*{2.5cm}\keyword{when} \identifier{category} \keyword{is null}
 \keyword{then} \keyword{false} \\
 \hspace*{2.5cm}\keyword{else} \identifier{price} + category * 0.1 \\
 \hspace*{2cm}\keyword{end}
+\end{minipage}
 
-This is of importance in the \keyword{where} clause.
+This is of special importance in the \keyword{where} clause.
 When a \keyword{case} expression is used in a \keyword{where}
 like this:
 
@@ -1020,7 +1024,7 @@ the \keyword{where} clause is undefined.
 an unspecified number arguments.
 \identifier{Coalesce} evaluates to
 the first argument that itself
-does not evaluate to \keyword{not null}.
+does not evaluate to \keyword{null}.
 If none of the arguments is \keyword{not null},
 \identifier{coalesce} evaluates to \keyword{null}.
 Example:
@@ -1033,7 +1037,7 @@ otherwise, it evaluates to the current
 value of \identifier{category}.
 
 Since \identifier{coalesce} accepts
-an undetermined number of argument,
+an undetermined number of arguments,
 the following expression is legal:
 
 \identifier{coalesce}(\identifier{species},
@@ -1064,21 +1068,17 @@ $\ll, \gg, \&, |,\sim$, xor, bit
 
 \comment{Not yet available.
 Bitwise operators, however, are very interesting
-to store bools. It is not very efficient to
-store single booleans in the database.
-It is interesting, however, to store
-bitmaps; but the database needs
-to provide support for working with bitmaps.}
+to store bools as bitmaps.}
 
 \subsubsection{Time}
 \paragraph{Time Component Functions}
 Time component functions return a part of the time,
 such as the year, the month, the day of the month,
-\etc\ as \keyword{int} according to the European calendar.
+\etc\ as \term{int} according to the European calendar.
 Example:
 
 \keyword{select} \identifier{year}(\keyword{stamp})
-\keyword{from} \identifier{sales}
+\keyword{from} \identifier{buys}
 
 \identifier{year} returns the year, \eg\ 2018.
 
@@ -1104,7 +1104,7 @@ returns the minute of the hour from $0\dots 59$.
 
 \identifier{second}
 returns the second of the minute,
-which is almost always between $0\dots 59$.
+which is almost always in the range $0\dots 59$.
 In case of leap seconds, however, 60 may be returned.
 
 \identifier{milli}
@@ -1122,7 +1122,6 @@ They take no argument and return a \keyword{time} value.
 Example:
 
 \keyword{select} \identifier{now}()
-\keyword{from} \identifier{sales}
 
 \identifier{now}
 returns the current system time.
@@ -1214,12 +1213,12 @@ When applied to a field, \identifier{count} is usually combined with
 otherwise the result would be the same as applying it to the row.
 Common examples are therefore:
 
-\keyword{select} \identifier{count}($\ast$) \keyword{from} \identifier{sales}
+\keyword{select} \identifier{count}($\ast$) \keyword{from} \identifier{buys}
 
 and
 
-\keyword{select} \identifier{count}(\keyword{distinct} \keyword{edge})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{count}(\keyword{distinct} \keyword{origin})
+\keyword{from} \identifier{buys}
 
 The return type is always \keyword{uint}.
 
@@ -1234,11 +1233,11 @@ The return type depends on the type of the input field.
 
 Example:
 
-\keyword{select} \identifier{sum}(\identifier{weight})
-  \keyword{from} \identifier{sales}
+\keyword{select} \identifier{sum}(\identifier{quantity})
+  \keyword{from} \identifier{buys}
 
-produces the sum of the values in the weight field
-for the whole table \identifier{sales}.
+produces the sum of the values in the \identifier{quantity} field
+for the whole table \identifier{buys}.
 
 \subsubsection{max and min}
 The functions take one argument.
@@ -1249,9 +1248,9 @@ The arguments must be numeric.
 The return type depends on the type of the input field.
 Example:
 
-\keyword{select} \identifier{max}(\identifier{weight}),
-                 \identifier{min}(\identifier{weight})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{max}(\identifier{price}),
+                 \identifier{min}(\identifier{price})
+\keyword{from} \identifier{buys}
 
 \subsubsection{spread}
 The function takes one argument.
@@ -1264,8 +1263,8 @@ The return type depends on the type of the input field.
 
 Example:
 
-\keyword{select} \identifier{spread}(\identifier{weight})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{spread}(\identifier{price})
+\keyword{from} \identifier{buys}
 
 \subsubsection{avg}
 The Function takes one argument.
@@ -1285,8 +1284,8 @@ The return type is \keyword{float}.
 
 Example:
 
-\keyword{select} \identifier{avg}(\identifier{weight})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{avg}(\identifier{price})
+\keyword{from} \identifier{buys}
 
 \subsubsection{median}
 The Function takes one argument.
@@ -1299,8 +1298,8 @@ The return type is \keyword{float}.
 
 Example:
 
-\keyword{select} \identifier{median}(\identifier{weight})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{median}(\identifier{price})
+\keyword{from} \identifier{buys}
 
 \comment{
 No precaution is currently taken for the case
@@ -1316,8 +1315,8 @@ It finds the most frequent value in the result set.
 The argument may be of any type.
 The return type depends on the type of the input field.
 
-\keyword{select} \identifier{mode}(\identifier{weight})
-\keyword{from} \identifier{sales}
+\keyword{select} \identifier{mode}(\identifier{price})
+\keyword{from} \identifier{buys}
 
 \comment{
 Not yet available
@@ -1366,13 +1365,6 @@ Example:
 \keyword{select} \identifier{integral}(
 \keyword{stamp}, \identifier{weight})
 \keyword{from} \identifier{sales}
-}
-
-\comment{
-Interesting would be \term{earliest} and \term{latest}
-to find the earliest and latest timestamp;
-this would be used with \keyword{having}, \eg:
-\keyword{having} \identifier{latest}(\keyword{stamp})
 }
 
 \section{Data Definition}
