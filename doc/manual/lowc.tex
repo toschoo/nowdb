@@ -2,7 +2,7 @@
 The low-level C \acronym{api} is not intended
 for application development. For this purpose
 high-level C and a \CC\ \acronym{api}s exist
-(please refer to chapter \ref{chpt_ccpp}).
+(please refer to \comment{document xxx}).
 This \acronym{api} aims instead to ease
 the development of client language bindings.
 The Python, Lua and Go client \acronym{api}s
@@ -74,7 +74,7 @@ an error code (see chapter \ref{chpt_errors}).
 
 The function attempts to parse the time string
 according to the format string and, if successful,
-stores the result under the address passed in as third parameter.
+stores the result at the address passed in as third parameter.
 
 \subsubsection{nowdb\_time\_show}
 The function receives
@@ -314,7 +314,7 @@ a client error code.
 The function \emph{casts} the result
 passed in to the pointer address.
 The function fails if the result
-does not not represent a valid result
+does not represent a valid result
 or if that result was created
 with \term{zerocopy} option.
 Note that \tech{nowdb\_exec\_statementZC}
@@ -360,7 +360,7 @@ the error code of the cursor passes to \term{end-of-file}.
 
 \subsubsection{nowdb\_cursor\_row}
 The function receives a \tech{nowdb\_cursor\_t}
-and returns \tech{nowdb\_row\_t}.
+and returns a \tech{nowdb\_row\_t}.
 Note that the result is not a copy
 of the rows in the cursor, but a reference
 to those.

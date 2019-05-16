@@ -33,9 +33,9 @@ Example:
 
 \begin{python}
 \begin{lstlisting}
-with connect("localhost", "55505", "", "", "retail") as conn:
+with connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
     # here goes your code
-    # refer to the connection as 'conn'
+    # refer to the connection as 'c'
 \end{lstlisting}
 \end{python}
 
@@ -61,15 +61,15 @@ the statement (which is mandatory), a list of parameters for this
 statement (which is optional) and the row format (which, too,
 is optional).
 
-The parameters argument is expected to be a list of parameters
-that will be added to the statement according
+The parameters argument is expected to be a list of parameters,
+which will be added to the statement according
 to usual string formatting in Python.
 \comment{We will need server-side parameter binding in the future.}
 A simple example is:
 
 \begin{python}
 \begin{lstlisting}
-with connect("localhost", "55505", "", "", "retail") as c:
+with connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
      with c.execute("select count(*) from buys \
                       where stamp >= '%s'", ['2018-10-01']) as cur:
        # process cursor here
@@ -108,12 +108,12 @@ A basic usage example is
 \begin{python}
 \begin{lstlisting}
 import nowapi as na
-with na.connect("localhost", "55505", "", "", "retail") as c:
+with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
   # cursor is an iterator
   for row in c.execute("select client_key as k,\
                                client_name as n \
                           from client"):
-      print("%d: %s" % (row[k], row[n]))
+      print("%d: %s" % (row['k'], row['n']))
 \end{lstlisting}
 \end{python}
 
@@ -123,7 +123,7 @@ And an example involving Pandas:
 \begin{lstlisting}
 import nowapi as na
 import pandas as pd
-with na.connect("localhost", "55505", "", "", "retail") as c:
+with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
   sales = pd.read_sql("select origin, stamp, quanity, price \
                          from buys", c)
   # do something with dataframe 'sales'
@@ -140,7 +140,7 @@ is to create a cursor by means of the method \term{cursor}, \eg:
 \begin{python}
 \begin{lstlisting}
 import nowapi as na
-with na.connect("localhost", "55505", "", "", "retail") as c:
+with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
   cur = c.cursor()
   # do something with 'cur'
 \end{lstlisting}
@@ -285,7 +285,7 @@ for instance:
 \begin{python}
 \begin{lstlisting}
 import nowapi as na
-with na.connect("localhost", "55505", "", "", "retail") as c:
+with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
   for row in c.execute("select * from buys \
                          where stamp = '%s'", \
                        [Date(2018, 1, 15)]):

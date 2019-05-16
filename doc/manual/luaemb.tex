@@ -23,7 +23,7 @@ are therefore:
 \begin{itemize}
 \item implementing complex queries that require
       repeated data access or complex joins;
-\item building algorithms that are beyond simple queries
+\item building algorithms that are beyond pure \sql\ queries
       like path finding or recommendation engines; 
 \item data preparation for data science tasks
       like grouping, statistical sampling or
@@ -59,7 +59,7 @@ containing the user code for stored procedures,
 are loaded when needed, that is, on the first
 execution of a specific stored procedure.
 
-The main Lua module defines the table 
+The \nowdb\ Lua module creates the table 
 \term{nowdb} which contains all
 functions and constants defined by
 the \nowdb\ Lua environment.
@@ -78,7 +78,7 @@ semicolon-separated definitions of the form
 \tech{db:path}
 
 where \term{db} is the name of a database and
-\term{path} is an ordinary \acronym{posix} path.
+\term{path} is an regular \acronym{posix} path.
 \nowdb\ will then search for a specific module
 in the path given for the database currently
 in use (defined by the most recent
@@ -96,9 +96,9 @@ indicated after the colon for a file called
 \term{mymodule.lua}.
 
 It is possible to define a wildcard that matches all databases.
-The wildcard is \tech{*}, \eg:
+The wildcard is $\ast$, \eg:
 
-\tech{*:/path/to/lua}
+\tech{$\ast$:/path/to/lua}
 
 If such an entry exists 
 in \tech{NOWDB\_LUA\_PATH},
@@ -152,7 +152,7 @@ variant called \term{nowdb.pexecute}.
 It also expects an \sql\ statement
 as input, but returns two return values:
 an error code and a result or string.
-If the error code is \term{nowdb.OK},
+If the error code is \term{nowdb}.\acronym{ok},
 the second return value
 is a polymorphic result type
 (a status, report, cursor or row).
@@ -251,7 +251,8 @@ r.release()
 Since this is a lot of boilerplate,
 there is a function to handle such cases,
 namely \term{nowdb.eval} which evaluates
-an \sql\ expression. It expects a string that
+a single \sql\ expression.
+It expects a string that
 contains only the expression, \eg\
 $pi()$, $1+2$, $now()$, \etc\
 The above code can thus be written as
@@ -293,7 +294,7 @@ A result always has the following methods:
       It is not strictly necessary to release these resources
       explicitly, since the Lua \acronym{gc} takes care of that.
       However, it is a good policy to release results as soon
-      as they are not needed anymore; The \acronym{gc} is not
+      as possible; the \acronym{gc} is not
       aware of the size of the C resources and may decide to
       postpone the next cycle although there is already
       a lot of unused memory on the C side.
@@ -302,7 +303,7 @@ A result always has the following methods:
 \subsection{Status and Error Handling}
 The simplest result type is
 the status which represents an error condition.
-It is provide two methods, namely
+It provides two methods, namely
 \term{errcode}() and \term{errdetails}().
 The former returns a numeric error condition (see appendix
 \ref{chpt_errors}), the latter a string
@@ -333,7 +334,7 @@ decide on how to proceed in the code are
 The programmer may decide to return an error result from
 her function. That is not strictly necessary:
 if the user-defined function does not return anything,
-\nowdb\ will send \term{nowdb.OK} back to the client.
+\nowdb\ will send \term{nowdb}.\acronym{ok} back to the client.
 If user code raises an error, \nowdb\ will convert
 this error into an error message which is sent back
 to the client with error code \term{nowdb}.\acronym{usrerr}.
@@ -342,10 +343,14 @@ For explicit error handling
 the environment provides functions to
 create status codes, namely:
 
-\term{nowdb.success}() creates a status with error code
+\begin{minipage}{\textwidth}
+\begin{itemize}
+\item \term{nowdb.success}() creates a status with error code
 \term{nowdb}.\acronym{ok};
-\term{nowdb.error}(rc, msg) creates a status with error code $rc$ and
+\item \term{nowdb.error}(rc, msg) creates a status with error code $rc$ and
 error message $msg$.
+\end{itemize}
+\end{minipage}
 
 The programmer can use the function
 \term{nowdb.raise}(rc, msg) to immediately terminate
@@ -364,7 +369,7 @@ The functions take three arguments,
 which are all functions themselves, called
 \term{before}, \term{after} and \term{body}.
 Ignoring details of parameter passing
-(which in fact is bit more complex),
+(which in fact is bit more complicated),
 the implementation of \term{pbracket} looks
 like the code snippet:
 
@@ -423,16 +428,16 @@ and reraises the error in case the Boolean was $false$
 \subsection{Rows}
 Row results represent single lines of a result set.
 They appear naturally with cursors which provide
-methods to iterate through the the rows of a result set
+methods to iterate through the rows of a result set
 and this is basically the only way where they
 appear on client side. On server-side there are two
 other occasions where rows appear:
-a stored procedure may return a row (or bunch of rows).
+1) a stored procedure may return a row (or bunch of rows).
 On client side, this is not the case, because \nowdb\
 transforms rows into cursors before they are sent to
 the client. On the server, however, rows are returned in
 their ``raw'' form.
-The second occasion is projections
+2) Projections
 without a \keyword{from} clause.
 
 A row contains one or more typed values.
@@ -493,13 +498,13 @@ which expects a type code and returns a string
 to 'float') and
 \term{nowdb.nowtypebyname}, which expects
 a string and, if this string is recognised
-as the name of the type, returns the corresponding
+as the name of a type, returns the corresponding
 type code; valid type strings are
 'text', 'date', 'time', 'uint', 'uinteger',
 'int', 'integer', 'float', 'bool', 'boolean',
 'null' and 'nil'.
 
-Rows are an important means to return 
+Rows are also an important means to return 
 results back to the calling client.
 A row is created with the function
 \term{nowdb.makerow}, which takes
@@ -571,7 +576,7 @@ Another convenience interface is \term{nowdb.makeresult},
 which creates a row from a single value. The function
 takes two arguments, the type and the value itself
 and returns a row containing this value as its
-only field. A very common use case for this function is to
+only field. A very common use case for this function is
 to communicate a single value back to the calling client.
 Here is a, perhaps, somewhat artificial example:
 
@@ -608,7 +613,7 @@ end
 
 The function computes an approximation
 to the area under the curve
-formed by the time series `ts' with origin $k$
+formed by the stamped edge `ts' with origin $k$
 and timestamp as the $x$-value and field 'fld'
 as the $y$-value.
 
@@ -686,14 +691,14 @@ like \term{field} and \term{typedfield} can be called
 directly on the cursor.
 
 Data are immediately available,
-when the cursor was opened and \term{fetch}
-was called on it.
+when the cursor has been opened and \term{fetch}
+has been called on it.
 The internal offset which points to the current row
 within the bunch of rows now held by the cursor is
 incremented with the method \term{nextrow}.
 The method returns either
 \term{nowdb}.\acronym{eof},
-\term{nowdb}.\acronym{notacur},
+\term{nowdb}.\acronym{notacur}
 or \term{nowdb}.\acronym{ok}.
 Details are not available for this method.
 
@@ -945,7 +950,7 @@ The collection contains currently:
       services to obtain and manage unique identifiers;
 
 \item The Result Cache Library:
-      services for result caches with various
+      services for result caching with various
       expiration strategies;
 
 \item Virtual Cursors:
@@ -955,7 +960,7 @@ The collection contains currently:
        
 \item Numnow:
       Is a Lua implementation of NumPy
-      base on the open source project Lunum.
+      based on the open source project Lunum.
       \comment{not yet...}
 \item Stats
       \comment{not yet...}

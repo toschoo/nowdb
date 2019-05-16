@@ -1448,11 +1448,11 @@ Valid sizing keywords are:
 \keyword{tiny, small, medium, big, large, huge}.
 
 Sizing keywords affect the allocation unit
-of disk space. The concrete meaning is not
+for disk space. The concrete meaning is not
 part of this specification and may change
 in the future.
 
-It is also possible to add options to
+It is also possible to add options 
 to a \term{create storage} statement.
 Options have the general form
 
@@ -1487,7 +1487,7 @@ and may vary between platforms.
 
 The user may decide on the compression algorithm to use.
 The standard compression algorithm is \term{zstd},
-which is fast, but has also very good compression ratio.
+which is fast, but also has a very good compression ratio.
 It is recommended to use \term{zstd} in most cases.
 \term{lz4} (\comment{not yet available}) is faster than \term{zstd},
 in particular on decompression,
@@ -1495,7 +1495,7 @@ but has a weaker compression ratio.
 Finally, no compression at all (empty string)
 makes sense on small tables
 that are known never to grow beyond some megabyte in size
-(or beyond some million edges).
+(or beyond some million edges or vertices).
 
 An example of a \term{create storage} statement with options is
 
@@ -1551,7 +1551,7 @@ that is primary key must be either
 \keyword{uint} or \keyword{text}.
 
 The order in which attributes are declared
-determines the \term{canonical} order for this type.
+determines the \term{canonical order} for this type.
 
 The \keyword{create type} statement has an optional
 \keyword{storage} clause of the form
@@ -1575,7 +1575,8 @@ is managed by the default storage for vertices.
 
 \subsubsection{DROP}
 The \term{drop type} statement removes a type
-from the database.
+and all its vertices
+from the database and physically from disk.
 It has the form:
 
 \keyword{drop type} \identifier{product}
@@ -1598,8 +1599,9 @@ The \term{create edge} statement defines the layout
 of a specific edge type in the database.
 
 There are two variants of the \keyword{create edge} clause.
-The simple variant defines a simple edge, which may only
-have two fields: \keyword{origin} and \keyword{destin}, \eg:
+The simple variant defines a simple edge, which must 
+have precisely two fields:
+\keyword{origin} and \keyword{destin}, \eg:
 
 \keyword{create edge} \identifier{prod\_category} ( \\
 \hspace*{1cm}\keyword{origin} \identifier{product}, \\
@@ -1737,13 +1739,13 @@ It has the form:
 \keyword{create procedure} \identifier{mymodule}.\identifier{myfun}(
                            \identifier{param1} \keyword{uint},
                            \identifier{param2} \keyword{text})
-                           \keyword{language} \identifier{python}
+                           \keyword{language} \identifier{lua}
 
 A procedure may have no parameters.
 The definition then simplifies to
 
 \keyword{create procedure} \identifier{mymodule}.\identifier{myfun}()
-                           \keyword{language} \identifier{python}
+                           \keyword{language} \identifier{lua}
 
 Any number of parameters is allowed and parameters may have
 any static type.
@@ -1776,14 +1778,14 @@ attribute name, type per row.
 \subsection{Lock}
 \subsubsection{CREATE}
 The \term{create lock} statement
-creates a lock in the database.
+creates a read-write lock in the current database.
 It has the form:
 
 \keyword{create lock} \identifier{mylock}.
 
 \subsubsection{DROP}
 The \term{drop lock} statement
-drops a lock from the database.
+drops a lock from the current database.
 It has the form:
 
 \keyword{drop lock} \identifier{mylock}
@@ -1815,9 +1817,9 @@ Without this feature, databases would grow
 to an extent that would make efficient queries difficult
 or even impossible. Deleting data by means of the
 \term{delete} statement, however, is not efficient for large
-amounts of data and in \nowdb\
+amounts of data and, in \nowdb\
 (but also in other databases), deleting
-the data would not solve the problem at all,
+the data would not solve the problem anyway,
 because \term{delete} does not physically remove
 the data, but just makes them invisible.
 
@@ -1843,7 +1845,7 @@ and this clause must contain exactly one condition,
 namely \keyword{between} related to the timestamp.
 
 The rationale for this restriction is
-to avoid accidentally dropping entire tables
+to avoid accidentally dropping too many data
 using too complex or incomplete \term{drop} statements.
 
 To illustrate that, the following example 
@@ -1881,7 +1883,8 @@ The basic form is
                        \identifier{myfield2})
      \keyword{values} (value1, value2)
 
-where `value1' and so on are expressions.
+where `myfield1' \etc\ are fields of entity \identifier{mytable}
+and `value1' and so on are expressions.
 
 A more concrete example is
 
@@ -2080,7 +2083,7 @@ reimported later.
 Here is how to indicate an error file:
 
 \keyword{load} '/opt/import/transactions.csv'
-\keyword{into} \identifier{sales} \\
+\keyword{into} \identifier{buys} \\
 \hspace*{0.3cm}\keyword{set errors} $=$ '/opt/import/transactions.err'
 
 If no error file is indicated,
@@ -2143,7 +2146,7 @@ This is especially useful with joins.
 Expressions are, of course, not necessarily fields.
 They also may be functions, constants or even complex expressions
 composed of fields, constants, functions and operators.
-The following are, for instance, valid \term{select} clauses:
+The following clauses are all valid:
 
 \begin{minipage}{\textwidth}
 \keyword{select} \identifier{true} \\
@@ -2205,7 +2208,8 @@ cursor, while \term{select}-only statements result
 in a single row. This has no impact on queries sent
 from a client, since rows are always wrapped into
 a cursor before they are sent to the client.
-In server-side programming, however, this is a difference
+In server-side programming, however,
+this actually makes a difference
 (see chapter \ref{chpt_luaemb}).
 
 It is also possible to define an alias for fields
@@ -2214,7 +2218,7 @@ the \keyword{as} keyword, \eg:
 
 \keyword{select} \identifier{count}($\ast$) \keyword{as} \identifier{cnt}
 
-The effect is that some clients
+The effect is that some client \acronym{api}s
 (see for example chapter \ref{chpt_papiclient})
 can refer to columns in a cursor by the alias,
 \eg\
@@ -2674,8 +2678,8 @@ one could say:
 \keyword{select} \identifier{count}($\ast$)
 \keyword{from} \identifier{buys}
 
-The partition to which \identifier{count} is applied here
-is the whole result set.
+The partition to which \identifier{count} is applied
+is here the whole result set.
 
 Syntactically, even this is \acronym{ok}:
 
@@ -2782,8 +2786,8 @@ for reading or writing. The simplest form is
 
 \keyword{lock} \identifier{mylock}
 
-This would lock \identifier{mylock} for writing.
-This can be done explicitly:
+This would acquire \identifier{mylock} for writing.
+This can also be done explicitly:
 
 \keyword{lock} \identifier{mylock} \keyword{for writing}
 
@@ -2807,7 +2811,7 @@ lock request cannot acquire it,
 the session blocks until the lock is released.
 There is no guarantee of any particular order
 in which locks are acquired. If two sessions
-were waiting for the same lock, any of the two
+are waiting for the same lock, any of the two
 will acquire the lock when it is released.
 
 The \term{lock} statement allows for specifying

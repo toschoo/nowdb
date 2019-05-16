@@ -147,7 +147,7 @@ be used with the \term{with} statement, \ie:
 
 \begin{python}
 \begin{lstlisting}
-with Connection("localhost", "55505", None, None) as conn:
+with Connection('localhost', '55505', 'myusr', 'mypwd') as conn:
     # here goes your code
     # refer to the connection as 'conn'
 \end{lstlisting}
@@ -183,7 +183,7 @@ to release resources as soon as
 they are not needed anymore.
 Yet again, \term{Result} is a resource manager
 and can be used in \term{with} statements,
-which call release internally, when leaving
+which call release internally when leaving
 the block, \eg:
 
 \begin{python}
@@ -191,7 +191,7 @@ the block, \eg:
 with conn.execute("select count(*) from buys") as cur:
     # here goes your code
     # 'conn' is a previously created connection
-    # 'cur' is the result and
+    # 'cur' is the result and,
     # if no error has occurred, cur is a cursor
 \end{lstlisting}
 \end{python}
