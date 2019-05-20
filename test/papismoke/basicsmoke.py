@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import nowapi as na
+import random
 import now
 import db
 
@@ -23,6 +24,9 @@ def countdb(c, t):
              return row[0]
 
 if __name__ == '__main__':
+
+        random.seed()
+
         (products, clients, stores, buys, visits) = createdb()
 
         pl = len(products)

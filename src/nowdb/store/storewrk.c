@@ -1,5 +1,5 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * ========================================================================
  * Workers for stores
  * ========================================================================
@@ -26,14 +26,14 @@
  * Sync Worker Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SYNCPERIOD    500000000l
+#define SYNCPERIOD   1000000000l
 #define SYNCTIMEOUT 10000000000l
 
 /* ------------------------------------------------------------------------
  * Sorter Period and Timeout
  * ------------------------------------------------------------------------
  */
-#define SORTPERIOD     500000000l
+#define SORTPERIOD    5000000000l
 #define SORTTIMEOUT 300000000000l
 
 #define NOMEM(x) \
@@ -175,8 +175,14 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	nowdb_time_t max = NOWDB_TIME_DAWN;
 	nowdb_time_t min = NOWDB_TIME_DUSK;
+	uint32_t bsz = file->recordsize*(file->bufsize /
+	                                 file->recordsize);
+	uint32_t remsz = file->bufsize - file->recordsize;
 
-	for (int i=0; i<file->size; i+=file->recordsize) {
+	for (int i=0; i<file->size;) {
+		if (i%file->bufsize >= bsz) {
+			i+=remsz; continue;
+		}
 	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) < min)
 	        	memcpy(&min, buf+i+NOWDB_OFF_STAMP,
 			              sizeof(nowdb_time_t));
@@ -184,6 +190,7 @@ static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) > max)
 	        	memcpy(&max, buf+i+NOWDB_OFF_STAMP,
 			              sizeof(nowdb_time_t));
+		i+=file->recordsize;
 	}
 	file->oldest = min;
 	file->newest = max;
@@ -585,15 +592,21 @@ static inline nowdb_err_t compsort(nowdb_worker_t  *wrk,
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	/* erase waiting... */
+	// release pending
+	err = nowdb_store_releasePending(store, src);
+	if (err != NOWDB_OK) return err;
+
+	// erase waiting... 
+	/*
 	err = nowdb_file_erase(src);
 	if (err != NOWDB_OK) {
 		nowdb_file_destroy(src); free(src); return err;
 	}
 
-	/* ...and donate it */
+	// ...and donate it 
 	err = nowdb_store_donate(store, src);
 	if (err != NOWDB_OK) return err;
+	*/
 
 	return NOWDB_OK;
 }

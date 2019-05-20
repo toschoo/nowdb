@@ -308,7 +308,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 
 	/* path */
 	s = strnlen(path, NOWDB_MAX_PATH+1);
-	if (s >= NOWDB_MAX_NAME) {
+	if (s >= NOWDB_MAX_PATH) {
 		return nowdb_err_get(nowdb_err_invalid, FALSE, OBJECT,
 	                                 "path too long (max: 4096)");
 	}
@@ -317,7 +317,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                            "allocating scope path");
 	}
-	strcpy(scope->path, path);
+	strncpy(scope->path, path, s); scope->path[s] = 0;
 
 	/* storage catalog */
 	scope->strgpath = nowdb_path_append(scope->path, STORECAT);
@@ -398,6 +398,13 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 		nowdb_scope_destroy(scope);
 		return err;
 	}
+
+	// ipc
+	err = nowdb_ipc_new(&scope->ipc, path);
+	if (err != NOWDB_OK) {
+		nowdb_scope_destroy(scope);
+		return err;
+	}
 	return NOWDB_OK;
 }
 
@@ -432,6 +439,10 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	if (scope->pman != NULL) {
 		nowdb_procman_destroy(scope->pman);
 		free(scope->pman); scope->pman = NULL;
+	}
+	if (scope->ipc != NULL) {
+		nowdb_ipc_destroy(scope->ipc);
+		free(scope->ipc); scope->ipc = NULL;
 	}
 	nowdb_rwlock_destroy(&scope->lock);
 	ts_algo_tree_destroy(&scope->contexts);
@@ -901,19 +912,13 @@ static inline nowdb_err_t findContext(nowdb_scope_t  *scope,
 	s = strnlen(name, NOWDB_MAX_NAME+1);
 	if (s >= NOWDB_MAX_NAME) return nowdb_err_get(nowdb_err_invalid,
 	                     FALSE, OBJECT, "name too long (max: 255)");
-	search.name = malloc(s+1); /* here a slab could be very useful */
-	if (search.name == NULL) {
-		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
-		                           "allocating name string");
-	}
-	strcpy(search.name, name);
+	search.name = name;
 
 	*ctx = ts_algo_tree_find(&scope->contexts, &search);
 	if (*ctx == NULL) {
 		err = nowdb_err_get(nowdb_err_key_not_found,
 	                        FALSE, OBJECT, search.name);
 	}
-	free(search.name);
 	return err;
 }
 
@@ -1419,6 +1424,10 @@ nowdb_err_t nowdb_scope_drop(nowdb_scope_t *scope) {
 	err = removeFile(scope, "pcat");
 	if (err != NOWDB_OK) goto unlock;
 
+	/* remove ipc */
+	err = removeFile(scope, "ipc");
+	if (err != NOWDB_OK) goto unlock;
+
 	/* remove catalog */
 	err = nowdb_path_remove(scope->catalog);
 	if (err != NOWDB_OK) goto unlock;
@@ -1716,6 +1725,13 @@ nowdb_err_t nowdb_scope_open(nowdb_scope_t *scope) {
 		goto unlock;
 	}
 
+	err = nowdb_ipc_load(scope->ipc);
+	if (err != NOWDB_OK) {
+		nowdb_ipc_destroy(scope->ipc);
+		free(scope->ipc); scope->ipc = NULL;
+		goto unlock;
+	}
+
 	err = openAllContexts(scope);
 	if (err != NOWDB_OK) {
 		nowdb_index_man_destroy(scope->iman);
@@ -1777,6 +1793,9 @@ nowdb_err_t nowdb_scope_close(nowdb_scope_t *scope) {
 	if (scope->model != NULL) {
 		nowdb_model_destroy(scope->model);
 		free(scope->model); scope->model = NULL;
+	}
+	if (scope->ipc != NULL) {
+		nowdb_ipc_close(scope->ipc);
 	}
 	err = nowdb_text_close(scope->text);
 	if (err != NOWDB_OK) goto unlock;
@@ -2359,6 +2378,69 @@ nowdb_err_t nowdb_scope_getProcedure(nowdb_scope_t   *scope,
 
 unlock:
 	err2 = nowdb_unlock_read(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Create Lock
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createLock(nowdb_scope_t  *scope, char *name) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (name == NULL) {
+		INVALID("no lock name");
+	}
+	size_t s = strnlen(name, NOWDB_MAX_NAME+1);
+	if (s >= NOWDB_MAX_NAME || s == 0) {
+		if (s == 0) INVALID("no lock name");
+		INVALID("lock name too long");
+	}
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_ipc_createLock(scope->ipc, name);
+	if (err != NOWDB_OK) goto unlock;
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
+ * Drop Lock
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropLock(nowdb_scope_t *scope, char *name) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	if (name == NULL) {
+		INVALID("no lock name");
+	}
+	size_t s = strnlen(name, NOWDB_MAX_NAME+1);
+	if (s >= NOWDB_MAX_NAME || s == 0) {
+		if (s == 0) INVALID("no lock name");
+		INVALID("lock name too long");
+	}
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) return err;
+
+	err = nowdb_ipc_dropLock(scope->ipc, name);
+	if (err != NOWDB_OK) goto unlock;
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
 	if (err2 != NOWDB_OK) {
 		err2->cause = err; return err2;
 	}

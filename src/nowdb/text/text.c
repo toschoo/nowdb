@@ -825,8 +825,8 @@ nowdb_err_t nowdb_text_getKey(nowdb_text_t *txt,
 		return NOWDB_OK;
 	}
 
-	s = strnlen(str, 4096);
-	if (s > 4095) return nowdb_err_get(nowdb_err_invalid,
+	s = strnlen(str, BIG+1);
+	if (s >= BIG) return nowdb_err_get(nowdb_err_invalid,
 	                     FALSE, OBJECT, "string too big");
 	if (s == 0) {
 		*key = NULLKEY;

@@ -78,8 +78,12 @@
 #define nowdb_err_server          69
 #define nowdb_err_addr            70
 #define nowdb_err_python          71
-#define nowdb_err_unk_symbol      72
-#define nowdb_err_usrerr          73
+#define nowdb_err_lua             72
+#define nowdb_err_unk_symbol      73
+#define nowdb_err_usrerr          74
+#define nowdb_err_selflock        75
+#define nowdb_err_deadlock        76
+#define nowdb_err_doesnothold     77
 #define nowdb_err_unknown       9999
 #endif
 

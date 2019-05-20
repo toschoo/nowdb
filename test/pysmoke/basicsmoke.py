@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
 import now
+import random
 import db
 
 if __name__ == '__main__':
+
+    random.seed()
+
     with now.Connection("localhost", "55505", None, None) as c:
 
 	nump = 100
@@ -67,31 +71,23 @@ if __name__ == '__main__':
               print "we need to have %d" % nume
               exit(1)
 	
-        with c.execute("select prod_key, prod_desc from product") as cur:
-           if not cur.ok():
-              print "ERROR %d: %s" % (cur.code(), cur.details())
-              exit(1)
-           cnt = 0
-           for row in cur:
-              cnt += 1
+        cnt = 0
+        for row in c.execute("select prod_key, prod_desc from product"):
+            cnt += 1
 
-           print "we have %d products" % cnt
-           if cnt != nump:
-              print "we need to have %d" % nump
-              exit(1)
+        print "we have %d products" % cnt
+        if cnt != nump:
+           print "we need to have %d" % nump
+           exit(1)
 
-        with c.execute("select client_key, client_name from client") as cur:
-           if not cur.ok():
-              print "ERROR %d: %s" % (cur.code(), cur.details())
-              exit(1)
-           cnt = 0
-           for row in cur:
-              # print "%s" % row.field(0)
-              cnt += 1
-           print "we have %d clients " % cnt
-           if cnt != numc:
-              print "we need to have %d" % numc
-              exit(1)
+        cnt = 0
+        for row in c.execute("select client_key, client_name from client"):
+            cnt += 1
+
+        print "we have %d clients " % cnt
+        if cnt != numc:
+           print "we need to have %d" % numc
+           exit(1)
 
         with c.execute("select store_name, city, address, size from store") as cur:
            if not cur.ok():

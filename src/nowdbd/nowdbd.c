@@ -37,6 +37,7 @@ char global_feedback = 1;
 char global_timing = 0;
 char global_banner = 1;
 char global_python = 0;
+char global_lua = 0;
 int global_cpool = 128;
 
 /* -----------------------------------------------------------------------
@@ -63,6 +64,7 @@ void helptxt(char *progname) {
 	fprintf(stderr, "all options are in the format -opt value\n");
 	fprintf(stderr, "-b: base path (default: ./)\n");
 	fprintf(stderr, "-c: number of connections (0: infinite)\n");
+	fprintf(stderr, "-l: enable server-side lua\n");
 	fprintf(stderr, "-p: port or service (default: 55505)\n");
 	fprintf(stderr, "-s: bind domain or address (default: any)\n");
 	fprintf(stderr, "-t: timing\n");
@@ -90,7 +92,7 @@ void printVersion() {
  * -----------------------------------------------------------------------
  */
 int getOpts(int argc, char **argv) {
-	char *opts = "b:c:p:s:tqyVh?";
+	char *opts = "b:c:p:s:tqlyVh?";
 	char c;
 	char *tmp, *hlp;
 
@@ -143,6 +145,7 @@ int getOpts(int argc, char **argv) {
 			}
 			break;
 
+		case 'l': global_lua=1; break;
 		case 'y':
 
 #ifdef _NOWDB_WITH_PYTHON
@@ -201,8 +204,14 @@ fprintf(stdout, " \n");
 fprintf(stdout, "  UTC %s\n", tstr);
 fprintf(stdout, " \n");
 fprintf(stdout, "  The server is ready\n");
-#ifdef _NOWDB_WITH_PYTHON
 fprintf(stdout, " \n");
+fprintf(stdout, "    - with lua support ");
+if (lib->luaEnabled) {
+	fprintf(stdout, "enabled\n");
+} else {
+	fprintf(stdout, "disabled\n");
+}
+#ifdef _NOWDB_WITH_PYTHON
 fprintf(stdout, "    - with python support ");
 if (lib->pyEnabled) {
 	fprintf(stdout, "enabled\n");
@@ -464,6 +473,9 @@ int runServer(int argc, char **argv) {
 	if (x > 0) return EXIT_SUCCESS;
 	if (x < 0) return EXIT_FAILURE;
 
+	if (global_lua)
+		flags |= NOWDB_ENABLE_LUA;
+
 	if (global_python)
 		flags |= NOWDB_ENABLE_PYTHON;
 
@@ -584,6 +596,7 @@ int runServer(int argc, char **argv) {
 			fprintf(stderr, "unknown signal: %d\n", sig);
 		}
 		if (global_stop) break;
+		if (rc) break;
 	}
 
 	// stop listener

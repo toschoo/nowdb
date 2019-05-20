@@ -414,6 +414,9 @@ def infun(c):
                     raise db.TestFailed("count does not match for %d: %d" % (i, row.field(0)))
 
 if __name__ == "__main__":
+
+    random.seed()
+
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 

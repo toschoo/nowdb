@@ -190,8 +190,8 @@ nowdb_err_t nowdb_procman_init(nowdb_procman_t *pm,
 	}
 
 	s = strnlen(base, 4097);
-	if (s > 4096) {
-		INVALID("base path too long (max: 4096)");
+	if (s >= 4096) {
+		INVALID("base path too long (max: 4095)");
 		nowdb_procman_destroy(pm);
 		return err;
 	}
@@ -361,8 +361,6 @@ static nowdb_err_t readProc(nowdb_procman_t *pm, char *buf,
 	strcpy(desc->name, buf+*idx);
 	(*idx) += s+1;
 
-	// fprintf(stderr, "loading %s\n", desc->name);
-
 	// type, language and return type
 	if (*idx+2 >= sz) {
 		free(desc->name); free(desc);
@@ -372,6 +370,11 @@ static nowdb_err_t readProc(nowdb_procman_t *pm, char *buf,
 	memcpy(&desc->type, buf+*idx, 1); (*idx)++;
 	memcpy(&desc->lang, buf+*idx, 1); (*idx)++;
 	memcpy(&desc->rtype, buf+*idx, 2); (*idx)+=2;
+
+	/*
+	fprintf(stderr, "loading %s, language: %d\n",
+	                      desc->name, desc->lang);
+	*/
 
 	// module
 	s = strnlen(buf+*idx, sz-*idx-1);

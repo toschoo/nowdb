@@ -78,6 +78,12 @@
 %type load_option {nowdb_ast_t*}
 %destructor load_option {nowdb_ast_destroyAndFree($$);}
 
+%type lock_options {nowdb_ast_t*}
+%destructor lock_options {nowdb_ast_destroyAndFree($$);}
+
+%type lock_option {nowdb_ast_t*}
+%destructor lock_option {nowdb_ast_destroyAndFree($$);}
+
 %type operand {nowdb_ast_t*}
 %destructor operand {nowdb_ast_destroyAndFree($$);}
 
@@ -254,6 +260,10 @@ desc_clause(C) ::= DESC IDENTIFIER(I). {
 	nowdb_ast_setValue(C, NOWDB_AST_V_STRING, I);
 }
 
+/* desc and show procedures */
+/* show locks */
+/* show and desc queues */
+
 /* ------------------------------------------------------------------------
  * DLL
  * ------------------------------------------------------------------------
@@ -353,13 +363,31 @@ misc ::= projection_clause(P). {
 	NOWDB_SQL_MAKE_SELECT(P);
 }
 
-/* val_list shall be expression list! */
 misc ::= EXECUTE IDENTIFIER(I) LPAR RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,NULL);
 }
 
 misc ::= EXECUTE IDENTIFIER(I) LPAR expr_list(V) RPAR. {
 	NOWDB_SQL_MAKE_EXEC(I,V);
+}
+
+misc ::= LOCK IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_LOCK(I, NOWDB_AST_LOCK, NULL);
+}
+
+misc ::= LOCK IDENTIFIER(I) FOR IDENTIFIER(M). {
+	nowdb_ast_t *m;
+	NOWDB_SQL_MAKE_OPTION(m, NOWDB_AST_MODE, NOWDB_AST_V_STRING, M);
+	NOWDB_SQL_MAKE_LOCK(I, NOWDB_AST_LOCK, m);
+}
+
+misc ::= LOCK IDENTIFIER(I) FOR IDENTIFIER(M) SET lock_options(O). {
+	NOWDB_SQL_ADD_OPTION(O, NOWDB_AST_MODE, NOWDB_AST_V_STRING, M);
+	NOWDB_SQL_MAKE_LOCK(I, NOWDB_AST_LOCK, O);
+}
+
+misc ::= UNLOCK IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_LOCK(I, NOWDB_AST_UNLOCK, NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -448,6 +476,10 @@ create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR RPAR 
 /* field_decl_list also allows PK! */
 create_clause(C) ::= CREATE PROCEDURE IDENTIFIER(M) DOT IDENTIFIER(N) LPAR field_decl_list(P) RPAR LANGUAGE IDENTIFIER(L). {
 	NOWDB_SQL_MAKE_PROC(C, M, N, L, 0, P);
+}
+
+create_clause(C) ::= CREATE LOCK IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_CREATE(C, NOWDB_AST_MUTEX, I, NULL);
 }
 
 storage_clause(S) ::= STORAGE EQ IDENTIFIER(I). {
@@ -555,6 +587,10 @@ drop_clause(C) ::= DROP EDGE IDENTIFIER(I). {
 
 drop_clause(C) ::= DROP PROCEDURE IDENTIFIER(I). {
 	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_PROC,I,NULL);
+}
+
+drop_clause(C) ::= DROP LOCK IDENTIFIER(I). {
+	NOWDB_SQL_MAKE_DROP(C,NOWDB_AST_MUTEX,I,NULL);
 }
 
 /* ------------------------------------------------------------------------
@@ -714,6 +750,26 @@ load_option(O) ::= ERRORS EQ STRING(S). {
 	NOWDB_SQL_CHECKSTATE();
 	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_ERRORS);
 	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, S);
+}
+
+/* ------------------------------------------------------------------------
+ * LOCK options
+ * ------------------------------------------------------------------------
+ */
+lock_options(L) ::= lock_option(O). {
+	L=O;
+}
+
+lock_options(L) ::= lock_option(O) COMMA lock_options(L2). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_ADDKID(O,L2);
+	L=O;
+}
+
+lock_option(O) ::= TIMEOUT EQ UINTEGER(I). {
+	NOWDB_SQL_CHECKSTATE();
+	NOWDB_SQL_CREATEAST(&O, NOWDB_AST_OPTION, NOWDB_AST_TIMEOUT);
+	nowdb_ast_setValue(O, NOWDB_AST_V_STRING, I);
 }
 
 /* ------------------------------------------------------------------------

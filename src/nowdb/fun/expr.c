@@ -2329,7 +2329,9 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_MIN:
 	case NOWDB_EXPR_OP_SEC:
 		if (types[0] != NOWDB_TYP_TIME &&
-		    types[0] != NOWDB_TYP_DATE) {
+		    types[0] != NOWDB_TYP_DATE &&
+                    types[0] != NOWDB_TYP_UINT &&
+                    types[0] != NOWDB_TYP_INT) {
 			INVALIDTYPE("not a time value");
 		}
 		return getTimeComp(fun, argv[0], res);
@@ -2338,7 +2340,9 @@ static nowdb_err_t evalFun(uint32_t       fun,
 	case NOWDB_EXPR_OP_MICRO:
 	case NOWDB_EXPR_OP_NANO:
 		if (types[0] != NOWDB_TYP_TIME &&
-		    types[0] != NOWDB_TYP_DATE) 
+		    types[0] != NOWDB_TYP_DATE &&
+                    types[0] != NOWDB_TYP_UINT &&
+                    types[0] != NOWDB_TYP_INT) 
 		{
 			INVALIDTYPE("not a time value");
 		}

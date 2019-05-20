@@ -1,0 +1,4 @@
+drop procedure: remove from session
+---------------
+
+when a procedure is dropped remove it from session, i.e. proc

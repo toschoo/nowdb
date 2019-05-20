@@ -49,7 +49,7 @@ def createDB(c, db):
                       prod_packing uint, \
                       prod_price float)") as r:
         if not r.ok():
-            raise FailedCreation("cannot create type product")
+            raise FailedCreation("cannot create type product: %d (%s)" % (r.code(), r.details()))
 
     # this one is for insert tests
     with c.execute("create type product2 ( \

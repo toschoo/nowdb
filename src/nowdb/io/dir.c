@@ -25,11 +25,11 @@ nowdb_path_t nowdb_path_append(nowdb_path_t base, nowdb_path_t toadd) {
 
 	if (base == NULL) return NULL;
  	s1 = strnlen(base, NOWDB_MAX_PATH+1);
-	if (s1 > NOWDB_MAX_PATH) return NULL;
+	if (s1 >= NOWDB_MAX_PATH) return NULL;
 
 	if (toadd == NULL) return NULL;
  	s2 = strnlen(toadd, NOWDB_MAX_PATH+1);
-	if (s2 > NOWDB_MAX_PATH) return NULL;
+	if (s2 >= NOWDB_MAX_PATH) return NULL;
 
 	if (s1 + s2 + 1 > NOWDB_MAX_PATH) return NULL;
 

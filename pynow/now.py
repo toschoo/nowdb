@@ -2,7 +2,7 @@
    Basic Python NOWDB Client Interface
  
    -----------------------------------
-   (c) Tobias Schoofs, 2018
+   (c) Tobias Schoofs, 2018 - 2019
    -----------------------------------
    
    This file is part of the NOWDB CLIENT Library.
@@ -54,7 +54,17 @@ INT = 5
 UINT = 6
 BOOL = 9
 
+OK = 0
 EOF = 8
+NOMEM = 1
+TOOBIG = 5
+KEYNOF = 26
+DUPKEY = 27
+TIMEOUT = 36
+USRERR  =  74
+SELFLOCK =  75 
+DEADLOCK =  76
+NOTMYLOCK =  77
 
 utc = tzutc()
 
@@ -173,12 +183,11 @@ class Connection:
     The Connection class provides access to a NoWDB server.
     Connection is a resource manager and can be used
     in a 'with' statement, e.g.:
-       with nowapi.connect('localhost', '50677', 'user', 'mypwd') as c:
+       with now.connect('localhost', '50677', 'user', 'mypwd') as c:
            ...
     close() is called on leaving the scope of the with statment.
    
     A connection can be shared between threads.
-
     '''
     def __init__(self, addr, port, usr, pwd):
         if type(addr) != str or \
@@ -223,7 +232,7 @@ class Connection:
 
     def execute(self, stmt):
         '''
-        executes an sql statement agains the database.
+        executes an sql statement against the database.
         It returns a polymorphic 'result' (see below).
         '''
         if type(stmt) != str:
@@ -234,6 +243,54 @@ class Connection:
             return Result(r)
         else:
             raise ClientError(x)
+
+    def rexecute(self, stmt):
+        '''
+        executes an sql statement.
+        On success, it returns a polymorphic 'result' (see below).
+        If the result indicates an error condition,
+        the result is released and a DBError exception is raised.
+        '''
+        r = self.execute(stmt)
+        if r.ok():
+           return r
+        else:
+          c = r.code()
+          d = r.details()
+          r.release()
+          raise DBError(c, d)
+
+    def rexecute_(self, stmt):
+        '''
+        executes an sql statement.
+        On error, the result is released and a DBError exception is raised.
+        On success, the result is released and nothing is returned.
+        '''
+        r = self.rexecute(stmt)
+        r.release()
+
+    def oneRow(self, stmt):
+        '''
+        executes an sql statement (which is assumed to result in a cursor). 
+        On error, the result is released and a DBError exception is raised.
+        On success, the cursor is released and
+        its first row is returned as a list.
+        '''
+        r = []
+        for row in self.rexecute(stmt):
+            for i in range(row.count()):
+                r.append(row.field(i))
+            break
+        return r
+
+    def oneValue(self, stmt):
+        '''
+        executes an sql statement (which is assumed to result in a cursor). 
+        On error, the result is released and a DBError exception is raised.
+        On success, the cursor is released and
+        the first value of its first row is returned.
+        '''
+        return self.oneRow(stmt)[0]
 
 # ---- result
 class Result:
@@ -321,18 +378,22 @@ class Result:
     def __next__(self):
         x = self.rType()
         if x != CURSOR and x != ROW:
+            self.release()
             raise StopIteration
 
         if not self.ok():
+            self.release()
             raise StopIteration
 
         if self.needNext:
             if self.rw is None:
+               self.release()
                raise StopIteration
             if not self.rw.nextRow():
                 self.rw.release()
                 self.rw = None
                 if x != CURSOR:
+                   self.release()
                    raise StopIteration
                 self.fetch()
                 if not self.ok():
@@ -340,6 +401,7 @@ class Result:
                     d = self.details()
 
                     if x == EOF:
+                       self.release()
                        raise StopIteration
 
                     raise DBError(x, d)
@@ -446,7 +508,6 @@ class Result:
                for row cur:
                    (t,v) = row.field(0)
                    print("value %s is of type %d" % (t,v))
-        
         '''
         x = self.rType()
         if x != CURSOR and x != ROW:

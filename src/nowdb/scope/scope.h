@@ -22,6 +22,7 @@
 #include <nowdb/mem/plru12.h>
 #include <nowdb/text/text.h>
 #include <nowdb/scope/procman.h>
+#include <nowdb/scope/ipc.h>
 
 #include <tsalgo/tree.h>
 
@@ -30,18 +31,19 @@
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_rwlock_t       lock; /* read/write lock       */
-	uint32_t            state; /* open or closed        */
-	nowdb_path_t         path; /* base path             */
-	nowdb_path_t     strgpath; /* catalog path          */
-	nowdb_path_t      catalog; /* ctx catalog path      */
-	nowdb_version_t       ver; /* db version            */
-	ts_algo_tree_t    storage; /* tree of storage cfgs */
-	ts_algo_tree_t   contexts; /* contexts              */
-	nowdb_index_man_t   *iman; /* index manager         */
-	nowdb_model_t      *model; /* model                 */
-	nowdb_text_t        *text; /* strings               */
-	nowdb_procman_t     *pman; /* stored procedures     */
+	nowdb_rwlock_t       lock; // read/write lock
+	uint32_t            state; // open or closed
+	nowdb_path_t         path; // base path
+	nowdb_path_t     strgpath; // catalog path
+	nowdb_path_t      catalog; // ctx catalog path
+	nowdb_version_t       ver; // db version
+	ts_algo_tree_t    storage; // tree of storage cfgs
+	ts_algo_tree_t   contexts; // contexts
+	nowdb_index_man_t   *iman; // index manager
+	nowdb_model_t      *model; // model
+	nowdb_text_t        *text; // strings
+	nowdb_procman_t     *pman; // stored procedures
+	nowdb_ipc_t          *ipc; // inter-session communication 
 } nowdb_scope_t;
 
 /* -----------------------------------------------------------------------
@@ -205,6 +207,18 @@ nowdb_err_t nowdb_scope_dropProcedure(nowdb_scope_t *scope,
 nowdb_err_t nowdb_scope_getProcedure(nowdb_scope_t   *scope,
                                      char             *name,
                                      nowdb_proc_desc_t **pd);
+
+/* -----------------------------------------------------------------------
+ * Create Lock
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_createLock(nowdb_scope_t  *scope, char *name);
+
+/* -----------------------------------------------------------------------
+ * Drop Lock
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_dropLock(nowdb_scope_t *scope, char *name);
 
 /* -----------------------------------------------------------------------
  * Create Type

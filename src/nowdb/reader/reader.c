@@ -450,7 +450,7 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 
 	if (reader->file != NULL) {
 		if (reader->file->id != fid) {
-			err = nowdb_file_close(reader->file);
+			err = nowdb_file_close(reader->file); // only close if it was opened by us!
 			if (err != NOWDB_OK) return err;
 			reader->file = NULL;
 		}
@@ -458,7 +458,10 @@ static inline nowdb_err_t getpage(nowdb_reader_t *reader, nowdb_pageid_t pge) {
 	if (reader->file == NULL) {
 		reader->file = findfile(reader->files, fid);
 		if (reader->file == NULL) {
-			fprintf(stderr, "file not found %u\n", fid);
+			/* this is not an error:
+			 * file is already in the index
+			 * but was not in the readers... */
+			// fprintf(stderr, "file not found %u\n", fid);
 			return nowdb_err_get(nowdb_err_key_not_found,
 			                         FALSE, OBJECT, NULL);
 		}

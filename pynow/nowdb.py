@@ -2,7 +2,7 @@
    Basic Python NOWDB Stored Procedure Interface
  
    -----------------------------------
-   (c) Tobias Schoofs, 2018
+   (c) Tobias Schoofs, 2018 -- 2019
    -----------------------------------
    
    This file is part of the NOWDB Stored Procedure Library.

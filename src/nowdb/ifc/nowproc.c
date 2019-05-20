@@ -1,5 +1,5 @@
 /* ========================================================================
- * (c) Tobias Schoofs, 2018
+ * (c) Tobias Schoofs, 2018 -- 2019
  * 
  * This file is part of the NOWDB Stored Procedure Library.
  *
@@ -147,7 +147,6 @@ nowdb_err_t nowdb_dbresult_err(nowdb_dbresult_t res) {
 char *nowdb_dbresult_details(nowdb_dbresult_t res) {
 	if (res == NULL) return NULL;
 	return nowdb_err_describe(res->err, ';');
-	
 }
 
 /* ------------------------------------------------------------------------
@@ -318,7 +317,24 @@ nowdb_dbresult_t nowdb_dbresult_makeError(int errcode,
 	if (r == NULL) return NULL;
 
 	r->errcode = errcode;
-	r->err = nowdb_err_get(errcode, FALSE, "python", msg);
+	r->err = nowdb_err_get(errcode, FALSE, "user", msg);
+
+	return r;
+}
+
+/* ------------------------------------------------------------------------
+ * Create a result from error (already having an error descriptor)
+ * ------------------------------------------------------------------------
+ */
+nowdb_dbresult_t nowdb_dbresult_fromError(nowdb_err_t err) {
+	struct nowdb_dbresult_t *r;
+
+	r = mkResult(NOWDB_DBRESULT_STATUS);
+	if (r == NULL) return NULL;
+
+	if (err == NOWDB_OK) return r;
+	r->errcode = err->errcode;
+	r->err = err;
 
 	return r;
 }
@@ -392,6 +408,8 @@ int nowdb_dbresult_add2Row(nowdb_dbrow_t row, char t, void *value)
 	}
 	qr->row = tmp;
 	ROW(row)->res.result = qr;
+	ROW(row)->sz = qr->sz;
+	ROW(row)->buf = qr->row;
 	return 0;
 }
 
@@ -428,6 +446,8 @@ int nowdb_dbresult_closeRow(nowdb_dbrow_t row) {
 
 	nowdb_row_addEOR(qr->row, &qr->sz);
 	ROW(row)->res.result = qr;
+	ROW(row)->sz = qr->sz;
+	ROW(row)->buf = qr->row;
 	return 0;
 }
 
@@ -613,6 +633,7 @@ int nowdb_dbrow_count(nowdb_dbrow_t p) {
 	int i;
 	int f=0;
 
+	if (ROW(p)->buf == NULL) return 0;
 	for(i=ROW(p)->off; i<ROW(p)->sz && ROW(p)->buf[i] != NOWDB_EOR;)  {
 		if (ROW(p)->buf[i] == NOWDB_TYP_TEXT) {
 			i = findEndOfStr(ROW(p)->buf,
@@ -645,6 +666,11 @@ void *nowdb_dbrow_field(nowdb_dbrow_t p, int field, int *type) {
 			i = findEndOfStr(ROW(p)->buf,
 			                 ROW(p)->sz,i);
 			if (i < 0) break;
+
+		} else if (ROW(p)->buf[i] == NOWDB_TYP_BOOL ||
+                           ROW(p)->buf[i] == NOWDB_TYP_NOTHING) {
+			i+=2;
+
 		} else {
 			i+=9;
 		}

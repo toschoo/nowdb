@@ -93,6 +93,31 @@ def simplequeries(c):
             if row.field(0) != n:
                raise db.TestFailed("wrong count: %d %% %d" % (n, row.field(0)))
 
+def singlerow(c):
+
+    print "RUNNING TEST 'singlerow'"
+
+    stmt = "select count(*), sum(quantity) from buys"
+    cnt = 0
+    sm  = 0
+    for row in c.execute(stmt):
+        cnt = row.field(0)
+        sm  = row.field(1)
+
+    r = c.oneRow(stmt)
+    if r[0] != cnt:
+       raise db.TestFailed("count differs: %d | %d" % (r[0], cnt))
+    if r[1] != sm:
+       raise db.TestFailed("sum differs: %d | %d" % (r[1], sm))
+
+    v = c.oneValue("select count(*) from buys")
+    if v != cnt:
+       raise db.TestFailed("count differs (2): %d | %d" % (v, cnt))
+
+    v = c.oneValue("select sum(quantity) from buys")
+    if v != sm:
+       raise db.TestFailed("sum differs (2): %d | %d" % (v, sm))
+
 # complex where queries
 def nwherequeries(c):
 
@@ -240,10 +265,14 @@ def orderqueries(c):
        raise db.TestFailed("data not sorted!")
 
 if __name__ == "__main__":
+
+    random.seed()
+
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
         simplequeries(c)
+        singlerow(c)
         nwherequeries(c)
         groupqueries(c)
         orderqueries(c)

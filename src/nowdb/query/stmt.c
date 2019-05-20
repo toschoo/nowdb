@@ -40,6 +40,13 @@
 #define PYTHONERR(s) \
 	err = nowdb_err_get(nowdb_err_python, FALSE, OBJECT, s)
 
+/* -------------------------------------------------------------------------
+ * Macro for the very common error "lua error"
+ * -------------------------------------------------------------------------
+ */
+#define LUAERR(s) \
+	err = nowdb_err_get(nowdb_err_lua, FALSE, OBJECT, s)
+
 static char *OBJECT = "stmt";
 
 /* -------------------------------------------------------------------------
@@ -876,7 +883,8 @@ static nowdb_err_t createProc(nowdb_ast_t  *op,
 	lang = l->value;
 	if (lang == NULL) INVALIDAST("no name in language option");
 
-	if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
+	if (strcasecmp(lang, "lua") == 0) lx = NOWDB_STORED_LUA;
+	else if (strcasecmp(lang, "python") == 0) lx = NOWDB_STORED_PYTHON;
 	else INVALIDAST("unknown language in AST");
 
 	// return type
@@ -982,6 +990,46 @@ static nowdb_err_t dropProc(nowdb_ast_t  *op,
 		if (o != NULL) {
 			nowdb_err_release(err);
 			err = NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: create lock
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t createLock(nowdb_ast_t  *op,
+                              nowdb_ast_t *trg,
+                          nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	err = nowdb_scope_createLock(scope, trg->value);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err->errcode == nowdb_err_dup_key) {
+		nowdb_ast_t *o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
+		}
+	}
+	return err;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: drop lock
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t dropLock(nowdb_ast_t  *op,
+                                  char *name,
+                        nowdb_scope_t *scope)  {
+	nowdb_err_t err;
+	err = nowdb_scope_dropLock(scope, name);
+	if (err == NOWDB_OK) return NOWDB_OK;
+	if (err->errcode == nowdb_err_key_not_found) {
+		nowdb_ast_t *o = nowdb_ast_option(op, NOWDB_AST_IFEXISTS);
+		if (o != NULL) {
+			nowdb_err_release(err);
+			return NOWDB_OK;
 		}
 	}
 	return err;
@@ -1355,6 +1403,147 @@ static nowdb_err_t handleSelect(nowdb_scope_t    *scope,
 }
 
 /* -------------------------------------------------------------------------
+ * Helper: handle lock/unlock
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t handleLock(nowdb_scope_t   *scope,
+                                     nowdb_ast_t        *op,
+                                     void              *proc,
+                                     nowdb_qry_result_t *res) {
+	nowdb_err_t  err;
+	nowdb_ast_t *o;
+	char *name;
+	char mode = NOWDB_IPC_WLOCK;
+	int64_t tmo = -1;
+
+	if (proc == NULL) {
+		INVALID("no session"); return err;
+	}
+
+	if (op->value == NULL) {
+		INVALIDAST("no target name in ast");
+	}
+
+	name = op->value;
+	if (strnlen(name, NOWDB_MAX_NAME+1) >= NOWDB_MAX_NAME) {
+		INVALIDAST("lock name too long");
+	}
+
+	char holds = nowdb_proc_holdsLock(proc, name);
+
+	if (op->ntype == NOWDB_AST_LOCK) {
+		if (holds) return nowdb_err_get(nowdb_err_selflock,
+		                               FALSE, OBJECT, name);
+		o = nowdb_ast_option(op, NOWDB_AST_MODE);
+		if (o != NULL) {
+			if (strcasecmp(o->value, "READING") == 0)
+				mode = NOWDB_IPC_RLOCK;
+		}
+		o = nowdb_ast_option(op, NOWDB_AST_TIMEOUT);
+		if (o != NULL) {
+			if (nowdb_ast_getInt(o, &tmo) != 0) {
+				INVALIDAST("timeout is not a valid number");
+			}
+		}
+		err = nowdb_ipc_lock(scope->ipc, name, mode, tmo);
+		if (err == NOWDB_OK) {
+			err = nowdb_proc_addLock(proc, name);
+		}
+	} else {
+		if (!holds) return nowdb_err_get(nowdb_err_doesnothold,
+		                                   FALSE, OBJECT, name);
+		err = nowdb_ipc_unlock(scope->ipc, name);
+		if (err == NOWDB_OK) {
+			nowdb_proc_removeLock(proc, name);
+		}
+	}
+	return err;
+}
+
+#define LUADESTROYARGS(n,args) \
+	for(int z=0; z<n; z++) { \
+		if (args[z] != NULL) { \
+			if (args[z]->value != NULL) { \
+				free(args[z]->value); \
+			} \
+			free(args[z]); args[z] = NULL; \
+		} \
+	} \
+	free(args);
+
+/* -------------------------------------------------------------------------
+ * Helper: get lua arguments from ast
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getLuaArgs(nowdb_scope_t        *scope,
+                                     nowdb_proc_desc_t       *pd,
+                                     nowdb_ast_t         *params,
+                                     nowdb_simple_value_t **args) {
+	nowdb_err_t err;
+	nowdb_ast_t  *p;
+
+	if (pd->argn == 0) return NOWDB_OK;
+	if (params == NULL) {
+		LUAERR("not enough parameters");
+		return err;
+	}
+	p = params;
+	for(int i=0; i<pd->argn; i++) {
+		err = expr2simplev(scope, NULL, p, args+i);
+		if (err != NOWDB_OK) {
+			LUADESTROYARGS(i,args);
+			return err;
+		}
+		p = nowdb_ast_nextParam(p);
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Helper: execute Lua function 
+ * -------------------------------------------------------------------------
+ */
+static inline nowdb_err_t execLua(nowdb_scope_t    *scope,
+                                  nowdb_ast_t        *ast,
+                                  nowdb_proc_t      *proc,
+                                  nowdb_proc_desc_t   *pd,
+                                  void                 *f,
+                                  void                 *c,
+                                  nowdb_qry_result_t *res) {
+	nowdb_err_t err;
+	nowdb_simple_value_t **args=NULL;
+	nowdb_dbresult_t p=NULL;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result  = NULL;
+
+	if (pd->argn > 0) {
+		args = calloc(pd->argn, sizeof(nowdb_simple_value_t*));
+		if (args == NULL) {
+			NOMEM("allocating argument buffer");
+			return err;
+		}
+		err = getLuaArgs(scope, pd, nowdb_ast_param(ast), args);
+		if (err != NOWDB_OK) return err;
+	}
+
+	p = nowdb_proc_call(proc, c, f, args);
+	if (args != NULL) {
+		LUADESTROYARGS(pd->argn, args);
+	}
+	if (p == NULL) {
+		LUAERR("Call failed: result is NULL");
+		return err;
+	}
+	if (!nowdb_dbresult_status(p)) {
+		err = nowdb_dbresult_err(p); free(p);
+		return err;
+	}
+	nowdb_dbresult_result(p, res); free(p);
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
  * Helper: convert nowdb type to python type
  * -------------------------------------------------------------------------
  */
@@ -1469,7 +1658,7 @@ static nowdb_err_t loadPyArgs(nowdb_scope_t *scope,
 #endif
 
 /* -------------------------------------------------------------------------
- * Helper: load arguments for python function
+ * Helper: execute a python function
  * -------------------------------------------------------------------------
  */
 #ifdef _NOWDB_WITH_PYTHON
@@ -1477,8 +1666,8 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
                                      nowdb_ast_t        *ast,
                                      nowdb_proc_t      *proc,
                                      nowdb_proc_desc_t   *pd,
-                                     PyObject             *f,
-                                     PyObject             *c,
+                                     void                 *f,
+                                     void                 *c,
                                      nowdb_qry_result_t *res)
 {
 	nowdb_err_t err;
@@ -1507,7 +1696,9 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		return err;
 	}
 
-	r = nowdb_proc_call(c, f, args);
+	// fprintf(stderr, "calling f (%s) as %p | %p\n", pd->name, f, pd);
+
+	r = nowdb_proc_call(proc, c, f, args);
 	if (args != NULL) Py_DECREF(args);
 
 	if (r == NULL) {
@@ -1525,7 +1716,6 @@ static inline nowdb_err_t execPython(nowdb_scope_t    *scope,
 		nowdb_proc_updateInterpreter(proc);
 		return err;
 	}
-
 	nowdb_dbresult_result(p, res); free(p);
 
 	nowdb_proc_updateInterpreter(proc);
@@ -1561,6 +1751,14 @@ static nowdb_err_t handleExec(nowdb_scope_t    *scope,
 	if (err != NOWDB_OK) return err;
 
 	switch(pd->lang) {
+	case NOWDB_STORED_LUA:
+ 		if (!lib->luaEnabled) {
+			INVALID("feature not enabled: Lua");
+			return err;
+		}
+
+		return execLua(scope, ast, rsc, pd, f, c, res);
+
 	case NOWDB_STORED_PYTHON:
 
  		if (!lib->pyEnabled) {
@@ -1816,6 +2014,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return createEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:
 			return createProc(op, trg, scope);
+		case NOWDB_AST_MUTEX:
+			return createLock(op, trg, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -1835,6 +2035,8 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 			return dropEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:
 			return dropProc(op, trg->value, scope);
+		case NOWDB_AST_MUTEX:
+			return dropLock(op, trg->value, scope);
 		default: INVALIDAST("invalid target in AST");
 		}
 	}
@@ -2221,6 +2423,12 @@ static nowdb_err_t handleMisc(nowdb_ast_t *ast,
 		res->resType = NOWDB_QRY_RESULT_NOTHING;
 		res->result = NULL;
 		return handleSelect(scope, op, res);
+
+	case NOWDB_AST_LOCK:
+	case NOWDB_AST_UNLOCK:
+		res->resType = NOWDB_QRY_RESULT_NOTHING;
+		res->result = NULL;
+		return handleLock(scope, op, rsc, res);
 
 	default: INVALIDAST("invalid operation in AST");
 	}

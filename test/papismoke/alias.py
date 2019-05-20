@@ -153,6 +153,9 @@ def aliastest(c):
         i+=1
 
 if __name__ == "__main__":
+
+    random.seed()
+
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
         wrongtest(c)

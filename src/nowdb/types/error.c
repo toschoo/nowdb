@@ -56,13 +56,14 @@ static inline nowdb_err_t errget(nowdb_errcode_t errcode,
 	err->errcode = errcode;
 	if (object != NULL) strncpy(err->object, object, 7);
 	if (info != NULL) {
-		int l = strnlen(info, NOWDB_MAX_NAME);
+		int l = strnlen(info, 4096);
 		err->info = malloc(l+1);
 		if (err->info == NULL) {
 			nowdb_errman_release(err);
 			return NULL;
 		}
-		strcpy(err->info, info); err->info[l] = 0;
+		strncpy(err->info, info, l);
+		err->info[l] = 0;
 	}
 	return err;
 }
@@ -165,7 +166,7 @@ static char *describe(nowdb_err_t err, char *indent, char term) {
 	len += strlen(o);
 
 	if (err->info != NULL) {
-		len += strnlen(err->info, NOWDB_MAX_NAME);
+		len += strlen(err->info);
 	}
 	len++; /* '\0' */
 	
@@ -313,8 +314,12 @@ const char* nowdb_err_desc(nowdb_errcode_t rc) {
 	case nowdb_err_server: return "internal server error";
 	case nowdb_err_addr: return "cannot find address information";
 	case nowdb_err_python: return "python api error";
+	case nowdb_err_lua: return "lua api error";
 	case nowdb_err_unk_symbol: return "unknown symbol";
 	case nowdb_err_usrerr: return "error in stored procedure";
+	case nowdb_err_selflock: return "selflock detected";
+	case nowdb_err_deadlock: return "deadlock detected";
+	case nowdb_err_doesnothold: return "session does not hold the lock";
 	default: return "unknown";
 	}
 }

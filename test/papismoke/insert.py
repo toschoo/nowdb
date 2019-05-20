@@ -174,6 +174,9 @@ def insertfun(c):
             db.TestFailed("this is not e*pi: %.f" % row['price'])
 
 if __name__ == "__main__":
+
+    rnd.seed()
+
     with na.connect("localhost", "55505", None, None, 'db150') as c:
 
         testnoresult(c)

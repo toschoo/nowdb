@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <signal.h>
 
 #define DELAY 1000000
 
@@ -356,8 +357,9 @@ void *job(void *args) {
 	}
 	for(;;) {
 		// fprintf(stderr, "dequeuing from %p\n", q1);
-		err = nowdb_queue_dequeue(q1, -1, (void**)&rcv);
+		err = nowdb_queue_dequeue(q1, 100000000, (void**)&rcv);
 		if (err != NOWDB_OK) {
+			fprintf(stderr, "ERROR ON JOB: dequeue\n");
 			nowdb_err_print(err);
 			nowdb_err_release(err);
 			NOWDB_IGNORE(nowdb_unlock(qs->lock));
@@ -440,6 +442,7 @@ nowdb_bool_t test2tasks() {
 		free(fibs);
 		return FALSE;
 	}
+	fprintf(stderr, "DETACH: %d\n", pthread_detach(t));
 
 	f = malloc(sizeof(uint32_t));
 	if (f == NULL) {
@@ -467,6 +470,7 @@ nowdb_bool_t test2tasks() {
 		// fprintf(stderr, "dequeuing from %p\n", &q2);
 		err = nowdb_queue_dequeue(&q2, -1, (void**)&rcv);
 		if (err != NOWDB_OK) {
+			fprintf(stderr, "ERROR ON MAIN: dequeue\n");
 			nowdb_err_print(err);
 			nowdb_err_release(err);
 			NOWDB_IGNORE(nowdb_queue_shutdown(&q1));
@@ -548,6 +552,11 @@ nowdb_bool_t test2tasks() {
 
 int main() {
 	int rc = EXIT_SUCCESS;
+
+	sigset_t six;
+	sigemptyset(&six);
+	sigaddset(&six, SIGUSR1);
+	pthread_sigmask(SIG_SETMASK, &six, NULL);
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "nowdb_err_init failed\n");

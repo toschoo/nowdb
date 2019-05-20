@@ -96,7 +96,7 @@ char *nowdb_row_fromValue(nowdb_type_t t, void *value, uint32_t *sz) {
 static inline int findEndOfStr(char *buf, int sz, int idx) {
 	int z;
 	int x = strnlen(buf+idx, 4097);
-	if (x > 4096) return -1;
+	if (x >= 4096) return -1;
 	z = idx+x;
 	if (z>=sz) return -1;
 	return (z+1);
@@ -214,7 +214,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 	case NOWDB_TYP_TEXT:
 	case NOWDB_TYP_LONGTEXT:
 		s = strnlen((char*)value, 4097);
-		if (s > 4096) return NULL;
+		if (s >= 4096) return NULL;
 
 		s+=2;
 
@@ -253,7 +253,7 @@ char *nowdb_row_addValue(char *row, nowdb_type_t t,
 		row2[l] = (char)t;
 
 		if (t==NOWDB_TYP_BOOL) {
-			char v = (char)*(uint64_t*)value;
+			char v = (char)*(int64_t*)value;
 			memcpy(row2+l+1, &v, m);
 		} else {
 			memcpy(row2+l+1, value, m);

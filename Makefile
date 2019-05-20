@@ -24,7 +24,7 @@ CFLAGS = -O3 -g -Wall -std=c99 -fPIC \
 
 LDFLAGS = -L./lib
 
-INC = -I./include -I./test -I./src -I./
+INC = -I./include -I./test -I./src -I./ -I/usr/include/lua5.3
 LIB = lib
 CLIENTLIB = nowclientlib 
 
@@ -32,6 +32,7 @@ SRC = src/nowdb
 SRD = src/nowdbd
 SRL = src/nowdbclient
 PYC = pynow
+LUA = lua
 SQL = $(SRC)/sql
 HDR = include/nowdb
 TST = test
@@ -48,7 +49,8 @@ OUTLIB = lib
 DOC=doc
 MAN=doc/manual
 LIBPY = python2.7
-libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY)
+LIBLUA = lua5.3
+libs = -lm -ldl -lpthread -ltsalgo -lbeet -lzstd -lcsv -l$(LIBPY) -l$(LIBLUA)
 clibs = -lm -lpthread -ltsalgo -lcsv
 
 OBJ = $(SRC)/types/types.o    \
@@ -78,6 +80,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/scope/scope.o    \
       $(SRC)/scope/loader.o   \
       $(SRC)/scope/procman.o  \
+      $(SRC)/scope/ipc.o      \
       $(SRC)/scope/dml.o      \
       $(SRC)/index/index.o    \
       $(SRC)/index/compare.o  \
@@ -102,6 +105,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/query/cursor.o   \
       $(SRC)/ifc/proc.o       \
       $(SRC)/ifc/nowproc.o    \
+      $(SRC)/ifc/luaproc.o    \
       $(SRC)/ifc/nowdb.o
 
 DEP = $(SRC)/types/version.h  \
@@ -133,6 +137,7 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/scope/loader.h   \
       $(SRC)/scope/procman.h  \
       $(SRC)/scope/dml.h      \
+      $(SRC)/scope/ipc.h      \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
@@ -155,6 +160,7 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/sql/state.h      \
       $(SRC)/sql/parser.h     \
       $(SRC)/ifc/proc.h       \
+      $(SRC)/ifc/luaproc.h    \
       $(SRC)/ifc/nowdb.h
 
 CLIENTDEP = $(HDR)/errcode.h  \
@@ -166,7 +172,7 @@ IFC = include/nowdb/nowdb.h \
 default:	lib 
 
 #all:	default tools tests bench server client
-all:	default tools tests server client
+all:	default tools tests server client 
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
@@ -181,9 +187,9 @@ client_install:	client tools
 		cp -r pynow /usr/local/
 		cp -r include/nowdb /usr/local/include/
 
-server:	$(BIN)/nowdbd
+server:	$(BIN)/nowdbd lua
 
-client:	$(BIN)/nowclient
+client:	$(BIN)/nowclient lua
 
 tools:	bin/randomfile    \
 	bin/readfile      \
@@ -283,8 +289,32 @@ lib/libnowdbclient.so:	$(SRL)/nowdbclient.o $(CLIENTDEP) \
                         	 $(SRC)/query/rowutl.o \
 			         $(SRL)/nowdbclient.o $(clibs)
 
-# lua client
-# gcc -shared -I../lib -I/usr/include/lua5.3 -fPIC -o cnow.so nowluawrap.c -lnowdbclient
+rsclua:	rsc/lua/nowdb.lua rsc/lua/db.lua rsc/lua/hw.lua
+
+rsc/lua/nowdb.lua:	lua/nowdb.lua
+			cp lua/nowdb.lua rsc/lua/
+
+rsc/lua/hw.lua:	lua/hw.lua
+		cp lua/hw.lua rsc/lua/
+
+rsc/lua/db.lua:	test/server/db.lua
+		cp test/server/db.lua rsc/lua/
+
+# Lua Client library
+lua:	nowluaifc rsclua
+
+nowluaifc:	$(LUA)/libnowluaifc.so
+
+$(LUA)/libnowluaifc.so:	nowclientlib \
+			$(LUA)/libluaifc.o
+			$(LNKMSG)
+			$(CC) -shared \
+		      	-o $(LUA)/libnowluaifc.so \
+		           $(LUA)/libluaifc.o -lnowdbclient -llua5.3
+
+$(LUA)/libluaifc.o:	$(LUA)/libluaifc.c
+			$(CMPMSG)
+			$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 # Lemon
 lemon/lemon.o:	lemon/lemon.c
@@ -696,6 +726,9 @@ clean:
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so
 	rm -f $(OUTLIB)/libnowdbclient.so
+	rm -f $(OUTLIB)/libnowluaifc.so
+	rm -f $(LUA)/libnowluaifc.so
+	rm -f $(LUA)/*.o
 	rm -f $(LOG)/*.log
 	rm -f $(RSC)/*.db
 	rm -f $(RSC)/*.dbz
@@ -728,6 +761,7 @@ clean:
 	rm -rf $(RSC)/vertex??
 	rm -rf $(RSC)/model??
 	rm -rf $(RSC)/text??
+	rm -f  $(RSC)/lua/*.lua
 	rm -f $(SMK)/errsmoke
 	rm -f $(SMK)/timesmoke
 	rm -f $(SMK)/pathsmoke

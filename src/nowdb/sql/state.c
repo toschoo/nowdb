@@ -46,11 +46,11 @@ void nowdbsql_errmsg(nowdbsql_state_t *res, char *msg, char *token) {
 		sprintf(res->errmsg, "%s at unknown position", msg);
 	} else {
 		size_t s = strnlen(token, MAX_TOKEN_SIZE+1);
-		if (s == MAX_TOKEN_SIZE+1) {
+		if (s > MAX_TOKEN_SIZE) {
 			token[MAX_TOKEN_SIZE] = 0;
 		}
 		s = strnlen(msg, MAX_TOKEN_SIZE+1);
-		if (s == MAX_TOKEN_SIZE+1) {
+		if (s > MAX_TOKEN_SIZE) {
 			msg[MAX_TOKEN_SIZE] = 0;
 		}
 		sprintf(res->errmsg, "%s near '%s'", msg, token);
