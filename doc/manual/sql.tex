@@ -248,7 +248,9 @@ For possible values, please refer to the standard or to the table in
 Constructors: any integer followed by a dot and a sequence of digits,
               optionally followed by $e$ followed by an integer.
               \comment{The exponential form is not yet available.} \\
-Examples: $-1.0, 0.0, 1.0, 3.14159, 1.797693e308$ 
+Examples: $-1.0, 0.0, 1.0, 3.14159, 1.797693e308$\\
+\comment{A specific value of the float type is NaN (not-a-number).
+         Currently there is no constructor for NaN, but it will be necessary.}
 \end{minipage}
 
 \begin{minipage}{\textwidth}
@@ -803,7 +805,7 @@ $not (a=b)$
 
 The \term{inequality} operators
 $<,>,\le$ and $\ge$ can only be applied
-to numerical types (and result in a
+to numerical types including time (and result in a
 type error otherwise).
 
 All comparison operators return $false$

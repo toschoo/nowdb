@@ -31,8 +31,8 @@ at efficiently handling
 data with growing complexity.
 They are very similar to relational
 databases, but replace the set-theoretic
-fundament of relational databases by
-graph theory. Graph databases do not deal
+fundament of the relational world by
+graph theory. They, hence, do not deal
 with relations over sets, but with
 sets of vertices that are connected
 by edges. In a Twitter-like application,
@@ -40,20 +40,19 @@ vertices may represent users, while
 edges may be used to model
 the connections between users such as
 \term{following}.
-Applications built on top of graph databases
+Applications built on top of such a model
 typically focus on finding relations
 between vertices; a goal may be to decide
 whether a user $A$ belongs to the network
 of a user $B$ where a follower of a
-follower of $B$ is considered part of
-$B$'s network. Another challenge may be
+follower is considered part of
+the network. Another challenge may be
 to compute how many users have seen
 a certain tweet or how many users
 see tweets of user $A$ in general.
 
-Edges are formally equivalent to relations,
-but more flexible. A Relational database
-expresses the relation between entities
+Relational databases
+express the relation between entities
 in terms of \term{foreign keys}.
 That is, one entity stores a reference
 to another entity in its physical
@@ -63,10 +62,11 @@ between a $product$ and its $supplier$.
 A relational database would store
 the \term{primary key} of the supplier
 in the product.
-The relation is then be built into
+The relation is this way built into
 the product table.
 
-A graph database would express this relation
+Graph databases, by contrast,
+would express such relations
 by means of an edge between the two entities.
 The entities themselves would not be touched.
 There would be instead a separate entity,
@@ -141,15 +141,19 @@ the graph interpretation:
 \end{center}
 \end{minipage}
 
-Graph databases are therefore more flexible.
+Graph databases are therefore more flexible
+(but also less rigid).
 It is easily possible to add new relations
 without the need to change the structure or
 the data of the entities involved. Also,
 there may be more than one relation holding
 between two entities, for instance, at
 different points in time. There is also
-no difference between $1:n$ and $n:m$ relations
-like in relational databases. 
+no structural difference between
+$1:n$ and $n:m$ relations
+like in relational databases where
+a master table must be used
+to express a many-to-many relation.
 
 In \nowdb\ edges are not only
 used to express relations,
@@ -166,7 +170,7 @@ Indeed, \nowdb\ aims to provide the
 performance advantages of timeseries databases
 using concepts from graph databases
 to allow more complex data models
-than usually seen with timeseries databases.
+than usually seen in the timeseries world.
 \nowdb\ can thus be applied to a wider
 range of applications than pure
 timeseries databases without losing
@@ -175,13 +179,88 @@ their performance advantage.
 \nowdb\ is in particular strong with
 data that can be organised in some variant of the
 \term{star} or \term{snowflake schema}. Relations between
-fact tables and dimensional tables
+\term{fact} tables and \term{dimensional} tables
 are expressed in terms of
 timestamped edges
 between dimensional vertices of
 arbitrary complexity that, themselves, 
 can be related to each other by
 simple, unstamped edges.
+
+\begin{minipage}{\textwidth}
+The following diagram shows part of a snowflake architecture
+where the dimensional vertices $Client$ and $Product$ are
+linked to the stamped edge $buys$, which can be seen as a fact table
+and which has additional fields, namely a timestamp ($stamp$)
+and information on the quantity, the price and potential disccount.
+$Client$ and $Product$ are additionally related to a (customer)
+$Card$ and a $Supplier$ respectively:
+\begin{center}
+\begin{tikzpicture}
+\draw (0,5) rectangle (1,3.5);
+\draw (0,5) rectangle (1,4.6);
+\node [font=\tiny,align=center] (crd) at (0.5,4.8) {Card};
+\node [font=\tiny,align=center,anchor=west] (crd1) at (0,4.3) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (crd3) at (0,3.9) {\dots};
+
+\draw (3,4) rectangle (4,2);
+\draw (3,4) rectangle (4,3.5);
+\node [font=\tiny,align=center] (cli) at (3.5,3.75) {Client};
+\node [font=\tiny,align=center,anchor=west] (cl1) at (3,3.2) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (cl2) at (3,2.9) {name};
+\node [font=\tiny,align=center,anchor=west] (cl3) at (3,2.6) {$\dots$};
+
+\draw [->] (1,4.3) -- (1.75,4.3) -- (1.75,3.2) -- (3,3.2);
+\node [font=\tiny,align=center,anchor=west] (one) at (0.9,4.4) {origin};
+\node [font=\tiny,align=center,anchor=west] (n) at (2.1,3.4) {destin};
+
+\draw (5,2) rectangle (6.5,0);
+\draw (5,2) rectangle (6.5,1.5);
+\node [font=\tiny,align=center] (buys) at (5.5,1.75) {buys};
+\node [font=\tiny,align=center,anchor=west] (b1) at (5.1,1.2) {stamp};
+\node [font=\tiny,align=center,anchor=west] (b2) at (5.1,0.9) {quantity};
+\node [font=\tiny,align=center,anchor=west] (b3) at (5.1,0.6) {paid};
+\node [font=\tiny,align=center,anchor=west] (b4) at (5.1,0.3) {discount};
+
+\draw (4,3.2) -- (4.75,3.2) -- (4.75,1.8) -- (5,1.8);
+\node [font=\tiny,align=center,anchor=west] (clb) at (3.95,3.4) {origin};
+
+\draw (7.5,4) rectangle (8.5,2);
+\draw (7.5,4) rectangle (8.5,3.5);
+\node [font=\tiny,align=center] (prod) at (8,3.75) {Product};
+\node [font=\tiny,align=center,anchor=west] (prod1) at (7.6,3.2) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (prod2) at (7.6,2.9) {desc};
+\node [font=\tiny,align=center,anchor=west] (prod3) at (7.6,2.6) {$\dots$};
+
+\draw (7.5,3.2) -- (6.75,3.2) -- (6.75,1.8) -- (6.5,1.8);
+\node [font=\tiny,align=center,anchor=east] (suprod) at (7.6,3.4) {destin};
+
+\draw (10.5,5) rectangle (11.5,3.5);
+\draw (10.5,5) rectangle (11.5,4.6);
+\node [font=\tiny,align=center] (sup) at (11,4.8) {Supplier};
+\node [font=\tiny,align=center,anchor=west] (sup1) at (10.6,4.3) {\textbf{id}};
+\node [font=\tiny,align=center,anchor=west] (sup2) at (10.6,3.9) {\dots};
+
+\draw [->] (10.5,4.3) -- (9.75,4.3) -- (9.75,3.2) -- (8.5,3.2);
+\node [font=\tiny,align=center,anchor=east] (ori) at (10.6,4.4) {origin};
+\node [font=\tiny,align=center,anchor=west] (dst) at (8.5,3.4) {destin};
+
+\end{tikzpicture}
+\end{center}
+\end{minipage}
+
+The main information encoded in this diagram may be translated
+to a phrase like ``clients buy products (at a given time, for a certain price)'';
+The customer card and supplier tables add more information
+in the client and product dimension. That is why this specific
+diagram is a \term{snowflake} schema
+(and not a simpler \term{star} schema).
+One can imagine that even more information
+is added in the dimensions leading to
+always increasing complexity without
+affecting the vertex tables and without
+complicating the main relation between
+clients and products.
 
 In contrast to traditional
 \term{star schema} applications,
