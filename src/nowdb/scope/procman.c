@@ -848,4 +848,29 @@ unlock:
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_procman_all(nowdb_procman_t *pm,
-                              ts_algo_list_t  *plist);
+                              ts_algo_list_t  **plist) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	if (pm == NULL) ARGNULL("proc manager is NULL");
+	if (plist == NULL) ARGNULL("list is NULL");
+
+	err = nowdb_lock_read(pm->lock);
+	if (err != NOWDB_OK) return err;
+
+	*plist = NULL;
+	if (pm->procs->count == 0) goto unlock;
+	*plist = ts_algo_tree_toList(pm->procs);
+	if (*plist == NULL) {
+		NOMEM("tree.toList");
+		goto unlock;
+	}
+	
+unlock:
+	err2 = nowdb_unlock_read(pm->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}

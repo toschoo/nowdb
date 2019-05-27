@@ -122,6 +122,13 @@ nowdb_err_t nowdb_scope_getStorage(nowdb_scope_t   *scope,
                                    nowdb_storage_t **strg);
 
 /* -----------------------------------------------------------------------
+ * Get all storages from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_allStorage(nowdb_scope_t   *scope,
+                                   ts_algo_list_t  **strg);
+
+/* -----------------------------------------------------------------------
  * Create a context within that scope
  * -----------------------------------------------------------------------
  */

@@ -85,5 +85,5 @@ nowdb_err_t nowdb_procman_get(nowdb_procman_t   *pm,
                               nowdb_proc_desc_t **pd);
 
 nowdb_err_t nowdb_procman_all(nowdb_procman_t *pm,
-                              ts_algo_list_t  *plist);
+                              ts_algo_list_t **plist);
 #endif

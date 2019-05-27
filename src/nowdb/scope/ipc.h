@@ -39,6 +39,18 @@ typedef struct {
 } nowdb_ipc_t;
 
 /* ------------------------------------------------------------------------
+ * Lock
+ * ------------------------------------------------------------------------
+ */
+typedef struct {
+	nowdb_lock_t lock; // protect this structure
+	int       readers; // number of readers holding the lock
+	char        *name; // name of this lock
+	char        state; // state free -> rlock|wlock -> free
+        ts_algo_list_t  q; // do we need to guarantee order?
+} nowdb_ipc_lock_t;
+
+/* ------------------------------------------------------------------------
  * Allocate and initialise IPC Manager
  * ------------------------------------------------------------------------
  */
@@ -79,6 +91,12 @@ nowdb_err_t nowdb_ipc_createLock(nowdb_ipc_t *ipc, char *name);
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_ipc_dropLock(nowdb_ipc_t *ipc, char *name);
+
+/* ------------------------------------------------------------------------
+ * Get all locks
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_ipc_locks(nowdb_ipc_t *ipc, ts_algo_list_t **locks);
 
 /* ------------------------------------------------------------------------
  * Lock

@@ -2063,6 +2063,37 @@ unlock:
 }
 
 /* -----------------------------------------------------------------------
+ * Get all storages from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_allStorage(nowdb_scope_t   *scope,
+                                   ts_algo_list_t  **strg) {
+	nowdb_err_t err = NOWDB_OK;
+	nowdb_err_t err2;
+
+	SCOPENULL();
+
+	err = nowdb_lock_write(&scope->lock);
+	if (err != NOWDB_OK) goto unlock;
+
+	SCOPENOTOPEN();
+
+	if (scope->storage.count == 0) goto unlock;
+	*strg = ts_algo_tree_toList(&scope->storage);
+	if (*strg == NULL) {
+		NOMEM("tree.toList");
+		goto unlock;
+	}
+
+unlock:
+	err2 = nowdb_unlock_write(&scope->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err; return err2;
+	}
+	return err;
+}
+
+/* -----------------------------------------------------------------------
  * Get context within that scope
  * -----------------------------------------------------------------------
  */
