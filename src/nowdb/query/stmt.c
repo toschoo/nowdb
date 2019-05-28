@@ -1905,6 +1905,73 @@ static nowdb_err_t getPedges(nowdb_scope_t  *scope,
 }
 
 /* -------------------------------------------------------------------------
+ * Describe non-model thing
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t describeNonModel(nowdb_scope_t      *scope,
+                                    char               *name,
+                                    nowdb_qry_result_t *res) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_proc_desc_t    *pd;
+	nowdb_proc_arg_t   *args;
+	nowdb_qry_row_t *r;
+	uint32_t sz=0;
+	char *row=NULL;
+	char *tmp=NULL;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result = NULL;
+
+	err = nowdb_procman_get(scope->pman, name, &pd);
+	if (err != NOWDB_OK) return err;
+
+	args = pd->args;
+	for(int i=0; i<pd->argn; i++) {
+		if (row == NULL) {
+			row = nowdb_row_fromValue(NOWDB_TYP_TEXT,
+			                      args[i].name, &sz);
+			if (row == NULL) {
+				NOMEM("allocating row");
+				break;
+			}
+		} else {
+			tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+			                           args[i].name, &sz);
+			if (tmp == NULL) {
+				free(row);
+				NOMEM("allocating row");
+				break;
+			}
+			row = tmp;
+		}
+		tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+		            nowdb_typename(args[i].typ), &sz);
+		if (tmp == NULL) {
+			free(row);
+			NOMEM("allocating row");
+			break;
+		}
+		row = tmp;
+		nowdb_row_addEOR(row, &sz);
+	}
+	nowdb_proc_desc_destroy(pd); free(pd);
+	if (err != NOWDB_OK) return err;
+	if (row != NULL) {
+		r = calloc(1, sizeof(nowdb_qry_row_t));
+		if (r == NULL) {
+			NOMEM("allocating qryrow");
+			free(row);
+			return err;
+		}
+		r->sz = sz;
+		r->row = row;
+		res->resType = NOWDB_QRY_RESULT_ROW;
+		res->result = r;
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
  * Describe
  * -------------------------------------------------------------------------
  */
@@ -1922,9 +1989,16 @@ static nowdb_err_t describeThing(nowdb_scope_t      *scope,
 	nowdb_content_t what;
 	char *name;
 
+	if (scope == NULL) INVALIDAST("no scope");
 	if (ast->value == NULL) INVALIDAST("no target in ast");
 	err = nowdb_model_whatIs(scope->model, ast->value, &what);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+			nowdb_err_release(err);
+			return describeNonModel(scope, ast->value, res);
+		}
+		return err;
+	}
 
 	ts_algo_list_init(&list);
 	if (what == NOWDB_CONT_EDGE) {
