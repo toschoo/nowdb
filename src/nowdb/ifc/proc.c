@@ -710,9 +710,11 @@ static nowdb_err_t reinitInterpreter(nowdb_proc_t *proc) {
 			Py_XDECREF(proc->nowmod); proc->nowmod = NULL;
 		}
 	}
+#endif
 
 	err = reloadModules(proc);
 
+#ifdef _NOWDB_WITH_PYTHON
 	// release lock
 	if (LIB(proc->lib)->pyEnabled) {
 		if (proc->pyIntp != NULL) {
@@ -922,9 +924,15 @@ nowdb_err_t nowdb_proc_reinit(nowdb_proc_t *proc) {
  */
 nowdb_err_t nowdb_proc_setScope(nowdb_proc_t  *proc, 
                                 nowdb_scope_t *scope) {
-	proc->scope = scope;
-	nowdb_dml_destroy(proc->dml);
-	return nowdb_dml_init(proc->dml, proc->scope, 1);
+
+	if (proc->scope != scope) {
+		nowdb_err_t err = nowdb_proc_reinit(proc);
+		if (err != NOWDB_OK) return err;
+		proc->scope = scope;
+		nowdb_dml_destroy(proc->dml);
+		return nowdb_dml_init(proc->dml, proc->scope, 1);
+	}
+	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
