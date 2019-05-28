@@ -1,9 +1,4 @@
 \section{Outline}
-\ignore{
-- why lua
-- what it provides
-- how it works
-}
 The main server interface
 besides \sql\ is Lua.
 While \sql\ is intentionally kept simple in \nowdb,
@@ -930,6 +925,28 @@ Care should be taken with larger units;
 This function is not aware of leap years and seconds
 and other time subtleties. If precision is needed,
 \sql\ should be used to perform time arithmetic.
+
+A special function is \term{nowdb.sleep}.
+This is not a time function in the strict sense;
+it is more about a thread execution function.
+It receives one parameter, a \nowdb\ time value,
+and suspends execution for \emph{at least}
+the number of nanoseconds
+given in this parameter.
+For how much time exactly execution is suspended
+depends on the underlying system.
+
+In the following example,
+we whould suspend execution for five seconds:
+
+\begin{lua}
+\begin{lstlisting}
+nowdb.sleep(5*nowdb.second)
+\end{lstlisting}
+\end{lua}
+
+The function does not return any result
+and calls \term{nowdb.raise} on error.
 
 \section{Lua Support Modules}\label{sec_luasupp}
 The \nowdb\ Lua Support Package is a collection

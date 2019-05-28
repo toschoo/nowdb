@@ -17,6 +17,10 @@ function timetest(t)
   return r
 end
 
+function sleeptest(t)
+  nowdb.sleep(t)
+end
+
 function mycount(tab)
   local sql = string.format("select count(*) from %s", tab)
   local cur = nowdb.execute(sql)
