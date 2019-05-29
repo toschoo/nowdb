@@ -164,6 +164,7 @@ static inline nowdb_err_t readN(int sock, char *buf, int sz) {
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
+                                nowdb_t2tmap_t *dbpaths,
                                 int loglvl, int nthreads,
                                 uint64_t flags) {
 	nowdb_err_t err;
@@ -226,6 +227,8 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		return err;
 	}
 	sprintf((*lib)->luapath, "%s/lua", base);
+
+	(*lib)->dbpaths = dbpaths;
 
 	(*lib)->fthreads = calloc(1,sizeof(ts_algo_list_t));
 	if ((*lib)->fthreads == NULL) {
@@ -438,6 +441,10 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->luapath != NULL) {
 		free(lib->luapath); lib->luapath = NULL;
+	}
+	if (lib->dbpaths != NULL) {
+		nowdb_t2tmap_destroy(lib->dbpaths);
+		free(lib->dbpaths); lib->dbpaths = NULL;
 	}
 	if (lib->lock != NULL) {
 		nowdb_rwlock_destroy(lib->lock);

@@ -12,6 +12,8 @@
 
 #include <common/cmd.h>
 
+#include <nowdb/mem/t2tmap.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -170,6 +172,83 @@ int getOpts(int argc, char **argv) {
 }
 
 /* -----------------------------------------------------------------------
+ * split path at ':'
+ * -----------------------------------------------------------------------
+ */
+static inline int add2map(nowdb_t2tmap_t *pmap, char *path) {
+	nowdb_err_t err;
+	size_t s = strlen(path);
+	int i;
+	char *db;
+	char *p;
+
+	for(i=0;i<s;i++) {
+		if(path[i] == ':') break;
+	}
+	if (i == s) return 0;
+
+	path[i] = 0;
+	db = strdup(path);
+	if (db == NULL) return -1;
+
+	p = strdup(path+i+1);
+	if (p == NULL) {
+		free(db); return -1;
+	}
+
+	err = nowdb_t2tmap_add(pmap, db, p);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(err);
+		free(db); free(p);
+		return -1;
+	}
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Build db/path map
+ * -----------------------------------------------------------------------
+ */
+int buildpathmap(char *path, nowdb_t2tmap_t **pmap) {
+	nowdb_err_t err;
+	char *wrk = strdup(path);
+	char *ptr = NULL;
+	char *tmp;
+	int  rc=0;
+
+	err = nowdb_t2tmap_new(pmap);
+	if (err != NOWDB_OK) {
+		nowdb_err_release(err);
+		return -1;
+	}
+	for(tmp = strtok_r(wrk, ";", &ptr); tmp!=NULL;
+	    tmp = strtok_r(NULL, ";", &ptr)) {
+		if (add2map(*pmap, tmp) != 0) {
+			rc = -1; break;
+		}
+	}
+	if (wrk != NULL) free(wrk);
+	if (*pmap != NULL && rc != 0) {
+		nowdb_t2tmap_destroy(*pmap); free(*pmap);
+	}
+	return rc;
+}
+
+
+/* -----------------------------------------------------------------------
+ * Environment
+ * -----------------------------------------------------------------------
+ */
+int getNowEnv(nowdb_t2tmap_t **pmap) {
+	char *nluap = getenv(NOWDB_LUA_PATH);
+	if (nluap == NULL) return 0;
+
+	if (buildpathmap(nluap, pmap) != 0) return -1;
+
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
  * banner
  * -----------------------------------------------------------------------
  */
@@ -263,12 +342,12 @@ void ignhandler(int sig) {}
  * -----------------------------------------------------------------------
  */
 typedef struct {
-	nowdb_t         *lib;  /* the library object          */
-	nowdb_err_t      err;  /* error occurred              */
-	nowdb_task_t  master;  /* threadid of the main thread */
-	char           *serv;  /* service (usually a port)    */
-	uint64_t ses_started;  /* number of started session   */
-	uint64_t   ses_ended;  /* number of stopped session   */
+	nowdb_t          *lib;  // the library object          
+	nowdb_err_t       err;  // error occurred              
+	nowdb_task_t   master;  // threadid of the main thread 
+	char            *serv;  // service (usually a port)    
+	uint64_t  ses_started;  // number of started session  
+	uint64_t    ses_ended;  // number of stopped session 
 	// addresses
 	// options...
 } srv_t;
@@ -459,6 +538,7 @@ nowdb_err_t stopListener(srv_t *srv, nowdb_task_t listener) {
  * -----------------------------------------------------------------------
  */
 int runServer(int argc, char **argv) {
+	nowdb_t2tmap_t  *pmap=NULL;
 	struct sigaction sact;
 	nowdb_task_t listener;
 	nowdb_err_t err;
@@ -479,14 +559,23 @@ int runServer(int argc, char **argv) {
 	if (global_python)
 		flags |= NOWDB_ENABLE_PYTHON;
 
+	// environment variables
+	if (getNowEnv(&pmap) != 0) {
+		LOGERR("cannot get environment");
+		return EXIT_FAILURE;
+	}
+
 	err = nowdb_library_init(&lib, global_path,
-	                               global_feedback,
+	                         pmap, global_feedback,
 	                               global_cpool,
                                               flags);
 	if (err != NOWDB_OK) {
 		LOGERR("cannot initialise library");
 		nowdb_err_print(err);
 		nowdb_err_release(err);
+		if (pmap != NULL) {
+			nowdb_t2tmap_destroy(pmap); free(pmap);
+		}
 		return EXIT_FAILURE;
 	}
 

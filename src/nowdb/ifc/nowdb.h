@@ -11,6 +11,7 @@
 #include <nowdb/types/error.h>
 #include <nowdb/task/task.h>
 #include <nowdb/task/lock.h>
+#include <nowdb/mem/t2tmap.h>
 #include <nowdb/scope/scope.h>
 #include <nowdb/sql/parser.h>
 #include <nowdb/query/cursor.h>
@@ -46,6 +47,8 @@ typedef struct {
 #define NOWDB_ENABLE_PYTHON 2
 #define NOWDB_ENABLE_C      4
 #define NOWDB_ENABLE_LUA    8
+
+#define NOWDB_LUA_PATH "NOWDB_LUA_PATH"
 
 /* ------------------------------------------------------------------------
  * session cursor
@@ -92,6 +95,7 @@ typedef struct {
 	nowdb_rwlock_t     *lock; /* protect the library      */
 	char               *base; /* base path                */
 	ts_algo_tree_t   *scopes; /* tree of scope            */
+	nowdb_t2tmap_t  *dbpaths; /* db and execution path    */
 	ts_algo_list_t *fthreads; /* list of free sessions    */
 	ts_algo_list_t *uthreads; /* list of used sessions    */
 	int             nthreads; /* max number of sessions   */
@@ -112,8 +116,9 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
-                                int loglvl, int nthreads,
-                                uint64_t flags);
+                               nowdb_t2tmap_t   *dbpaths,
+                               int loglvl,  int nthreads,
+                               uint64_t flags);
 
 /* ------------------------------------------------------------------------
  * close library (called only once per process)

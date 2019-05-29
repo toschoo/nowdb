@@ -71,6 +71,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/pplru.o      \
       $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
+      $(SRC)/mem/t2tmap.o     \
       $(SRC)/store/store.o    \
       $(SRC)/store/storage.o  \
       $(SRC)/store/comp.o     \
@@ -127,6 +128,7 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/mem/pplru.h      \
       $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
+      $(SRC)/mem/t2tmap.h     \
       $(SRC)/store/store.h    \
       $(SRC)/store/storage.h  \
       $(SRC)/store/comp.h     \
