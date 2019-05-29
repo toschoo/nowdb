@@ -574,6 +574,8 @@ static nowdb_err_t reloadModules(nowdb_proc_t *proc) {
 
 /* ------------------------------------------------------------------------
  * Helper: set lua path
+ *         NOT NEEDED
+ *         instead: NOWDB_HOME (where resources are)
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t setLuaPath(nowdb_proc_t *proc) {
@@ -1030,6 +1032,22 @@ void nowdb_proc_updateInterpreter(nowdb_proc_t *proc) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: get db path
+ * ------------------------------------------------------------------------
+ */
+static inline char *getdbpath(nowdb_proc_t *proc) {
+	if (proc->scope == NULL) {
+		fprintf(stderr, "no current scope\n");
+		return NULL;
+	}
+	fprintf(stderr, "searching for db %s\n", proc->scope->name);
+	char *p = nowdb_t2tmap_get(LIB(proc->lib)->dbpaths,
+	                                 proc->scope->name);
+	if (p != NULL) return p;
+	return nowdb_t2tmap_get(LIB(proc->lib)->dbpaths, "*");
+}
+
+/* ------------------------------------------------------------------------
  * Helper: load Lua module
  * ------------------------------------------------------------------------
  */
@@ -1037,16 +1055,18 @@ static nowdb_err_t loadLuaModule(nowdb_proc_t *proc,
                                 char         *mname,
                                 module_t   **module) {
 	nowdb_err_t err;
+	char *path = getdbpath(proc);
 
-	if (proc->luapath == NULL) {
-		LUAERR("no luapath");
+	if (path == NULL) {
+		INVALID("no path defined");
+		return err;
 	}
-	char *p = malloc(strlen(proc->luapath) + strlen(mname) + 6);
+	char *p = malloc(strlen(path) + strlen(mname) + 6);
 	if (p == NULL) {
 		NOMEM("allocating module path");
 		return err;
 	}
-	sprintf(p, "%s/%s.lua", proc->luapath, mname);
+	sprintf(p, "%s/%s.lua", path, mname);
 	int x = luaL_dofile(LUA, p); free(p);
 	if (x != 0) {
 		return mkLuaErr(proc, "cannot load module");

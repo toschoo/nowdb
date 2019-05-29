@@ -282,6 +282,35 @@ nowdb_err_t nowdb_scope_new(nowdb_scope_t **scope,
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: set scope name
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t setScopeName(nowdb_scope_t *scope, char *path) {
+	nowdb_err_t err;
+	char *p = strdup(path);
+	char *tmp, *ptr, *file=NULL;
+
+	if (p == NULL) {
+		NOMEM("allocating path");
+		return err;
+	}
+	for(tmp = strtok_r(p, "/", &ptr); tmp!=NULL;
+	    tmp = strtok_r(NULL, "/", &ptr)) {
+		file=tmp;
+	}
+	if (file == NULL || strlen(file) < 1) {
+		free(p);
+		INVALID("no file name in path");
+	}
+	scope->name = strdup(file); free(p);
+	if (scope->name == NULL) {
+		NOMEM("allocating scope name");
+		return err;
+	}
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * Initialise an already allocated scope
  * -----------------------------------------------------------------------
  */
@@ -299,6 +328,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 
 	/* set defaults */
 	scope->path = NULL;
+	scope->name = NULL;
 	scope->iman = NULL;
 	scope->model = NULL;
 	scope->text = NULL;
@@ -319,10 +349,17 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	}
 	strncpy(scope->path, path, s); scope->path[s] = 0;
 
+	// scope name
+	err = setScopeName(scope, path);
+	if (err != NOWDB_OK) {
+		free(scope->path); scope->path = NULL;
+	}
+
 	/* storage catalog */
 	scope->strgpath = nowdb_path_append(scope->path, STORECAT);
 	if (scope->strgpath == NULL) {
 		free(scope->path); scope->path = NULL;
+		free(scope->name); scope->name = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                    "allocating scope catalog path");
 	}
@@ -331,6 +368,7 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	scope->catalog = nowdb_path_append(scope->path, "catalog");
 	if (scope->catalog == NULL) {
 		free(scope->path); scope->path = NULL;
+		free(scope->name); scope->name = NULL;
 		free(scope->strgpath); scope->strgpath = NULL;
 		return nowdb_err_get(nowdb_err_no_mem, FALSE, OBJECT,
 		                    "allocating scope catalog path");
@@ -338,7 +376,12 @@ nowdb_err_t nowdb_scope_init(nowdb_scope_t *scope,
 	
 	/* lock */
 	err = nowdb_rwlock_init(&scope->lock);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		free(scope->path); scope->path = NULL;
+		free(scope->name); scope->name = NULL;
+		free(scope->strgpath); scope->strgpath = NULL;
+		return err;
+	}
 	
 	/* storage tree */
 	if (ts_algo_tree_init(&scope->storage,
@@ -420,6 +463,9 @@ void nowdb_scope_destroy(nowdb_scope_t *scope) {
 	}
 	if (scope->path != NULL) {
 		free(scope->path); scope->path = NULL;
+	}
+	if (scope->name != NULL) {
+		free(scope->name); scope->name = NULL;
 	}
 	if (scope->strgpath != NULL) {
 		free(scope->strgpath);

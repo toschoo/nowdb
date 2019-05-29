@@ -34,6 +34,7 @@ typedef struct {
 	nowdb_rwlock_t       lock; // read/write lock
 	uint32_t            state; // open or closed
 	nowdb_path_t         path; // base path
+	nowdb_path_t         name; // scope name
 	nowdb_path_t     strgpath; // catalog path
 	nowdb_path_t      catalog; // ctx catalog path
 	nowdb_version_t       ver; // db version
