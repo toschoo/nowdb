@@ -174,7 +174,7 @@ IFC = include/nowdb/nowdb.h \
 default:	lib 
 
 #all:	default tools tests bench server client
-all:	default tools tests server client 
+all:	default tools tests client lua server 
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
@@ -183,7 +183,7 @@ install:	lib server client tools
 		cp -r pynow /usr/local/
 		cp -r include/nowdb /usr/local/include/
 
-client_install:	client tools
+client_install:	client bin/nowclient
 		cp lib/libnowdbclient.so /usr/local/lib
 		cp bin/nowclient /usr/local/bin
 		cp -r pynow /usr/local/
@@ -191,7 +191,7 @@ client_install:	client tools
 
 server:	$(BIN)/nowdbd lua
 
-client:	$(BIN)/nowclient lua
+client:	$(BIN)/nowclient
 
 tools:	bin/randomfile    \
 	bin/readfile      \
