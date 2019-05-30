@@ -1040,7 +1040,7 @@ static inline char *getdbpath(nowdb_proc_t *proc) {
 		fprintf(stderr, "no current scope\n");
 		return NULL;
 	}
-	fprintf(stderr, "searching for db %s\n", proc->scope->name);
+	if (LIB(proc->lib)->dbpaths == NULL) return NULL;
 	char *p = nowdb_t2tmap_get(LIB(proc->lib)->dbpaths,
 	                                 proc->scope->name);
 	if (p != NULL) return p;

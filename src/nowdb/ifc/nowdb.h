@@ -49,6 +49,7 @@ typedef struct {
 #define NOWDB_ENABLE_LUA    8
 
 #define NOWDB_LUA_PATH "NOWDB_LUA_PATH"
+#define NOWDB_HOME     "NOWDB_HOME"
 
 /* ------------------------------------------------------------------------
  * session cursor
