@@ -58,6 +58,18 @@ export LD\_LIBRARY\_PATH=/lib:/usr/lib:/usr/local/lib
 This sets the search path for shared libraries.
 
 \cmdline{
+export NOWDB\_HOME=/usr/local
+}
+
+This sets the \term{home} directory, \ie\
+the directory where daemon will find resources
+like the Lua \nowdb\ script.
+It is here set to \tech{/usr/local},
+which means that the daemon will find
+the script \tech{nowdb.lua} in 
+the directory \tech{/usr/local/lua}.
+
+\cmdline{
 export LUA\_PATH=/lua/?.lua
 } 
 
