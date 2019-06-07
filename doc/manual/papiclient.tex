@@ -117,6 +117,7 @@ with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
 \end{lstlisting}
 \end{python}
 
+\begin{minipage}{\textwidth}
 And an example involving Pandas:
 
 \begin{python}
@@ -129,6 +130,7 @@ with na.connect('localhost', '55505', 'usr', 'pwd', 'retail') as c:
   # do something with dataframe 'sales'
 \end{lstlisting}
 \end{python}
+\end{minipage}
 
 \section{Cursors}
 A cursor is a device to send \sql\ statements to the database.
@@ -183,6 +185,7 @@ where $n$ is passed in as parameter. If \term{fetchmany}
 is called without parameter, $n$ defaults to 1.
 Finally, \term{fetchall} fetches all rows at once.
 
+\enlargethispage*{100cm}
 As a rationale to provide these methods,
 the \acronym{pep} 249 specification refers
 to performance reasons. It should be noted
@@ -195,6 +198,7 @@ This is already handled in the underlying
 C library, which always receives a bunch of rows
 from which single rows are then fetched locally
 in the client.
+\clearpage
 
 Furthermore, since Cursor is an iterator,
 there is no need to use these methods at all;

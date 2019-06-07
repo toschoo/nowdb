@@ -110,6 +110,7 @@ requests arrive.
 \end{itemize}
 \end{minipage}
 
+\clearpage
 \section{Environment Variables}
 The following environment variables have influence
 on the behaviour of the program:
@@ -124,7 +125,6 @@ must be added.
 \begin{minipage}{\textwidth}
 Non-standard libraries used by the daemon are:
 
-\begin{minipage}{\textwidth}
 \begin{itemize}
 \item The \term{tsalgo} library that provides
       fundamental algorithms and datastructures;
@@ -132,9 +132,12 @@ Non-standard libraries used by the daemon are:
       on-disk B$^+$Trees needed for indices;
 \item The \term{zstd} and \term{lz4} libraries
       both implementing compression algorithms;
+\item The \term{libcsv} library that implements
+      efficient \acronym{csv} handling.
+\item \comment{avron}
 \item The \term{icu} library providing \acronym{utf}-8
       handling for C;
-\item The embed\acronym{tls} library which equips
+\item The \term{embed\acronym{tls}} library which equips
       \nowdb\ with secure communication;    
 \item The \term{python} 3.5 library;
 \item The \term{lua} 5.3 library.
@@ -162,11 +165,13 @@ This is the search path used by \nowdb\ to find top-level
 user modules. The syntax for this variable is special
 and is discussed in detail in section \ref{chpt_luaemb}.
 
+\enlargethispage*{100cm}
 \tech{NOWDB\_HOME}\\
 This variable shall hold the path to \nowdb\ resources,
 such as the Lua and Python \nowdb\ modules. Where this
 path is located on your system depends on the installation.
 Please refer to \ref{chpt_install} for details.
+\clearpage
 
 \section{The \nowdb\ Docker}
 The \nowdb\ docker provides a ready-made environment
@@ -229,13 +234,14 @@ nowdbd -b /dbs -l 2>/log/nowdbd.log
 
 The script sets all relevant environment variables,
 namely the \tech{LD\_LIBRARY\_PATH},
-\tech{NOWDB\_HOME},
+\tech{NOWDB\-\_HOME},
 \tech{LUA\_PATH} and \tech{LUA\_CPATH}
 as well as the \tech{NOWDB\_LUA\_PATH}.
 Note that the \tech{PYTHONPATH} is not set.
 This is because Lua is considered the
 default server-side language.
 
+\clearpage
 Then, the \nowdb\ daemon itself is started.
 The script passes two options to the daemon:
 the base directory where all databases
