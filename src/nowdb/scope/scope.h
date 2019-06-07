@@ -34,6 +34,7 @@ typedef struct {
 	nowdb_rwlock_t       lock; // read/write lock
 	uint32_t            state; // open or closed
 	nowdb_path_t         path; // base path
+	nowdb_path_t         name; // scope name
 	nowdb_path_t     strgpath; // catalog path
 	nowdb_path_t      catalog; // ctx catalog path
 	nowdb_version_t       ver; // db version
@@ -120,6 +121,13 @@ nowdb_err_t nowdb_scope_dropStorage(nowdb_scope_t *scope,
 nowdb_err_t nowdb_scope_getStorage(nowdb_scope_t   *scope,
                                    char             *name,
                                    nowdb_storage_t **strg);
+
+/* -----------------------------------------------------------------------
+ * Get all storages from that scope
+ * -----------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_scope_allStorage(nowdb_scope_t   *scope,
+                                   ts_algo_list_t  **strg);
 
 /* -----------------------------------------------------------------------
  * Create a context within that scope

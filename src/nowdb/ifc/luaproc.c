@@ -28,6 +28,7 @@
  */
 #include <nowdb/ifc/luaproc.h>
 #include <nowdb/nowproc.h>
+#include <nowdb/task/task.h>
 
 /* ------------------------------------------------------------------------
  * Stack operation macros
@@ -390,6 +391,28 @@ static int now2lua_release(lua_State *lu) {
 }
 
 /* ------------------------------------------------------------------------
+ * sleep
+ * receives a time period in nanoseconds
+ * and stops execution at least until the period is elapsed.
+ * ------------------------------------------------------------------------
+ */
+static int now2lua_sleep(lua_State *lu) {
+	nowdb_time_t i;
+	nowdb_err_t err;
+
+	INTEGER(1);
+
+	err = nowdb_task_sleep(i);
+	if (err != NOWDB_OK) {
+		PUSHERR(err->errcode, err->info);
+		nowdb_err_release(err);
+		return 2;	
+	}
+	PUSHOK();
+	return 1;
+}
+
+/* ------------------------------------------------------------------------
  * register all functions
  * ------------------------------------------------------------------------
  */
@@ -410,5 +433,6 @@ nowdb_err_t nowdb_registerNow2Lua(lua_State *lu) {
 	lua_register(lu, "now2lua_countfields", now2lua_countfields);
 	lua_register(lu, "now2lua_field", now2lua_field);
 	lua_register(lu, "now2lua_release", now2lua_release);
+	lua_register(lu, "now2lua_sleep", now2lua_sleep);
 	return NOWDB_OK;
 }

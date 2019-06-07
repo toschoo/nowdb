@@ -160,10 +160,34 @@ static inline nowdb_err_t readN(int sock, char *buf, int sz) {
 }
 
 /* -----------------------------------------------------------------------
+ * set lua path
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t setLuaPath(nowdb_t *lib) {
+	nowdb_err_t err;
+	char *path = getenv(NOWDB_HOME);
+
+	if (path == NULL) {
+		lib->luapath = strdup("./lua");
+		if (lib->luapath == NULL) {
+			NOMEM("allocating luapath");
+			return err;
+		}
+		return NOWDB_OK;
+	}
+	size_t s = strnlen(path, 4096);
+	if (s >= 4096) INVALID("path too long");
+	lib->luapath = malloc(s+5);
+	sprintf(lib->luapath, "%s/lua", path);
+	return NOWDB_OK;
+}
+
+/* -----------------------------------------------------------------------
  * initialise library
  * -----------------------------------------------------------------------
  */
 nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
+                                nowdb_t2tmap_t *dbpaths,
                                 int loglvl, int nthreads,
                                 uint64_t flags) {
 	nowdb_err_t err;
@@ -219,13 +243,14 @@ nowdb_err_t nowdb_library_init(nowdb_t **lib, char *base,
 		nowdb_library_close(*lib); *lib = NULL;
 		return err;
 	}
-	(*lib)->luapath = malloc(strlen(base) + 5);
-	if ((*lib)->luapath == NULL) {
-		NOMEM("allocating luapath");
+
+	err = setLuaPath(*lib);
+	if (err != NOWDB_OK) {
 		nowdb_library_close(*lib); *lib = NULL;
 		return err;
 	}
-	sprintf((*lib)->luapath, "%s/lua", base);
+
+	(*lib)->dbpaths = dbpaths;
 
 	(*lib)->fthreads = calloc(1,sizeof(ts_algo_list_t));
 	if ((*lib)->fthreads == NULL) {
@@ -438,6 +463,10 @@ void nowdb_library_close(nowdb_t *lib) {
 	}
 	if (lib->luapath != NULL) {
 		free(lib->luapath); lib->luapath = NULL;
+	}
+	if (lib->dbpaths != NULL) {
+		nowdb_t2tmap_destroy(lib->dbpaths);
+		free(lib->dbpaths); lib->dbpaths = NULL;
 	}
 	if (lib->lock != NULL) {
 		nowdb_rwlock_destroy(lib->lock);

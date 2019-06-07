@@ -738,6 +738,17 @@ function nowdb.pbracket(before, after, body)
   return table.unpack(brack(before, after, body))
 end
 
+---------------------------------------------------------------------------
+-- The function sleep delays execution for at least 'delay' nanoseconds.
+-- On error, an exception is raised.
+---------------------------------------------------------------------------
+function nowdb.sleep(delay)
+  local rc, msg = now2lua_sleep(delay)
+  if rc ~= nowdb.OK then
+     nowdb.raise(rc, msg)
+  end
+end
+
 -- internal use only ---
 function _nowdb_caller(callee, ...)
   local ok, r = pcall(callee, ...)

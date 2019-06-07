@@ -6,6 +6,7 @@ import nowapi as na
 import random as rnd
 import math
 import sys
+from datetime import datetime
 
 def countdb(c,t):
     sql = "select count(*) as cnt from %s" % t
@@ -36,6 +37,9 @@ def price(c,p):
 def createprocs(c, lang):
     print "RUNNING 'createprocs' %s" % lang
 
+    c.execute("drop procedure sleeptest if exists").close()
+    c.execute("create procedure db.sleeptest(delay time) language %s" % lang).close()
+
     c.execute("drop procedure locktest if exists").close()
     c.execute("create procedure db.locktest(lk text) language %s" % lang).close()
 
@@ -47,6 +51,35 @@ def createprocs(c, lang):
 
     c.execute("drop procedure dropcache if exists").close()
     c.execute("create procedure db.dropcache(name text) language %s" % lang).close()
+
+def sleeptest(c):
+
+    print("RUNNING 'sleeptest'")
+
+    t1 = datetime.now(now.utc)
+
+    c.execute("exec sleeptest(10)")
+    c.execute("exec sleeptest(100000)")
+    c.execute("exec sleeptest(1000000)")
+    c.execute("exec sleeptest(100000000)")
+    c.execute("exec sleeptest(1000000000)")
+
+    t2 = datetime.now(now.utc)
+    d = t2 - t1
+
+    print("waited: %s" % d)
+
+    if d.seconds < 1:
+       raise db.TestFailed("waited less than a second")
+
+    ok = False
+    try:
+      c.execute("exec sleeptest(-10)")
+    except Exception as e:
+      print("negative delay: %s" % str(e))
+      ok = True
+    if not ok:
+       raise db.TestFailed("negative delay accepted")
 
 def locktest(c):
     print("RUNNING 'locktest'")
@@ -64,7 +97,7 @@ def uniquetest(c):
           s = len(us)
           us.add(row[0])
           if s == len(us):
-             db.TestFailed("value not unique: %d" % row[0])
+             raise db.TestFailed("value not unique: %d" % row[0])
 
 def recachetest(c):
     print("RUNNING 'recachetest'")
@@ -155,6 +188,7 @@ if __name__ == "__main__":
 
        createprocs(c, 'lua')
 
+       sleeptest(c)
        locktest(c)
        uniquetest(c)
        recachetest(c)

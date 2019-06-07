@@ -58,6 +58,18 @@ export LD\_LIBRARY\_PATH=/lib:/usr/lib:/usr/local/lib
 This sets the search path for shared libraries.
 
 \cmdline{
+export NOWDB\_HOME=/usr/local
+}
+
+This sets the \term{home} directory, \ie\
+the directory where daemon will find resources
+like the Lua \nowdb\ script.
+It is here set to \tech{/usr/local},
+which means that the daemon will find
+the script \tech{nowdb.lua} in 
+the directory \tech{/usr/local/lua}.
+
+\cmdline{
 export LUA\_PATH=/lua/?.lua
 } 
 
@@ -408,6 +420,7 @@ create edge from_a_to_b (origin a, destin b)
 
 where $a$ and $b$ are vertex types.
 
+\enlargethispage*{100cm}
 Stamped edges have at least one additional field,
 namely \term{timestamp} (which is usually abbreviated
 to \term{stamp}). This field does not need to be mentioned
@@ -419,6 +432,7 @@ of 99 fields).
 The edge `buys' defined above has two user-defined
 attributes: `quantity', a \term{uint}, and
 `price', a \term{float}.
+\clearpage
 
 The \term{origin} of buys is of type
 \term{client} and \term{destin} is of type \term{product}.
@@ -687,6 +701,7 @@ for \nowdb\ (which can be downloaded from \comment{xxx}).
 This tool comes with a much larger feature set
 and is described in \comment{another document}.
 
+\clearpage
 Here is a more typical time series query illustrating
 the advantage of the pretty printer:
 
@@ -882,7 +897,7 @@ that needs a client \acronym{api} to connect to the database.
 
 \nowdb\ comes with a native client \acronym{api}
 that is available in different languages, among others
-C, \CC, Go, Python and Lua.
+C, \CC, Go, Python (both, 2.7 and 3.5) and Lua (5.3).
 
 For Python, there are in fact
 two \acronym{api}s. One is very close to the underlying
@@ -896,7 +911,7 @@ The module implementing the simple Python \nowdb\ \acronym{api}
 is called \term{now.py} and must be imported into the client program.
 For the Python interpreter to find this module,
 it must be in a directory in the \acronym{pythonpath}.
-There may be different ideas on how to install python modules.
+There may be different ideas on how to install Python modules.
 The \nowdb\ installation will copy all \nowdb-related modules
 to one specific folder and add this folder to the
 \acronym{pythonpath}. But you also may install
@@ -1045,7 +1060,7 @@ We can therefore simplify the code above to
 \begin{minipage}{\textwidth}
 \begin{python}
 \begin{lstlisting}
-c.rexecute_("insert into buys (origin, product, timestamp) \
+c.rexecute("insert into buys (origin, product, timestamp) \
            values (9000001, 100002, '1929-01-23T08:45:00')")
 \end{lstlisting}
 \end{python}
@@ -1066,7 +1081,7 @@ stored procedures and stored functions,
 \ie\ user code that is executed within the database.
 The main server-side language
 for implementing stored procedures and
-stored functions is Lua.
+stored functions is Lua (version 5.3 or higher).
 Another option is Python,
 but the \nowdb\ Lua environment
 provides better performance,
@@ -1213,6 +1228,7 @@ end
 \end{lua}
 \end{minipage}
 
+\enlargethispage*{100cm}
 First, you may have noticed that there are no imports.
 Indeed, the basic \nowdb\ functionality is
 present in the global table \tech{nowdb}.
@@ -1220,6 +1236,7 @@ All functions and constants defined in
 this table can be used just like the functionality
 in the Lua standard packages (\term{string},
 \term{table}, \term{os}, \etc).
+\clearpage
 
 The function revenue starts with
 the definition of two local variables
@@ -1485,6 +1502,7 @@ basic statistics, statistical sampling, feature extraction
 and so on. The support modules are described
 \comment{in another document}.
 
+\clearpage
 \section{What's Next?}
 This chapter was only a brief introduction
 to some important features and the general flavour 
