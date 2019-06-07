@@ -67,11 +67,11 @@ The program accepts the following
 command line options:
 
 \begin{itemize}
-\item \tech{-b} The base directory,
+\item \tech{-b}: The base directory,
 where databases are stored.
 (default is the current working directory).
 
-\item \tech{-s} the binding domain, default:
+\item \tech{-s}: the binding domain, default:
 any. If set to a host or a domain, the server
 will accept only connections from that host
 or domain. Example: \tech{-s localhost} does
@@ -79,18 +79,18 @@ only accept connections from the server.
 The host or domain can be given as name (\term{localhost})
 or as \acronym{ip} address (\tech{127.0.0.1});
 
-\item \tech{-p} the port to which
+\item \tech{-p}: the port to which
 the server will listen; default is 55505,
 but any other (free) port may be used.
  
-\item \tech{-c} number of connections accepted at the same time.
+\item \tech{-c}: number of connections accepted at the same time.
 If the argument is 0, indefinitely many
 simultaneous connections are accepted
 (until the server is not able to serve more requests);
 otherwise, for \tech{-c n},
 $n$ being a positive integer,
 the server accepts
-up to $n$ sessions at the same time and
+up to $n$ connections at the same time and
 will refuse to accept more if this number is reached.
 The default value for this parameter is 128;
 
@@ -100,13 +100,13 @@ reused, that is, sessions enter a connection pool
 from which they are fetched, when new connection
 requests arrive.
 
-\item \tech{-q} runs in quiet mode
+\item \tech{-q}: runs in quiet mode
 (\ie\ no debug messages are printed to standard error);
-\item \tech{-n} does not print the starting banner;
-\item \tech{-y} activate server-side Python support;
-\item \tech{-l} activates server-side Lua support;
-\item \tech{-V} prints version information to standard output;
-\item \tech{-?} or \tech{-h} prints a help message to standard error.
+\item \tech{-n}: does not print the starting banner;
+\item \tech{-y}: activates server-side Python support;
+\item \tech{-l}: activates server-side Lua support;
+\item \tech{-V}: prints version information to standard output;
+\item \tech{-?} or \tech{-h}: prints a help message to standard error.
 \end{itemize}
 \end{minipage}
 
@@ -120,6 +120,8 @@ If libraries needed by the daemon are not in
 the standard path \tech{/usr/lib}, the path
 where those libraries were actually installed
 must be added.
+
+\begin{minipage}{\textwidth}
 Non-standard libraries used by the daemon are:
 \begin{itemize}
 \item The \term{tsalgo} library that provides
@@ -133,6 +135,7 @@ Non-standard libraries used by the daemon are:
 \item The \term{python} 3.5 library;
 \item The \term{lua} 5.3 library.
 \end{itemize}
+\end{minipage}
 
 \tech{PYTHONPATH}\\
 This is the search path used by the Python interpreter
