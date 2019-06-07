@@ -1,7 +1,7 @@
 
 echo "RUNNING TEST BATTERY 'PYSMOKE'" > log/pysmoke.log
 
-nohup nowdbd -b rsc > log/nowdb.log 2>&1 &
+nohup bin/nowdbd -b rsc > log/nowdb.log 2>&1 &
 if [ $? -ne 0 ]
 then
 	echo "FAILED: cannot run server"

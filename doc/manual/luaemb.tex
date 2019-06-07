@@ -1,11 +1,6 @@
 \section{Outline}
-\ignore{
-- why lua
-- what it provides
-- how it works
-}
 The main server interface
-besides \sql\ is Lua.
+besides \sql\ is Lua (version 5.3 or higher).
 While \sql\ is intentionally kept simple in \nowdb,
 it is in fact a mere data access language
 without control structures and variables,
@@ -59,7 +54,8 @@ containing the user code for stored procedures,
 are loaded when needed, that is, on the first
 execution of a specific stored procedure.
 
-The \nowdb\ Lua module creates the table 
+\clearpage
+The \nowdb\ Lua module creates the Lua table 
 \term{nowdb} which contains all
 functions and constants defined by
 the \nowdb\ Lua environment.
@@ -130,6 +126,7 @@ what happens when I first use one database and then
 the other potentially with equally named modules?
 }
 
+\clearpage
 \section{Execute}
 Most interactions with the \nowdb\ server
 are performed by one of the varieties of
@@ -198,6 +195,7 @@ There are two functions to handle this kind of
 situations: \term{nowdb.onerow} and
 \term{nowdb.onevalue}.
 
+\clearpage
 \term{nowdb.onerow} accepts an \sql\ statement
 and returns a Lua array representing one
 result row, \eg:
@@ -263,6 +261,7 @@ local p = nowdb.eval('pi()')
 \end{lstlisting}
 \end{lua}
 
+\clearpage
 \section{Results}
 The \term{execute} functions return
 a polymorphic result type (see dynamic types
@@ -300,6 +299,7 @@ A result always has the following methods:
       a lot of unused memory on the C side.
 \end{itemize}
 
+\clearpage
 \subsection{Status and Error Handling}
 The simplest result type is
 the status which represents an error condition.
@@ -475,6 +475,7 @@ row.release()
 \end{lstlisting}
 \end{lua}
 
+\clearpage
 The method \term{countfields}() returns
 the number of fields in a row.
 Here is a usage example that also
@@ -715,6 +716,7 @@ The logic, hence, is:
 \end{enumerate}
 \end{minipage}
 
+\clearpage
 Contrary to rows, cursors cannot be created
 ``out of thin air''; cursors can only be created
 as results of a \keyword{select} statement.
@@ -838,6 +840,7 @@ end
 \end{lstlisting}
 \end{lua}
 
+\clearpage
 The function creates a bunch of
 up to hundred rows each time it is called
 and sends them to the client.
@@ -931,6 +934,29 @@ This function is not aware of leap years and seconds
 and other time subtleties. If precision is needed,
 \sql\ should be used to perform time arithmetic.
 
+A special function is \term{nowdb.sleep}.
+This is not a time function in the strict sense;
+it is more about a thread execution function.
+It receives one parameter, a \nowdb\ time value,
+and suspends execution for \emph{at least}
+the number of nanoseconds
+given in this parameter.
+For how much time exactly execution is suspended
+depends on the underlying system.
+
+In the following example,
+we whould suspend execution for five seconds:
+
+\begin{lua}
+\begin{lstlisting}
+nowdb.sleep(5*nowdb.second)
+\end{lstlisting}
+\end{lua}
+
+The function does not return any result
+and calls \term{nowdb.raise} on error.
+
+\clearpage
 \section{Lua Support Modules}\label{sec_luasupp}
 The \nowdb\ Lua Support Package is a collection
 of useful modules to extend the server-side

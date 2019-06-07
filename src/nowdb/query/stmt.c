@@ -1801,18 +1801,37 @@ static nowdb_err_t showThings(nowdb_scope_t    *scope,
 	if (strcasecmp(ast->value, "edges") == 0) what=0;
 	else if (strcasecmp(ast->value, "vertices") == 0 ||
 	         strcasecmp(ast->value, "types") == 0) what=1;
+	else if (strcasecmp(ast->value, "procedures") == 0 ||
+	         strcasecmp(ast->value, "procs") == 0) what=2;
+	else if (strcasecmp(ast->value, "stores") == 0) what=3;
+	else if (strcasecmp(ast->value, "locks") == 0) what=4;
 	else INVALIDAST("unknown target in ast");
 
-	if (what == 0) {
-		err = nowdb_model_getEdges(scope->model, &list);
-	} else {
-		err = nowdb_model_getVertices(scope->model, &list);
+	switch(what) {
+	case 0:
+		err = nowdb_model_getEdges(scope->model, &list); break;
+	case 1:
+		err = nowdb_model_getVertices(scope->model, &list); break;
+	case 2:
+		err = nowdb_procman_all(scope->pman, &list); break;
+	case 3:
+		err = nowdb_scope_allStorage(scope, &list); break;
+	case 4:
+		err = nowdb_ipc_locks(scope->ipc, &list); break;
 	}
 	if (err != NOWDB_OK) return err;
-
+	if (list == NULL) {
+		return nowdb_err_get(nowdb_err_eof, FALSE, OBJECT, NULL);
+	}
 	for(run=list->head; run!=NULL; run=run->nxt) {
-		name = what==0?((nowdb_model_edge_t*)run->cont)->name:
-		               ((nowdb_model_vertex_t*)run->cont)->name;
+		switch(what) {
+		case 0: name = ((nowdb_model_edge_t*)run->cont)->name; break;
+		case 1: name = ((nowdb_model_vertex_t*)run->cont)->name; break;
+		case 2: name = ((nowdb_proc_desc_t*)run->cont)->name; break;
+		case 3: name = ((nowdb_storage_t*)run->cont)->name; break;
+		case 4: name = run->cont; break;
+		default: name = "unknown";
+		}
 		if (row == NULL) {
 			row = nowdb_row_fromValue(NOWDB_TYP_TEXT,
 			                              name, &sz);
@@ -1886,6 +1905,73 @@ static nowdb_err_t getPedges(nowdb_scope_t  *scope,
 }
 
 /* -------------------------------------------------------------------------
+ * Describe non-model thing
+ * -------------------------------------------------------------------------
+ */
+static nowdb_err_t describeNonModel(nowdb_scope_t      *scope,
+                                    char               *name,
+                                    nowdb_qry_result_t *res) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_proc_desc_t    *pd;
+	nowdb_proc_arg_t   *args;
+	nowdb_qry_row_t *r;
+	uint32_t sz=0;
+	char *row=NULL;
+	char *tmp=NULL;
+
+	res->resType = NOWDB_QRY_RESULT_NOTHING;
+	res->result = NULL;
+
+	err = nowdb_procman_get(scope->pman, name, &pd);
+	if (err != NOWDB_OK) return err;
+
+	args = pd->args;
+	for(int i=0; i<pd->argn; i++) {
+		if (row == NULL) {
+			row = nowdb_row_fromValue(NOWDB_TYP_TEXT,
+			                      args[i].name, &sz);
+			if (row == NULL) {
+				NOMEM("allocating row");
+				break;
+			}
+		} else {
+			tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+			                           args[i].name, &sz);
+			if (tmp == NULL) {
+				free(row);
+				NOMEM("allocating row");
+				break;
+			}
+			row = tmp;
+		}
+		tmp = nowdb_row_addValue(row, NOWDB_TYP_TEXT,
+		            nowdb_typename(args[i].typ), &sz);
+		if (tmp == NULL) {
+			free(row);
+			NOMEM("allocating row");
+			break;
+		}
+		row = tmp;
+		nowdb_row_addEOR(row, &sz);
+	}
+	nowdb_proc_desc_destroy(pd); free(pd);
+	if (err != NOWDB_OK) return err;
+	if (row != NULL) {
+		r = calloc(1, sizeof(nowdb_qry_row_t));
+		if (r == NULL) {
+			NOMEM("allocating qryrow");
+			free(row);
+			return err;
+		}
+		r->sz = sz;
+		r->row = row;
+		res->resType = NOWDB_QRY_RESULT_ROW;
+		res->result = r;
+	}
+	return NOWDB_OK;
+}
+
+/* -------------------------------------------------------------------------
  * Describe
  * -------------------------------------------------------------------------
  */
@@ -1903,9 +1989,16 @@ static nowdb_err_t describeThing(nowdb_scope_t      *scope,
 	nowdb_content_t what;
 	char *name;
 
+	if (scope == NULL) INVALIDAST("no scope");
 	if (ast->value == NULL) INVALIDAST("no target in ast");
 	err = nowdb_model_whatIs(scope->model, ast->value, &what);
-	if (err != NOWDB_OK) return err;
+	if (err != NOWDB_OK) {
+		if (nowdb_err_contains(err, nowdb_err_key_not_found)) {
+			nowdb_err_release(err);
+			return describeNonModel(scope, ast->value, res);
+		}
+		return err;
+	}
 
 	ts_algo_list_init(&list);
 	if (what == NOWDB_CONT_EDGE) {
@@ -1983,21 +2076,22 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	op = nowdb_ast_operation(ast);
 	if (op == NULL) INVALIDAST("no operation in AST");
 
+	
+	trg = nowdb_ast_target(ast);
+	if ((trg == NULL ||
+	     trg->stype != NOWDB_AST_SCOPE) && scope == NULL) {
+		INVALIDAST("no scope");
+	}
+
 	if (op->ntype == NOWDB_AST_SHOW) {
 		return showThings(scope, op, res);
 	}
 	if (op->ntype == NOWDB_AST_DESC) {
 		return describeThing(scope, op, res);
 	}
-	
-	trg = nowdb_ast_target(ast);
+
 	if (trg == NULL) INVALIDAST("no target in AST");
-
 	if (trg->value == NULL) INVALIDAST("no target name in AST");
-
-	if (trg->stype != NOWDB_AST_SCOPE && scope == NULL) {
-		INVALIDAST("no scope");
-	}
 
 	/* create */
 	if (op->ntype == NOWDB_AST_CREATE) {

@@ -151,6 +151,7 @@ parts of this protocol
 will probably be documented
 and published in the future
 
+\clearpage
 \section{Types}
 \nowdb\ \sql\
 has a very simple type system,
@@ -444,6 +445,7 @@ a unary operator is $not$:
 if $a$ is a valid expression,
 so is $not~a$.
 
+\clearpage
 Expressions may also contain
 functions. Functions are very
 similar to operators, but differ
@@ -522,6 +524,7 @@ integers. Workaround is to either introduce
 a blank before \tech{b}: \tech{a+ b} or to put parentheses
 around it: \tech{a+(b)}.}
 
+\clearpage
 Division (/), however, is different in that it
 has different meanings for different numerical types.
 For \term{float} values it performs floating point
@@ -671,10 +674,12 @@ The hyperbolic function \identifier{acosh}
 is valid only for values $\ge 1$.
 For smaller values, \identifier{acosh} returns $NaN$.
 
+\enlargethispage*{100cm}
 The hyperbolic function \identifier{atanh}
 is valid only for values $\le 1$.
 For 1, it returns $\infty$.
 For greater values, it returns $NaN$.
+\clearpage
 
 \subsubsection{Mathematical Constants}
 \nowdb\ defines the mathematical constants
@@ -834,6 +839,7 @@ Special operators are
 \keyword{any} and \keyword{all}
 are not yet available.}
 
+\enlargethispage*{100cm}
 The operator \keyword{is} must be used
 to compare with the special value
 \acronym{null}, \eg\ 1 \keyword{is null}
@@ -844,6 +850,7 @@ The expression
 $a$ \keyword{is not null} is
 equivalent to
 \keyword{not}($a$ \keyword{is null}).
+\clearpage
 
 The operator \keyword{between} tests
 whether a value is in a range.
@@ -1037,6 +1044,11 @@ If the field \identifier{category} is \keyword{null},
 \identifier{coalesce} evaluates to 99;
 otherwise, it evaluates to the current
 value of \identifier{category}.
+
+\identifier{coalesce} may be shortened to \identifier{coal}.
+So, the following statement is equivalent to the previous:
+
+\identifier{coal}(\identifier{category}, 99)
 
 Since \identifier{coalesce} accepts
 an undetermined number of arguments,
@@ -1487,6 +1499,7 @@ How many threads are allocated
 is not part of this specification
 and may vary between platforms.
 
+\clearpage
 The user may decide on the compression algorithm to use.
 The standard compression algorithm is \term{zstd},
 which is fast, but also has a very good compression ratio.
@@ -1675,11 +1688,13 @@ edges (simple and stamped)
 defined in the current database,
 one edge name per row.
 
+\enlargethispage*{100cm}
 \keyword{describe} \identifier{myedge}
 returns a cursor with the attributes
 and attribute types for the edge 
 \identifier{myedge}, one pair of
 attribute name, type per row.
+\clearpage
 
 \subsection{Index}
 \subsubsection{CREATE}
@@ -1850,11 +1865,13 @@ The rationale for this restriction is
 to avoid accidentally dropping too many data
 using too complex or incomplete \term{drop} statements.
 
+\enlargethispage*{100cm}
 To illustrate that, the following example 
 is legal and it drops all data
 before a given date (which is very common
 for timeseries databases, that often represent gliding
 time windows):
+\clearpage
 
 \begin{minipage}{\textwidth}
 \keyword{drop period on} \identifier{mytable} \\
@@ -2183,6 +2200,7 @@ The following are valid \term{select} clauses:
                                    \identifier{price}) $/$ 2) \\
 \keyword{select} \identifier{stddev}(\identifier{price})
 
+\clearpage
 The freedom of the \term{select} clause
 is restricted by other clauses, in particular
 the \term{from} clause and the \term{group} clause.

@@ -1,0 +1,258 @@
+\section{Outline}
+\nowdb\ implements a classic client/server approach.
+The \nowdb\ daemon acts as the server side,
+that is, the daemon process implements the server;
+the terms \term{daemon} and \term{server}
+are therefore interchangeable.
+One server may run one or more databases,
+which reside in the same base directory
+on the server machine.
+Several servers may run on the same machine,
+but need to use different database directories
+and, of course, different ports.
+
+Clients connect to the server
+through \acronym{tcp/ip}.
+A \acronym{tcp/ip} connection
+constitutes a \term{session}.
+It is always possible to execute \sql\
+statements within a session and
+it may be possible to execute
+server-side Lua or Python scripts,
+depending on the command line options
+passed to the process on start-up.
+
+For Lua and Python, the session also
+defines the scope and lifetime
+of global and module-wide variables.
+This makes it possible to implement
+stateful server modules that maintain
+state for as long as the session exists.
+This feature allows implementing
+a wide range of patterns,
+such as complex queries using internally
+one or more cursors or partial computation results,
+but also long running publish \& subscribe
+services.
+
+The \nowdb\ daemon is a \acronym{posix}-compliant
+command line program optimised and tested
+for 64bit machines running under Linux.
+Clients are available for a wide range
+of languages (C, Python, Lua, Go, \etc)
+and platforms (Linux, Apple, Windows).
+In the future, the \nowdb\ daemon may
+address other platforms as well.
+But, currently, this is not a priority.
+
+The behaviour of the daemon process
+is influenced by a number
+of command line parameters and
+environment variables.
+Configuration files are (\comment{currently})
+not necessary.
+In the following two sections,
+we will discuss available
+command line parameters and
+environment variables.
+The last section will present
+the \nowdb\ docker.
+The docker eases the installation
+especially of the server-side components
+and the maintenance of \nowdb\ servers.
+
+\section{Command Line Parameters}
+\begin{minipage}{\textwidth}
+The program accepts the following
+command line options:
+
+\begin{itemize}
+\item \tech{-b}: The base directory,
+where databases are stored.
+(default is the current working directory).
+
+\item \tech{-s}: the binding domain, default:
+any. If set to a host or a domain, the server
+will accept only connections from that host
+or domain. Example: \tech{-s localhost} does
+only accept connections from the server.
+The host or domain can be given as name (\term{localhost})
+or as \acronym{ip} address (\tech{127.0.0.1});
+
+\item \tech{-p}: the port to which
+the server will listen; default is 55505,
+but any other (free) port may be used.
+ 
+\item \tech{-c}: number of connections accepted at the same time.
+If the argument is 0, indefinitely many
+simultaneous connections are accepted
+(until the server is not able to serve more requests);
+otherwise, for \tech{-c n},
+$n$ being a positive integer,
+the server accepts
+up to $n$ connections at the same time and
+will refuse to accept more if this number is reached.
+The default value for this parameter is 128;
+
+It should be noted that, up to a certain threshold
+(which is not configurable) sessions are
+reused, that is, sessions enter a connection pool
+from which they are fetched, when new connection
+requests arrive.
+
+\item \tech{-q}: runs in quiet mode
+(\ie\ no debug messages are printed to standard error);
+\item \tech{-n}: does not print the starting banner;
+\item \tech{-y}: activates server-side Python support;
+\item \tech{-l}: activates server-side Lua support;
+\item \tech{-V}: prints version information to standard output;
+\item \tech{-?} or \tech{-h}: prints a help message to standard error.
+\end{itemize}
+\end{minipage}
+
+\clearpage
+\section{Environment Variables}
+The following environment variables have influence
+on the behaviour of the program:
+
+\tech{LD\_LIBRARY\_PATH}\\
+This is the Linux search path for shared libraries.
+If libraries needed by the daemon are not in
+the standard path \tech{/usr/lib}, the path
+where those libraries were actually installed
+must be added.
+
+\begin{minipage}{\textwidth}
+Non-standard libraries used by the daemon are:
+
+\begin{itemize}
+\item The \term{tsalgo} library that provides
+      fundamental algorithms and datastructures;
+\item The \term{beet} library that provides
+      on-disk B$^+$Trees needed for indices;
+\item The \term{zstd} and \term{lz4} libraries
+      both implementing compression algorithms;
+\item The \term{libcsv} library that implements
+      efficient \acronym{csv} handling.
+\item \comment{avron}
+\item The \term{icu} library providing \acronym{utf}-8
+      handling for C;
+\item The \term{embed\acronym{tls}} library which equips
+      \nowdb\ with secure communication;    
+\item The \term{python} 3.5 library;
+\item The \term{lua} 5.3 library.
+\end{itemize}
+\end{minipage}
+
+\tech{PYTHONPATH}\\
+This is the search path used by the Python interpreter
+to find imported modules and packages.
+
+\tech{LUA\_PATH}\\
+This is the search path used by the Lua interpreter
+to find imported modules.
+The syntax for this variable is special.
+For details, please refer to the Lua 5.3 documentation.
+
+\tech{LUA\_CPATH}\\
+This is the search path used by the Lua interpreter
+to find C libraries that are used in Lua modules.
+The syntax for this variable is special.
+For details, please refer to the Lua 5.3 documentation.
+
+\tech{NOWDB\_LUA\_PATH}\\
+This is the search path used by \nowdb\ to find top-level
+user modules. The syntax for this variable is special
+and is discussed in detail in section \ref{chpt_luaemb}.
+
+\enlargethispage*{100cm}
+\tech{NOWDB\_HOME}\\
+This variable shall hold the path to \nowdb\ resources,
+such as the Lua and Python \nowdb\ modules. Where this
+path is located on your system depends on the installation.
+Please refer to \ref{chpt_install} for details.
+\clearpage
+
+\section{The \nowdb\ Docker}
+The \nowdb\ docker provides a ready-made environment
+for the server to run. All libraries are installed,
+relevant environment variables are set and the daemon
+is started with a consistent parameter setting.
+All decisions can be reviewed by the user and alternative
+settings can be chosen.
+
+Within the docker, \nowdb\ is started
+by means of a shell script.
+One possible way to start the docker is:
+
+\cmdline{
+docker run --rm -p 55505:55505 $\backslash$\\
+\hspace*{2cm} -v /opt/dbs:/dbs -v /var/log:/log $\backslash$\\
+\hspace*{2cm} -d nowdbdocker /bin/bash -c "/nowstart.sh"
+}
+
+This command creates the docker container and starts it.
+The parameters are
+\begin{itemize}
+\item \tech{--rm}
+instructs the docker daemon to remove
+the container immediately after it will have stopped.
+
+\item \tech{-p 55505:55505} binds the host port \term{55505}
+to the same docker port.
+
+\item \tech{-v} maps the host path
+\tech{/opt/dbs} to the docker path \tech{/dbs} and
+the host path \tech{/var/log} to the docker path \tech{/log}.
+
+\item \tech{-d} means the docker runs in the background
+(\term{detached}).
+
+\item \tech{nowdbdocker} is the name of the docker image.
+
+\item \tech{/bin/bash} is the command to be executed
+within the docker; \tech{-c} passes a command
+to be executed to \tech{bash},
+namely \tech{/nowstart.sh}.
+\end{itemize}
+
+For more information on how to start, stop and manage
+dockers, please refer to the docker documentation at
+\url{https://docs.docker.com/}.
+
+The script \tech{nowstart.sh}, contains the
+instructions to start the \nowdb\ daemon:
+
+\cmdline{
+export LD\_LIBRARY\_PATH=/lib:/usr/lib:/usr/local/lib \\
+export NOWDB\_HOME=/usr/local \\
+export LUA\_PATH=/lua/?.lua \\
+export LUA\_CPATH=/lua/?.so \\
+export NOWDB\_LUA\_PATH=$\star$:/lua \\
+nowdbd -b /dbs -l 2>/log/nowdbd.log
+}
+
+The script sets all relevant environment variables,
+namely the \tech{LD\_LIBRARY\_PATH},
+\tech{NOWDB\-\_HOME},
+\tech{LUA\_PATH} and \tech{LUA\_CPATH}
+as well as the \tech{NOWDB\_LUA\_PATH}.
+Note that the \tech{PYTHONPATH} is not set.
+This is because Lua is considered the
+default server-side language.
+
+\clearpage
+Then, the \nowdb\ daemon itself is started.
+The script passes two options to the daemon:
+the base directory where all databases
+managed by this particular daemon live (\tech{-b /dbs})
+and the \tech{-l} switch, which activates
+server-side Lua support.
+
+The docker also contains the \nowdb\ command line client
+and the client libraries for C, Python, Lua and Go.
+This way the docker can be used to work with the server
+interactively without the need to additionally install
+programs on the server or the client; the docker can
+also be used to prototype a complete solution including
+server and client applications.

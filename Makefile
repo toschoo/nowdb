@@ -71,6 +71,7 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/mem/pplru.o      \
       $(SRC)/mem/plru12.o     \
       $(SRC)/mem/blist.o      \
+      $(SRC)/mem/t2tmap.o     \
       $(SRC)/store/store.o    \
       $(SRC)/store/storage.o  \
       $(SRC)/store/comp.o     \
@@ -127,6 +128,7 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/mem/pplru.h      \
       $(SRC)/mem/plru12.h     \
       $(SRC)/mem/blist.h      \
+      $(SRC)/mem/t2tmap.h     \
       $(SRC)/store/store.h    \
       $(SRC)/store/storage.h  \
       $(SRC)/store/comp.h     \
@@ -172,16 +174,17 @@ IFC = include/nowdb/nowdb.h \
 default:	lib 
 
 #all:	default tools tests bench server client
-all:	default tools tests server client 
+all:	default tools tests client lua server 
 
 install:	lib server client tools
 		cp lib/*.so /usr/local/lib
 		cp bin/nowdbd /usr/local/bin
 		cp bin/nowclient /usr/local/bin
 		cp -r pynow /usr/local/
+		cp -r lua /usr/local/
 		cp -r include/nowdb /usr/local/include/
 
-client_install:	client tools
+client_install:	client bin/nowclient
 		cp lib/libnowdbclient.so /usr/local/lib
 		cp bin/nowclient /usr/local/bin
 		cp -r pynow /usr/local/
@@ -189,7 +192,7 @@ client_install:	client tools
 
 server:	$(BIN)/nowdbd lua
 
-client:	$(BIN)/nowclient lua
+client:	$(BIN)/nowclient
 
 tools:	bin/randomfile    \
 	bin/readfile      \

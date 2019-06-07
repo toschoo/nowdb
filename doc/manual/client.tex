@@ -1,0 +1,87 @@
+\section{Outline}
+This chapter presents the \term{simple client},
+\term{nowclient},
+which comes with basic \nowdb\ installation
+and is available in the \nowdb\ docker.
+The advantage of this client is that it is
+extremely simple, it has a very small code base,
+it is fast and very easy to use.
+On the other hand, it does not implement
+advanced features like an interactive user interface
+or pretty printing query results.
+There is a more complete client implemented
+in Go \comment{(or Rust?)} that can be downloaded
+\comment{here}.
+
+The simple client is a program to send a
+single statement or a sequence of statements
+to the \nowdb\ server. The result,
+in case of \acronym{dql} statements,
+is presented in a \acronym{csv}-like format
+on \term{stdout}
+(with semicolon instead of comma).
+
+For a single \acronym{sql} statement,
+the program provides the command line parameter
+\tech{-Q} (see next section for details).
+Without this option, \term{nowclient}
+expects the statement(s) to be sent to the server
+on \term{stdin}. The program could, hence,
+be called in the form:
+
+\cmdline{
+"use retail; select count(*) from buys;" | nowclient
+}
+
+This line would send two statements to the server,
+a \term{use} statement and a \term{select}.
+Note that both statements are terminated with
+a semicolon. This is mandatory, when sending
+queries through \term{stdin}.
+
+In this example, no command line options are used.
+The program will therefore fall back to
+its default behaviour.
+The following section discusses
+the command line options.
+
+\clearpage
+\section{Command Line Parameters}
+Options known to \term{nowclient} are:
+
+\begin{itemize}
+\item \tech{-s}:
+The server address or name, \eg\ \tech{myserver.mydomain.org} or
+\tech{127.0.0.1}. Default is \tech{127.0.0.1};
+
+\item \tech{-p}:
+the port to which the database is listening. Default: 55505;
+
+\item \tech{-d}:
+the database to which we want to connect. 
+Default: no database at all, which means
+that we cannot send queries without naming a database.
+Below we will look at alternatives to using this parameter;
+
+\item \tech{-Q}:
+the query we want the database to process;
+the query is added as a string, \eg:
+
+\cmdline{
+nowclient -d retail -Q "select count(*) from buys"
+}
+
+It is not necessary to end the statement with semicolon.
+This is only necessary when statements are sent through
+\term{stdin};
+
+\item \tech{-t}:
+print some (server-side) timing information to standard error;
+
+\item \tech{-q}:
+quiet mode: don't print processing information to standard error;
+
+\item \tech{-V}: prints version information to standard output;
+\item \tech{-?} or \tech{-h}: prints a help message to standard error.
+\end{itemize}
+

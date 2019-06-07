@@ -1,15 +1,17 @@
 FROM ubuntu:16.04
-RUN apt-get update
+RUN apt-get update --fix-missing
 RUN apt-get install -y \
     gcc \
     git \
     curl \
     sudo \
-    sudo \
     flex \
     libcsv-dev \
     python-dev \
-    python-pip 
+    python-pip
+
+RUN apt-get install -y liblua5.3-dev
+RUN apt-get install -y lua5.3
 
 RUN pip install python-dateutil
 
@@ -32,6 +34,10 @@ RUN cd build && cd beet && \
   make all && make install && cd .. 
 
 ADD nowdb build/nowdb
+RUN cd build && cd nowdb && \
+  env LD_LIBRARY_PATH="./lib:/usr/lib:/usr/local/lib" \
+  make client && make client_install && cd ../..
+
 RUN cd build && cd nowdb && \
   env LD_LIBRARY_PATH="./lib:/usr/lib:/usr/local/lib" make lemon && \
   env LD_LIBRARY_PATH="./lib:/usr/lib:/usr/local/lib" \

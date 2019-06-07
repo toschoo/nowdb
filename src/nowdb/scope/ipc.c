@@ -34,25 +34,13 @@ static char *catalogue = "ipc";
 #define DELAYUNIT 1000000
 
 /* ------------------------------------------------------------------------
- * Lock
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_lock_t lock; // protect this structure
-	int       readers; // number of readers holding the lock
-	char        *name; // name of this lock
-	char        state; // state free -> rlock|wlock -> free
-        ts_algo_list_t  q; // do we need to guarantee order?
-} lock_t;
-
-/* ------------------------------------------------------------------------
  * Make lock
  * ------------------------------------------------------------------------
  */
-static lock_t *mkLock(char *name, nowdb_err_t *err) {
-	lock_t *l;
+static nowdb_ipc_lock_t *mkLock(char *name, nowdb_err_t *err) {
+	nowdb_ipc_lock_t *l;
 
-	l = calloc(1,sizeof(lock_t));
+	l = calloc(1,sizeof(nowdb_ipc_lock_t));
 	if (l == NULL) return NULL;
 
 	l->name = name;
@@ -72,7 +60,7 @@ static lock_t *mkLock(char *name, nowdb_err_t *err) {
  * destroy lock 
  * ------------------------------------------------------------------------
  */
-void destroyLock(lock_t *lock) {
+void destroyLock(nowdb_ipc_lock_t *lock) {
 	if (lock == NULL) return;
 	if (lock->name != NULL) {
 		free(lock->name); lock->name = NULL;
@@ -532,11 +520,71 @@ unlock:
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: filter locks
+ * ------------------------------------------------------------------------
+ */
+static ts_algo_bool_t filocks(void *ignore, const void *other,
+                                            const void *self){
+	return (THING(self)->t == L);
+}
+
+/* ------------------------------------------------------------------------
+ * Get all locks
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_ipc_locks(nowdb_ipc_t *ipc, ts_algo_list_t **locks) {
+	nowdb_err_t err=NOWDB_OK;
+	nowdb_err_t err2;
+	ts_algo_list_t list;
+	ts_algo_list_node_t *run;
+
+	err = nowdb_lock_read(&ipc->lock);
+	if (err != NOWDB_OK) return err;
+
+	ts_algo_list_init(&list);
+	if (ts_algo_tree_filter(ipc->things, &list,
+	             NULL, &filocks) != TS_ALGO_OK) {
+		NOMEM("tree.filter");
+		ts_algo_list_destroy(&list);
+		goto unlock;
+	}
+	if (list.len == 0) {
+		ts_algo_list_destroy(&list);
+		*locks = NULL;
+		goto unlock;
+	}
+
+	*locks = calloc(1,sizeof(ts_algo_list_t));
+	if (*locks == NULL) {
+		ts_algo_list_destroy(&list);
+		NOMEM("alloc list");
+		goto unlock;
+	}
+	for(run=list.head; run!=NULL; run=run->nxt) {
+		if (ts_algo_list_append(*locks,THING(run->cont)->name)
+		                                        != TS_ALGO_OK) {
+			ts_algo_list_destroy(&list);
+			NOMEM("list.append");
+			free(*locks); *locks = NULL;
+			goto unlock;
+		}
+	}
+	ts_algo_list_destroy(&list);
+unlock:
+	err2 = nowdb_unlock_read(&ipc->lock);
+	if (err2 != NOWDB_OK) {
+		err2->cause = err;
+		return err2;
+	}
+	return err;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: get lock
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getlock(nowdb_ipc_t *ipc, char *name,
-                                                 lock_t **lock) {
+                                       nowdb_ipc_lock_t **lock) {
 	nowdb_err_t err=NOWDB_OK;
 	nowdb_err_t err2;
 	thing_t pattern, *thing;
@@ -571,7 +619,7 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
 	nowdb_time_t delay = TINYDELAY;
 	nowdb_time_t wmo = tmo*DELAYUNIT;
 	char locked = 0;
-	lock_t *l=NULL;
+	nowdb_ipc_lock_t *l=NULL;
 
 	/* we should set an "in-use" marker here!
 	*/
@@ -628,7 +676,7 @@ nowdb_err_t nowdb_ipc_lock(nowdb_ipc_t *ipc, char *name,
  */
 nowdb_err_t nowdb_ipc_unlock(nowdb_ipc_t *ipc, char *name) {
 	nowdb_err_t err=NOWDB_OK;
-	lock_t *l=NULL;
+	nowdb_ipc_lock_t *l=NULL;
 
 	err = getlock(ipc, name, &l);
 	if (err != NOWDB_OK) return err;
