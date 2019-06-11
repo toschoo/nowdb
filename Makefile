@@ -714,8 +714,10 @@ clean:
 	rm -f $(SRD)/*.o
 	rm -f $(SRL)/*.o
 	rm -f $(PYC)/*.pyc
+	rm -rf $(PYC)/__pycache__
 	rm -f $(TST)/*/*.o
 	rm -f $(TST)/*/*.pyc
+	rm -rf $(TST)/*/__pycache__
 	rm -f $(COM)/*.o
 	rm -f $(BENCH)/*.o
 	rm -f $(TOOLS)/*.o
@@ -725,6 +727,7 @@ clean:
 	rm -f $(SQL)/nowdbsql.c
 	rm -f $(SQL)/nowdbsql.out
 	rm -f todo/bin/*.pyc
+	rm -rf todo/bin/__pycache__
 	rm -f lemon/*.o
 	rm -f lemon/nowlemon
 	rm -f $(OUTLIB)/libnowdb.so

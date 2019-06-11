@@ -30,7 +30,7 @@
    <http://www.gnu.org/licenses/>.
 '''
 import now
-from exceptions import StandardError
+# from exceptions import StandardError
 from datetime import datetime
 
 # globals
@@ -43,14 +43,14 @@ tuplerow = 2
 listrow = 3
 
 # exceptions
-class Warning(StandardError):
+class Warning(Exception):
     def __init__(self, info):
         self.info = info
 
     def __str__(self):
         return self.info
 
-class Error(StandardError):
+class Error(Exception):
     def __init__(self, info):
         self.info = info
 

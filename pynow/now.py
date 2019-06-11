@@ -81,7 +81,7 @@ _clientinit.restype = c_char
 _clientinit.argtypes = []
 
 if _clientinit() == 0:
-   print "cannot init library"
+   print("cannot init library")
    exit(1)
 
 _connect = now.nowdb_connect
@@ -195,8 +195,10 @@ class Connection:
            raise ParamError('address, port, user and password must be string')
 
         con = c_void_p()
-        x = _connect(byref(con), c_char_p(addr), c_char_p(port),\
-                                 c_char_p(usr), c_char_p(pwd), \
+        x = _connect(byref(con), c_char_p(addr.encode('utf-8')), \
+                                 c_char_p(port.encode('utf-8')),\
+                                 c_char_p(usr), \
+                                 c_char_p(pwd), \
                                  c_long(0))
         if x == 0:
             self.con = con
@@ -228,7 +230,7 @@ class Connection:
         if x == 0:
             self.con = None
         else:
-            print "cannot close connection!"
+            print("cannot close connection!")
 
     def execute(self, stmt):
         '''
@@ -238,7 +240,7 @@ class Connection:
         if type(stmt) != str:
            raise ParamError('statement must be a string')
         r = c_void_p()
-        x = _exec(self.con, c_char_p(stmt), byref(r))
+        x = _exec(self.con, c_char_p(stmt.encode('utf-8')), byref(r))
         if x == 0:
             return Result(r)
         else:
@@ -324,7 +326,6 @@ class Result:
 
     '''
     def __init__(self, r):
-        # print "result up"
         self.r = r
         self.cur = None
         self.needNext = False
@@ -493,7 +494,7 @@ class Result:
         if x != ROW:
             raise WrongType("result not a row")
 
-	if self.r is None:
+        if self.r is None:
            return 0
 
         return int(_rCount(self.r))

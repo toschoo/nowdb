@@ -424,5 +424,5 @@ def randomString(l):
     s = ""
     for i in range(l):
        c = random.randint(65,90)
-       s += str(unichr(c))
+       s += str(chr(c))
     return s
