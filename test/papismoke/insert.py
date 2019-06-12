@@ -37,7 +37,7 @@ def testnoresult(c):
         return row['price']
     
 def insertvertex(c,k):
-    print "RUNNING TEST 'insertvertex'"
+    print("RUNNING TEST 'insertvertex'")
     s = 'product %d' % k
     sql = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \
                        values  (%d, '%s', 1, 2, 1.99)" % (k, s)
@@ -56,7 +56,7 @@ def insertvertex(c,k):
        raise db.TestFailed('expecting one row, having: %d' % count)
 
 def insertnullvertex(c,k):
-    print "RUNNING TEST 'insertnullvertex'"
+    print("RUNNING TEST 'insertnullvertex'")
     s = 'product %d' % k
     sql = "insert into product (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \
                        values  (%d, '%s', 1, NULL, 1.99)" % (k, s)
@@ -78,7 +78,7 @@ def insertnullvertex(c,k):
        raise db.TestFailed('expecting one row, having: %d' % count)
 
 def insertedge(c,o,d):
-    print "RUNNING TEST 'insertedge'"
+    print("RUNNING TEST 'insertedge'")
 
     before = countdb(c,'buys')
 
@@ -110,7 +110,7 @@ def insertedge(c,o,d):
            raise db.TestFailed("median differs")
 
 def insertnulledge(c,o,d):
-    print "RUNNING TEST 'insertnulledge'"
+    print("RUNNING TEST 'insertnulledge'")
 
     before = countdb(c,'buys')
 

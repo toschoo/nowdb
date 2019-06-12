@@ -34,7 +34,7 @@ def price(c,p):
         return row['price']
 
 def createprocs(c, lang):
-    print "RUNNING 'createprocs' %s" % lang
+    print("RUNNING 'createprocs' %s" % lang)
 
     c.execute("drop procedure emptytable if exists").close()
     c.execute("create procedure db.emptytable() language %s" % lang).close()
@@ -88,21 +88,21 @@ def createprocs(c, lang):
                   f6     float)").close()
 
 def hellotest(c):
-    print "RUNNING TEST 'hellotest'"
+    print("RUNNING TEST 'hellotest'")
 
     c.execute("exec sayhello()").close()
     c.execute("exec sayhello()").close()
     c.execute("exec sayhello()").close()
 
 def emptytest(c):
-    print "RUNNING TEST 'emptytest'"
+    print("RUNNING TEST 'emptytest'")
 
     c.execute("exec emptytable()").close()
     c.execute("exec emptytable()").close()
     c.execute("exec emptytable()").close()
 
 def counttest(c):
-    print "RUNNING TEST 'counttest'"
+    print("RUNNING TEST 'counttest'")
 
     n = countdb(c,'buys')
     for row in c.execute("exec mycount('buys')"):
@@ -125,7 +125,7 @@ def counttest(c):
            raise db.TestFailed('client differs')
 
 def grouptest(c):
-    print "RUNNING TEST 'grouptest'"
+    print("RUNNING TEST 'grouptest'")
 
     l = countdb(c,'product')
     x = rnd.randint(0,l-1)
@@ -167,7 +167,7 @@ def grouptest(c):
 
 def addtest(c):
 
-    print "RUNNING TEST 'addtest'"
+    print("RUNNING TEST 'addtest'")
 
     # float
     a = rnd.uniform(0.1,100.0)
@@ -217,7 +217,7 @@ def addtest(c):
 
 def logictest(c):
 
-    print "RUNNING TEST 'logictest'"
+    print("RUNNING TEST 'logictest'")
 
     a = True if rnd.randint(0,1) == 0 else False
     b = False if rnd.randint(0,1) == 0 else True
@@ -251,7 +251,7 @@ def logictest(c):
 
 def express(c):
 
-    print "RUNNING TEST 'express'"
+    print("RUNNING TEST 'express'")
 
     # arithmetic
     a = rnd.randint(0,100)
@@ -280,7 +280,7 @@ def express(c):
 
 def invalidpars(c):
 
-    print "RUNNING TEST 'invalidpars'"
+    print("RUNNING TEST 'invalidpars'")
 
     try:
        c.execute("exec myfloatadd(price1, price2)")
@@ -302,7 +302,7 @@ def invalidpars(c):
 
 def timetest(c):
 
-    print "RUNNING TEST 'timetest'"
+    print("RUNNING TEST 'timetest'")
 
     x = countdb(c,'buys')
 
@@ -323,7 +323,7 @@ def timetest(c):
 
 def eastertest(c):
 
-    print "RUNNING TEST 'eastertest'"
+    print("RUNNING TEST 'eastertest'")
 
     for i in range(50):
         for row in c.execute("exec easter(%d)" % (i+2000)):
@@ -336,7 +336,7 @@ def fib(n):
 
 def fibtest(c):
 
-    print "RUNNING TEST 'fibtest'"
+    print("RUNNING TEST 'fibtest'")
 
     c.execute("exec fibreset()")
     for i in range(10):

@@ -18,14 +18,14 @@ def countvrtxby(vs, key, pivot):
     return n
 
 def roundfloats(c):
-    print "RUNNING TEST 'roundfloats'"
+    print("RUNNING TEST 'roundfloats'")
 
     idx = random.randint(1,len(ps)-1)
 
-    print "PIVOT: %d - %f" % (ps[idx].key, \
-                              ps[idx].price)
+    print("PIVOT: %d - %f" % (ps[idx].key, \
+                              ps[idx].price))
 
-    print "TOINT"
+    print("TOINT")
     w = int(round(ps[idx].price*100))/100
     stmt = "select prod_key, prod_price \
               from product \
@@ -35,14 +35,14 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %f" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %f" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == ps[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my product")
 
-    print "CEIL/FLOOR"
+    print("CEIL/FLOOR")
     stmt = "select prod_key, prod_price \
               from product \
              where ceil(prod_price)  >= %f \
@@ -53,14 +53,14 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %f" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %f" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == ps[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my product")
 
-    print "SQUARE"
+    print("SQUARE")
     stmt = "select prod_key, prod_price \
               from product \
              where (prod_price^2)/prod_price     >= %f \
@@ -71,29 +71,29 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %f" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %f" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == ps[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my edge")
 
 def weekdays(c):
-    print "RUNNING TEST 'weekdays'"
+    print("RUNNING TEST 'weekdays'")
 
     idx = random.randint(1,len(cs)-1)
 
-    print "PIVOT: %d - %d - %d, %d, %d, %d, %d, %d" % (cs[idx].key, \
+    print("PIVOT: %d - %d - %d, %d, %d, %d, %d, %d" % (cs[idx].key, \
                                                        now.dt2now(cs[idx].birthdate),
                                                        cs[idx].birthdate.weekday(),
                                                        cs[idx].birthdate.day,
                                                        cs[idx].birthdate.hour,
                                                        cs[idx].birthdate.minute,
                                                        cs[idx].birthdate.second,
-                                                       cs[idx].birthdate.microsecond)
+                                                       cs[idx].birthdate.microsecond))
     w = (cs[idx].birthdate.weekday()+1)%7
 
-    print "WEEKDAY"
+    print("WEEKDAY")
     stmt = "select client_key, wday(birthdate) \
               from client \
              where wday(birthdate) = %d" % w
@@ -102,14 +102,14 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my client")
 
-    print "DAY OF MONTH"
+    print("DAY OF MONTH")
     stmt = "select client_key, mday(birthdate) \
               from client \
              where mday(birthdate) = %d" % (cs[idx].birthdate.day)
@@ -118,14 +118,14 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my client")
 
-    print "HOUR OF DAY"
+    print("HOUR OF DAY")
     stmt = "select client_key, hour(birthdate) \
               from client \
              where hour(birthdate) = %d" % (cs[idx].birthdate.hour)
@@ -134,14 +134,14 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my client")
 
-    print "MINUTE OF HOUR"
+    print("MINUTE OF HOUR")
     stmt = "select client_key, minute(birthdate) \
               from client \
              where minute(birthdate) = %d" % (cs[idx].birthdate.minute)
@@ -150,14 +150,14 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my client")
 
-    print "SECOND OF MINUTE"
+    print("SECOND OF MINUTE")
     stmt = "select client_key, second(birthdate) \
               from client \
              where second(birthdate) = %d" % (cs[idx].birthdate.second)
@@ -166,14 +166,14 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
             raise db.TestFailed("could not find my client")
 
-    print "MICROSECONDs"
+    print("MICROSECONDs")
     stmt = "select client_key, micro(birthdate) \
               from client \
              where micro(birthdate) = %d" % (cs[idx].birthdate.microsecond)
@@ -182,8 +182,8 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d" % (row.field(0), \
-                                       row.field(1))
+             print("FOUND: %d - %d" % (row.field(0), \
+                                       row.field(1)))
              if row.field(0) == cs[idx].key:
                 found=True
          if not found:
@@ -191,14 +191,14 @@ def weekdays(c):
 
 def shortcircuit(c):
 
-    print "RUNNING TEST 'shortcircuit'"
+    print("RUNNING TEST 'shortcircuit'")
 
     idx = random.randint(1,len(cs)-1)
     l = len(cs)
 
-    print "PIVOT: %d " % (cs[idx].key)
+    print("PIVOT: %d " % (cs[idx].key))
 
-    print "short circuit: false or key=x"
+    print("short circuit: false or key=x")
     stmt = "select client_key from client \
              where 1=0 or client_key = %d" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -212,7 +212,7 @@ def shortcircuit(c):
          if n != 1:
              raise db.TestFailed("wrong number of clients: %d" % n)
 
-    print "short circuit: true or key=x"
+    print("short circuit: true or key=x")
     stmt = "select client_key from client \
              where 1=1 or client_key = %d" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -229,7 +229,7 @@ def shortcircuit(c):
          if n != l:
              raise db.TestFailed("wrong number of clients: %d" % n)
 
-    print "short circuit: key=x or false"
+    print("short circuit: key=x or false")
     stmt = "select client_key from client \
              where client_key = %d or 1=0" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -243,7 +243,7 @@ def shortcircuit(c):
          if n != 1:
              raise db.TestFailed("wrong number of clients: %d" % n)
 
-    print "short circuit: key=x or true"
+    print("short circuit: key=x or true")
     stmt = "select client_key from client \
              where client_key = %d or 1=1" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -260,14 +260,14 @@ def shortcircuit(c):
          if n != l:
              raise db.TestFailed("wrong number of clients: %d" % n)
 
-    print "short circuit: false and key=x"
+    print("short circuit: false and key=x")
     stmt = "select client_key from client \
              where 1=0 and client_key = %d" % cs[idx].key
     with c.execute(stmt) as cur:
          if cur.ok():
             raise db.TestFailed("found false..." % (cur.code(), cur.details()))
 
-    print "short circuit: true and key=x"
+    print("short circuit: true and key=x")
     stmt = "select client_key from client \
              where 1=1 and client_key = %d" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -281,14 +281,14 @@ def shortcircuit(c):
          if n != 1:
              raise db.TestFailed("wrong number of clients: %d" % n)
 
-    print "short circuit: key=x and false"
+    print("short circuit: key=x and false")
     stmt = "select client_key from client \
              where client_key = %d and 1=0" % cs[idx].key
     with c.execute(stmt) as cur:
          if cur.ok():
             raise db.TestFailed("found false..." % (cur.code(), cur.details()))
 
-    print "short circuit: key=x and true"
+    print("short circuit: key=x and true")
     stmt = "select client_key from client \
              where client_key = %d and 1=1" % cs[idx].key
     with c.execute(stmt) as cur:
@@ -304,7 +304,7 @@ def shortcircuit(c):
 
 def casefun(c):
 
-    print "RUNNING TEST 'casefun'"
+    print("RUNNING TEST 'casefun'")
 
     # case appears in where
     cnt=0
@@ -327,7 +327,7 @@ def casefun(c):
          n=0
          for row in cur:
              n+=1
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -351,7 +351,7 @@ def casefun(c):
          n=0
          for row in cur:
              n+=1
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -375,7 +375,7 @@ def casefun(c):
          n=0
          for row in cur:
              n+=1
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -402,11 +402,11 @@ def mkin(keys,key,n):
 
 def infun(c):
 
-    print "RUNNING TEST 'infun'"
+    print("RUNNING TEST 'infun'")
 
     stmt = "select count(*) from product where prod_key in %s"
     for i in range(1, 100, 5):
-        print "%d out of %d" % (i, len(ps))
+        print("%d out of %d" % (i, len(ps)))
         # print stmt % mkin(ps, lambda k: k.key, i)
         with c.execute(stmt % mkin(ps, lambda k: k.key, i)) as cur:
              for row in cur:
@@ -427,5 +427,5 @@ if __name__ == "__main__":
             casefun(c)
             infun(c)
 
-        print "PASSED" 
+        print("PASSED")
 

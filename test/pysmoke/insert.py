@@ -32,7 +32,7 @@ def getClient(c):
 
 def prefill(c):
 
-    print "RUNNING TEST 'prefill'"
+    print("RUNNING TEST 'prefill'")
 
     stmt = "insert into product2 (prod_key, prod_desc, prod_cat, prod_packing, prod_price) \
                                  (%d, 'product %s', 1, 2, 1.99)"
@@ -44,7 +44,7 @@ def prefill(c):
 
 def dupkeyvertex(c):
 
-    print "RUNNING TEST 'dupkeyvertex'"
+    print("RUNNING TEST 'dupkeyvertex'")
 
     k = getNextKey(c)
     stmt = "insert into product2 (prod_key, prod_desc, prod_cat, prod_price) \
@@ -87,7 +87,7 @@ def dupkeyvertex(c):
 
 def failedinsert(c):
 
-    print "RUNNING TEST 'failedinsert'"
+    print("RUNNING TEST 'failedinsert'")
 
     k = getNextKey(c)
     stmt = "insert into product2 (prod_key, prod_desc, prod_price) \
@@ -95,7 +95,7 @@ def failedinsert(c):
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("I can insert a vertex with wrong type")
-       print r.details()
+       print(r.details())
 
     stmt = "select prod_desc from product2 where prod_key = %d" % k
     with c.execute(stmt) as cur:
@@ -106,7 +106,7 @@ def failedinsert(c):
 
 def insertallvertex(c):
 
-    print "RUNNING TEST 'insertallvertex'"
+    print("RUNNING TEST 'insertallvertex'")
 
     # insert with field list (partial)
     k = getNextKey(c)
@@ -144,7 +144,7 @@ def insertallvertex(c):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
             if row.field(1) is not None:
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(1)))
-            print "%s, %s" % (row.field(0), row.field(1))
+            print("%s, %s" % (row.field(0), row.field(1)))
 
     # select only a non-existing prop
     stmt = "select prod_cat from product2 where prod_key = %d" % k
@@ -158,7 +158,7 @@ def insertallvertex(c):
             n+=1
             if row.field(0) is not None:
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
-            print "%s" % (row.field(0))
+            print("%s" % (row.field(0)))
 
     # select non-existing prop with complex where
     stmt = "select prod_cat, prod_desc from product2 \
@@ -170,7 +170,7 @@ def insertallvertex(c):
         n=0
         for row in cur:
             n+=1
-            print "%s;%s" % (row.field(0), row.field(1))
+            print("%s;%s" % (row.field(0), row.field(1)))
             if row.field(0) is not None:
                raise db.TestFailed("NOT NULL %d: %s" % (k, row.field(0)))
             if row.field(1) != ('product %d' % k):
@@ -197,7 +197,7 @@ def insertallvertex(c):
                raise db.TestFailed("NOT NULL (3) %d: %s" % (k, row.field(1)))
             if row.field(3) != 1.59:
                raise db.TestFailed("wrong price %d: %f (%f)" % (k, row.field(3), price))
-            print "%s, %s" % (row.field(0), row.field(1))
+            print("%s, %s" % (row.field(0), row.field(1)))
 
     # sum over a non-existing prop
     stmt = "select avg(prod_cat) from product2 where prod_key = %d" % k
@@ -207,7 +207,7 @@ def insertallvertex(c):
         for row in cur:
             if row.field(0) != 0:
                raise db.TestFailed("NULL field not ignored %d: %s" % (k, row.field(0)))
-            print "%s" % (row.field(0))
+            print("%s" % (row.field(0)))
 
     # sum over existing props
     cnt = 0
@@ -218,7 +218,7 @@ def insertallvertex(c):
         for row in cur:
             if row.field(0) == 0:
                raise db.TestFailed("all cats are zero for %d: %s" % (k, row.field(0)))
-            print "avg cat: %d" % (row.field(0))
+            print("avg cat: %d" % (row.field(0)))
             cnt = row.field(0)
 
     # sum over existing and non-existing props
@@ -229,19 +229,19 @@ def insertallvertex(c):
         for row in cur:
             if row.field(0) != cnt:
                raise db.TestFailed("NULL not ignored %d: %d (%d)" % (k, row.field(0), cnt))
-            print "avg cat: %d (%d)" % (row.field(0), cnt)
+            print("avg cat: %d (%d)" % (row.field(0), cnt))
 
     # stddev over existing props
     std = 0.0
     stmt = "select stddev(coal(prod_cat,0)) from product2 where prod_desc != '%s'" % dsc
-    print stmt
+    print(stmt)
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             if row.field(0) == 0:
                raise db.TestFailed("all cats are zero for %d: %f" % (k, row.field(0)))
-            print "stddev cat: %d" % (row.field(0))
+            print("stddev cat: %d" % (row.field(0)))
             std = row.field(0)
 
     # stddev over existing and non existing props
@@ -265,7 +265,7 @@ def insertallvertex(c):
         for row in cur:
             if row.field(0) == 0:
                raise db.TestFailed("all cats are zero for %d: %f" % (k, row.field(0)))
-            print "median cat: %d" % (row.field(0))
+            print("median cat: %d" % (row.field(0)))
             md = row.field(0)
 
     # median over existing and non-existing props
@@ -276,7 +276,7 @@ def insertallvertex(c):
         for row in cur:
             if row.field(0) != md:
                raise db.TestFailed("median no correct %d: %f" % (k, row.field(0)))
-            print "median cat: %d" % (row.field(0))
+            print("median cat: %d" % (row.field(0)))
 
     # filter a non-existing prop
     stmt = "select prod_key from product2 where prod_cat = 3"
@@ -285,7 +285,7 @@ def insertallvertex(c):
            for row in cur:
               if row.field(0) == k:
                  raise db.TestFailed("NULL field filtered %d: %s" % (k, row.field(0)))
-              print "%s" % (row.field(0))
+              print("%s" % (row.field(0)))
 
     # filter out a non-existing prop
     stmt = "select prod_key from product2 where prod_cat != 3"
@@ -308,7 +308,7 @@ def insertallvertex(c):
                found=True
             if row.field(1) is not None:
                raise db.TestFailed("NULL is not None")
-            print "NULL: %d" % row.field(0)
+            print("NULL: %d" % row.field(0))
         if not found:
            raise db.TestFailed("NULL not found for %d" % k)
 
@@ -337,7 +337,7 @@ def insertallvertex(c):
              "end"
 
     stmt = "select %s from product2" % mycase
-    print stmt
+    print(stmt)
 
     sm = 0
     for p in ps:
@@ -350,13 +350,13 @@ def insertallvertex(c):
         else:
            sm += p.packing * (-1)
 
-    print sm
+    print(sm)
 
     # case with null in where
     mycase = "case when prod_cat is null then true else false end"
 
     stmt = "select prod_key, prod_cat from product2 where %s" % mycase
-    print stmt
+    print(stmt)
 
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -364,13 +364,13 @@ def insertallvertex(c):
         for row in cur:
             if row.field(1) is not None:
                raise db.TestFailed("not null %d: %s" % (row.field(0), row.field(1)))
-            print "%d: %s" % (row.field(0), row.field(1))
+            print("%d: %s" % (row.field(0), row.field(1)))
 
     # case with null in where, logic reversed
     mycase = "case when prod_cat is not null then true else false end"
 
     stmt = "select prod_key, prod_cat from product2 where %s" % mycase
-    print stmt
+    print(stmt)
 
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -378,7 +378,7 @@ def insertallvertex(c):
         for row in cur:
             if row.field(1) is None:
                raise db.TestFailed("null %d: %s" % (row.field(0), row.field(1)))
-            print "%d: %s" % (row.field(0), row.field(1))
+            print("%d: %s" % (row.field(0), row.field(1)))
 
     # coalesce non-existing prop
     stmt = "select prod_desc, coal(prod_cat, 6) from product2 where prod_key = %d" % k
@@ -394,7 +394,7 @@ def insertallvertex(c):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
             if row.field(1) != 6:
                raise db.TestFailed("%d: %d != 6" % (k, row.field(1)))
-            print "%s, %s" % (row.field(0), row.field(1))
+            print("%s, %s" % (row.field(0), row.field(1)))
 
     # coalesce on 2 non-existing props
     stmt = "select prod_desc, coal(prod_cat, prod_packing, 6) \
@@ -411,7 +411,7 @@ def insertallvertex(c):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
             if row.field(1) != 6:
                raise db.TestFailed("%d: %d != 6" % (k, row.field(1)))
-            print "%s, %s" % (row.field(0), row.field(1))
+            print("%s, %s" % (row.field(0), row.field(1)))
 
     # coalesce all null
     stmt = "select prod_desc, coal(prod_cat, prod_packing) \
@@ -428,7 +428,7 @@ def insertallvertex(c):
                raise db.TestFailed("wrong product %d: %s" % (k, row.field(0)))
             if row.field(1) is not None:
                raise db.TestFailed("%d: not null" % (k, row.field(1)))
-            print "%s, %s" % (row.field(0), row.field(1))
+            print("%s, %s" % (row.field(0), row.field(1)))
 
     # coalesce non-existing prop in where
     stmt = "select prod_key, prod_cat from product2 \
@@ -576,7 +576,7 @@ def insertallvertex(c):
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert incompletely")
-       print "%d: %s" % (r.code(), r.details())
+       print("%d: %s" % (r.code(), r.details()))
 
     stmt = "select prod_desc from product2 where prod_key = %d" % k
     with c.execute(stmt) as cur:
@@ -591,7 +591,7 @@ def insertallvertex(c):
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert with wrong type")
-       print "%d: %s" % (r.code(), r.details())
+       print("%d: %s" % (r.code(), r.details()))
 
     stmt = "select prod_desc from product2 where prod_key = %d" % k
     with c.execute(stmt) as cur:
@@ -602,7 +602,7 @@ def insertallvertex(c):
 
 def insertalledge(c,ps,cs):
 
-    print "RUNNING TEST 'insertalledge'"
+    print("RUNNING TEST 'insertalledge'")
 
     # insert with field list (partial)
     p = getProduct(ps).key
@@ -697,7 +697,7 @@ def insertalledge(c,ps,cs):
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert incomplete edge")
-       print "%d: %s" % (r.code(), r.details())
+       print("%d: %s" % (r.code(), r.details()))
 
     stmt = "select origin, destin, stamp from buys \
              where origin = %d \
@@ -719,7 +719,7 @@ def insertalledge(c,ps,cs):
     with c.execute(stmt) as r:
        if r.ok():
           raise db.TestFailed("can insert edge with wrong type!")
-       print "%d: %s" % (r.code(), r.details())
+       print("%d: %s" % (r.code(), r.details()))
 
     stmt = "select origin, destin, stamp from buys \
              where origin = %d \
@@ -741,10 +741,10 @@ if __name__ == "__main__":
     with now.Connection("localhost", "55505", None, None) as c:
         (ps, cs, ss, es, vs) = db.loadDB(c, "db100")
 
-	prefill(c)
+        prefill(c)
         dupkeyvertex(c)
         failedinsert(c)
         insertallvertex(c)
         insertalledge(c,ps,cs)
 
-        print "PASSED"
+        print("PASSED")

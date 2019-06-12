@@ -71,4 +71,4 @@ if __name__ == '__main__':
             dbdesc = stats(con, o, 'quantity')
             compare(mydesc,dbdesc)
 
-   print "PASSED"
+   print("PASSED")

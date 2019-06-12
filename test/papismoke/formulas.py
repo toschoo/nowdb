@@ -20,7 +20,7 @@ def fibonacci(c,key,one,two,n):
 
 def fibotest(c, n):
     
-    print "RUNNING TEST 'fibonacci %d'" % n
+    print("RUNNING TEST 'fibonacci %d'" % n)
 
     l = countdb(c, 'product')
     x = random.randint(0,l)
@@ -33,7 +33,7 @@ def fibotest(c, n):
               break
            i+=1
 
-    print "1\n1"
+    print("1\n1")
     fibonacci(c,k,1,1,n)
 
 if __name__ == "__main__":

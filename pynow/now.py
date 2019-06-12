@@ -33,6 +33,7 @@ from ctypes import *
 from datetime import *
 from calendar import *
 from dateutil.tz import *
+from sys import version_info
 
 # ---- load libraries -----------------------------------------------------
 libc = cdll.LoadLibrary("libc.so.6")
@@ -166,8 +167,8 @@ def dt2now(dt):
 
 # ---- convert nowdb time to datetime
 def now2dt(p):
-    t = p/1000 # to microseconds
-    s = t / 1000000 # to seconds
+    t = p//1000 # to microseconds
+    s = t // 1000000 # to seconds
     m = t - s * 1000000 # isolate microseconds
     dt = datetime.fromtimestamp(s, utc)
     dt += timedelta(microseconds=m)
@@ -195,11 +196,21 @@ class Connection:
            raise ParamError('address, port, user and password must be string')
 
         con = c_void_p()
-        x = _connect(byref(con), c_char_p(addr.encode('utf-8')), \
-                                 c_char_p(port.encode('utf-8')),\
-                                 c_char_p(usr), \
-                                 c_char_p(pwd), \
-                                 c_long(0))
+        x = 0
+
+        if version_info.major < 3:
+           x = _connect(byref(con), c_char_p(addr), \
+                                    c_char_p(port),\
+                                    c_char_p(usr), \
+                                    c_char_p(pwd), \
+                                    c_long(0))
+        else:
+           x = _connect(byref(con), c_char_p(addr.encode('utf-8')), \
+                                    c_char_p(port.encode('utf-8')),\
+                                    c_char_p(usr), \
+                                    c_char_p(pwd), \
+                                    c_long(0))
+
         if x == 0:
             self.con = con
             self.addr = addr
@@ -240,7 +251,12 @@ class Connection:
         if type(stmt) != str:
            raise ParamError('statement must be a string')
         r = c_void_p()
-        x = _exec(self.con, c_char_p(stmt.encode('utf-8')), byref(r))
+        x = 0
+        if version_info.major < 3:
+           x = _exec(self.con, c_char_p(stmt), byref(r))
+        else:
+           x = _exec(self.con, c_char_p(stmt.encode('utf-8')), byref(r))
+
         if x == 0:
             return Result(r)
         else:
@@ -450,7 +466,10 @@ class Result:
         '''
         returns a more detailed error message.
         '''
-        return _rDetails(self.r)
+        if version_info.major < 3:
+           return _rDetails(self.r)
+        else:
+           return _rDetails(self.r).decode('utf-8')
 
     # get row from cursor
     def row(self):
@@ -519,7 +538,10 @@ class Result:
 
         if t.value == TEXT:
             s = cast(v, c_char_p)
-            return (t.value, s.value)
+            if version_info.major < 3:
+               return (t.value, s.value)
+            else:
+               return (t.value, s.value.decode('utf-8'))
 
         elif t.value == TIME or t.value == DATE or t.value == INT:
             i = cast(v,POINTER(c_longlong))
@@ -556,7 +578,10 @@ class Result:
 
         if t.value == TEXT:
             s = cast(v, c_char_p)
-            return s.value
+            if version_info.major < 3:
+               return s.value
+            else:
+               return s.value.decode('utf-8')
 
         elif t.value == TIME or t.value == DATE or t.value == INT:
             i = cast(v,POINTER(c_longlong))
