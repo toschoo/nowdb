@@ -19,7 +19,7 @@ def countedge(es): # there should be a function argument!
 # simple queries
 def simplequeries(c):
 
-    print "RUNNING TEST 'simplequeries'"
+    print("RUNNING TEST 'simplequeries'")
 
     idx = random.randint(1,len(es)-1)
     l = countedge(es)
@@ -35,8 +35,8 @@ def simplequeries(c):
             if not row.field(0):
                raise db.TestFailed("wrong constant: %s" % (row.field(0)))
 
-    print "counted: %d" % n
-    print "length : %d" % l
+    print("counted: %d" % n)
+    print("length : %d" % l)
 
     if n != l:
        raise db.TestFailed("count is wrong: %d / %d" % (l, n))
@@ -66,7 +66,7 @@ def simplequeries(c):
         if e.quantity == es[idx].quantity:
            l+=1
 
-    print "expected: %d" % l
+    print("expected: %d" % l)
 
     # fullscan with condition
     stmt = "select origin, quantity from buys \
@@ -95,7 +95,7 @@ def simplequeries(c):
 
 def singlerow(c):
 
-    print "RUNNING TEST 'singlerow'"
+    print("RUNNING TEST 'singlerow'")
 
     stmt = "select count(*), sum(quantity) from buys"
     cnt = 0
@@ -121,7 +121,7 @@ def singlerow(c):
 # complex where queries
 def nwherequeries(c):
 
-    print "RUNNING TEST 'nwherequeries'"
+    print("RUNNING TEST 'nwherequeries'")
 
     idx = random.randint(1,len(es)-1)
     o = es[idx].origin
@@ -130,7 +130,7 @@ def nwherequeries(c):
 # group queries
 def groupqueries(c):
 
-    print "RUNNING TEST 'groupqueries'"
+    print("RUNNING TEST 'groupqueries'")
 
     idx = random.randint(1,len(es)-1)
     o = es[idx].origin
@@ -232,7 +232,7 @@ def groupqueries(c):
 # order queries
 def orderqueries(c):
 
-    print "RUNNING TEST 'orderqueries'"
+    print("RUNNING TEST 'orderqueries'")
     
     ses = sorted(es, key=lambda e: (e.destin))
 
@@ -248,7 +248,7 @@ def orderqueries(c):
                break
             i+=1
     if x:
-       print "CAUTION data already sorted according to destination!"
+       print("CAUTION data already sorted according to destination!")
 
     x=True
     i=0
@@ -277,4 +277,4 @@ if __name__ == "__main__":
         groupqueries(c)
         orderqueries(c)
 
-        print "PASSED"
+        print("PASSED")

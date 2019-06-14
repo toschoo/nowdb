@@ -35,7 +35,7 @@ if __name__ == '__main__':
         bl = len(buys)
         vl = len(visits)
 
-	if pl != nump or \
+        if pl != nump or \
            cl != numc or \
            sl != nums or \
            bl != nume or \

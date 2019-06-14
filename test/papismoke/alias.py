@@ -21,7 +21,7 @@ def checkprod(c,k):
 
 def wrongtest(c):
 
-    print "RUNNING TEST 'wrongtest'"
+    print("RUNNING TEST 'wrongtest'")
 
     try:
        c.execute("select count(*) cnt from product")
@@ -88,7 +88,7 @@ def wrongtest(c):
 
 def aliastest(c):
     
-    print "RUNNING TEST 'aliastest'"
+    print("RUNNING TEST 'aliastest'")
 
     l = countdb(c, 'product')
     for row in c.execute("select count(*) as count from product"):

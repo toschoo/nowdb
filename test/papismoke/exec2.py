@@ -35,7 +35,7 @@ def price(c,p):
         return row['price']
 
 def createprocs(c, lang):
-    print "RUNNING 'createprocs' %s" % lang
+    print("RUNNING 'createprocs' %s" % lang)
 
     c.execute("drop procedure sleeptest if exists").close()
     c.execute("create procedure db.sleeptest(delay time) language %s" % lang).close()

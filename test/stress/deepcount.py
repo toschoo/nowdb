@@ -16,24 +16,24 @@ class QThread(threading.Thread):
       with Connection("127.0.0.1", "55505", None, None) as con:
         with con.execute("use retail") as r:
           if not r.ok():
-             print "ERROR: %d on use: %s" % (r.code(), r.details())
+             print("ERROR: %d on use: %s" % (r.code(), r.details()))
              return
 
         for i in range(self.loops):
-          # print "[%s] range %d" % (self.name, i)
+          # print("[%s] range %d" % (self.name, i))
           with con.execute("select count(*) from buys \
                              where origin = 419830620288") as r:
             if not r.ok():
-               print "ERROR %d on fib: %s" % (r.code(), r.details())
+               print("ERROR %d on fib: %s" % (r.code(), r.details()))
                return
     except ClientError as x:
-      print "[%s] cannot connect: %s" % (self.name, x)
+      print("[%s] cannot connect: %s" % (self.name, x))
 
 # ------------------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------------------
 
-print "%s called with %d arguments" % (sys.argv[0], len(sys.argv)-1)
+print("%s called with %d arguments" % (sys.argv[0], len(sys.argv)-1))
 
 n = len(sys.argv)
 
@@ -64,17 +64,17 @@ except:
   if ok == 2:
     x = sys.argv[3]
 
-  print "%s is not an integer" % x
+  print("%s is not an integer" % x)
   exit(1)
 
   
-print "iterations: %d, threads: %d, loops per thread: %d"  % \
-      (IT, THREADS, LOOP)
+print("iterations: %d, threads: %d, loops per thread: %d"  % \
+      (IT, THREADS, LOOP))
 
 for j in range(IT):
 
   if IT > 1:
-    print "iteration %d of %d" % (j+1,IT)
+    print("iteration %d of %d" % (j+1,IT))
 
   thds = []
 

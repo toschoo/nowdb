@@ -26,7 +26,7 @@ then
 	exit 1
 fi
 
-echo "RUNNING SMOKE TESTS IN PYTHON"
+echo "RUNNING SMOKE TESTS IN PYTHON 2"
 scripts/pysmoke.sh
 if [ $? -ne 0 ]
 then
@@ -44,13 +44,31 @@ then
 	exit 1
 fi
 
-echo "RUNNING PYTHON DB API TESTS IN PYTHON"
+echo "RUNNING PYTHON DB API TESTS IN PYTHON 2"
 scripts/papismoke.sh
 if [ $? -ne 0 ]
 then
 	exit 1
 fi
 
-sleep 1
+sleep 2
+
+echo "RUNNING SMOKE TESTS IN PYTHON 3"
+scripts/pysmoke.sh 3
+if [ $? -ne 0 ]
+then
+	exit 1
+fi
+
+sleep 2
+
+echo "RUNNING PYTHON DB API TESTS IN PYTHON 3"
+scripts/papismoke.sh 3
+if [ $? -ne 0 ]
+then
+	exit 1
+fi
+
+sleep 2
 
 echo "PASSED"
