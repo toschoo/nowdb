@@ -214,7 +214,7 @@ def testNoneIsNull(c):
              if cnt != 1:
                 db.TestFailed("too many or not enough rows: %d" % cnt)
 
-    for i in range(len(tdg)/50):
+    for i in range(len(tdg)//50):
         k = rnd.randint(0,len(tdg)-1)
         with c.execute("select origin, temp, revo \
                           from measure \

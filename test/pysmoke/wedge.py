@@ -24,16 +24,16 @@ def countedgeby(es, key, pivot):
     return n
 
 def roundfloats(c):
-    print "RUNNING TEST 'roundfloats'"
+    print("RUNNING TEST 'roundfloats'")
 
     idx = random.randint(1,len(es)-1)
 
-    print "PIVOT: %d - %d - %d - %f" % (es[idx].origin, \
+    print("PIVOT: %d - %d - %d - %f" % (es[idx].origin, \
                                         es[idx].destin, \
                                         now.dt2now(es[idx].tp),
-                                        es[idx].price)
+                                        es[idx].price))
 
-    print "TOINT"
+    print("TOINT")
     w = int(round(es[idx].price*100))/100
     stmt = "select origin, destin, stamp, \
                    quantity, price \
@@ -44,10 +44,10 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %f" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %f" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(4))
+                                                 row.field(4)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -55,7 +55,7 @@ def roundfloats(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "CEIL/FLOOR"
+    print("CEIL/FLOOR")
     stmt = "select origin, destin, stamp, \
                    quantity, price    \
               from buys \
@@ -67,10 +67,10 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %f" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %f" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(4))
+                                                 row.field(4)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -78,7 +78,7 @@ def roundfloats(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "SQUARE"
+    print("SQUARE")
     stmt = "select origin, destin, stamp, \
                    quantity, price    \
               from buys \
@@ -90,10 +90,10 @@ def roundfloats(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %f" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %f" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(4))
+                                                 row.field(4)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -102,11 +102,11 @@ def roundfloats(c):
             raise db.TestFailed("could not find my edge")
 
 def weekdays(c):
-    print "RUNNING TEST 'weekdays'"
+    print("RUNNING TEST 'weekdays'")
 
     idx = random.randint(1,len(es)-1)
 
-    print "PIVOT: %d - %d - %d - %d, %d, %d, %d, %d, %d" % (es[idx].origin, \
+    print("PIVOT: %d - %d - %d - %d, %d, %d, %d, %d, %d" % (es[idx].origin, \
                                                             es[idx].destin, \
                                                             now.dt2now(es[idx].tp),
                                                             es[idx].tp.weekday(),
@@ -114,11 +114,11 @@ def weekdays(c):
                                                             es[idx].tp.hour,
                                                             es[idx].tp.minute,
                                                             es[idx].tp.second,
-                                                            es[idx].tp.microsecond)
+                                                            es[idx].tp.microsecond))
 
     w = (es[idx].tp.weekday()+1)%7
 
-    print "WEEKDAY"
+    print("WEEKDAY")
     stmt = "select origin, destin, stamp, wday(stamp) \
               from buys \
              where wday(stamp) = %d" % w
@@ -128,10 +128,10 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              cnt += 1
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
@@ -140,7 +140,7 @@ def weekdays(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "DAY OF MONTH"
+    print("DAY OF MONTH")
     stmt = "select origin, destin, stamp, mday(stamp) \
               from buys \
              where mday(stamp) = %d" % (es[idx].tp.day)
@@ -150,10 +150,10 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              cnt2 += 1
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
@@ -164,7 +164,7 @@ def weekdays(c):
          if cnt != cnt2:
             raise db.TestFailed("day of week(%d) != day of month(%d)" % (cnt, cnt2))
 
-    print "HOUR OF DAY"
+    print("HOUR OF DAY")
     stmt = "select origin, destin, stamp, hour(stamp) \
               from buys \
              where hour(stamp) = %d" % (es[idx].tp.hour)
@@ -173,10 +173,10 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -184,7 +184,7 @@ def weekdays(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "MINUTE OF HOUR"
+    print("MINUTE OF HOUR")
     stmt = "select origin, destin, stamp, minute(stamp) \
               from buys \
              where minute(stamp) = %d" % (es[idx].tp.minute)
@@ -193,10 +193,10 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -204,7 +204,7 @@ def weekdays(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "SECOND OF MINUTE"
+    print("SECOND OF MINUTE")
     stmt = "select origin, destin, stamp, second(stamp) \
               from buys \
              where second(stamp) = %d" % (es[idx].tp.second)
@@ -213,10 +213,10 @@ def weekdays(c):
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -224,7 +224,7 @@ def weekdays(c):
          if not found:
             raise db.TestFailed("could not find my edge")
 
-    print "MICROSECONDs"
+    print("MICROSECONDs")
     stmt = "select origin, destin, stamp, micro(stamp) \
               from buys \
              where micro(stamp) = %d" % (es[idx].tp.microsecond)
@@ -234,10 +234,10 @@ def weekdays(c):
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
              
-             print "FOUND: %d - %d - %d - %d" % (row.field(0), \
+             print("FOUND: %d - %d - %d - %d" % (row.field(0), \
                                                  row.field(1), \
                                                  row.field(2), \
-                                                 row.field(3))
+                                                 row.field(3)))
              if row.field(0) == es[idx].origin and \
                 row.field(1) == es[idx].destin and \
                 row.field(2) == now.dt2now(es[idx].tp):
@@ -247,7 +247,7 @@ def weekdays(c):
 
 def shortcircuit(c):
 
-    print "RUNNING TEST 'shortcircuit'"
+    print("RUNNING TEST 'shortcircuit'")
 
     idx = random.randint(1,len(es)-1)
     l = countedge(es)
@@ -260,9 +260,9 @@ def shortcircuit(c):
          for row in cur:
              x = row.field(0)
 
-    print "PIVOT: %d, %d " % (es[idx].origin, x)
+    print("PIVOT: %d, %d " % (es[idx].origin, x))
 
-    print "short circuit: false or key=x"
+    print("short circuit: false or key=x")
     stmt = "select origin from buys \
              where 1=0 or origin = %d" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -276,7 +276,7 @@ def shortcircuit(c):
          if n != x:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
-    print "short circuit: true or key=x"
+    print("short circuit: true or key=x")
     stmt = "select origin from buys \
              where 1=1 or origin = %d" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -293,7 +293,7 @@ def shortcircuit(c):
          if n != l:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
-    print "short circuit: key=x or false"
+    print("short circuit: key=x or false")
     stmt = "select origin from buys \
              where origin = %d or 1=0" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -307,7 +307,7 @@ def shortcircuit(c):
          if n != x:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
-    print "short circuit: key=x or true"
+    print("short circuit: key=x or true")
     stmt = "select origin from buys \
              where origin = %d or 1=1" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -324,14 +324,14 @@ def shortcircuit(c):
          if n != l:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
-    print "short circuit: false and key=x"
+    print("short circuit: false and key=x")
     stmt = "select origin from buys \
              where 1=0 and origin = %d" % es[idx].origin
     with c.execute(stmt) as cur:
          if cur.ok():
             raise db.TestFailed("found false..." % (cur.code(), cur.details()))
 
-    print "short circuit: true and key=x"
+    print("short circuit: true and key=x")
     stmt = "select origin from buys \
              where 1=1 and origin = %d" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -345,14 +345,14 @@ def shortcircuit(c):
          if n != x:
              raise db.TestFailed("wrong number of edges: %d" % n)
 
-    print "short circuit: key=x and false"
+    print("short circuit: key=x and false")
     stmt = "select origin from buys \
              where origin = %d and 1=0" % es[idx].origin
     with c.execute(stmt) as cur:
          if cur.ok():
             raise db.TestFailed("found false..." % (cur.code(), cur.details()))
 
-    print "short circuit: key=x and true"
+    print("short circuit: key=x and true")
     stmt = "select origin from buys \
              where origin = %d and 1=1" % es[idx].origin
     with c.execute(stmt) as cur:
@@ -368,7 +368,7 @@ def shortcircuit(c):
 
 def casefun(c):
 
-    print "RUNNING TEST 'casefun'"
+    print("RUNNING TEST 'casefun'")
 
     # case appears in where
     cnt=0
@@ -392,7 +392,7 @@ def casefun(c):
          n=0
          for row in cur:
              n+=1
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -421,7 +421,7 @@ def casefun(c):
          for row in cur:
              n+=1
 
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -445,7 +445,7 @@ def casefun(c):
          n=0
          for row in cur:
              n+=1
-    print "%d ?= %d" % (cnt, n)
+    print("%d ?= %d" % (cnt, n))
     if n != cnt:
        raise db.TestFailed("not equal: %d != %d " % (n, cnt))
 
@@ -472,7 +472,7 @@ def mkin(keys,n):
 
 def infun(c):
 
-    print "RUNNING TEST 'infun'"
+    print("RUNNING TEST 'infun'")
 
     keys = []
 
@@ -484,7 +484,7 @@ def infun(c):
 
     stmt = "select count(*) from buys where destin in %s"
     for i in range(1, 100, 5):
-        print "%d out of %d" % (i, len(keys))
+        print("%d out of %d" % (i, len(keys)))
         with c.execute(stmt % mkin(keys, i)) as cur:
              for row in cur:
                  if row.field(0) != countalledges(keys, i):
@@ -505,5 +505,5 @@ if __name__ == "__main__":
             casefun(c)
             infun(c)
 
-        print "PASSED"
+        print("PASSED")
 

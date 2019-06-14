@@ -1,6 +1,7 @@
 import now
 import random
 import datetime
+from sys import version_info
 
 PRODUCTRANGE = 1000
 CLIENTRANGE = 9000000
@@ -424,5 +425,8 @@ def randomString(l):
     s = ""
     for i in range(l):
        c = random.randint(65,90)
-       s += str(unichr(c))
+       if version_info.major < 3:
+          s += str(unichr(c))
+       else:
+          s += str(chr(c))
     return s

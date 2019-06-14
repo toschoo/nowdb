@@ -1,6 +1,7 @@
 import now
 import random
 import datetime
+from sys import version_info
 
 PRODUCTRANGE = 1000
 CLIENTRANGE = 9000000
@@ -370,9 +371,8 @@ def createProducts(no):
         else:
            cat = (x%5) + 1
 
-        p.append(Product(1000 + i, \
-                 randomString(random.randint(1,16)), \
-                 cat, 
+        s = randomString(random.randint(1,16))
+        p.append(Product(1000 + i, s, cat,
                  random.randint(1,3), \
                  float(random.randint(1,25))/float(random.randint(1,10))))
     return p
@@ -424,5 +424,8 @@ def randomString(l):
     s = ""
     for i in range(l):
        c = random.randint(65,90)
-       s += str(unichr(c))
+       if version_info.major < 3:
+          s += str(unichr(c))
+       else:
+          s += str(chr(c))
     return s

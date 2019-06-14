@@ -14,7 +14,7 @@ IT = 10
 # simple expressions on vertex
 def simplevrtx(c):
 
-    print "RUNNING TEST 'simplevrtx'"
+    print("RUNNING TEST 'simplevrtx'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -49,7 +49,7 @@ def simplevrtx(c):
         n=0
         for row in cur:
             n+=1
-            print "%f ?= %f" % (r, row.field(1))
+            print("%f ?= %f" % (r, row.field(1)))
             if row.field(0) != ps[idx].price:
                raise db.TestFailed("wrong value %d: %d" % (k, row.field(0)))
         if n != 1:
@@ -67,7 +67,7 @@ def simplevrtx(c):
         n=0
         for row in cur:
             n+=1
-	    print "%f --> %f" % (row.field(0), row.field(1))
+            print("%f --> %f" % (row.field(0), row.field(1)))
             if row.field(0) != ps[idx].price:
                raise db.TestFailed("wrong value %f: %f" % (k, row.field(0)))
             if row.field(1) < ps[idx].price or \
@@ -85,7 +85,7 @@ def simplevrtx(c):
 # simple expressions on edge
 def simpleedge(c):
 
-    print "RUNNING TEST 'simpleedge'"
+    print("RUNNING TEST 'simpleedge'")
 
     idx = random.randint(1,len(es)-1)
 
@@ -127,7 +127,7 @@ def simpleedge(c):
 
             r = ((row.field(0) + a) / b)**2
 
-            print "%f ?= %f" % (r, row.field(1))
+            print("%f ?= %f" % (r, row.field(1)))
 
             if row.field(1) != r:
                raise db.TestFailed("wrong value %f: %f" % (r, row.field(1)))
@@ -144,12 +144,12 @@ def simpleedge(c):
         if not cur.ok():
           raise db.TestFailed("cannot find: %d %s" % (cur.code(),cur.details()))
         for row in cur:
-	    print "%f --> %f" % (row.field(0), row.field(1))
-            if row.field(1) < row.field(0) or \
+            print("%f --> %f" % (row.field(0), row.field(1)))
+            if row.field(1) < row.field(0) - 0.1 or \
                row.field(1) > row.field(0) + 0.1:
                raise db.TestFailed("wrong ceiling %f: %f" % (row.field(0), row.field(1)))
             if row.field(2) < row.field(0) - 0.1 or \
-               row.field(2) > row.field(0):
+               row.field(2) > row.field(0) + 0.1:
                raise db.TestFailed("wrong flooring %f: %f" % (row.field(0), row.field(2)))
             if row.field(3) < row.field(0) - 0.1 or \
                row.field(3) > row.field(0) + 0.1:
@@ -158,14 +158,14 @@ def simpleedge(c):
 # punktrechnung vor strichtrechnung
 def punktvorstrich(c):
 
-    print "RUNNING TEST 'punktvorstrich'"
+    print("RUNNING TEST 'punktvorstrich'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
     p = ps[idx].price
 
     x=7
-    print "expected: %d" % x
+    print("expected: %d" % x)
     stmt = "select 3*2 + 1 from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -179,7 +179,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=5
-    print "expected: %d" % x
+    print("expected: %d" % x)
     stmt = "select 3*2 - 1 from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -193,7 +193,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=9
-    print "expected: %d" % x
+    print("expected: %d" % x)
     stmt = "select 3*(2 + 1) from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -207,7 +207,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=3
-    print "expected: %d" % x
+    print("expected: %d" % x)
     stmt = "select 3*(2 - 1) from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -221,7 +221,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=12
-    print "expected: %f" % x
+    print("expected: %f" % x)
     stmt = "select 3*2^2 from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -235,7 +235,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=36
-    print "expected: %f" % x
+    print("expected: %f" % x)
     stmt = "select (3*2)^2 from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -249,7 +249,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=3
-    print "expected: %f" % x
+    print("expected: %f" % x)
     stmt = "select 3*2^1/2 from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -263,7 +263,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=3.0*2.0**(1.0/2.0)
-    print "expected: %f" % x
+    print("expected: %f" % x)
     stmt = "select 3*2^(1.0/2.0) from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -277,7 +277,7 @@ def punktvorstrich(c):
                raise db.TestFailed("wrong number of results: %d (expected: 1)" % (n, 1))
 
     x=3.0*2.0**math.log(2) # 0.6931471805599453
-    print "expected: %f" % x
+    print("expected: %f" % x)
     stmt = "select 3*2^log(2.0) from product where prod_key = %d" % k
     with c.execute(stmt) as cur:
         if not cur.ok():
@@ -293,7 +293,7 @@ def punktvorstrich(c):
 # agg expressions on vertex
 def aggvrtx(c):
 
-    print "RUNNING TEST 'aggvrtx'"
+    print("RUNNING TEST 'aggvrtx'")
 
     stmt = "select sum(1), count(*) from product"
     with c.execute(stmt) as cur:
@@ -334,7 +334,7 @@ def aggvrtx(c):
     sp = sorted(ps, key=lambda p: p.price)
     l = len(ps) - 1
     if l%2 != 0: # length is even
-       m = (sp[l/2].price + sp[l/2+1].price)/2
+       m = (sp[l//2].price + sp[l//2+1].price)/2
     else: # length is odd
        m = sp[(l+1)/2].price
 
@@ -345,7 +345,7 @@ def aggvrtx(c):
         n=0
         for row in cur:
             n+=1
-            print "median price: %f" % row.field(0)
+            print("median price: %f" % row.field(0))
             if row.field(0) != m:
                raise db.TestFailed("expected median: %f, but have %f" % (m, row.field(0)))
         if n != 1:
@@ -354,7 +354,7 @@ def aggvrtx(c):
 # agg expressions on edge
 def aggedge(c):
 
-    print "RUNNING TEST 'aggedge'"
+    print("RUNNING TEST 'aggedge'")
 
     stmt = "select sum(1), count(*) from buys"
     with c.execute(stmt) as cur:
@@ -394,9 +394,9 @@ def aggedge(c):
     se = sorted(es, key=lambda e: e.price)
     l = len(es) - 1
     if l%2 != 0: # length is even
-       m = (se[l/2].price + se[l/2+1].price)/2
+       m = (se[l//2].price + se[l//2+1].price)/2
     else: # length is odd
-       m = se[(l+1)/2].price
+       m = se[(l+1)//2].price
 
     stmt = "select median(price) from buys"
     with c.execute(stmt) as cur:
@@ -405,7 +405,7 @@ def aggedge(c):
         n=0
         for row in cur:
             n+=1
-            print "median quantity: %f" % row.field(0)
+            print("median quantity: %f" % row.field(0))
             if row.field(0) != m:
                raise db.TestFailed("expected median: %f, but have %f" % (m, row.field(0)))
         if n != 1:
@@ -414,7 +414,7 @@ def aggedge(c):
 # grouped expressions on edge
 def grpedge(c):
 
-    print "RUNNING TEST 'grpedge'"
+    print("RUNNING TEST 'grpedge'")
 
     stmt = "select origin, sum(1), count(*) \
               from buys \
@@ -428,7 +428,7 @@ def grpedge(c):
 
             stmt = "select count(*) from buys \
                      where origin=%d" % (row.field(0))
-            print "executing %s" % stmt
+            print("executing %s" % stmt)
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
@@ -448,7 +448,7 @@ def grpedge(c):
 
             stmt = "select avg(quantity) from buys \
                      where origin=%d" % (row.field(0))
-            print "executing %s" % stmt
+            print("executing %s" % stmt)
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
@@ -465,7 +465,7 @@ def grpedge(c):
         for row in cur:
             stmt = "select median(quantity) from buys \
                      where origin=%d" % (row.field(0))
-            print "executing %s" % stmt
+            print("executing %s" % stmt)
             with c.execute(stmt) as cur2:
                 if not cur2.ok():
                   raise db.TestFailed("cur2 not ok: %d, %s" % (cur2.code(),cur2.details()))
@@ -492,7 +492,7 @@ def fibonacci(c,one,two,x):
             n+=1
             if row.field(0) != one + two:
                raise db.TestFailed("wrong value %d + %d: %d" % (one, two, row.field(0)))
-            print "%d" % row.field(0)
+            print("%d" % row.field(0))
             fibonacci(c, two, row.field(0), x-1)
         if n != 1:
            raise db.TestFailed("wrong number of rows: %d" % (n))
@@ -500,7 +500,7 @@ def fibonacci(c,one,two,x):
 
 def pipitest(c):
 
-    print "RUNNING TEST 'pipitest'"
+    print("RUNNING TEST 'pipitest'")
 
     stmt = "select pi() from product"
     with c.execute(stmt) as cur:
@@ -509,7 +509,7 @@ def pipitest(c):
         n=0
         for row in cur:
             if n==0:
-               print "%.9f" % row.field(0)
+               print("%.9f" % row.field(0))
                n+=1
             if row.field(0) > math.pi + 0.00000001 or \
                row.field(0) < math.pi - 0.00000001:
@@ -522,7 +522,7 @@ def pipitest(c):
         n=0
         for row in cur:
             if n == 0:
-               print "%.9f" % row.field(0)
+               print("%.9f" % row.field(0))
                n+=1
             if row.field(0) > math.e + 0.00000001 or \
                row.field(0) < math.e - 0.00000001:
@@ -530,15 +530,15 @@ def pipitest(c):
 
 def fibotest(c,x):
 
-    print "RUNNING TEST 'fibonacci %d'" % x
+    print("RUNNING TEST 'fibonacci %d'" % x)
 
-    print "1\n1"
+    print("1\n1")
     fibonacci(c,1,1,x)
 
 # constant values
 def constvalues(c):
 
-    print "RUNNING TEST 'constvalues'"
+    print("RUNNING TEST 'constvalues'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -590,7 +590,7 @@ def constvalues(c):
              where prod_key = %d" % k
     
     dt = datetime.datetime(1971, 5, 18, 6, 23, 10, 123456, now.utc)
-    print "%s" % dt
+    print("%s" % dt)
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (k,cur.details()))
@@ -605,7 +605,7 @@ def constvalues(c):
 # test trigonometry functions
 def trigofun(c):
 
-    print "RUNNING TEST 'trigofun'"
+    print("RUNNING TEST 'trigofun'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -618,7 +618,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.sin(ps[idx].price)
-            print "sine: %f %f" % (s, row.field(0))
+            print("sine: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("sine confusion: %f != %f" % (row.field(0), s))
@@ -631,7 +631,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.asin(math.sin(ps[idx].price))
-            print "asine: %f %f" % (s, row.field(0))
+            print("asine: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("asine confusion: %f != %f" % (row.field(0), s))
@@ -644,7 +644,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.cos(ps[idx].price)
-            print "cosine: %f %f" % (s, row.field(0))
+            print("cosine: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("cosine confusion: %f != %f" % (row.field(0), s))
@@ -657,7 +657,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.acos(math.cos(ps[idx].price))
-            print "acosine: %f %f" % (s, row.field(0))
+            print("acosine: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("acosine confusion: %f != %f" % (row.field(0), s))
@@ -670,7 +670,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.tan(ps[idx].price)
-            print "studio tan: %f %f" % (s, row.field(0))
+            print("studio tan: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("tangent confusion: %f != %f" % (row.field(0), s))
@@ -683,7 +683,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.atan(math.tan(ps[idx].price))
-            print "atan: %f %f" % (s, row.field(0))
+            print("atan: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("atan confusion: %f != %f" % (row.field(0), s))
@@ -696,7 +696,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.sinh(ps[idx].price)
-            print "sineh: %f %f" % (s, row.field(0))
+            print("sineh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("sineh confusion: %f != %f" % (row.field(0), s))
@@ -709,7 +709,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.asinh(math.sinh(ps[idx].price))
-            print "asineh: %f %f" % (s, row.field(0))
+            print("asineh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("asineh confusion: %f != %f" % (row.field(0), s))
@@ -722,7 +722,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.cosh(ps[idx].price)
-            print "cosineh: %f %f" % (s, row.field(0))
+            print("cosineh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("cosineh confusion: %f != %f" % (row.field(0), s))
@@ -735,7 +735,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.acosh(math.cosh(ps[idx].price))
-            print "acosineh: %f %f" % (s, row.field(0))
+            print("acosineh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("acosineh confusion: %f != %f" % (row.field(0), s))
@@ -748,7 +748,7 @@ def trigofun(c):
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
             s = math.tanh(ps[idx].price)
-            print "tanh: %f %f" % (s, row.field(0))
+            print("tanh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("tangenth confusion: %f != %f" % (row.field(0), s))
@@ -763,7 +763,7 @@ def trigofun(c):
             if row.field(0) >= 1.0:
                 continue
             s = math.atanh(math.tanh(ps[idx].price))
-            print "atanh: %f %f" % (s, row.field(0))
+            print("atanh: %f %f" % (s, row.field(0)))
             if row.field(0) + 0.0001 < s or \
                row.field(0) - 0.0001 > s:
                raise db.TestFailed("atanh confusion: %f != %f" % (row.field(0), s))
@@ -771,7 +771,7 @@ def trigofun(c):
 # test time functions
 def timefun(c):
 
-    print "RUNNING TEST 'timefun'"
+    print("RUNNING TEST 'timefun'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -974,7 +974,7 @@ def timefun(c):
 # test case 
 def casefun(c):
 
-    print "RUNNING TEST 'casefun'"
+    print("RUNNING TEST 'casefun'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -1000,7 +1000,7 @@ def casefun(c):
                (row.field(1) == "big" and ps[idx].packing != 3) or \
                (row.field(1) == "unknown"):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].packing))
-            print "%s" % row.field(1)
+            print("%s" % row.field(1))
 
     # three alternatives and else with different type
     mycase = "case " \
@@ -1024,7 +1024,7 @@ def casefun(c):
                (row.field(1) == 4 and ps[idx].cat != 4) or \
                (row.field(1) == 5 and ps[idx].cat != 5):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
-            print "%s" % row.field(1)
+            print("%s" % row.field(1))
 
     # three alternatives else is NULL
     mycase = "case " \
@@ -1047,7 +1047,7 @@ def casefun(c):
                (row.field(1) is None and \
                 ps[idx].cat != 4 and ps[idx].cat != 5):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
-            print "%d: %s" % (ps[idx].cat,row.field(1))
+            print("%d: %s" % (ps[idx].cat,row.field(1)))
 
     # three alternatives no else
     mycase = "case " \
@@ -1069,7 +1069,7 @@ def casefun(c):
                (row.field(1) is None and \
                 ps[idx].cat != 4 and ps[idx].cat != 5):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
-            print "%d: %s" % (ps[idx].cat,row.field(1))
+            print("%d: %s" % (ps[idx].cat,row.field(1)))
 
     # when is null else is not
     mycase = "case " \
@@ -1087,7 +1087,7 @@ def casefun(c):
             if (row.field(1) is None and ps[idx].cat != 1) or \
                (row.field(1) is not None and row.field(1) != ps[idx].cat):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(1), ps[idx].cat))
-            print "%d: %s" % (ps[idx].cat,row.field(1))
+            print("%d: %s" % (ps[idx].cat,row.field(1)))
 
     # complex when
     mycase = "case " \
@@ -1102,12 +1102,12 @@ def casefun(c):
              " end"
 
     stmt = "select prod_desc, %s from product where prod_key = %d" % (mycase, k)
-    print stmt
+    print(stmt)
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
         for row in cur:
-            print "%d / %d: %s" % (ps[idx].cat,ps[idx].packing,row.field(1))
+            print("%d / %d: %s" % (ps[idx].cat,ps[idx].packing,row.field(1)))
             if row.field(0) != ps[idx].desc:
                raise db.TestFailed("wrong value %s: %s" % (row.field(0), ps[idx].desc))
             if (ps[idx].cat == 1 and ps[idx].packing ==1 and \
@@ -1125,9 +1125,9 @@ def casefun(c):
                (ps[idx].cat == 3 and row.field(1) != "three") or \
                ((ps[idx].cat == 4 or ps[idx].cat == 5) and \
                 row.field(1) != "a whole bunch"):
-               print "%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1))
+               print("%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1)))
                raise db.TestFailed("unexpected value '%s': %d" % (row.field(1), ps[idx].cat))
-            print "%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1))
+            print("%d / %d: '%s'" % (ps[idx].cat,ps[idx].packing,row.field(1)))
 
     # case with agg
     mycase = "case " \
@@ -1151,7 +1151,7 @@ def casefun(c):
         if p.cat == ps[idx].cat:
            cnt+=1
 
-    print "counted: %d" % cnt
+    print("counted: %d" % cnt)
 
     with c.execute(stmt) as cur:
         for row in cur:
@@ -1167,7 +1167,7 @@ def casefun(c):
                (cnt ==   1 and row.field(0) != "one") or \
                (cnt ==   0 and row.field(0) != "zero"):
                raise db.TestFailed("unexpected value %s: %d" % (row.field(0), ps[idx].cat))
-            print "%s" % row.field(0)
+            print("%s" % row.field(0))
 
     # agg with case
     mycase = "case " \
@@ -1193,13 +1193,13 @@ def casefun(c):
         else:
            sm+=p.cat
 
-    print "sum: %d" % sm
+    print("sum: %d" % sm)
 
     with c.execute(stmt) as cur:
         for row in cur:
             if sm != row.field(0):
                raise db.TestFailed("unexpected value %d: %d" % (row.field(0), sm))
-            print "%s" % row.field(0)
+            print("%s" % row.field(0))
 
 if __name__ == "__main__":
 
@@ -1225,4 +1225,4 @@ if __name__ == "__main__":
         aggedge(c)
         grpedge(c)
 
-        print "PASSED"
+        print("PASSED")

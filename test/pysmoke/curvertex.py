@@ -13,7 +13,7 @@ ERR_DUP_KEY = 27
 # select primary key where primary key
 def vidwherevid(c):
 
-    print "RUNNING TEST 'vidwherevid'"
+    print("RUNNING TEST 'vidwherevid'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -32,7 +32,7 @@ def vidwherevid(c):
 # select primary key where primary keys
 def vidwherevids(c):
 
-    print "RUNNING TEST 'vidwherevids'"
+    print("RUNNING TEST 'vidwherevids'")
 
     id1 = random.randint(1,len(ps)-1)
     k = ps[id1].key
@@ -131,7 +131,7 @@ def vidwherevids(c):
 # select anything where primary key
 def attswherevid(c):
 
-    print "RUNNING TEST 'attswherevid'"
+    print("RUNNING TEST 'attswherevid'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -202,7 +202,7 @@ def attswherevid(c):
 # select primary key where one att
 def vidwhere1att(c):
 
-    print "RUNNING TEST 'vidwhere1att'"
+    print("RUNNING TEST 'vidwhere1att'")
 
     idx = random.randint(1,len(ps)-1)
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
@@ -210,7 +210,7 @@ def vidwhere1att(c):
 
     # prod_key where 1 condition
     stmt = "select prod_key from product where prod_desc = '%s'" % ps[idx].desc
-    print "%s (%d)" % (stmt,k)
+    print("%s: %s (%d)" % (type(ps[idx].desc),stmt,k))
     with c.execute(stmt) as cur:
         if not cur.ok():
           raise db.TestFailed("not ok %d: %s" % (cur.code(),cur.details()))
@@ -295,7 +295,7 @@ def vidwhere1att(c):
 # select primary key where several atts
 def vidwhereatts(c):
 
-    print "RUNNING TEST 'vidwhereatts'"
+    print("RUNNING TEST 'vidwhereatts'")
 
     idx = random.randint(1,len(ps)-1)
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
@@ -420,10 +420,10 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
-            print "%d" % row.field(0)
+            print("%d" % row.field(0))
             if row.field(0) == k:
                found=True
         if n<1:
@@ -441,7 +441,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -460,7 +460,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -479,7 +479,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -498,7 +498,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -517,7 +517,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -547,7 +547,7 @@ def vidwhereatts(c):
         if not cur.ok():
           raise db.TestFailed("cannot find %d: %s" % (cur.code(),cur.details()))
         n=0
-	found=False
+        found=False
         for row in cur:
             n+=1
             if row.field(0) == k:
@@ -560,7 +560,7 @@ def vidwhereatts(c):
 # select atts where several atts
 def attswhereatts(c):
 
-    print "RUNNING TEST 'attswhereatts'"
+    print("RUNNING TEST 'attswhereatts'")
 
     idx = random.randint(1,len(ps)-1)
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
@@ -574,7 +574,7 @@ def attswhereatts(c):
     stmt = "select prod_desc, prod_cat from product \
              where prod_desc = '%s' \
                and prod_key=%d" % (ps[idx].desc, ps[idx].key)
-    print stmt
+    print(stmt)
     with c.execute(stmt) as cur:
         if not cur.ok():
             raise db.TestFailed("cursor not ok: %d/%s" % 
@@ -765,7 +765,7 @@ def attswhereatts(c):
 # select atts where one att
 def attswhere1att(c):
 
-    print "RUNNING TEST 'attswhere1att'"
+    print("RUNNING TEST 'attswhere1att'")
 
     idx = random.randint(1,len(ps)-1)
     # print "LENGTH: %d, idx: %d" % (len(ps), idx)
@@ -842,7 +842,7 @@ def attswhere1att(c):
 # does not yet work!!!
 def constwherevid(c):
 
-    print "RUNNING TEST 'constwherevid'"
+    print("RUNNING TEST 'constwherevid'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -954,7 +954,7 @@ def constwherevid(c):
 # select primary key where primary key IN
 def whereinvid(c):
 
-    print "RUNNING TEST 'whereinvid'"
+    print("RUNNING TEST 'whereinvid'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -1005,7 +1005,7 @@ def whereinvid(c):
 # select primary key where att IN
 def wherein1att(c):
 
-    print "RUNNING TEST 'wherein1att'"
+    print("RUNNING TEST 'wherein1att'")
 
     idx = random.randint(1,len(ps)-1)
     k = ps[idx].key
@@ -1060,7 +1060,7 @@ def wherein1att(c):
 # select primary key where att IN
 def whereinatts(c):
 
-    print "RUNNING TEST 'whereinatts'"
+    print("RUNNING TEST 'whereinatts'")
 
     idx = random.randint(2,len(ps)-1)
     k = ps[idx].key
@@ -1132,7 +1132,7 @@ def whereinatts(c):
                 raise db.TestFailed("wrong cat selected: %d" % row.field(1))
         if n < 1:
             raise db.TestFailed("nothing found")
-        print "found %d" % n
+        print("found %d" % n)
 
 if __name__ == "__main__":
 
@@ -1152,4 +1152,4 @@ if __name__ == "__main__":
         wherein1att(c)
         whereinatts(c)
 
-        print "PASSED"
+        print("PASSED")
