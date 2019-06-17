@@ -7,7 +7,8 @@
 #ifndef nowdb_ast_decl
 #define nowdb_ast_decl
 
-#include <nowdb/reader/filter.h>
+// #include <nowdb/reader/filter.h>
+#include <nowdb/types/types.h>
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -235,13 +236,13 @@
  * -----------------------------------------------------------------------
  */
 #define NOWDB_AST_COMPARE  10500
-#define NOWDB_AST_EQ NOWDB_FILTER_EQ
-#define NOWDB_AST_LE NOWDB_FILTER_LE
-#define NOWDB_AST_GE NOWDB_FILTER_GE
-#define NOWDB_AST_LT NOWDB_FILTER_LT
-#define NOWDB_AST_GT NOWDB_FILTER_GT
-#define NOWDB_AST_NE NOWDB_FILTER_NE
-#define NOWDB_AST_IN NOWDB_FILTER_IN
+#define NOWDB_AST_EQ 1
+#define NOWDB_AST_LE 2
+#define NOWDB_AST_GE 3
+#define NOWDB_AST_LT 4
+#define NOWDB_AST_GT 5
+#define NOWDB_AST_NE 6
+#define NOWDB_AST_IN 7
 
 /* -----------------------------------------------------------------------
  * what the ast value represents:
