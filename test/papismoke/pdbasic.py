@@ -35,7 +35,8 @@ def compare(df,d):
        raise db.TestFailed('max differs')
     mf = float(int(df['mean'] * 1000))/1000
     m  = float(int(d['mean'] * 1000))/1000
-    if mf != m:
+    if mf < m - 0.001 or \
+       mf > m + 0.001:
        raise db.TestFailed('mean differs')
 
     mf = float(int(df['std'] * 1000))/1000

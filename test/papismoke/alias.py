@@ -90,6 +90,7 @@ def aliastest(c):
     
     print("RUNNING TEST 'aliastest'")
 
+    k = 0
     l = countdb(c, 'product')
     for row in c.execute("select count(*) as count from product"):
         if row['count'] != l:
