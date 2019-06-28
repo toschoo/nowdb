@@ -10,10 +10,10 @@ if __name__ == '__main__':
 
     with now.Connection("localhost", "55505", None, None) as c:
 
-        nump = 100
-        numc = 50
+        nump = 1000
+        numc = 500
         nums = 25
-        nume = 1000
+        nume = 30000
         numv = 100
 
         db.createDB(c, "db100")

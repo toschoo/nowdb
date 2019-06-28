@@ -8,7 +8,7 @@ import datetime
 import time
 import random
 
-IT = 10
+IT = 1
 
 def countedge(es):
     n=0
@@ -475,16 +475,20 @@ def infun(c):
     print("RUNNING TEST 'infun'")
 
     keys = []
+    stps = 0
 
     with c.execute("select prod_key from product where prod_cat is not null") as cur:
          if not cur.ok():
             raise db.TestFailed("not ok: %d (%s)" % (cur.code(), cur.details()))
          for row in cur:
              keys.append(row.field(0))
+             stps += 1
+             if stps == 100:
+                break
 
     stmt = "select count(*) from buys where destin in %s"
     for i in range(1, 100, 5):
-        print("%d out of %d" % (i, len(keys)))
+        print("%s" % mkin(keys,i))
         with c.execute(stmt % mkin(keys, i)) as cur:
              for row in cur:
                  if row.field(0) != countalledges(keys, i):

@@ -43,6 +43,8 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot use %s" % db)
 
+    c.rexecute_("create small storage buystore")
+
     with c.execute("create type product ( \
                       prod_key uint primary key, \
                       prod_desc    text, \
@@ -81,7 +83,7 @@ def createDB(c, db):
                       origin client, \
                       destin product, \
                       quantity uint, \
-                      price float)") as r:
+                      price float) storage=buystore") as r:
         if not r.ok():
             raise FailedCreation("cannot create edge buys: %s (%d)" % \
                                             (r.details(), r.code()))
