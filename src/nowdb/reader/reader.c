@@ -555,7 +555,7 @@ static inline char hasKey(nowdb_reader_t *reader) {
 	for(int i=0;i<reader->ikeys->sz;i++) {
 		if (reader->maps[i] == NULL) continue;
 		if (ts_algo_tree_find(reader->maps[i],
-		    reader->key+reader->ikeys->off[i]) == NULL) return 0;
+		    reader->key+i*sizeof(nowdb_key_t)) == NULL) return 0;
 	}
 	return 1;
 }
@@ -624,6 +624,8 @@ static inline nowdb_err_t moveFRange(nowdb_reader_t *reader) {
 			break;
 		}
 		BEETERR(ber,0);
+
+		// fprintf(stderr, "content: %lu\n", *pge);
 
 		err = getpage(reader, *pge);
 		if (err == NOWDB_OK) break;
