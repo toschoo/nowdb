@@ -338,6 +338,8 @@ static void sortBlocks(ts_algo_list_t  *blocks,
  * ------------------------------------------------------------------------
  */
 static inline int crounds(int n) {
+	if (n < 2) return 0;
+	if (n == 2) return 1;
 	int l=1;
 	for(int i=n; i>0; i>>=1) l++;
 	return l;
@@ -622,7 +624,7 @@ static nowdb_err_t mergeBlocks(ts_algo_list_t  *blocks,
 	ts_algo_list_t tmp;
 	ts_algo_list_t *src=NULL, *trg=NULL;
 	int k = 1;
-	int rounds = crounds((blocks->len)/recsize)+1;
+	int rounds = crounds(blocks->len);
 
 	ts_algo_list_init(&tmp);
 
