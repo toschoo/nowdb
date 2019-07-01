@@ -142,6 +142,9 @@ int main() {
 		case 2: n=64; break;
 		case 3: n=128; break;
 		case 5: n=256; break;
+		case 6: n=8192; break;
+		case 7: n=20000; break;
+		case 8: n=30000; break;
 		default: n=NELEMENTS;
 		}
 		if (testBlistSort(n) != 0) {
