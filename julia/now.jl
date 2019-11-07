@@ -6,10 +6,7 @@ using Dates
 # sym_init = Libdl.dlsym(lib, "nowdb_client_init")
 
 # TODO
-# - control flow (bracket?)
-# - row -> "vector"
-# - cur -> "table"
-# - julia & sql?
+#   + release cursor after loop
 
 const lib = "libnowdbclient"
 
@@ -64,19 +61,18 @@ const BOOL = 9
 
 const NPERSEC = 1000000000
 
-function libinit()
-  println("NoWDB Client is initing")
+function _libinit()
   if ccall(("nowdb_client_init", lib), Cuchar, ()) == 0
      error("cannot init nowdbclient lib") # InitError
   end
 end
 
-function libclose()
+function _libclose()
   ccall(("nowdb_client_close", lib), Cvoid, ())
 end
 
 function __init__()
-  libinit()
+  _libinit()
 end
 
 function now2unix(t::Int64)
@@ -122,19 +118,25 @@ function now2time(t::Int64)
              ms, us, ns)
 end
 
+function now2datetimepair(t::Int64)
+  (now2date(t), now2time(t))
+end
+
 mutable struct Connection
   _con::ConT
   _addr::String
   _port::String
   _usr::String
-  function Connection(c, addr, port, usr)
-    me = new(c, addr, port, usr)
+  _pwd::String
+  _db::String
+  function Connection(c, addr, port, usr, pwd)
+    me = new(c, addr, port, usr, pwd, "")
     finalizer(close, me)
     return me
   end
 end
 
-function connect(srv::String, port::String, usr::String, pwd::String)
+function _connect(srv::String, port::String, usr::String, pwd::String)
   c::Ref{ConT} = 0
   x = ccall(("nowdb_connect", lib), Cint,
             (Ref{ConT},
@@ -143,7 +145,6 @@ function connect(srv::String, port::String, usr::String, pwd::String)
              Cstring,
              Cstring,
              Cint), c, srv, port, usr, pwd, 0)
-
   if x != 0
      # INVALID
      if x == INVALID
@@ -157,7 +158,12 @@ function connect(srv::String, port::String, usr::String, pwd::String)
         throw(ClientError("$x"))
      end
   end
-  Connection(c[], srv, port, usr)
+  return c
+end
+
+function connect(srv::String, port::String, usr::String, pwd::String)
+  c = _connect(srv, port, usr, pwd)
+  Connection(c[], srv, port, usr, pwd)
 end
 
 function close(con::Connection)
@@ -169,12 +175,36 @@ function close(con::Connection)
   con._con = 0
 end
 
+function reconnect(con::Connection)
+  c = _connect(con._srv, con._port, con._usr, con._pwd)
+  con._con = c[]
+  if con._db != ""
+     execute(con, "use $db"); con._db = db
+  end
+end
+
+function withconnection(srv::String, port::String,
+                        usr::String, pwd::String,
+                        db::String, f::Function)
+  con = connect(srv, port, usr, pwd)
+  try
+     if db != ""
+        execute(con, "use $db"); con._db = db
+     end
+     return f(con)
+  finally
+     close(con)
+  end
+end
+
 mutable struct Result
    _res::ResultT
    _type::Int
    _cur::CursorT
-   function Result(res, t, cur)
-     me = new(res, t, cur)
+   _ctype::Int8
+   _fcount::Int64
+   function Result(res, t, cur, ct)
+     me = new(res, t, cur, ct, -1)
      finalizer(release, me)
      return me
    end
@@ -251,7 +281,7 @@ function _rcount(r::ResultT)
   ccall(("nowdb_row_count", lib), Cint, (ResultT,), r)
 end
 
-function execute(con::Connection, stmt::String)
+function execute(con::Connection, stmt::String, ctype::Int8)
   con._con != 0 || throw(ArgumentError("no connection"))
   r::Ref{ResultT} = 0
   x = ccall(("nowdb_exec_statement", lib), Cint,
@@ -270,18 +300,47 @@ function execute(con::Connection, stmt::String)
     _release(r[])
     return nothing
   end
-  Result(r[], t, cid)
+  Result(r[], t, cid, ctype)
+end
+
+function execute(con::Connection, stmt::String)
+  return execute(con, stmt, Int8(0))
+end
+
+function asarray(cur::Result)
+  cur._ctype = Int8(1)
+  return cur
 end
 
 function onerow(con::Connection, stmt::String)
   res = execute(con, stmt)
   isa(res, Nothing) && throw(NothingError())
-  for r in res return r end
+  for r in res
+      a = row2array(r)
+      release(res) 
+      return a
+  end
 end
 
 function onevalue(con::Connection, stmt::String)
-  return field(onerow(con, stmt), 0)
+  return onerow(con, stmt)[1]
 end
+
+function fill(con::Connection, stmt::String, cols; T=Any, count="", limit=0)
+  l = limit; i = 1
+  if count != "" l = onevalue(con, count) end 
+  m = Matrix{T}(undef, l, cols)
+  for row in execute(con, stmt) |> asarray
+    if l > 0
+       for j=1:cols m[i,j] = row[j] end
+    else
+       m = vcat(m,permutedims(row))
+    end
+    if l > 0 && i == l break end
+    i+=1
+  end
+  return m
+end 
 
 function now(con::Connection)
   return onevalue(con, "select now()")
@@ -300,13 +359,17 @@ function Base.iterate(res::Result, have=false)
      err = _errcode(res._res)
      if err == EOF return nothing end
      if err != OK throw(DBError(err, _errmsg(res._res))) end
-     return (res, true)
-  end
-  if !_nextrow(res._res)
+     res._fcount = fieldcount(res)
+  elseif !_nextrow(res._res)
      if res._type == ROW return nothing end
      if !_fetch(res._res) return nothing end
   end
-  return (res, true)
+  ret = res._ctype == 0 ? res : row2array(res)
+  return (ret, true)
+end
+
+function row2array(row::Result)
+  Any[field(row,i) for i in 0:row._fcount]
 end
 
 function _convert(t::Int, v::Ptr{Nothing})
