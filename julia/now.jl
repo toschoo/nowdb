@@ -31,6 +31,7 @@
 module NoW
 
 export NoConnectionError, ClientError, DBError,
+       InvalidAliasError, InvalidStatementError,
        TEXT, DATE, TIME, FLOAT, INT, UINT, BOOL,
        datetime2now, now2datetime, now2datetimens,
        now2date, now2time, now2datetimepair, now,
@@ -38,7 +39,7 @@ export NoConnectionError, ClientError, DBError,
        execute, fill, asarray, onerow, onevalue,
        tfield, field, fieldcount, release
 
-using Dates
+using Dates, DataFrames, DataFramesMeta
 
 const lib = "libnowdbclient"
 
@@ -50,6 +51,14 @@ const lib = "libnowdbclient"
 struct NoConnectionError <: Exception end 
 
 struct WrongTypeError    <: Exception end
+
+struct InvalidAliasError <: Exception
+  msg::String
+end
+
+struct InvalidStatementError <: Exception
+  msg::String
+end
 
 """
        NothingError()
@@ -331,9 +340,8 @@ julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb", con -> beg
 # Related
   connect, reconnect, close
 """
-function withconnection(srv::String, port::String,
-                        usr::String, pwd::String,
-                        db::String, f::Function)
+function withconnection(f::Function, srv::String, port::String,
+                        usr::String, pwd::String, db::String)
   con = connect(srv, port, usr, pwd)
   try
      if db != ""
@@ -403,13 +411,27 @@ function onevalue(con::Connection, stmt::String)
   return onerow(con, stmt)[1]
 end
 
-function fill(con::Connection, stmt::String, cols; T=Any, count="", limit=0)
+function describe(con::Connection, obj)
+   a = Array{Tuple{String,String},1}()
+   for row in execute(con, "describe $obj") |> asarray
+       push!(a, (row[1], row[2]))
+   end
+   return a
+end
+
+function fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
   l = limit; i = 1
+  c = cols
+  if c <= 0 
+     fs = _parseselect(con, stmt)
+     c = size(fs, 1)
+     if c <= 0 throw(InvalidStatementError(stmt)) end
+  end
   if count != "" l = onevalue(con, count) end 
-  m = Matrix{T}(undef, l, cols)
+  m = Matrix{T}(undef, l, c)
   for row in execute(con, stmt) |> asarray
     if l > 0
-       for j=1:cols m[i,j] = row[j] end
+       for j=1:c m[i,j] = row[j] end
     else
        m = vcat(m,permutedims(row))
     end
@@ -418,6 +440,16 @@ function fill(con::Connection, stmt::String, cols; T=Any, count="", limit=0)
   end
   return m
 end 
+
+function loadsql(con::Connection, stmt::String; T=Any, count="", limit=0)
+  fs = _parseselect(con, stmt)
+  df = DataFrames.DataFrame(fill(con, stmt, T=T,
+                                 cols=size(fs,1),
+                                 count=count,
+                                 limit=limit))
+  DataFrames.names!(df, [Symbol(f) for f in fs])
+  return df
+end
 
 function now(con::Connection)
   return onevalue(con, "select now()")
@@ -446,7 +478,7 @@ function Base.iterate(res::Result, have=false)
 end
 
 function row2array(row::Result)
-  Any[field(row,i) for i in 0:row._fcount]
+  Any[field(row,i) for i in 0:row._fcount-1]
 end
 
 function _convert(t::Int, v::Ptr{Nothing})
@@ -558,4 +590,121 @@ function _rcount(r::ResultT)
   ccall(("nowdb_row_count", lib), Cint, (ResultT,), r)
 end
 
+const white = [' ', '\n', '\r', '\t']
+
+_whitespace(c) = c in white
+
+function _skipwhite(s)
+  x = lastindex(s)
+  for i=1:x-1
+    if !_whitespace(s[i]) return (i-1,false) end
+  end
+  return (0,true)
+end
+
+function _parsefield(s)
+  x = lastindex(s); i=1
+  instr = 0
+  inpar = 0
+  while i <= x
+     if instr > 0
+        if s[i] == '\'' instr-=1 end
+        i=nextind(s,i)
+        continue
+     end
+     if inpar > 0
+        if s[i] == ')' inpar -=1 elseif s[i] == '(' inpar += 1 end
+        i+=1; continue
+     end
+     if s[i] == '\'' instr = 1; i+=1; continue end
+     if s[i] == '(' inpar = 1; i+=1; continue end
+     if s[i] == ',' return (i-1, false) end
+     ok = true
+     for j=0:3
+         if !isvalid(s,i+j) ok=false; break end
+     end
+     if !ok i=nextind(s,i); continue end
+     if lowercase(s[i:i+3]) == "from"  &&
+        (i == 1 || _whitespace(s[i-1])) &&
+        (i+4 >= x || _whitespace(s[i+4])) return (i-2,true)
+     end
+     i+=1
+  end
+  return (x,true)
+end
+
+function _parsefields(s)
+  r = []
+  a = 1
+  x = false
+  while !x
+    (z,x) = _skipwhite(s[a:end])
+    if x break end
+    a += z
+    (z,x) = _parsefield(s[a:end])
+    push!(r, s[a:a+z-1])
+    a += z+1
+  end
+  return r
+end
+
+function _alias(f)
+  i = lastindex(f)
+  e = i
+  a = 1
+  w = false
+  x = false
+  while i > 0
+    if !isvalid(f[i]) throw(InvalidAliasError(f)) end
+    if _whitespace(f[i])
+       if w a = i+1; x = true end
+       i-=1; continue
+    end
+    if i == 0 && !x throw(InvalidAliasError(f)) end
+    if !w w=true; e=i
+    elseif x
+       if f[i] != 's' || f[i-1] != 'a' throw(InvalidAliasError(f)) else break end
+    end
+    i-=1
+  end
+  return f[a:e]
+end
+
+_aliases(fs) = map(_alias, fs)
+
+function _parseselect(con::Connection, stmt)
+  s = SubString(stmt)
+  i, x = _skipwhite(s)
+  i += 1 
+  if x || lowercase(s[i:i+5]) != "select"
+     throw(InvalidStatementError(s))
+  end
+  i+=6
+  a, x = _skipwhite(s[i:end])
+  if x return [] end
+  i+=a
+  if s[i] == '*'
+     return [t[1] for t in describe(con, _getentity(s[i+1:end]))]
+  end
+  _parsefields(s[i:end]) |> _aliases
+end
+
+function _getentity(s)
+  i, x = _skipwhite(s)
+  i+=1
+  if x || lowercase(s[i:i+3]) != "from" 
+     println(s[i:i+3])
+     throw(InvalidStatementError(s))
+  end
+  i += 4
+  a, x = _skipwhite(s)
+  if x throw(InvalidStatementError(s)) end
+  i += a
+  l = lastindex(s[1:end])
+  e = l
+  for j=i:l
+    if _whitespace(s[j]) l=j; break end
+  end
+  return s[i:e]
+end
 end

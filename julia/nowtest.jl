@@ -1,7 +1,7 @@
 include("./now.jl")
 # using NoW
 
-NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo", con -> begin
+NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo") do con
   z = 0
   for row in NoW.execute(con, "select * from station") |> NoW.asarray
     z += 1
@@ -11,4 +11,4 @@ NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo", con -> be
     end
     println("")
   end
-end)
+end
