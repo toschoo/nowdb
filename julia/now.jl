@@ -52,10 +52,23 @@ struct NoConnectionError <: Exception end
 
 struct WrongTypeError    <: Exception end
 
+"""
+       InvalidAliasError()
+
+       Alias given in a select statement is invalid
+       (e.g. is not an identifier,
+             contains non-ASCII characters,
+             the alias definition is not of the form 'a as b' or 'a')
+"""
 struct InvalidAliasError <: Exception
   msg::String
 end
 
+"""
+       InvalidAliasError()
+
+       The statement is syntactically wrong.
+"""
 struct InvalidStatementError <: Exception
   msg::String
 end
@@ -112,7 +125,9 @@ const REPORT  = 34
 const ROW     = 35
 const CURSOR  = 36
 
-# Data Types
+"""
+      NoWDB Types
+"""
 const TEXT = 1
 const DATE = 2
 const TIME = 3
@@ -121,6 +136,7 @@ const INT = 5
 const UINT = 6
 const BOOL = 9
 
+# nanoseconds per second
 const NPERSEC = 1000000000
 
 # Initialize the C library
@@ -212,6 +228,7 @@ function now2datetimepair(t::Int64)
   (now2date(t), now2time(t))
 end
 
+# connection object
 mutable struct Connection
   _con::ConT
   _addr::String
@@ -219,13 +236,14 @@ mutable struct Connection
   _usr::String
   _pwd::String
   _db::String
-  function Connection(c, addr, port, usr, pwd)
-    me = new(c, addr, port, usr, pwd, "")
+  function Connection(c, addr, port, usr, pwd, db)
+    me = new(c, addr, port, usr, pwd, db)
     finalizer(close, me)
     return me
   end
 end
 
+# low-level connect 
 function _connect(srv::String, port::String, usr::String, pwd::String)
   c::Ref{ConT} = 0
   x = ccall(("nowdb_connect", lib), Cint,
@@ -252,12 +270,13 @@ function _connect(srv::String, port::String, usr::String, pwd::String)
 end
 
 """
-    connect(srv::String, port::String, usr::String, pwd::String)
+    connect(srv::String, port::String, usr::String, pwd::String, db="")
 
     Create a connection to the database server identified by
     the host (name or ip address) and
     the service (service name or port number)
     for the indicated user authenticated by the given password.
+    If 'db' is given, the connection will issue a 'use' statement.
 
     On success, return a Connection object;
     Otherwise, throw an exception.
@@ -277,11 +296,13 @@ Main.NoW.Connection(0x00000000023f6310, "localhost", "50677", "foo", "bar", "")
 ```
 
 # Related
-  close, reconnect, withconnection
+  close, reconnect, withconnection, use
 """
-function connect(srv::String, port::String, usr::String, pwd::String)
+function connect(srv::String, port::String, usr::String, pwd::String, db="")
   c = _connect(srv, port, usr, pwd)
-  Connection(c[], srv, port, usr, pwd)
+  con = Connection(c[], srv, port, usr, pwd, db)
+  use(con, db)
+  return con
 end
 
 """
@@ -291,7 +312,7 @@ end
     free all resources used by this connection.
 
 # Related
-  connect, reconnect, withconnection
+  connect, reconnect, withconnection, use
 """
 function close(con::Connection)
   if con._con == 0 return end
@@ -309,20 +330,19 @@ end
     to the datbase.
 
 # Related
-  connect, withconnection, close
+  connect, withconnection, close, use
 """
 function reconnect(con::Connection)
   c = _connect(con._srv, con._port, con._usr, con._pwd)
   con._con = c[]
-  if con._db != ""
-     execute(con, "use $db"); con._db = db
-  end
+  use(con, db)
 end
 
 """
-    withconnect(srv::String, port::String,
+    withconnect(f::Function,
+                srv::String, port::String,
                 usr::String, pwd::String,
-                db::String, f::Function)
+                db::String)
 
     Connect to the database; on success, apply function 'f' on the result
     and, finally, close the connection.
@@ -330,29 +350,23 @@ end
 
 # Examples
 ```
-julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb", con -> begin
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
          for row in NoW.execute(con, "select * from mytable")
            # here we do something
          end
-       end)
+       end
 ```
 
 # Related
-  connect, reconnect, close
+  connect, reconnect, close, use
 """
 function withconnection(f::Function, srv::String, port::String,
                         usr::String, pwd::String, db::String)
-  con = connect(srv, port, usr, pwd)
-  try
-     if db != ""
-        execute(con, "use $db"); con._db = db
-     end
-     return f(con)
-  finally
-     close(con)
-  end
+  con = connect(srv, port, usr, pwd, db)
+  try return f(con) finally close(con) end
 end
 
+# result type
 mutable struct Result
    _res::ResultT
    _type::Int
@@ -366,6 +380,7 @@ mutable struct Result
    end
 end
 
+# low-level execute
 function _execute(con::Connection, stmt::String, ctype::Int8)
   con._con != 0 || throw(ArgumentError("no connection"))
   r::Ref{ResultT} = 0
@@ -388,15 +403,69 @@ function _execute(con::Connection, stmt::String, ctype::Int8)
   Result(r[], t, cid, ctype)
 end
 
+"""
+   execute(con::Connection, stmt::String)
+
+   send the SQL statement 'stmt' to the database.
+   If the the execution results in a row, cursor or report,
+   the result is returned to the caller. Otherwise,
+   nothing is returned.
+   Throw an exception on error.
+
+# Examples
+```
+julia> for row in NoW.execute(con, "select * from customer")
+         # here we do something
+       end
+```
+
+# Related
+  asarray, fill, loadsql, onerow, onevalue
+"""
 function execute(con::Connection, stmt::String)
   return _execute(con, stmt, Int8(0))
 end
 
+"""
+   asarry(cur::Result)
+
+   instruct the result (row or cursor) to present results
+   as arrays rather than in the internal row format.
+   This function is typically used with piping (see examples).
+   
+# Examples
+```
+julia> for row in NoW.execute(con, "select * from customer") |> asarray
+         # here we do something
+       end
+```
+
+# Related
+  execute, fill, loadsql, onerow, onevalue
+"""
 function asarray(cur::Result)
   cur._ctype = Int8(1)
   return cur
 end
 
+"""
+   onerow(con::Connection, stmt::String)
+   
+   execute the statement 'stmt' and
+   return the first row of its result as array.
+   It is usually used for statements that are known
+   to return just one line, like
+   "select count(*), sum(amount) from sales" or
+   "select pi(), e()"
+
+# Examples
+```
+julia> row = NoW.onerow(con, "select count(*), sum(amount) from sales where customerid = 123")
+```
+
+# Related
+  execute, fill, loadsql, onevalue
+"""
 function onerow(con::Connection, stmt::String)
   res = execute(con, stmt)
   isa(res, Nothing) && throw(NothingError())
@@ -407,10 +476,60 @@ function onerow(con::Connection, stmt::String)
   end
 end
 
+"""
+   onevalue(con::Connection, stmt::String)
+   
+   execute the statement 'stmt' and
+   return the first field of the first row of its result.
+   It is usually used for statements that are known
+   to return just one value, like
+   "select count(*) from sales" or
+   "select now()"
+
+# Examples
+```
+julia> cnt = NoW.onevalue(con, "select count(*) from sales where customerid = 123")
+```
+
+# Related
+  execute, fill, loadsql, onerow
+"""
 function onevalue(con::Connection, stmt::String)
   return onerow(con, stmt)[1]
 end
 
+"""
+   use(con::Connection, db::String)
+   
+   send a 'use' statement to the server, i.e. "use(\$db)";
+   return nothing on success and throw an exception on error.
+
+# Examples
+```
+julia> NoW.use(con, "salesdb")
+```
+
+# Related
+  execute, connect, withconnection, reconnect
+"""
+use(con::Connection, db::String) = if db != "" execute(con, "use $(db)") end
+
+"""
+   describe(con::Connection, entity::String)
+   
+   send a 'describe' statement to the server, i.e. "describe \$entity",
+   where 'entity' must be the name of a vertex or edge.
+   return an array of attribute name, attribute type per attribute
+   in the indicated entity.
+
+# Examples
+```
+julia> NoW.describe(con, "sales")
+```
+
+# Related
+  execute, asarray
+"""
 function describe(con::Connection, obj)
    a = Array{Tuple{String,String},1}()
    for row in execute(con, "describe $obj") |> asarray
@@ -419,6 +538,68 @@ function describe(con::Connection, obj)
    return a
 end
 
+"""
+   now(con::Connection)
+   
+   send the statement "select now()" to the server
+   and return the result as single Int64 value.
+
+# Examples
+```
+julia> NoW.now(con)
+1573563491879453212
+```
+
+# Related
+  execute
+"""
+function now(con::Connection)
+  return onevalue(con, "select now()")
+end
+
+"""
+   release(res::Result)
+
+   release all resource on server and client related to that result
+   (row, cursor, report). The user usually does not need to release results.
+   Results are automatically released by the GC; furthermore the iterator
+   on cursors and rows (for row in NoW.execute(con, "select * from sales"))
+   releases all resources when ready.
+"""
+function release(res::Result)
+  if res._res == 0 return end
+  _release(res._res)
+  res._res = 0
+end
+
+"""
+   fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
+ 
+   execute the statement and return the result as a matrix.
+   The statement must be a select statement.
+
+   Keywords: 
+   - 'T' is a type; if this is given, *all* columns of the matrix will have type T,
+     otherwise, they are of type 'Any';
+   - 'cols' indicates the number of columns in the select statement;
+     if not present, fill will parse the select clause of the statement to obtain this information
+     and, if necessary, issue a describe statement.
+   - 'count' is an additional SQL statement of the form "select count(*) ..."
+     to obtain the numbers of rows in the result set;
+   - 'limit' is a limit of rows (e.g. 100: produce at most 100 rows);
+     if neither count nor limit are given, rows are catted to the result matrix
+     (using vcat). Otherwise, the matrix is allocated with either count or limit number of rows
+     with limit having preference over count. This is much faster than the vcat approach.
+
+# Examples
+```
+julia> NoW.fill(con, "select * from sales", count="select count(*) from sales")
+100×10 Array{Any,2}:
+```
+
+# Related
+  execute, loadsql, describe
+"""
 function fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
   l = limit; i = 1
   c = cols
@@ -427,7 +608,7 @@ function fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
      c = size(fs, 1)
      if c <= 0 throw(InvalidStatementError(stmt)) end
   end
-  if count != "" l = onevalue(con, count) end 
+  if count != "" && l <= 0 l = onevalue(con, count) end 
   m = Matrix{T}(undef, l, c)
   for row in execute(con, stmt) |> asarray
     if l > 0
@@ -441,9 +622,33 @@ function fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
   return m
 end 
 
-function loadsql(con::Connection, stmt::String; T=Any, count="", limit=0)
+"""
+   loadsql(con::Connection, stmt::String; count="", limit=0)
+ 
+   execute the statement and return the result as DataFrame.
+   The statement must be a select statement.
+   The column names are extracted from the select clause.
+
+   Keywords: 
+   - 'count' is an additional SQL statement of the form "select count(*) ..."
+     to obtain the numbers of rows in the result set;
+   - 'limit' is a limit of rows (e.g. 100: produce at most 100 rows);
+     if neither count nor limit are given, rows are catted to the result matrix
+     (using vcat). Otherwise, the matrix is allocated with either count or limit number of rows
+     with limit having preference over count. This is much faster than the vcat approach.
+
+# Examples
+```
+julia> NoW.loadsql(con, "select * from sales", count="select count(*) from sales")
+100×10 DataFrames.DataFrame
+```
+
+# Related
+  execute, fill, describe
+"""
+function loadsql(con::Connection, stmt::String; count="", limit=0)
   fs = _parseselect(con, stmt)
-  df = DataFrames.DataFrame(fill(con, stmt, T=T,
+  df = DataFrames.DataFrame(fill(con, stmt,
                                  cols=size(fs,1),
                                  count=count,
                                  limit=limit))
@@ -451,16 +656,23 @@ function loadsql(con::Connection, stmt::String; T=Any, count="", limit=0)
   return df
 end
 
-function now(con::Connection)
-  return onevalue(con, "select now()")
-end
+"""
+   iterate(res::Result, have=false)
 
-function release(res::Result)
-  if res._res == 0 return end
-  _release(res._res)
-  res._res = 0
-end
+   iterate over the result set created by execute;
+   the result set must be a cursor or row;
+   the result is automatically released.
 
+# Examples
+```
+julia> for row in NoW.execute(con, "select * from sales") |> asarray
+           print("$(row[1]), $(row[2])")
+       end
+```
+
+# Related
+  execute, asarray
+"""
 function Base.iterate(res::Result, have=false)
   if !have
      res._type == CURSOR || res._type == ROW || throw(WrongTypeError())
@@ -477,6 +689,14 @@ function Base.iterate(res::Result, have=false)
   return (ret, true)
 end
 
+"""
+    row2array(row::Result)
+
+    transform the row into a vector.
+
+# Related
+  execute, asarray
+"""
 function row2array(row::Result)
   Any[field(row,i) for i in 0:row._fcount-1]
 end
@@ -495,62 +715,133 @@ function _convert(t::Int, v::Ptr{Nothing})
   else nothing end
 end
 
+"""
+    tfield(res::Result, idx::Int)
+
+    return the value at idx in the row as tuple (type, value).
+    The result must be a row; the indexing uses base 0!
+    The type in the tuple is the NoWDB Type.
+
+# Examples
+```
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+             t, v = NoW.tfield(row, 0)
+             println("$v as type $t") 
+         end
+       end
+```
+
+# Related
+  execute, field, fieldcount
+"""
 function tfield(res::Result,idx::Int)
   t, v = _rfield(res._res, idx)
   (t, _convert(t,v))
 end
 
+"""
+    field(res::Result, idx::Int)
+
+    return the value at idx in the row.
+    The result must be a row; the indexing uses base 0!
+
+# Examples
+```
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+             v = NoW.field(row, 0)
+             println(v)
+         end
+       end
+```
+
+# Related
+  execute, tfield, fieldcount
+"""
 function field(res::Result,idx::Int)
   _, v = tfield(res, idx)
   return v
 end
 
+"""
+    fieldcount(res::Result)
+
+    return the number of fields in the row.
+
+# Examples
+```
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+            e = NoW.fieldcount(row)
+            for i=0:e-1
+               println(print("$(NoW.field(row, i)) ")
+            end
+         end
+         println("")
+       end
+```
+
+# Related
+  execute, tfield, field
+"""
 function fieldcount(res::Result) 
   _rcount(res._res)
 end
 
+# init the library
 function _libinit()
   if ccall(("nowdb_client_init", lib), Cuchar, ()) == 0
      error("cannot init nowdbclient lib") # InitError
   end
 end
 
+# close the library
 function _libclose()
   ccall(("nowdb_client_close", lib), Cvoid, ())
 end
 
+# get result type from result
 function _resulttype(r::ResultT)
   ccall(("nowdb_result_type", lib), Cint, (ResultT,), r)
 end
 
+# get result status (ok or not ok) form result
 function _resultstatus(r::ResultT)
   ccall(("nowdb_result_status", lib), Cint, (ResultT,), r)
 end
 
+# check if result status is ok (boolean)
 function _ok(r::ResultT)
   _resultstatus(r) == OK
 end
 
+# check if errcode is EOF
 function _eof(r::ResultT)
   _errcode(r) == EOF
 end
 
+# Get errcode from result
 function _errcode(r::ResultT)
   ccall(("nowdb_result_errcode", lib), Cint, (ResultT,), r)
 end
 
+# Get errmessage from result
 function _errmsg(r::ResultT)
   unsafe_string(ccall(("nowdb_result_details", lib), Cstring, (ResultT,), r))
 end
 
+# Release the result 
 function _release(r::ResultT)
   ccall(("nowdb_result_destroy", lib), Cvoid, (ResultT,), r)
 end
 
+# Get curid from result
 function _curid(r::ResultT)
   ccall(("nowdb_cursor_id", lib), CursorT, (ResultT,), r)
 end
 
+# Advance to next row
 function _nextrow(r::ResultT)
   x = ccall(("nowdb_row_next", lib), Cint, (ResultT,), r)
   if x == EOF return false end
@@ -563,6 +854,7 @@ function _nextrow(r::ResultT)
   return true
 end
 
+# Fetch next bunch of rows
 function _fetch(r::ResultT)
   x = ccall(("nowdb_cursor_fetch", lib), Cint, (ResultT,), r)
   if x == EOF return false end
@@ -578,6 +870,7 @@ function _fetch(r::ResultT)
   return true
 end
 
+# Get field from row  as (type, value) pair
 function _rfield(r::ResultT, idx::Int)
   t::Ref{Cint} = NOTHING
   v = ccall(("nowdb_row_field", lib), Ptr{Cvoid},
@@ -586,14 +879,18 @@ function _rfield(r::ResultT, idx::Int)
   return (Int(t[]), v)
 end
 
+# Count number of fields in row
 function _rcount(r::ResultT)
   ccall(("nowdb_row_count", lib), Cint, (ResultT,), r)
 end
 
+# Select Parser: whitespace
 const white = [' ', '\n', '\r', '\t']
 
+# Select Parser: check if whitespace
 _whitespace(c) = c in white
 
+# Select Parser: skipe whitespace
 function _skipwhite(s)
   x = lastindex(s)
   for i=1:x-1
@@ -602,6 +899,9 @@ function _skipwhite(s)
   return (0,true)
 end
 
+# Select Parser: parse one field in the format
+#                a as b
+#                a
 function _parsefield(s)
   x = lastindex(s); i=1
   instr = 0
@@ -633,6 +933,7 @@ function _parsefield(s)
   return (x,true)
 end
 
+# Select Parser: parse all fields
 function _parsefields(s)
   r = []
   a = 1
@@ -648,6 +949,7 @@ function _parsefields(s)
   return r
 end
 
+# Select Parser: Get alias from field descriptor
 function _alias(f)
   i = lastindex(f)
   e = i
@@ -670,8 +972,10 @@ function _alias(f)
   return f[a:e]
 end
 
+# Select Parser: Get aliases from all field descriptors
 _aliases(fs) = map(_alias, fs)
 
+# Select Parser: parse the select clause
 function _parseselect(con::Connection, stmt)
   s = SubString(stmt)
   i, x = _skipwhite(s)
@@ -689,6 +993,7 @@ function _parseselect(con::Connection, stmt)
   _parsefields(s[i:end]) |> _aliases
 end
 
+# Select Parser: get (mandatory) entity in 'from'
 function _getentity(s)
   i, x = _skipwhite(s)
   i+=1
@@ -707,4 +1012,5 @@ function _getentity(s)
   end
   return s[i:e]
 end
+
 end

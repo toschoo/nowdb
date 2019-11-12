@@ -3,8 +3,8 @@ include("./now.jl")
 using DataFrames
 using Printf: @printf
 
-# NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo") do con
-NoW.withconnection("localhost", "50677", "foo", "bar", "wmo") do con
+NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo") do con
+# NoW.withconnection("localhost", "50677", "foo", "bar", "wmo") do con
   df, x = @timed NoW.loadsql(con, "select * from station", count="select count(*) from station")
   println(typeof(df))
   println(DataFrames.describe(df))
