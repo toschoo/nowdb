@@ -3,7 +3,8 @@ include("./now.jl")
 using Printf: @printf
 using Profile
 
-NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo") do con
+# NoW.withconnection("catull.schoofs.com", "50677", "foo", "bar", "wmo") do con
+NoW.withconnection("localhost", "50677", "foo", "bar", "wmo") do con
   m, x = @timed NoW.fill(con, "select * from station", count="select count(*) from station")
   """
   sz = size(m,1)
