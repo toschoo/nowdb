@@ -36,7 +36,7 @@ export NoConnectionError, ClientError, DBError,
        datetime2now, now2datetime, now2datetimens,
        now2date, now2time, now2datetimepair, now,
        connect, close, reconnect, withconnection,
-       execute, fillsql, loadsql, asarray, onerow, onevalue,
+       execute, fill, asarray, onerow, onevalue,
        tfield, field, fieldcount, release
 
 using Dates, DataFrames, DataFramesMeta
@@ -291,7 +291,7 @@ end
 
 # Examples
 ```
-julia> con = connect("localhost", "50677", "foo", "bar")
+julia> con = NoW.connect("localhost", "50677", "foo", "bar")
 Main.NoW.Connection(0x00000000023f6310, "localhost", "50677", "foo", "bar", "")
 ```
 
@@ -350,8 +350,8 @@ end
 
 # Examples
 ```
-julia> withconnection("localhost", "50677", "foo", "bar", "mydb") do con
-         for row in execute(con, "select * from mytable")
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
            # here we do something
          end
        end
@@ -414,13 +414,13 @@ end
 
 # Examples
 ```
-julia> for row in execute(con, "select * from customer")
+julia> for row in NoW.execute(con, "select * from customer")
          # here we do something
        end
 ```
 
 # Related
-  asarray, fillsql, loadsql, onerow, onevalue
+  asarray, fill, loadsql, onerow, onevalue
 """
 function execute(con::Connection, stmt::String)
   return _execute(con, stmt, Int8(0))
@@ -435,13 +435,13 @@ end
    
 # Examples
 ```
-julia> for row in execute(con, "select * from customer") |> asarray
+julia> for row in NoW.execute(con, "select * from customer") |> asarray
          # here we do something
        end
 ```
 
 # Related
-  execute, fillsql, loadsql, onerow, onevalue
+  execute, fill, loadsql, onerow, onevalue
 """
 function asarray(cur::Result)
   cur._ctype = Int8(1)
@@ -460,11 +460,11 @@ end
 
 # Examples
 ```
-julia> row = onerow(con, "select count(*), sum(amount) from sales where customerid = 123")
+julia> row = NoW.onerow(con, "select count(*), sum(amount) from sales where customerid = 123")
 ```
 
 # Related
-  execute, fillsql, loadsql, onevalue
+  execute, fill, loadsql, onevalue
 """
 function onerow(con::Connection, stmt::String)
   res = execute(con, stmt)
@@ -488,11 +488,11 @@ end
 
 # Examples
 ```
-julia> cnt = onevalue(con, "select count(*) from sales where customerid = 123")
+julia> cnt = NoW.onevalue(con, "select count(*) from sales where customerid = 123")
 ```
 
 # Related
-  execute, fillsql, loadsql, onerow
+  execute, fill, loadsql, onerow
 """
 function onevalue(con::Connection, stmt::String)
   return onerow(con, stmt)[1]
@@ -506,7 +506,7 @@ end
 
 # Examples
 ```
-julia> use(con, "salesdb")
+julia> NoW.use(con, "salesdb")
 ```
 
 # Related
@@ -524,7 +524,7 @@ use(con::Connection, db::String) = if db != "" execute(con, "use $(db)") end
 
 # Examples
 ```
-julia> describe(con, "sales")
+julia> NoW.describe(con, "sales")
 ```
 
 # Related
@@ -546,7 +546,7 @@ end
 
 # Examples
 ```
-julia> now(con)
+julia> NoW.now(con)
 1573563491879453212
 ```
 
@@ -563,7 +563,7 @@ end
    release all resource on server and client related to that result
    (row, cursor, report). The user usually does not need to release results.
    Results are automatically released by the GC; furthermore the iterator
-   on cursors and rows (for row in execute(con, "select * from sales"))
+   on cursors and rows (for row in NoW.execute(con, "select * from sales"))
    releases all resources when ready.
 """
 function release(res::Result)
@@ -573,7 +573,7 @@ function release(res::Result)
 end
 
 """
-   fillsql(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
+   fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
  
    execute the statement and return the result as a matrix.
    The statement must be a select statement.
@@ -582,7 +582,7 @@ end
    - 'T' is a type; if this is given, *all* columns of the matrix will have type T,
      otherwise, they are of type 'Any';
    - 'cols' indicates the number of columns in the select statement;
-     if not present, fillsql will parse the select clause of the statement to obtain this information
+     if not present, fill will parse the select clause of the statement to obtain this information
      and, if necessary, issue a describe statement.
    - 'count' is an additional SQL statement of the form "select count(*) ..."
      to obtain the numbers of rows in the result set;
@@ -593,14 +593,14 @@ end
 
 # Examples
 ```
-julia> fillsql(con, "select * from sales", count="select count(*) from sales")
+julia> NoW.fill(con, "select * from sales", count="select count(*) from sales")
 100×10 Array{Any,2}:
 ```
 
 # Related
   execute, loadsql, describe
 """
-function fillsql(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
+function fill(con::Connection, stmt::String; T=Any, cols=0, count="", limit=0)
   l = limit; i = 1
   c = cols
   if c <= 0 
@@ -639,19 +639,19 @@ end
 
 # Examples
 ```
-julia> loadsql(con, "select * from sales", count="select count(*) from sales")
+julia> NoW.loadsql(con, "select * from sales", count="select count(*) from sales")
 100×10 DataFrames.DataFrame
 ```
 
 # Related
-  execute, fillsql, describe
+  execute, fill, describe
 """
 function loadsql(con::Connection, stmt::String; count="", limit=0)
   fs = _parseselect(con, stmt)
-  df = DataFrames.DataFrame(fillsql(con, stmt,
-                                    cols=size(fs,1),
-                                    count=count,
-                                    limit=limit))
+  df = DataFrames.DataFrame(fill(con, stmt,
+                                 cols=size(fs,1),
+                                 count=count,
+                                 limit=limit))
   DataFrames.names!(df, [Symbol(f) for f in fs])
   return df
 end
@@ -665,7 +665,7 @@ end
 
 # Examples
 ```
-julia> for row in execute(con, "select * from sales") |> asarray
+julia> for row in NoW.execute(con, "select * from sales") |> asarray
            print("\$(row[1]), \$(row[2])")
        end
 ```
@@ -724,9 +724,9 @@ end
 
 # Examples
 ```
-julia> withconnection("localhost", "50677", "foo", "bar", "mydb") do con
-         for row in execute(con, "select * from mytable")
-             t, v = tfield(row, 0)
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+             t, v = NoW.tfield(row, 0)
              println("\$v as type \$t") 
          end
        end
@@ -748,9 +748,9 @@ end
 
 # Examples
 ```
-julia> withconnection("localhost", "50677", "foo", "bar", "mydb") do con
-         for row in execute(con, "select * from mytable")
-             v = field(row, 0)
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+             v = NoW.field(row, 0)
              println(v)
          end
        end
@@ -771,11 +771,11 @@ end
 
 # Examples
 ```
-julia> withconnection("localhost", "50677", "foo", "bar", "mydb") do con
-         for row in execute(con, "select * from mytable")
-            e = fieldcount(row)
+julia> NoW.withconnection("localhost", "50677", "foo", "bar", "mydb") do con
+         for row in NoW.execute(con, "select * from mytable")
+            e = NoW.fieldcount(row)
             for i=0:e-1
-               println(print("\$(field(row, i)) ")
+               println(print("\$(NoW.field(row, i)) ")
             end
          end
          println("")
