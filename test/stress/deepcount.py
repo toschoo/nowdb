@@ -14,6 +14,7 @@ class QThread(threading.Thread):
   def run(self):
     try:
       with Connection("127.0.0.1", "55505", None, None) as con:
+      # with Connection("127.0.0.1", "50677", None, None) as con:
         with con.execute("use retail") as r:
           if not r.ok():
              print("ERROR: %d on use: %s" % (r.code(), r.details()))
