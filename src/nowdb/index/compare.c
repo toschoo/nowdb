@@ -101,6 +101,16 @@ char nowdb_index_vertex_compare(const void *left,
 	return BEET_CMP_EQUAL;
 }
 
+void nowdb_index_grabKeys(nowdb_index_keys_t *k,
+                          const char      *node,
+                          char            *keys) {
+	int off=0, sz=8;
+	for(int i=0; i<k->sz; i++) {
+		memcpy(keys+off, node+k->off[i], sz); off+=sz;
+	}
+}
+
+
 void nowdb_index_grabEdgeKeys(nowdb_index_keys_t *k,
                               const char      *edge,
                               char            *keys) {

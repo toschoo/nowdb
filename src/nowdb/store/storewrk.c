@@ -384,8 +384,7 @@ static inline nowdb_err_t getIndexer(nowdb_store_t  *store,
 	for(runner=idxes.head; runner!=NULL; runner=runner->nxt) {
 		nowdb_index_desc_t *desc= runner->cont;
 		err = nowdb_indexer_init((*xer)+(*n),
-		                         desc->idx,
-		                         store->cont);
+		                          desc->idx);
 		if (err != NOWDB_OK) break;
 		(*n)++;
 	}

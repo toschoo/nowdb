@@ -29,8 +29,7 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
-                               nowdb_index_t   *idx,
-                               nowdb_content_t cont);
+                               nowdb_index_t   *idx);
 
 /* ------------------------------------------------------------------------
  * Destroy one indexer

@@ -144,6 +144,14 @@ int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 #define NOWDB_OFF_VTYPE 24
 #define NOWDB_OFF_ROLE  28
 
+/* should be like this
+ * -------------------
+#define NOWDB_OFF_VERTEX   0
+#define NOWDB_OFF_TMSTMP   8
+#define NOWDB_OFF_STAMP    8
+#define NOWDB_OFF_USER    16
+*/
+
 /* ------------------------------------------------------------------------
  * Vertex Property
  * ---------------
@@ -170,13 +178,16 @@ int nowdb_vertex_offByName(char *field);
  */
 #define NOWDB_OFF_ORIGIN   0
 #define NOWDB_OFF_DESTIN   8
+
+/* to be removed */
 #define NOWDB_OFF_TMSTMP  16
 #define NOWDB_OFF_STAMP   16
 #define NOWDB_OFF_USER    24
 
 int nowdb_edge_offByName(char *field);
 
-// compute the recordsize of an edge with n atts
+// compute the recordsize of a  node with n atts
+// compute the recordsize of an edge with n atts <- edges always 16 bytes
 // if n > 0, the edge is always stamped
 uint32_t nowdb_edge_recSize(char stamped, uint16_t atts);
 
@@ -190,7 +201,7 @@ uint32_t nowdb_pagectrlSize(uint32_t recsz);
 
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL
-uint32_t nowdb_edge_attctrlSize(uint16_t atts);
+uint32_t nowdb_edge_attctrlSize(uint16_t atts); // <- node, not edge
 
 // get attribute control bit and byte for specific offset
 void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,

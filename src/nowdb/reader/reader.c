@@ -712,35 +712,20 @@ static inline nowdb_err_t moveBufIdx(nowdb_reader_t *reader) {
 			               FALSE, OBJECT, NULL);
 		}
 		if (reader->key != NULL) {
-			if (reader->content == NOWDB_CONT_EDGE) {
-				nowdb_index_grabEdgeKeys(reader->ikeys,
-			                       reader->buf+reader->off,
-				                         reader->tmp2);
-			        x = nowdb_index_edge_compare(reader->tmp,
-				                             reader->tmp2,
-				                             reader->ikeys);
-			} else {
-				nowdb_index_grabVertexKeys(reader->ikeys,
-			                         reader->buf+reader->off,
-				                           reader->tmp2);
-			        x = nowdb_index_edge_compare(reader->tmp,
-				                             reader->tmp2,
-				                             reader->ikeys);
-			}
+			nowdb_index_grabKeys(reader->ikeys,
+			           reader->buf+reader->off,
+				             reader->tmp2);
+			x = nowdb_index_edge_compare(reader->tmp,
+				                    reader->tmp2,
+				                  reader->ikeys);
 			if (x != BEET_CMP_EQUAL) {
 				memcpy(reader->tmp, reader->tmp2,
 				             reader->ikeys->sz*8);
 			}
 		} else {
-			if (reader->content == NOWDB_CONT_EDGE) {
-				nowdb_index_grabEdgeKeys(reader->ikeys,
-			                       reader->buf+reader->off,
-				                           reader->tmp);
-			} else {
-				nowdb_index_grabVertexKeys(reader->ikeys,
-			                         reader->buf+reader->off,
-				                            reader->tmp);
-			}
+			nowdb_index_grabKeys(reader->ikeys,
+			           reader->buf+reader->off,
+				              reader->tmp);
 		}
 		reader->key = reader->tmp;
 		if (reader->maps != NULL) {

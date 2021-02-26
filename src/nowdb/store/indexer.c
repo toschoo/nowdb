@@ -86,8 +86,7 @@ ts_algo_rc_t xerupdate(void *x, void *o, void *n) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
-                               nowdb_index_t   *idx,
-                               nowdb_content_t cont) {
+                               nowdb_index_t   *idx) {
 	nowdb_err_t err;
 	xhelper_t   *x;
 	xer->idx = idx;
@@ -113,8 +112,7 @@ nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
 	x->rsc = nowdb_index_getResource(idx);
 	xer->tree->rsc = x;
 
-	x->keysz = cont==NOWDB_CONT_EDGE?nowdb_index_keySizeEdge(x->rsc):
-		                         nowdb_index_keySizeVertex(x->rsc);
+	x->keysz = nowdb_index_keySize(x->rsc);
 	if (x->keysz == 0) {
 		free(x);
 		ts_algo_tree_destroy(xer->tree);
@@ -167,14 +165,7 @@ static inline nowdb_err_t doxer(nowdb_indexer_t *xer,
 		                             "allocating index key");
 	}
 	memset(n->map, 0, store->setsize);
-
-	if (store->cont==NOWDB_CONT_EDGE) {
-		nowdb_index_grabEdgeKeys(XHLPT(xer->tree)->rsc,
-		                                  rec, n->keys);
-	} else {
-		nowdb_index_grabVertexKeys(XHLPT(xer->tree)->rsc,
-		                                    rec, n->keys);
-	}
+	nowdb_index_grabKeys(XHLPT(xer->tree)->rsc, rec, n->keys);
 	xerupdate(xer->tree, n, NULL);
 	if (ts_algo_tree_insert(xer->tree, n) != TS_ALGO_OK) {
 		xerdestroy(NULL, (void**)&n);
