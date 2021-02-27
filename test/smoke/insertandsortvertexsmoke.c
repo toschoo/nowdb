@@ -16,9 +16,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define WEIGHT_OFF NOWDB_OFF_USER
 
 void setRandomValue(char *e, uint32_t off) {
 	uint64_t x;
@@ -30,13 +28,9 @@ void setValue(char *e, uint32_t off, uint64_t v) {
 	memcpy(e+off, &v, 8);
 }
 
-void makeEdgePattern(char *e) {
-	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
-	setValue(e, NOWDB_OFF_DESTIN, 0xb);
+void makeVrtxPattern(char *e) {
+	setValue(e, NOWDB_OFF_VERTEX, 0xa);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
-	setValue(e, EDGE_OFF, 0xc);
-	setValue(e, LABEL_OFF, 0xd);
 	setValue(e, WEIGHT_OFF, 0);
 }
 
@@ -49,32 +43,32 @@ void makeEdgePattern(char *e) {
 #define ONEANDHALF (FULL+HALF)
 #define DELAY   10000000
 
-nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
+nowdb_bool_t insertVrtxs(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
-	char *e;
+	char *v;
 	uint64_t max = count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 
-	e = calloc(1, recsz);
-	if (e == NULL) {
+	v = calloc(1, recsz);
+	if (v == NULL) {
 		fprintf(stderr, "out-of-mem\n");
 		return FALSE;
 	}
 
-	makeEdgePattern(e);
+	makeVrtxPattern(v);
 	for(uint64_t i=0; i<max; i++) {
-		setValue(e, WEIGHT_OFF, i);
-		err = nowdb_store_insert(store, e);
+		setValue(v, WEIGHT_OFF, i);
+		err = nowdb_store_insert(store, v);
 		if (err != NOWDB_OK) {
 			fprintf(stderr, "insert error\n");
 			nowdb_err_print(err);
 			nowdb_err_release(err);
-			free(e); return FALSE;
+			free(v); return FALSE;
 		}
 	}
 	fprintf(stderr, "inserted %u from 0, to %lu\n",
-	       count, *(uint64_t*)(e+WEIGHT_OFF));
-	free(e);
+	       count, *(uint64_t*)(v+WEIGHT_OFF));
+	free(v);
 	return TRUE;
 }
 
@@ -109,10 +103,10 @@ nowdb_bool_t waitForSort(nowdb_store_t *store) {
 
 nowdb_bool_t checkSorted(nowdb_file_t *file) {
 	nowdb_err_t err;
-	char *e=NULL;
+	char *v=NULL;
 	char *last;
 	char first = 1;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 	uint32_t realsz = NOWDB_IDX_PAGE/recsz;
 	uint32_t remsz = NOWDB_IDX_PAGE - realsz;
 
@@ -161,35 +155,25 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 			if (i >= realsz) {
 				i+=remsz; continue;
 			}
-			e = (file->bptr+i);
+			v = (file->bptr+i);
 			if (first) {
-				memcpy(last,e,recsz); first = 0; continue;
+				memcpy(last,v,recsz); first = 0; continue;
 			}
-			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) <
-			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN)) {
-				fprintf(stderr, "not sorted (origin)\n");
+			if (*(uint64_t*)(v+NOWDB_OFF_VERTEX) <
+			    *(uint64_t*)(last+NOWDB_OFF_VERTEX)) {
+				fprintf(stderr, "not sorted (vertex)\n");
 				NOWDB_IGNORE(nowdb_file_close(file));
 				free(last); return FALSE;
 			}
-			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) ==
-			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN) &&
-			    *(uint64_t*)(e+NOWDB_OFF_DESTIN) <
-			    *(uint64_t*)(last+NOWDB_OFF_DESTIN)) {
-				fprintf(stderr, "not sorted (destin)\n");
-				NOWDB_IGNORE(nowdb_file_close(file));
-				free(last); return FALSE;
-			}
-			if (*(uint64_t*)(e+NOWDB_OFF_ORIGIN) ==
-			    *(uint64_t*)(last+NOWDB_OFF_ORIGIN) &&
-			    *(uint64_t*)(e+NOWDB_OFF_DESTIN) ==
-			    *(uint64_t*)(last+NOWDB_OFF_DESTIN) &&
-			    *(uint64_t*)(e+NOWDB_OFF_STAMP) <
+			if (*(uint64_t*)(v+NOWDB_OFF_VERTEX) ==
+			    *(uint64_t*)(last+NOWDB_OFF_VERTEX) &&
+			    *(uint64_t*)(v+NOWDB_OFF_STAMP) <
 			    *(uint64_t*)(last+NOWDB_OFF_STAMP)) {
 				fprintf(stderr, "%d: not sorted (timestamp)\n", i);
 				NOWDB_IGNORE(nowdb_file_close(file));
 				free(last); return FALSE;
 			}
-			memcpy(last,e,recsz);
+			memcpy(last,v,recsz);
 			i+=file->recordsize;
 		}
 	}
@@ -250,16 +234,16 @@ int main() {
 		fprintf(stderr, "cannot init library\n");
 		return EXIT_FAILURE;
 	}
-	store = xBootstrap("rsc/store30", NOWDB_CONT_EDGE,
-                              compare, NOWDB_COMP_ZSTD, 1,
-	                    recsz, NOWDB_MEGA, NOWDB_MEGA);
+	store = xBootstrap("rsc/store30", NOWDB_CONT_VERTEX,
+                                compare, NOWDB_COMP_ZSTD, 1,
+	                     recsz, NOWDB_MEGA, NOWDB_MEGA);
 	if (store == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 
 	timestamp(&t1);
-	if (!insertEdges(store, ONEANDHALF)) {
+	if (!insertVrtxs(store, ONEANDHALF)) {
 		fprintf(stderr, "cannot insert\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}

@@ -1,2 +1,6 @@
 mydocs
 wrk
+rsc
+**/*.o
+**/*.so
+**/.*.swp

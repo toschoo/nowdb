@@ -602,9 +602,10 @@ static uint32_t computeVertexSize(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_vertex_t *v;
 
+	// 0 + roleid + vid + num + size + ctrl
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		v = runner->cont;
-		sz+=strlen(v->name) + 1 + 4 + 1;
+		sz+=strlen(v->name) + 1 + 4 + 1 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -619,10 +620,10 @@ static uint32_t computePropSize(ts_algo_list_t *list) {
 	nowdb_model_prop_t *p;
 
 	/* size(prop) = strlen(name) + '\0' + propid (8)
-	 *            + roleid(4) + pos(4) + value(4) + pk(1) */
+	 *            + roleid(4) + pos(4) + value(4) + pk(1) + offset */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		p = runner->cont;
-		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1;
+		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1 + 4;
 	}
 	return sz;
 }
@@ -674,6 +675,9 @@ static void vertex2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		v = runner->cont;
 		memcpy(buf+sz, &v->roleid, 4); sz+=4;
 		memcpy(buf+sz, &v->vid, 1); sz+=1;
+		memcpy(buf+sz, &v->num, 2); sz+=2;
+		memcpy(buf+sz, &v->size, 4); sz+=4;
+		memcpy(buf+sz, &v->ctrl, 4); sz+=4;
 		strcpy(buf+sz, v->name); sz+=strlen(v->name)+1;
 	}
 }
@@ -694,6 +698,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &p->pos, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
 		memcpy(buf+sz, &p->pk, 1); sz+=1;
+		memcpy(buf+sz, &p->off, 1); sz+=4;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
 }
@@ -845,6 +850,9 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 		}
 		memcpy(&v->roleid, buf+off, 4); off+=4;
 		memcpy(&v->vid, buf+off, 1); off+=1;
+		memcpy(&v->num, buf+off, 2); off+=2;
+		memcpy(&v->size, buf+off, 4); off+=4;
+		memcpy(&v->ctrl, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
 			free(v);
@@ -889,6 +897,7 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		memcpy(&p->pos, buf+off, 4); off+=4;
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->pk, buf+off, 1); off+=1;
+		memcpy(&p->off, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
 			free(p);
@@ -1398,13 +1407,26 @@ static char propUnique(ts_algo_list_t *props,
  */
 static nowdb_err_t propsUnique(nowdb_model_t  *model,
                                nowdb_roleid_t roleid,
-                               ts_algo_list_t *props) {
+                               ts_algo_list_t *props,
+                               uint16_t         *num, 
+                               uint32_t        *size,
+                               uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t  *p, *tmp;
+	uint32_t off, xb;
+
+	xb  = nowdb_edge_attctrlSize(props->len);
+	off = xb;
+ 
+        *ctrl = xb;
 
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		p = runner->cont;
 		p->roleid = roleid;
+		p->off = off; off+=8;
+
+		(*num)++;
+
 		tmp = ts_algo_tree_find(model->propById, p);
 		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
 		                                 FALSE, OBJECT, p->name);
@@ -1416,6 +1438,7 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		                        FALSE, OBJECT, p->name);
 		}
 	}
+	(*size)=off;
 	return NOWDB_OK;
 }
 
@@ -1536,6 +1559,8 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 
 	MODELNULL();
 
+	fprintf(stderr, "ADDING TYPE '%s'\n", name);
+
 	err = nowdb_lock_write(&model->lock);
 	if (err != NOWDB_OK) return err;
 
@@ -1568,6 +1593,9 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	}
 
 	vrtx->roleid = getNextRoleid(model);
+	vrtx->num    = 0;
+	vrtx->ctrl   = 0;
+	vrtx->size   = 0;
 
 	if (prop != NULL) {
 		vrtx->vid = prop->value==NOWDB_TYP_TEXT?
@@ -1578,12 +1606,15 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	}
 
 	if (props != NULL) {
-		err = propsUnique(model, vrtx->roleid, props);
+		err = propsUnique(model, vrtx->roleid, props,
+		        &vrtx->num, &vrtx->size, &vrtx->ctrl);
 		if (err != NOWDB_OK) {
 			free(vrtx->name); free(vrtx);
 			goto unlock;
 		}
 	}
+
+	fprintf(stderr, "Vertex atts: %hu, size: %u\n", vrtx->num, vrtx->size);
 
 	err = addNL(model->vrtxById,
 	            model->vrtxByName,

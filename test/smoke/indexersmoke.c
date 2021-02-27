@@ -79,6 +79,38 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	return TRUE;
 }
 
+nowdb_bool_t insertVrtxs(nowdb_store_t *store, uint32_t count) {
+	nowdb_err_t err;
+	char *v;
+	uint32_t sz;
+
+	fprintf(stderr, "inserting %u random vertexes\n", count);
+
+	sz = nowdb_vrtx_recSize(1, 2);
+	fprintf(stderr, "allocating %u bytes\n", sz);
+	v = calloc(1, sz);
+	if (v == NULL) {
+		fprintf(stderr, "out-of-mem\n"); return 0;
+	}
+	memset(v,0,sz);
+	for(uint64_t i=0; i<count; i++) {
+
+	        memcpy(v+NOWDB_OFF_VERTEX, &i, 8);
+		setRandomValue(v, NOWDB_OFF_STAMP); // stamp only if there is!
+
+		err = nowdb_store_insert(store, v);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "insert error\n");
+			nowdb_err_print(err);
+			nowdb_err_release(err);
+			return FALSE;
+		}
+	}
+	free(v);
+	fprintf(stderr, "inserted...\n");
+	return TRUE;
+}
+
 nowdb_bool_t waitForSort(nowdb_store_t *store) {
 	nowdb_err_t err;
 	int max = 1000;
@@ -184,22 +216,25 @@ int closeScope(nowdb_scope_t *scope) {
 	return 1;
 }
 
-int createContext(nowdb_scope_t *scope, char *name) {
+int createContext(nowdb_scope_t *scope, char strg, char *name) {
 	nowdb_err_t err;
-	nowdb_storage_config_t cfg;
 
-	cfg.filesize  = NOWDB_MEGA;
-	cfg.largesize = NOWDB_MEGA;
-	cfg.sorters   = 1;
-	cfg.sort      = 1;
-	cfg.comp      = NOWDB_COMP_ZSTD;
-	cfg.encp      = NOWDB_ENCP_NONE;
+	if (strg) {
+		nowdb_storage_config_t cfg;
 
-	err = nowdb_scope_createStorage(scope, "test", &cfg);
-	if (err != NOWDB_OK) {
-		fprintf(stderr, "create storage failed\n");
-		nowdb_err_print(err); nowdb_err_release(err);
-		return 0;
+		cfg.filesize  = NOWDB_MEGA;
+		cfg.largesize = NOWDB_MEGA;
+		cfg.sorters   = 1;
+		cfg.sort      = 1;
+		cfg.comp      = NOWDB_COMP_ZSTD;
+		cfg.encp      = NOWDB_ENCP_NONE;
+
+		err = nowdb_scope_createStorage(scope, "test", &cfg);
+		if (err != NOWDB_OK) {
+			fprintf(stderr, "create storage failed\n");
+			nowdb_err_print(err); nowdb_err_release(err);
+			return 0;
+		}
 	}
 
 	fprintf(stderr, "creating context %s\n", name);
@@ -550,7 +585,7 @@ nowdb_context_t *getContext(nowdb_scope_t *scope,
 	nowdb_err_t      err;
 	nowdb_context_t *ctx;
 
-	err = nowdb_scope_getContext(scope, "MYEDGE", &ctx);
+	err = nowdb_scope_getContext(scope, ctxname, &ctx);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -563,6 +598,7 @@ int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_scope_t *scope = NULL;
 	nowdb_context_t *ctx;
+	nowdb_context_t *vtx;
 
 	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init environment\n");
@@ -591,8 +627,12 @@ int main() {
 		fprintf(stderr, "cannot create edge one\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!createContext(scope, "MYEDGE")) {
+	if (!createContext(scope, 1, "MYEDGE")) {
 		fprintf(stderr, "cannot create context one\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!createContext(scope, 0, "product")) {
+		fprintf(stderr, "cannot create context product\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	/*
@@ -626,12 +666,29 @@ int main() {
 		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!insertEdges(&ctx->store, 2*ONE)) {
+	if (!insertEdges(&ctx->store, 3*ONE)) {
 		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!waitForSort(&ctx->store)) {
 		fprintf(stderr, "MYEDGE does not get sorted\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	vtx = getContext(scope, "product");
+	if (vtx == NULL) {
+		fprintf(stderr, "cannot get context product\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertVrtxs(&vtx->store, ONE)) {
+		fprintf(stderr, "cannot insert into product\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertVrtxs(&vtx->store, 3*ONE)) {
+		fprintf(stderr, "cannot insert into product\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!waitForSort(&vtx->store)) {
+		fprintf(stderr, "product does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!closeScope(scope)) {
@@ -647,12 +704,25 @@ int main() {
 		fprintf(stderr, "cannot get context MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!insertEdges(&ctx->store, 3*ONE)) {
+	if (!insertEdges(&ctx->store, 4*ONE)) {
 		fprintf(stderr, "cannot insert into MYEDGE\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!waitForSort(&ctx->store)) {
 		fprintf(stderr, "MYEDGE does not get sorted\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	vtx = getContext(scope, "product");
+	if (vtx == NULL) {
+		fprintf(stderr, "cannot get context product\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!insertVrtxs(&vtx->store, 3*ONE)) {
+		fprintf(stderr, "cannot insert into MYEDGE\n");
+		rc = EXIT_FAILURE; goto cleanup;
+	}
+	if (!waitForSort(&vtx->store)) {
+		fprintf(stderr, "product does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 

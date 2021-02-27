@@ -430,6 +430,7 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		}
 		break;
 
+	/*
 	case NOWDB_OFF_STAMP:
 		if (val->type == NOWDB_TYP_DATE ||
                     val->type == NOWDB_TYP_TIME) break;
@@ -439,6 +440,7 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 			INVALID("not a valid timestamp");
 		}
 		break;
+	*/
 
 	default:
 		if (fname == NULL) {
@@ -582,7 +584,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		switch(off) {
 		case NOWDB_OFF_ORIGIN: o++; break;
 		case NOWDB_OFF_DESTIN: d++; break;
-		case NOWDB_OFF_STAMP:  t++; break;
+		// case NOWDB_OFF_STAMP:  t++; break;
 		}
 
 		val = vrun->cont;

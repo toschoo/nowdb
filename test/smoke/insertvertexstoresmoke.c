@@ -14,19 +14,7 @@
 #include <stdlib.h>
 #include <limits.h>
 
-/*
-uint64_t origin;
-uint64_t destin;
-int64_t  timestamp;
-char     byte; // control byte
-uint64_t edge;
-uint64_t label;
-uint64_t weight;
-*/
-
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define WEIGHT_OFF NOWDB_OFF_USER
 
 void setRandomValue(char *e, uint32_t off) {
 	uint64_t x;
@@ -38,14 +26,10 @@ void setValue(char *e, uint32_t off, uint64_t v) {
 	memcpy(e+off, &v, 8);
 }
 
-void makeEdgePattern(char *e) {
-	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
-	setValue(e, NOWDB_OFF_DESTIN, 0xb);
+void makeVrtxPattern(char *e) {
+	setValue(e, NOWDB_OFF_VERTEX, 0xa);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
-	setValue(e, EDGE_OFF, 0xc);
-	setValue(e, LABEL_OFF, 0xd);
-	setValue(e, WEIGHT_OFF, 0);
+	setValue(e, WEIGHT_OFF, 3);
 }
 
 #define RECPAGE (NOWDB_IDX_PAGE/recsz)
@@ -54,11 +38,11 @@ void makeEdgePattern(char *e) {
 #define FULLPOS NOWDB_MEGA
 #define HALFPOS (FULLPOS/2)
 
-nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
+nowdb_bool_t insertVrtxs(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	nowdb_err_t err;
 	char *e;
 	uint64_t max = start + count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 
 	e = calloc(1, recsz);
 	if (e == NULL) {
@@ -66,7 +50,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 		return FALSE;
 	}
 
-	makeEdgePattern(e);
+	makeVrtxPattern(e);
 	for(uint64_t i=start; i<max; i++) {
 		setValue(e, WEIGHT_OFF, i);
 		err = nowdb_store_insert(store, e);
@@ -108,7 +92,7 @@ nowdb_bool_t checkInitial(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkHalf(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
@@ -135,7 +119,7 @@ nowdb_bool_t checkHalf(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkFull(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
 		return FALSE;
@@ -172,7 +156,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	uint32_t remsz;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_vrtx_recSize(1,3);
 	realsz = (NOWDB_IDX_PAGE/recsz)*recsz;
 	remsz = NOWDB_IDX_PAGE - realsz;
 
@@ -235,7 +219,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 		}
 	}
 	if (e == NULL) {
-		fprintf(stderr, "no edge\n");
+		fprintf(stderr, "no vertex\n");
 		if (closeit) NOWDB_IGNORE(nowdb_file_close(file));
 		return FALSE;
 	}
@@ -262,7 +246,7 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	nowdb_err_t      err;
 	ts_algo_list_t files;
 	nowdb_file_t   *file;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_vrtx_recSize(1,3);
 	ts_algo_list_node_t *runner;
 	ts_algo_list_init(&files);
 
@@ -329,10 +313,10 @@ int main() {
 	nowdb_store_t *store;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_vrtx_recSize(1,3);
 
 	nowdb_err_init();
-	store = bootstrap("rsc/store10", NOWDB_CONT_EDGE, recsz);
+	store = bootstrap("rsc/store10", NOWDB_CONT_VERTEX, recsz);
 	if (store == NULL) {
 		fprintf(stderr, "cannot create store\n");
 		rc = EXIT_FAILURE; goto cleanup;
@@ -341,16 +325,16 @@ int main() {
 		fprintf(stderr, "checkInitial failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!insertEdges(store, HALF, 0)) {
-		fprintf(stderr, "insertEdges failed\n");
+	if (!insertVrtxs(store, HALF, 0)) {
+		fprintf(stderr, "insertVrtxs failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!checkHalf(store)) {
 		fprintf(stderr, "checkHalf failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
-	if (!insertEdges(store, FULL, HALF)) {
-		fprintf(stderr, "insertEdges (2) failed\n");
+	if (!insertVrtxs(store, FULL, HALF)) {
+		fprintf(stderr, "insertVrtxs (2) failed\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
 	if (!checkFull(store)) {

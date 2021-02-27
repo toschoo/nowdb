@@ -170,20 +170,6 @@ int nowdb_vertex_offByName(char *fld) {
 	if (strcasecmp(fld, "vid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertexid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertex") == 0) return NOWDB_OFF_VERTEX;
-	if (strcasecmp(fld, "prop") == 0) return NOWDB_OFF_PROP;
-	if (strcasecmp(fld, "property") == 0) return NOWDB_OFF_PROP;
-	if (strcasecmp(fld, "value") == 0) return NOWDB_OFF_VALUE;
-	if (strcasecmp(fld, "vtype") == 0) return NOWDB_OFF_VTYPE;
-	if (strcasecmp(fld, "type") == 0) return NOWDB_OFF_VTYPE;
-	if (strcasecmp(fld, "role") == 0) return NOWDB_OFF_ROLE;
-	return -1;
-}
-
-int nowdb_edge_offByName(char *fld) {
-	if (fld == NULL) return -1;
-	if (strcasecmp(fld, "origin") == 0) return NOWDB_OFF_ORIGIN;
-	if (strcasecmp(fld, "destin") == 0) return NOWDB_OFF_DESTIN;
-	if (strcasecmp(fld, "destination") == 0) return NOWDB_OFF_DESTIN;
 	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_STAMP;
 	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_STAMP;
 	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_STAMP;
@@ -192,14 +178,15 @@ int nowdb_edge_offByName(char *fld) {
 	return -1;
 }
 
+int nowdb_edge_offByName(char *fld) {
+	if (fld == NULL) return -1;
+	if (strcasecmp(fld, "origin") == 0) return NOWDB_OFF_ORIGIN;
+	if (strcasecmp(fld, "destin") == 0) return NOWDB_OFF_DESTIN;
+	if (strcasecmp(fld, "destination") == 0) return NOWDB_OFF_DESTIN;
+	return -1;
+}
+
 int nowdb_sizeByOff(nowdb_content_t content, uint16_t off) {
-	if (content == NOWDB_CONT_VERTEX) {
-		switch(off) {
-		case NOWDB_OFF_VTYPE:
-		case NOWDB_OFF_ROLE: return 4;
-		default: return 8;
-		}
-	}
 	return 8;
 }
 
@@ -235,6 +222,15 @@ static inline uint32_t edgeAttctrlSize(uint16_t atts) {
 	return (atts%8==0?atts/8:atts/8+1);
 }
 
+static inline uint32_t vrtxRecSize(char stamped, uint16_t atts) {
+	uint16_t xb = edgeAttctrlSize(atts);
+	return (xb+8*atts);
+}
+
+uint32_t nowdb_vrtx_recSize(char stamped, uint16_t atts) {
+	return vrtxRecSize(stamped, atts);
+}
+
 static inline uint32_t edgeRecSize(char stamped, uint16_t atts) {
 	if (atts == 0) {
 		if (stamped) return 24; else return 16;
@@ -256,9 +252,8 @@ uint32_t nowdb_recordsPerPage(uint32_t recsize) {
 }
 
 static inline uint32_t pagectrlSize(uint32_t recsz) {
-	if (recsz <= 24) return 0;
 	uint32_t rp = recordsPerPage(recsz);
-	return (rp%8==0?rp/8:rp/8+1);
+	return (rp%8==0?rp/8:rp/8+2);
 }
 
 uint32_t nowdb_pagectrlSize(uint32_t recsz) {

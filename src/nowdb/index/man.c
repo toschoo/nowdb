@@ -229,9 +229,9 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 
 	/* get name */
 	for(i=0;i<sz && buf[i] != 0;i++) {
-		/* fprintf(stderr, "%c ", buf[i]); */
+		fprintf(stderr, "%c ", buf[i]); 
 	}
-	/* fprintf(stderr, "\n"); */
+	fprintf(stderr, "\n");
 	
 	if (i>=sz-4 || i == 0) {
 		return nowdb_err_get(nowdb_err_catalog, FALSE, OBJECT,
@@ -281,6 +281,8 @@ static nowdb_err_t line2desc(nowdb_index_man_t   *man,
 	                                  "no keys in index catalog");
 	}
 	keys->sz  = s;
+
+	fprintf(stderr, "keysize: %u\n", keys->sz);
 
 	/* get offsets */
 	keys->off = calloc(s, sizeof(uint16_t));
@@ -423,6 +425,7 @@ static nowdb_err_t writeDesc(nowdb_index_man_t  *man,
 		}
 	}
 	s = desc->keys->sz;
+	fprintf(stderr, "writing %s: %u\n", desc->name, desc->keys->sz);
 	if (fwrite(&desc->keys->sz, 2, 1, man->file) != 1) {
 		return nowdb_err_get(nowdb_err_write,
 			     TRUE, OBJECT, man->path);

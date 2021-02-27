@@ -206,7 +206,7 @@ int main() {
 
 	nowdb_err_init();
 	fprintf(stderr, "uncompressed...\n");
-	store1 = bootstrap("rsc/store40", recsz);
+	store1 = bootstrap("rsc/store40", NOWDB_CONT_EDGE, recsz);
 	if (store1 == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");
 		return EXIT_FAILURE;
@@ -239,7 +239,7 @@ int main() {
 	}
 	nowdb_store_destroy(store1); free(store1); store1=NULL;
 
-	store2 = xBootstrap("rsc/store50", &nowdb_sort_edge_compare,
+	store2 = xBootstrap("rsc/store50", NOWDB_CONT_EDGE, &nowdb_sort_edge_compare,
 	          NOWDB_COMP_ZSTD, 2, recsz, NOWDB_MEGA, NOWDB_MEGA);
 	if (store2 == NULL) {
 		fprintf(stderr, "cannot bootstrap\n");

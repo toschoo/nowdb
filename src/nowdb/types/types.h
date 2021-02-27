@@ -135,22 +135,21 @@ int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 #define NOWDB_VERTEX_SIZE 32
 
 /* ------------------------------------------------------------------------
- * Vertex Offsets
+ * Offsets
  * ------------------------------------------------------------------------
  */
 #define NOWDB_OFF_VERTEX 0
-#define NOWDB_OFF_PROP   8
-#define NOWDB_OFF_VALUE 16
-#define NOWDB_OFF_VTYPE 24
-#define NOWDB_OFF_ROLE  28
+#define NOWDB_OFF_ORIGIN 0
+#define NOWDB_OFF_DESTIN 8
+#define NOWDB_OFF_TMSTMP 8
+#define NOWDB_OFF_STAMP  8
+#define NOWDB_OFF_USER  16
 
-/* should be like this
- * -------------------
-#define NOWDB_OFF_VERTEX   0
-#define NOWDB_OFF_TMSTMP   8
-#define NOWDB_OFF_STAMP    8
-#define NOWDB_OFF_USER    16
-*/
+/* to be removed */
+#define NOWDB_OFF_ROLE 128
+#define NOWDB_OFF_PROP 256
+#define NOWDB_OFF_VTYPE 512
+#define NOWDB_OFF_VALUE 1024
 
 /* ------------------------------------------------------------------------
  * Vertex Property
@@ -176,15 +175,12 @@ int nowdb_vertex_offByName(char *field);
  * Edge Offsets
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OFF_ORIGIN   0
-#define NOWDB_OFF_DESTIN   8
-
-/* to be removed */
-#define NOWDB_OFF_TMSTMP  16
-#define NOWDB_OFF_STAMP   16
-#define NOWDB_OFF_USER    24
 
 int nowdb_edge_offByName(char *field);
+
+// compute the recordsize of a  node with n atts
+// if n > 0, the edge is always stamped
+uint32_t nowdb_vrtx_recSize(char stamped, uint16_t atts);
 
 // compute the recordsize of a  node with n atts
 // compute the recordsize of an edge with n atts <- edges always 16 bytes

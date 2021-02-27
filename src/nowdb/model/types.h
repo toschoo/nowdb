@@ -47,10 +47,12 @@ typedef struct {
 	uint32_t            pos; /* keep properties ordered        */
 	nowdb_type_t      value; /* type of the property value     */
 	nowdb_bool_t         pk; /* this one is PK                 */
+	uint32_t            off; /* row offset                     */
 } nowdb_model_prop_t;
 
 /* ------------------------------------------------------------------------
  * Edge Property Model
+ * to be removed
  * ------------------------------------------------------------------------
  */
 typedef struct {
@@ -66,9 +68,13 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 typedef struct {
-	char             *name; /* name of the vertex  */
-	nowdb_roleid_t  roleid; /* roleid              */
-	nowdb_model_type_t vid; /* is the vid texutal? */
+	char               *name; /* name of the vertex    */
+	nowdb_roleid_t    roleid; /* roleid                */
+	nowdb_model_type_t   vid; /* is the vid texutal?   */
+	nowdb_model_pedge_t   tp; /* stamp  pedge          */
+	uint16_t             num; /* number of attributes  */
+	uint32_t            ctrl; /* size of control block */
+	uint32_t            size; /* size of edge          */
 } nowdb_model_vertex_t;
 
 /* ------------------------------------------------------------------------

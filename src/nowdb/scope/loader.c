@@ -747,6 +747,11 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * Vertex offsets
  * ------------------------------------------------------------------------
  */
+#define NOWDB_OFF_PROP 0
+#define NOWDB_OFF_VALUE 0
+#define NOWDB_OFF_VTYPE 0
+#define NOWDB_OFF_ROLE  0
+
 #define VERTEX  NOWDB_OFF_VERTEX
 #define PROP    NOWDB_OFF_PROP
 #define VALUE   NOWDB_OFF_VALUE

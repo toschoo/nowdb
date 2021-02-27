@@ -218,6 +218,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/filesmoke               \
 	$(SMK)/storesmoke              \
 	$(SMK)/insertstoresmoke        \
+	$(SMK)/insertvertexstoresmoke  \
 	$(SMK)/insertandsortstoresmoke \
 	$(SMK)/readersmoke             \
 	$(SMK)/exprsmoke               \
@@ -418,6 +419,15 @@ $(SMK)/insertstoresmoke:	$(LIB) $(DEP) $(SMK)/insertstoresmoke.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
 
+$(SMK)/insertvertexstoresmoke:	$(LIB) $(DEP) $(SMK)/insertvertexstoresmoke.o \
+			        $(COM)/stores.o \
+			        $(COM)/bench.o
+				$(LNKMSG)
+				$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                         $(COM)/stores.o \
+			                         $(COM)/bench.o  \
+				                 $(libs) -lnowdb
+
 $(SMK)/readersmoke:	$(LIB) $(DEP) $(SMK)/readersmoke.o \
 			$(COM)/stores.o \
 			$(COM)/bench.o
@@ -462,6 +472,15 @@ $(SMK)/insertandsortstoresmoke:	$(LIB) $(DEP) $(SMK)/insertandsortstoresmoke.o \
 			        $(COM)/bench.o
 				$(LNKMSG)
 				$(CC) $(LDFLAGS) -o $@ $@.o      \
+			                         $(COM)/stores.o \
+			                         $(COM)/bench.o  \
+				                 $(libs) -lnowdb
+
+$(SMK)/insertandsortvertexsmoke:	$(LIB) $(DEP) $(SMK)/insertandsortvertexsmoke.o \
+			        	$(COM)/stores.o \
+			   	     $(COM)/bench.o
+					$(LNKMSG)
+					$(CC) $(LDFLAGS) -o $@ $@.o      \
 			                         $(COM)/stores.o \
 			                         $(COM)/bench.o  \
 				                 $(libs) -lnowdb
@@ -775,6 +794,7 @@ clean:
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
+	rm -f $(SMK)/insertstorevertexsmoke
 	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/exprsmoke
 	rm -f $(SMK)/filtersmoke
@@ -783,6 +803,7 @@ clean:
 	rm -f $(SMK)/vrowsmoke
 	rm -f $(SMK)/pmansmoke
 	rm -f $(SMK)/insertandsortstoresmoke
+	rm -f $(SMK)/insertandsortvertexsmoke
 	rm -f $(SMK)/scopesmoke
 	rm -f $(SMK)/scopesmoke2
 	rm -f $(SMK)/imansmoke

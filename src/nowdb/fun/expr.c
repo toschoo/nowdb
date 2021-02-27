@@ -1099,10 +1099,12 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		}
 		break;
 
+	/*
 	case NOWDB_OFF_STAMP:
 		*t = NOWDB_TYP_TIME;
 		*res = src+NOWDB_OFF_STAMP;
 		break;
+	*/
 
 	default:
 		HANDLENULL(src,field);

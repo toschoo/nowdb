@@ -187,8 +187,8 @@ static inline nowdb_err_t revokeResidence(nowdb_store_t *store, char *buf) {
 	err = nowdb_lock_write(&store->lock);
 	if (err != NOWDB_OK) return err;
 
-	nowdb_plru12_revoke(store->lru,
-	                  *(nowdb_roleid_t*)(buf+NOWDB_OFF_ROLE),
+	nowdb_plru12_revoke(store->lru, 0, // roleid should be removed,
+                                           // this should be plru8
 	                  *(nowdb_key_t*)(buf+NOWDB_OFF_VERTEX));
 
 	err = nowdb_unlock_write(&store->lock);

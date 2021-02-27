@@ -1,6 +1,8 @@
 #include <nowdb/store/store.h>
 
-nowdb_store_t *mkStoreBlock(nowdb_path_t path, nowdb_comp_t comp,
+nowdb_store_t *mkStoreBlock(nowdb_path_t path,
+                            nowdb_content_t content,
+                            nowdb_comp_t comp,
                             uint32_t recsz, uint32_t block, uint32_t large) {
 	nowdb_storage_t *storage;
 	nowdb_storage_config_t cfg;
@@ -21,7 +23,7 @@ nowdb_store_t *mkStoreBlock(nowdb_path_t path, nowdb_comp_t comp,
 		return NULL;
 	}
 	err = nowdb_store_new(&store, path, NULL, 1,
-	                     NOWDB_CONT_EDGE, storage, recsz, 1);
+	                     content, storage, recsz, 1);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
@@ -31,8 +33,8 @@ nowdb_store_t *mkStoreBlock(nowdb_path_t path, nowdb_comp_t comp,
 	return store;
 }
 
-nowdb_store_t *mkStore(nowdb_path_t path) {
-	return mkStoreBlock(path, 1, 64, NOWDB_MEGA, NOWDB_MEGA);
+nowdb_store_t *mkStore(nowdb_path_t path, nowdb_content_t content) {
+	return mkStoreBlock(path, content, 1, 64, NOWDB_MEGA, NOWDB_MEGA);
 }
 
 nowdb_bool_t createStore(nowdb_store_t *store) {
@@ -112,6 +114,7 @@ nowdb_bool_t closeStore(nowdb_store_t *store) {
 }
 
 nowdb_store_t *xBootstrap(nowdb_path_t       path,
+                          nowdb_content_t content,
                           nowdb_comprsc_t compare,
                           nowdb_comp_t   compress,
                           uint32_t        tasknum,
@@ -120,14 +123,14 @@ nowdb_store_t *xBootstrap(nowdb_path_t       path,
                           uint32_t          large) {
 	nowdb_err_t      err;
 	nowdb_store_t *store=NULL;
-	store = mkStore(path);
+	store = mkStore(path,content);
 	if (store == NULL) return NULL;
 	if (openStore(store)) {
 		if (!closeStore(store)) goto failure;
 		if (!dropStore(store)) goto failure;
 	}
 	destroyStore(store); free(store);
-	store = mkStoreBlock(path, compress, recsize, block, large);
+	store = mkStoreBlock(path, content, compress, recsize, block, large);
 	if (store == NULL) return NULL;
 	if (store->storage != NULL) {
 		if (!startStorage(store)) goto failure;
@@ -158,7 +161,9 @@ failure:
 	return NULL;
 }
 
-nowdb_store_t *bootstrap(nowdb_path_t path, uint32_t recsz) {
-	return xBootstrap(path, NULL, NOWDB_COMP_FLAT, 1,
+nowdb_store_t *bootstrap(nowdb_path_t path,
+                         nowdb_content_t content,
+                         uint32_t recsz) {
+	return xBootstrap(path, content, NULL, NOWDB_COMP_FLAT, 1,
 	                   recsz,NOWDB_MEGA, NOWDB_MEGA);
 }
