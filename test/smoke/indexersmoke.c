@@ -699,6 +699,7 @@ int main() {
 		fprintf(stderr, "cannot close scope\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	/*
 	ctx = getContext(scope, "MYEDGE");
 	if (ctx == NULL) {
 		fprintf(stderr, "cannot get context MYEDGE\n");
@@ -725,6 +726,7 @@ int main() {
 		fprintf(stderr, "product does not get sorted\n");
 		rc = EXIT_FAILURE; goto cleanup;
 	}
+	*/
 
 cleanup:
 	if (scope != NULL) {

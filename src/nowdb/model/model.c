@@ -698,7 +698,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &p->pos, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
 		memcpy(buf+sz, &p->pk, 1); sz+=1;
-		memcpy(buf+sz, &p->off, 1); sz+=4;
+		memcpy(buf+sz, &p->off, 4); sz+=4;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
 }
@@ -781,7 +781,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
-
+	fprintf(stderr, "store size: %u\n", sz); 
 	if (sz == 0) return NOWDB_OK;
 	buf = malloc(sz);
 	if (buf == NULL) {

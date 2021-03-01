@@ -220,6 +220,7 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/insertstoresmoke        \
 	$(SMK)/insertvertexstoresmoke  \
 	$(SMK)/insertandsortstoresmoke \
+	$(SMK)/insertandsortvertexsmoke \
 	$(SMK)/readersmoke             \
 	$(SMK)/exprsmoke               \
 	$(SMK)/filtersmoke             \
@@ -794,6 +795,7 @@ clean:
 	rm -f $(SMK)/filesmoke
 	rm -f $(SMK)/storesmoke
 	rm -f $(SMK)/insertstoresmoke
+	rm -f $(SMK)/insertvertexstoresmoke
 	rm -f $(SMK)/insertstorevertexsmoke
 	rm -f $(SMK)/readersmoke
 	rm -f $(SMK)/exprsmoke
