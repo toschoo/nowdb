@@ -203,6 +203,12 @@ uint32_t nowdb_edge_attctrlSize(uint16_t atts); // <- node, not edge
 void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
                         uint8_t *bit,  uint16_t *byte);
 
+// get attribute control bit and byte for specific offset
+void nowdb_vrtx_getCtrl(uint32_t off, uint8_t *bit,  uint16_t *byte);
+
+// get start position of attribute control block
+uint32_t nowdb_vrtx_ctrlStart(uint16_t atts);
+
 char *nowdb_typename(nowdb_type_t typ);
 
 #endif
