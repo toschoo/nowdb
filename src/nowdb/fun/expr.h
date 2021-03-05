@@ -70,9 +70,9 @@ typedef struct {
 	nowdb_roleid_t     role; /* vertex type if vertex   */
 	nowdb_key_t      edgeid; /* edge   type if edge     */
 	nowdb_key_t      propid; /* propid if vertex        */
-	uint8_t         ctrlbit; /* control bit  for edge   */
-	uint16_t       ctrlbyte; /* control byte for edge   */
-	uint16_t            num; /* number of props (edge)  */
+	uint8_t         ctrlbit; /* control bit             */
+	uint16_t       ctrlbyte; /* control byte            */
+	uint16_t            num; /* number of props         */
 	char                 pk; /* primary key if vertex   */
 	char             usekey; /* use key instead of text */
 } nowdb_field_t;
@@ -216,8 +216,9 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off);
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
-                                      nowdb_key_t  propid,
-                                      nowdb_type_t  type);
+                                      uint32_t        off,
+                                      nowdb_type_t   type,
+                                      uint16_t       num);
 
 /* -----------------------------------------------------------------------
  * Create Constant expression
@@ -371,7 +372,6 @@ char nowdb_expr_has(nowdb_expr_t   expr,
  */
 nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_eval_t *hlp,
-                            uint64_t     rmap,
                             char         *row,
                             nowdb_type_t *typ,
                             void        **res);

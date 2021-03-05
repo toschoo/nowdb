@@ -61,7 +61,6 @@ void nowdb_row_destroy(nowdb_row_t *row);
  */
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
-                              uint64_t pmap,
                               char *buf, uint32_t sz,
                               uint32_t *osz,
                               char *full,

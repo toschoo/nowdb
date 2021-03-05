@@ -1413,10 +1413,9 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
                                uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t  *p, *tmp;
-	uint32_t off, xb;
+	uint32_t off=0, xb;
 
-	xb  = nowdb_edge_attctrlSize(props->len);
-	off = xb;
+	xb  = nowdb_vrtx_attctrlSize(props->len);
  
         *ctrl = xb;
 
@@ -1438,7 +1437,7 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		                        FALSE, OBJECT, p->name);
 		}
 	}
-	(*size)=off;
+	(*size)=off+xb;
 	return NOWDB_OK;
 }
 
@@ -1473,7 +1472,7 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
                                 uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_pedge_t *p, *tmp;
-	uint32_t off, xb;
+	uint32_t off=0, xb;
 	
 	xb = nowdb_edge_attctrlSize(props->len);
 	off = NOWDB_OFF_USER+xb;

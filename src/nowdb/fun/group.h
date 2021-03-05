@@ -77,7 +77,6 @@ void nowdb_group_reset(nowdb_group_t *group);
  */
 nowdb_err_t nowdb_group_map(nowdb_group_t *group,
                             nowdb_content_t type,
-                            uint64_t        rmap,
                             char         *record);
 
 /* -----------------------------------------------------------------------

@@ -511,7 +511,7 @@ static inline nowdb_err_t getType(nowdb_scope_t     *scope,
 /* ------------------------------------------------------------------------
  * Get filter
  * ----------
- * this is way to simple. we need to get the where *per target* and
+ * this is way too simple. we need to get the where *per target* and
  * we have to consider aliases. Also, the target may be derived, so
  * we must consider fields that we do not know beforehand.
  * Furthermore, not every where condition goes into a filter condition.
@@ -530,8 +530,6 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 	nowdb_err_t  err;
 	nowdb_ast_t  *op;
 	nowdb_expr_t w = NULL;
-	nowdb_expr_t t = NULL;
-	nowdb_expr_t and=NULL;
 	nowdb_model_vertex_t *v=NULL;
 	nowdb_model_edge_t   *e=NULL;
 	uint32_t limits;
@@ -539,10 +537,6 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 
 	*filter = NULL;
 
-	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
-		err = getType(scope, trg, &t, &v);
-		if (err != NOWDB_OK) return err;
-	}
 	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
 		err = nowdb_model_getEdgeByName(scope->model,
 		                             trg->value, &e);
@@ -559,39 +553,17 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
 		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_NEED_TEXT);
 		err = getExpr(scope, v, e, limits, trg, op, &w, &x);
-		if (err != NOWDB_OK) {
-			if (t != NULL) {
-				nowdb_expr_destroy(t); free(t);
-			}
-			return err;
-		}
+		if (err != NOWDB_OK) return err;
 		if (nowdb_expr_guessType(w) != NOWDB_TYP_BOOL) {
-			if (t != NULL) {
-				nowdb_expr_destroy(t); free(t);
-			}
 			nowdb_expr_destroy(w); free(w);
 			INVALIDAST("where is not boolean");
 		}
 		if (x) {
-			if (t != NULL) {
-				nowdb_expr_destroy(t); free(t);
-			}
 			nowdb_expr_destroy(w); free(w);
 			INVALIDAST("aggregates not allowed in where");
 		}
 	}
-	if (t != NULL && w != NULL) {
-		err = nowdb_expr_newOp(&and, NOWDB_EXPR_OP_AND, t, w);
-		if (err != NOWDB_OK) {
-			nowdb_expr_destroy(t);
-			nowdb_expr_destroy(w);
-			free(t); t = NULL;
-			free(w); w = NULL;
-			return err;
-		}
-		*filter = and;
-
-	} else if (t != NULL) *filter = t; else *filter = w;
+	*filter = w;
 
 	// nowdb_expr_show(*filter, stderr); fprintf(stderr, "\n");
 
@@ -761,7 +733,7 @@ static inline nowdb_err_t getVertexField(nowdb_scope_t    *scope,
 	if (err != NOWDB_OK) return err;
 
 	err = nowdb_expr_newVertexField(exp, field->value, v->roleid,
-	                                         p->propid, p->value);
+	                                   p->off, p->value, v->num);
 	if (err != NOWDB_OK) return err;
 	if (p->pk) {
 		FIELD(*exp)->off = NOWDB_OFF_VERTEX;
@@ -1287,8 +1259,10 @@ static inline nowdb_err_t getAllFields(nowdb_scope_t    *scope,
 		if (trg->stype == NOWDB_AST_TYPE) {
 			nowdb_model_prop_t *p = run->cont;
 			err = nowdb_expr_newVertexField(&exp, p->name,
-			                                    v->roleid,
-	                                         p->propid, p->value);
+			                                      v->roleid,
+                                                              p->off,
+                                                              p->value,
+                                                              v->num);
 		} else {
 			nowdb_model_pedge_t *p = run->cont;
 			err = nowdb_expr_newEdgeField(&exp, p->name,

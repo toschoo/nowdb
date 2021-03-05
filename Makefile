@@ -87,7 +87,6 @@ OBJ = $(SRC)/types/types.o    \
       $(SRC)/index/compare.o  \
       $(SRC)/index/man.o      \
       $(SRC)/reader/reader.o  \
-      $(SRC)/reader/vrow.o    \
       $(SRC)/model/model.o    \
       $(SRC)/text/text.o      \
       $(SRC)/fun/fun.o        \
@@ -142,7 +141,6 @@ DEP = $(SRC)/types/version.h  \
       $(SRC)/index/index.h    \
       $(SRC)/index/man.h      \
       $(SRC)/reader/reader.h  \
-      $(SRC)/reader/vrow.h    \
       $(SRC)/model/types.h    \
       $(SRC)/model/model.h    \
       $(SRC)/text/text.h      \
@@ -226,7 +224,6 @@ smoke:	$(SMK)/errsmoke                \
 	$(SMK)/filtersmoke             \
 	$(SMK)/funsmoke                \
 	$(SMK)/rowsmoke                \
-	$(SMK)/vrowsmoke               \
 	$(SMK)/pmansmoke               \
 	$(SMK)/scopesmoke              \
 	$(SMK)/imansmoke               \

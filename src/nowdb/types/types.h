@@ -141,9 +141,9 @@ int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 #define NOWDB_OFF_VERTEX 0
 #define NOWDB_OFF_ORIGIN 0
 #define NOWDB_OFF_DESTIN 8
-#define NOWDB_OFF_TMSTMP 8
-#define NOWDB_OFF_STAMP  8
-#define NOWDB_OFF_USER  16
+#define NOWDB_OFF_TMSTMP 16
+#define NOWDB_OFF_STAMP  16
+#define NOWDB_OFF_USER  24
 
 /* to be removed */
 #define NOWDB_OFF_ROLE 128
@@ -198,6 +198,8 @@ uint32_t nowdb_pagectrlSize(uint32_t recsz);
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL
 uint32_t nowdb_edge_attctrlSize(uint16_t atts); // <- node, not edge
+
+uint32_t nowdb_vrtx_attctrlSize(uint16_t atts); // <- node, not edge
 
 // get attribute control bit and byte for specific offset
 void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,

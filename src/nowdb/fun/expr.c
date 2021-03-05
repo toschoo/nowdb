@@ -246,8 +246,9 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off) {
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
-                                      nowdb_key_t  propid,
-                                      nowdb_type_t   type) {
+                                      uint32_t        off,
+                                      nowdb_type_t   type,
+                                      uint16_t        num) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_field_t));
@@ -260,12 +261,12 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->content = NOWDB_CONT_VERTEX;
-	FIELD(*expr)->off = NOWDB_OFF_VALUE;
+	FIELD(*expr)->off = off;
 	FIELD(*expr)->role = role;
-	FIELD(*expr)->propid = propid;
-	FIELD(*expr)->pk = 0;
+	FIELD(*expr)->pk = off == 0;
 	FIELD(*expr)->name = NULL;
 	FIELD(*expr)->type = type;
+	FIELD(*expr)->num = num;
 
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
@@ -275,6 +276,9 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 			return err;
 		}
 	}
+	nowdb_vrtx_getCtrl(off,
+		  &FIELD(*expr)->ctrlbit,
+		  &FIELD(*expr)->ctrlbyte);
 	return NOWDB_OK;
 }
 
@@ -685,12 +689,12 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 		                                   src->type, src->num);
 		
 	} else {
-		err = src->name == NULL?
-		      nowdb_expr_newVertexOffField(trg, src->off):
-		      nowdb_expr_newVertexField(trg, src->name,
+		err = nowdb_expr_newVertexField(trg, src->name,
 		                                     src->role,
-		                                     src->propid,
-		                                     src->type);
+                                                     src->off,
+                                                     src->type,
+                                                     src->num);
+                                                       
 	}
 	if (err != NOWDB_OK) return err;
 	FIELD(*trg)->usekey = src->usekey;
@@ -1032,6 +1036,7 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
                                   char        **str) {
 	nowdb_err_t err;
 
+	fprintf(stderr, "Trying to get string for %ld\n", key);
 	err = nowdb_ptlru_get(hlp->tlru, key, str);
 	if (err != NOWDB_OK) return err;
 
@@ -1157,36 +1162,35 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
  */
 static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          nowdb_eval_t  *hlp,
-                                         uint64_t      rmap,
                                          char          *src,
                                          nowdb_type_t  *t,
                                          void         **res) {
 	nowdb_err_t err;
 
 	if (field->name == NULL) {
-		// fprintf(stderr, "raw with map %lu\n", rmap);
 		return getRawVertexValue(field, hlp, src, t, res);
 	}
 
-	/*
 	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
 	                     *(uint64_t*)(src+field->off), field->type);
-	*/
 
-	// this magic formula should be defined somewhere
-	int i = (field->off-4)/8;
-	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
-	if ((rmap & 1<<i) == 0) {
-		// fprintf(stderr, "%s evaluates to NULL\n", field->name);
+	if (!(*(int*)(src+nowdb_vrtx_ctrlStart(field->num)+
+                      field->ctrlbyte) & (1 << field->ctrlbit)))
+	{
+		fprintf(stderr, "%u + %u: %u\n", nowdb_vrtx_ctrlStart(field->num),
+                                                 field->ctrlbyte,
+		                                 *(int*)(src+nowdb_vrtx_ctrlStart(field->num)+field->ctrlbyte));
+                                                  
 		*res = src+field->off;
-		*t = NOWDB_TYP_NOTHING; return NOWDB_OK;
-	}
-
-	*t = field->type; // where does the type come from?
-	if (*t == NOWDB_TYP_TEXT) {
-		HANDLETEXT((nowdb_key_t*)(src+field->off));
+		*t = NOWDB_TYP_NOTHING;
 	} else {
-		*res = src+field->off;
+
+		*t = field->type; // where does the type come from?
+		if (*t == NOWDB_TYP_TEXT) {
+			HANDLETEXT((nowdb_key_t*)(src+field->off));
+		} else {
+			*res = src+field->off;
+		}
 	}
 	return NOWDB_OK;
 }
@@ -1197,7 +1201,6 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
  */
 static nowdb_err_t evalField(nowdb_field_t *field,
                              nowdb_eval_t  *hlp,
-                             uint64_t      rmap,
                              char          *row,
                              nowdb_type_t  *typ,
                              void         **res) {
@@ -1209,7 +1212,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 		err = getEdgeValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	} else {
-		err = getVertexValue(field, hlp, rmap, row, typ, res);
+		err = getVertexValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -1245,7 +1248,6 @@ static inline int evalType(nowdb_op_t *op, char guess);
  */
 static nowdb_err_t evalOp(nowdb_op_t   *op,
                           nowdb_eval_t *hlp,
-                          uint64_t     rmap,
                           char         *row,
                           nowdb_type_t *typ,
                           void        **res) {
@@ -1257,7 +1259,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 
 			// the "main" thing
 			err = nowdb_expr_eval(op->argv[i],
-			                      hlp, rmap, row,
+			                      hlp, row,
 			                      op->types+i,
 			                      op->results+i);
 			if (err != NOWDB_OK) return err;
@@ -1364,24 +1366,23 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
  */
 nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_eval_t *hlp,
-                            uint64_t     rmap,
                             char         *row,
                             nowdb_type_t *typ,
                             void        **res) {
 	if (expr == NULL) return NOWDB_OK;
 	switch(EXPR(expr)->etype) {
 	case NOWDB_EXPR_FIELD:
-		return evalField(FIELD(expr), hlp, rmap, row, typ, res);
+		return evalField(FIELD(expr), hlp, row, typ, res);
 
 	case NOWDB_EXPR_CONST:
 		return evalConst(CONST(expr), typ, res);
 
 	case NOWDB_EXPR_OP:
-		return evalOp(OP(expr), hlp, rmap, row, typ, res);
+		return evalOp(OP(expr), hlp, row, typ, res);
 
 	case NOWDB_EXPR_REF:
 		return nowdb_expr_eval(REF(expr)->ref, hlp,
-		                       rmap, row, typ, res);
+		                       row, typ, res);
 
 	case NOWDB_EXPR_AGG:
 		return evalAgg(AGG(expr), typ, res);

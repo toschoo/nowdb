@@ -12,7 +12,6 @@
 #include <nowdb/scope/scope.h>
 #include <nowdb/fun/expr.h>
 #include <nowdb/reader/reader.h>
-#include <nowdb/reader/vrow.h>
 #include <nowdb/qplan/plan.h>
 #include <nowdb/query/row.h>
 #include <nowdb/fun/group.h>
@@ -41,11 +40,8 @@ typedef struct {
 	nowdb_group_t     *group; /* grouping                      */
 	nowdb_group_t     *nogrp; /* apply aggs without grouping   */
 	nowdb_model_vertex_t  *v; /* type if this is not a join!   */
-	nowdb_vrow_t       *wrow; /* vertex row for where          */
-	nowdb_vrow_t       *prow; /* vertex row for projection     */
 	nowdb_eval_t       *eval; /* evaluation helper             */
 	char           *leftover; /* leftover from previous round  */
-	uint64_t            pmap; /* property map of leftover      */
 	uint32_t             off; /* offset in the current reader  */
 	uint32_t           recsz; /* record size                   */
 	char                *tmp; /* temporary buffer for group    */

@@ -1378,7 +1378,6 @@ static nowdb_err_t fillbuf(nowdb_reader_t *reader) {
 				void        *v;
 				err = nowdb_expr_eval(reader->filter,
 				                      reader->eval,
-                                                      NOWDB_BITMAP64_ALL,
                                                       src+i, &t, &v);
 				if (err != NOWDB_OK) break;
 				if (*(nowdb_value_t*)v == 0) {

@@ -1072,7 +1072,6 @@ static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
                                        nowdb_ast_t   *v,
                                        nowdb_simple_value_t **val) {
 	nowdb_err_t err=NOWDB_OK;
-	uint64_t rmap = 0xffffffffffffffff;
 	nowdb_expr_t expr;
 	uint32_t limits;
 	void *tmp;
@@ -1092,7 +1091,7 @@ static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
 		nowdb_expr_destroy(expr); free(expr);
 		return err;
 	}
-	err = nowdb_expr_eval(expr, NULL, rmap, NULL,
+	err = nowdb_expr_eval(expr, NULL, NULL,
 	                    &(*val)->type, &tmp);
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(expr); free(expr);

@@ -430,7 +430,6 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 		}
 		break;
 
-	/*
 	case NOWDB_OFF_STAMP:
 		if (val->type == NOWDB_TYP_DATE ||
                     val->type == NOWDB_TYP_TIME) break;
@@ -440,7 +439,6 @@ static inline nowdb_err_t checkEdgeValue(nowdb_dml_t          *dml,
 			INVALID("not a valid timestamp");
 		}
 		break;
-	*/
 
 	default:
 		if (fname == NULL) {
@@ -722,6 +720,8 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
                                            &bit, &byte);
 			char *xbyte = ctrl+byte;
 			(*xbyte) |= 1<<bit;
+			fprintf(stderr, "SETTING CONTROL BIT %u | %u at %u: %u\n", byte, bit, nowdb_vrtx_ctrlStart(dml->v->num), *ctrl);
+			fprintf(stderr, "RECSIZE: %u\n", dml->ctx->store.recsize);
 		}
 		i++;
 	}
