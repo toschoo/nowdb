@@ -1167,20 +1167,12 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          void         **res) {
 	nowdb_err_t err;
 
-	if (field->name == NULL) {
+	if (field->name == NULL)
 		return getRawVertexValue(field, hlp, src, t, res);
-	}
-
-	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
-	                     *(uint64_t*)(src+field->off), field->type);
 
 	if (!(*(int*)(src+nowdb_vrtx_ctrlStart(field->num)+
                       field->ctrlbyte) & (1 << field->ctrlbit)))
 	{
-		fprintf(stderr, "%u + %u: %u\n", nowdb_vrtx_ctrlStart(field->num),
-                                                 field->ctrlbyte,
-		                                 *(int*)(src+nowdb_vrtx_ctrlStart(field->num)+field->ctrlbyte));
-                                                  
 		*res = src+field->off;
 		*t = NOWDB_TYP_NOTHING;
 	} else {

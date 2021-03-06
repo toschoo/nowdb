@@ -275,10 +275,15 @@ if __name__ == '__main__':
 
     ms = 50000
 
+    print("starting loader")
+    
     with now.Connection("localhost", "55505", None, None) as c:
+        print("connected...")
         with c.execute("use db100") as r:
              if not r.ok():
                 db.TestFailed('cannot use db100')
+        
+        print("using db100...")
 
         createTypes(c)
         createEdges(c)

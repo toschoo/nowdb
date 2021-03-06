@@ -236,9 +236,9 @@ void nowdb_loader_destroy(nowdb_loader_t *ldr) {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t fillbuf(FILE   *stream, 
-                     char  *buf,
-                     size_t bufsize,
-                     size_t *outsize)
+                    char   *buf,
+                    size_t  bufsize,
+                    size_t *outsize)
 {
 	size_t j,s,n,k;
 
@@ -384,8 +384,6 @@ static inline void rowTypeHeader(nowdb_loader_t *ldr) {
 	if (ldr->csv->list == NULL) return;
 	if (ldr->err != NOWDB_OK) return;
 
-	ldr->csv->recsize = sizeof(nowdb_vertex_t);
-
 	err = nowdb_model_getVertexByName(ldr->model, ldr->type, &v);
 	if (err != NOWDB_OK) {
 		ldr->err = err;
@@ -393,6 +391,21 @@ static inline void rowTypeHeader(nowdb_loader_t *ldr) {
 	}
 
 	roleid = v->roleid;
+
+	ldr->csv->recsize = v->size;
+	ldr->csv->atts    = v->num;
+
+	if (ldr->csv->atts > 0) {
+		ldr->csv->ctlSize = nowdb_vrtx_attctrlSize(v->num);
+
+		ldr->csv->xb = calloc(1,ldr->csv->ctlSize);
+		if (ldr->csv->xb == NULL) {
+			ldr->err = nowdb_err_get(nowdb_err_no_mem,
+			                            FALSE, OBJECT,
+			     "allocating attribute control block");
+			return;
+		}
+	}
 
 	ldr->csv->props = calloc(ldr->csv->psz, sizeof(nowdb_model_prop_t));
 	if (ldr->csv->props == NULL) {
@@ -414,6 +427,7 @@ static inline void rowTypeHeader(nowdb_loader_t *ldr) {
 		ldr->csv->props[i].roleid = roleid;
 		ldr->csv->props[i].propid = p->propid;
 		ldr->csv->props[i].value = p->value;
+		ldr->csv->props[i].off = p->off;
 		ldr->csv->props[i].pk = p->pk;
 		if (p->pk) ldr->csv->pkidx = i;
 
@@ -600,10 +614,13 @@ void nowdb_csv_row(int c, void *ldr) {
 		return;
 	}
 
+	uint32_t x = LDR(ldr)->flags & NOWDB_CSV_VERTEX?
+		     nowdb_vrtx_ctrlStart(LDR(ldr)->csv->atts):
+                     NOWDB_OFF_USER;
+
 	if (LDR(ldr)->csv->xb != NULL) {
 		memcpy(LDR(ldr)->csv->buf + 
-		       LDR(ldr)->csv->pos +
-		       NOWDB_OFF_USER,
+		       LDR(ldr)->csv->pos + x,
 		       LDR(ldr)->csv->xb,
 		       LDR(ldr)->csv->ctlSize);
 		memset(LDR(ldr)->csv->xb, 0, LDR(ldr)->csv->ctlSize);
@@ -615,8 +632,10 @@ void nowdb_csv_row(int c, void *ldr) {
 	LDR(ldr)->csv->fbcnt++;
 	LDR(ldr)->csv->total++;
 
+	/*
 	uint32_t x = LDR(ldr)->flags & NOWDB_CSV_VERTEX?
 	             LDR(ldr)->csv->psz+1:1;
+	*/
 	/*
 	fprintf(stderr, "%u + %u * %u == %u (%u)\n",
 			LDR(ldr)->csv->pos, x,
@@ -625,7 +644,7 @@ void nowdb_csv_row(int c, void *ldr) {
 	                LDR(ldr)->csv->recsize, BUFSIZE);
 	*/
 
-	if (LDR(ldr)->csv->pos + x * 
+	if (LDR(ldr)->csv->pos +
 	    LDR(ldr)->csv->recsize >= BUFSIZE) {
 		insertBuf(ldr);
 		LDR(ldr)->csv->pos = 0;
@@ -747,16 +766,8 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * Vertex offsets
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OFF_PROP 0
-#define NOWDB_OFF_VALUE 0
-#define NOWDB_OFF_VTYPE 0
-#define NOWDB_OFF_ROLE  0
 
 #define VERTEX  NOWDB_OFF_VERTEX
-#define PROP    NOWDB_OFF_PROP
-#define VALUE   NOWDB_OFF_VALUE
-#define VTYPE   NOWDB_OFF_VTYPE
-#define ROLE    NOWDB_OFF_ROLE
 
 /* ------------------------------------------------------------------------
  * Handle errors
@@ -892,6 +903,10 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
+	if (len >= 255) {
+		REJECT("VERTEX", "value too big");
+		return;
+	}
 	if (LDR(ldr)->csv->props == NULL) {
 		LDR(ldr)->err = nowdb_err_get(nowdb_err_loader,
 		                    FALSE, OBJECT, "no model");
@@ -899,13 +914,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	}
 
 	int i = LDR(ldr)->csv->cur;
-
-	/*
-	memcpy(LDR(ldr)->csv->txt, data, len);
-	LDR(ldr)->csv->txt[len] = 0;
-	fprintf(stderr, "at %u: %s\n",  LDR(ldr)->csv->cur,
-	                                LDR(ldr)->csv->txt);
-	*/
+	int off = LDR(ldr)->csv->props[i].off;
 
 	/* get PK (= vid) */
 	if (i >= LDR(ldr)->csv->psz) {
@@ -934,57 +943,34 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		}
 	}
 
-	/* get propid (from props) */
-	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
-	                         +NOWDB_OFF_PROP,
-	      &LDR(ldr)->csv->props[i].propid, 8);
-
 	/* value according to type */
 	if (len == 0) {
 		memset(LDR(ldr)->csv->buf  + 
-	               LDR(ldr)->csv->pos  +
-	               NOWDB_OFF_VALUE, 0, 8);
-	} else if (getValueAsType(ldr, data, len,
-	               LDR(ldr)->csv->props[i].value,
-	               LDR(ldr)->csv->buf  +
-	               LDR(ldr)->csv->pos  +
-	               NOWDB_OFF_VALUE) != 0) {
-		REJECT(LDR(ldr)->csv->props[i].name, "invalid value");
-		return;
-	}
-
-	/* vtype according to props */
-	if (len == 0) {
-		memset(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
-		                       +NOWDB_OFF_VTYPE,0,4);
+	               LDR(ldr)->csv->pos  + off, 0, 8);
 	} else {
-		memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
-		                         +NOWDB_OFF_VTYPE,
-		      &LDR(ldr)->csv->props[i].value, 4);
+		if (getValueAsType(ldr, data, len,
+	            LDR(ldr)->csv->props[i].value,
+	            LDR(ldr)->csv->buf  +
+	            LDR(ldr)->csv->pos  + off) != 0) {
+			REJECT(LDR(ldr)->csv->props[i].name, "invalid value");
+			return;
+		}
+		uint8_t  k;
+		uint16_t d;
+		nowdb_vrtx_getCtrl(off, &k, &d);
+		LDR(ldr)->csv->xb[d] |= 1<<k;
 	}
-
-	/* roleid according to props */
-	memcpy(LDR(ldr)->csv->buf+LDR(ldr)->csv->pos
-	                         +NOWDB_OFF_ROLE,
-	      &LDR(ldr)->csv->props[i].roleid, 4);
 
 	/* increment field counter */
 	LDR(ldr)->csv->cur++;
 
-	/* last field: set vid to all properties */
+	/* last field */
 	if (LDR(ldr)->csv->cur >= LDR(ldr)->csv->psz) {
-		for(i=0; i<LDR(ldr)->csv->psz; i++) {
-			memcpy(LDR(ldr)->csv->buf +
-			       LDR(ldr)->csv->pos - i *
-			       LDR(ldr)->csv->recsize,
-			      &LDR(ldr)->csv->vid, 8);
-		}
 		LDR(ldr)->csv->cur = 0;
 
 		nowdb_err_t err =
 		nowdb_scope_registerVertex(LDR(ldr)->scope,
-		                           LDR(ldr)->ctx,
-		                           LDR(ldr)->csv->props[0].roleid,
+		                           LDR(ldr)->ctx, 0,
 		                           LDR(ldr)->csv->vid);
 		if (err != NOWDB_OK) {
 			char freemsg=1;
@@ -999,8 +985,10 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		}
 
 	/* otherwise increase position */
+	/*
 	} else {
 		LDR(ldr)->csv->pos += LDR(ldr)->csv->recsize;
+	*/
 	}
 }
 

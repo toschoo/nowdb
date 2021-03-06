@@ -1,7 +1,7 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Loader: CSV Loader for the canonical formal (context and vertex)
+ * Loader: CSV Loader for the canonical format (context and vertex)
  *   TODO: The loader concept should be generic.
  *         In particular, it should be able to:
  *         - load CSV ('canoncial format' with numerical identifiers,

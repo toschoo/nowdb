@@ -1467,7 +1467,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		if (memcmp(src+cur->off, nowdb_nullrec, recsz) == 0) {
 			cur->off = mx; continue;
 		}
-		fprintf(stderr, "NOT A NULLREC\n");
 		// check content
 		// -------------
 		// here's potential for improvement:
@@ -1476,10 +1475,10 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		if (!checkpos(cur->rdr, cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
-		fprintf(stderr, "NOT DELETED\n");
+		// fprintf(stderr, "NOT DELETED\n");
 		// FILTER
 		if (filter != NULL) {
-			fprintf(stderr, "FILTER???\n");
+			// fprintf(stderr, "FILTER???\n");
 			void *v=NULL;
 			nowdb_type_t  t;
 			err = nowdb_expr_eval(filter, cur->eval,
@@ -1500,9 +1499,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 grouping:
 		// if keys-only, group or no-group aggregates
 		if (cur->tmp != NULL) {
-			fprintf(stderr, "tmp???\n");
 			if (cur->nogrp != NULL) {
-				fprintf(stderr, "NO GROUP???\n");
 				err = nogroup(cur, ctype, realsz, realsrc);
 				FREESRC();
 				if (err != NOWDB_OK) return err;
@@ -1510,7 +1507,6 @@ grouping:
 				continue;
 			}
 			if (cur->grouping) {
-				fprintf(stderr, "GROUPING???\n");
 				// review for vertex !
 				err = groupswitch(cur, ctype, realsz,
 				                        realsrc, &x);
@@ -1523,9 +1519,9 @@ grouping:
 			}
 		}
 projection:
-		fprintf(stderr, "PROJECTING\n");
+		// fprintf(stderr, "PROJECTING\n");
 		if (cur->group == NULL) {
-			fprintf(stderr, "NO GROUP\n");
+			// fprintf(stderr, "NO GROUP\n");
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
 			                         buf, sz,

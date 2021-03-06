@@ -257,7 +257,9 @@ static char vertexComplete(nowdb_dml_t *dml,
 	}
 	if (dml->propn != fields->len) return 0;
 	for(run=fields->head; run!=NULL; run=run->nxt) {
-		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
+		fprintf(stderr, "%d: %p\n", i, dml->p[i]);
+		if (strcasecmp(dml->p[i]->name,
+                    (char*)run->cont) != 0) {
 			return 0;
 		}
 		i++;
@@ -307,7 +309,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
-	// fprintf(stderr, "SETTING CONTENT %s\n", trgname);
+	fprintf(stderr, "SETTING CONTENT %s\n", trgname);
 
 	// check fields == values
 	if (fields != NULL && values != NULL) {
@@ -602,7 +604,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 		switch(off) {
 		case NOWDB_OFF_ORIGIN: o++; break;
 		case NOWDB_OFF_DESTIN: d++; break;
-		// case NOWDB_OFF_STAMP:  t++; break;
+		case NOWDB_OFF_STAMP:  t++; break;
 		}
 
 		val = vrun->cont;

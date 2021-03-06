@@ -549,9 +549,27 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
  */
 static nowdb_err_t dropType(nowdb_ast_t  *op,
                             char       *name,
-                        nowdb_scope_t *scope)  {
+                        nowdb_scope_t *scope,
+                            void        *rsc) {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
+
+        // don't reuse this target on dml
+	// this is not a solution!
+	// the target may have been used in another session 
+	// that session will not know that the target
+	// has been dropped or altered!
+	nowdb_dml_t *dml = nowdb_proc_getDML(rsc);
+	if (dml == NULL) {
+		err = nowdb_err_get(nowdb_err_no_rsc, FALSE,
+			      OBJECT, "no scope in session");
+		return err;
+	}
+	if (dml->trgname != NULL &&
+	    strcasecmp(dml->trgname, name) == 0) {
+		free(dml->trgname);
+		dml->trgname = NULL;
+	}
 
 	err = nowdb_scope_dropType(scope, name);
 	if (err == NOWDB_OK) {
@@ -2123,7 +2141,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
 		case NOWDB_AST_TYPE:
-			return dropType(op, trg->value, scope);
+			return dropType(op, trg->value, scope, rsc);
 		case NOWDB_AST_EDGE:
 			return dropEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:

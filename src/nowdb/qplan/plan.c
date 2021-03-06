@@ -537,17 +537,17 @@ static inline nowdb_err_t getFilter(nowdb_scope_t *scope,
 
 	*filter = NULL;
 
-	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL) {
+	if (trg->stype == NOWDB_AST_CONTEXT && trg->value != NULL)
 		err = nowdb_model_getEdgeByName(scope->model,
 		                             trg->value, &e);
-		if (err != NOWDB_OK) return err;
-	}
+	else 
+		err = nowdb_model_getVertexByName(scope->model,
+		                               trg->value, &v);
+	if (err != NOWDB_OK) return err;
 	op = nowdb_ast_field(ast);
 	if (op != NULL) {
 
-		/*
-		fprintf(stderr, "EXPR: %s\n", (char*)op->value);
-		*/
+		// fprintf(stderr, "EXPR: %s\n", (char*)op->value);
 
 		NOWDB_PLAN_OK_ALL(limits);
 		NOWDB_PLAN_OK_REMOVE(limits,NOWDB_PLAN_OK_AGG);
@@ -1305,6 +1305,7 @@ static inline nowdb_err_t getFields(nowdb_scope_t    *scope,
 
 	// get vertex type
 	if (trg->stype == NOWDB_AST_TYPE && trg->value != NULL) {
+		// fprintf(stderr, "GET VERTEX BY NAME: %s\n", trg->value);
 		err = nowdb_model_getVertexByName(scope->model,
 		                               trg->value, &v);
 		if (err != NOWDB_OK) return err;
