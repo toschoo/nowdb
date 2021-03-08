@@ -119,7 +119,7 @@ def keyzero(c):
     stmt = "create type testzero ( \
                test_key uint primary key, \
                test_desc text \
-            )"
+            ) if not exists"
     with c.execute(stmt) as r:
         if not r.ok():
            print("%d: %s" % (r.code(), r.details()))

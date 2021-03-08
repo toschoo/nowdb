@@ -1036,7 +1036,6 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
                                   char        **str) {
 	nowdb_err_t err;
 
-	fprintf(stderr, "Trying to get string for %ld\n", key);
 	err = nowdb_ptlru_get(hlp->tlru, key, str);
 	if (err != NOWDB_OK) return err;
 
@@ -1146,12 +1145,6 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
 
 	*t = field->type;
 	*res = src+field->off;
-
-	/*
-	fprintf(stderr, "RAW %d: %lu / %lu\n", field->off,
- 	                 ((nowdb_vertex_t*)src)->property,
-	                    ((nowdb_vertex_t*)src)->value);
-	*/
 
 	return NOWDB_OK;
 }

@@ -214,15 +214,15 @@ void nowdb_mem_sort_edge(char        *buf,
  * Sorting vertices
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
-                           uint32_t         sz,
-                           uint32_t      recsz,
-                           nowdb_ord_t     ord) {
+void nowdb_mem_sort_vertex(char       *buf,
+                           uint32_t     sz,
+                           uint32_t  recsz,
+                           nowdb_ord_t ord) {
 	if (ord == NOWDB_ORD_ASC) {
-		nowdb_mem_sort((char*)buf, sz/recsz, recsz,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		     &nowdb_sort_vertex_compare, NULL);
 	} else if (ord == NOWDB_ORD_DESC) {
-		nowdb_mem_sort((char*)buf, sz/recsz, recsz,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		    &nowdb_sort_vertex_compareD, NULL);
 	}
 }
@@ -251,6 +251,8 @@ nowdb_cmp_t nowdb_sort_edge_compare(const void *left,
 	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_DESTIN))
 		return NOWDB_SORT_GREATER;
 
+	// timestamp
+
 	return NOWDB_SORT_EQUAL;
 }
 
@@ -273,12 +275,13 @@ nowdb_cmp_t nowdb_sort_vertex_compare(const void *left,
                                       const void *right,
                                       void      *ignore)
 {
-	if (((nowdb_vertex_t*)left)->vertex <
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_LESS;
+	if (*(nowdb_key_t*)(char*)left <
+	    *(nowdb_key_t*)(char*)right) return NOWDB_SORT_LESS;
 
-	if (((nowdb_vertex_t*)left)->vertex >
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(char*)left >
+	    *(nowdb_key_t*)(char*)right) return NOWDB_SORT_GREATER;
 
+	/* TODO
 	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) <
 	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
 		return NOWDB_SORT_LESS;
@@ -286,6 +289,7 @@ nowdb_cmp_t nowdb_sort_vertex_compare(const void *left,
 	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) >
 	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
 		return NOWDB_SORT_GREATER;
+	*/
 
 	return NOWDB_SORT_EQUAL;
 }

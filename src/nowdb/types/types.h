@@ -132,8 +132,6 @@ extern char nowdb_nullrec[1024];
 
 int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 
-#define NOWDB_VERTEX_SIZE 32
-
 /* ------------------------------------------------------------------------
  * Offsets
  * ------------------------------------------------------------------------
@@ -151,24 +149,6 @@ int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 #define NOWDB_OFF_PROP 256
 #define NOWDB_OFF_VTYPE 512
 #define NOWDB_OFF_VALUE 1024
-
-/* ------------------------------------------------------------------------
- * Vertex Property
- * ---------------
- * Storetype of properties of a vertex
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_key_t   vertex; /* id of the vertex          */
-	nowdb_key_t property; /* id of the vertex property */
-	nowdb_value_t  value; /* property value            */
-	nowdb_type_t   vtype; /* type of the value         */
-	nowdb_roleid_t  role; /* role identifier           */
-} nowdb_vertex_t;
-
-void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
-void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
-int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
 
 int nowdb_vertex_offByName(char *field);
 

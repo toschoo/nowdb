@@ -84,7 +84,7 @@ int addVertex(nowdb_model_t *model,
 
 	fprintf(stderr, "adding vertex %u - %s\n", role, name);
 
-	v = calloc(1,sizeof(nowdb_vertex_t));
+	v = calloc(1,sizeof(nowdb_model_vertex_t));
 	if (v == NULL) {
 		perror("out-of-mem");
 		return -1;

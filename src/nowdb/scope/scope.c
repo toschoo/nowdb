@@ -657,8 +657,6 @@ static inline nowdb_err_t initVertexContext(nowdb_scope_t        *scope,
                                             char                  *path) {
 	nowdb_err_t err;
 
-	fprintf(stderr, "VRTX SIZE: %u\n", vrtx->size);
-
 	// external vertex cache
 	ctx->evache = calloc(1,sizeof(nowdb_plru12_t));
 	if (ctx->evache == NULL) {
@@ -686,7 +684,6 @@ static inline nowdb_err_t initVertexContext(nowdb_scope_t        *scope,
 		free(ctx->ivache); ctx->ivache = NULL;
 		return err;
 	}
-	fprintf(stderr, "INIT STORE %s\n", path);
 	err = nowdb_store_init(&ctx->store, path,
 	                 ctx->evache, scope->ver,
 	                 NOWDB_CONT_VERTEX, strg,
@@ -1678,9 +1675,9 @@ static inline nowdb_err_t fillEVache(nowdb_scope_t *scope,
 
 	while((err = nowdb_reader_move(reader)) == NOWDB_OK) {
 		page = nowdb_reader_page(reader);
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=NOWDB_VERTEX_SIZE) {
+		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
 			char x=0;
-			if (memcmp(page+i, nowdb_nullrec, 32) == 0) break;
+			if (memcmp(page+i, nowdb_nullrec, reader->recsize) == 0) break;
 			memcpy(&vid, page+i+NOWDB_OFF_VERTEX, 8);
 			err = nowdb_plru12_get(ctx->evache, 0, vid, &x);
 			if (err != NOWDB_OK) break;
@@ -2733,6 +2730,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	err = nowdb_plru12_get(ctx->evache, role, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
+		fprintf(stderr, "DUP KEY DETECTED (1)\n");
 		err = nowdb_err_get(nowdb_err_dup_key,
 		              FALSE, OBJECT, "vertex");
 		goto unlock;
@@ -2741,6 +2739,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	err = nowdb_plru12_get(ctx->ivache, role, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
+		fprintf(stderr, "DUP KEY DETECTED (2)\n");
 		err = nowdb_err_get(nowdb_err_dup_key,
 		              FALSE, OBJECT, "vertex");
 		goto unlock;
@@ -2756,6 +2755,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 		err = nowdb_plru12_addResident(ctx->evache, 0, vid);
 		goto unlock;
 	}
+	fprintf(stderr, "KEY FOUND IN BEET: %d.%ld\n", role, vid);
 	if (ber != BEET_OK) {
 		err = makeBeetError(ber); goto unlock;
 	}
