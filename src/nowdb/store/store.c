@@ -49,7 +49,7 @@ static nowdb_wrk_message_t sortmsg = {11,NULL,NULL};
  */
 nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
-                            nowdb_plru12_t   *lru,
+                            nowdb_plru8r_t   *lru,
                             nowdb_version_t   ver,
                             nowdb_content_t  cont,
                             nowdb_storage_t *strg,
@@ -314,7 +314,7 @@ static inline nowdb_file_t *findReader(nowdb_store_t *store,
  */
 nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
-                             nowdb_plru12_t   *lru,
+                             nowdb_plru8r_t   *lru,
                              nowdb_version_t   ver,
                              nowdb_content_t  cont,
                              nowdb_storage_t *strg,

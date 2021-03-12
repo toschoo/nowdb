@@ -658,28 +658,28 @@ static inline nowdb_err_t initVertexContext(nowdb_scope_t        *scope,
 	nowdb_err_t err;
 
 	// external vertex cache
-	ctx->evache = calloc(1,sizeof(nowdb_plru12_t));
+	ctx->evache = calloc(1,sizeof(nowdb_plru8r_t));
 	if (ctx->evache == NULL) {
 		NOMEM("external vertex cache");
 		return err;
 	}
-	err = nowdb_plru12_init(ctx->evache, 100000);
+	err = nowdb_plru8r_init(ctx->evache, 100000);
 	if (err != NOWDB_OK) {
 		free(ctx->evache); ctx->evache = NULL;
 		return err;
 	}
 
 	// internal vertex cache
-	ctx->ivache = calloc(1,sizeof(nowdb_plru12_t));
+	ctx->ivache = calloc(1,sizeof(nowdb_plru8r_t));
 	if (ctx->ivache == NULL) {
-		nowdb_plru12_destroy(ctx->evache);
+		nowdb_plru8r_destroy(ctx->evache);
 		free(ctx->evache); ctx->evache = NULL;
 		NOMEM("internal vertex cache");
 		return err;
 	}
-	err = nowdb_plru12_init(ctx->ivache, 2500000);
+	err = nowdb_plru8r_init(ctx->ivache, 2500000);
 	if (err != NOWDB_OK) {
-		nowdb_plru12_destroy(ctx->evache);
+		nowdb_plru8r_destroy(ctx->evache);
 		free(ctx->evache); ctx->evache = NULL;
 		free(ctx->ivache); ctx->ivache = NULL;
 		return err;
@@ -689,8 +689,8 @@ static inline nowdb_err_t initVertexContext(nowdb_scope_t        *scope,
 	                 NOWDB_CONT_VERTEX, strg,
 	                           vrtx->size,0); // timestamped?
 	if (err != NOWDB_OK) {
-		nowdb_plru12_destroy(ctx->evache);
-		nowdb_plru12_destroy(ctx->ivache);
+		nowdb_plru8r_destroy(ctx->evache);
+		nowdb_plru8r_destroy(ctx->ivache);
 		free(ctx->evache); ctx->evache = NULL;
 		free(ctx->ivache); ctx->ivache = NULL;
 	}
@@ -1679,11 +1679,11 @@ static inline nowdb_err_t fillEVache(nowdb_scope_t *scope,
 			char x=0;
 			if (memcmp(page+i, nowdb_nullrec, reader->recsize) == 0) break;
 			memcpy(&vid, page+i+NOWDB_OFF_VERTEX, 8);
-			err = nowdb_plru12_get(ctx->evache, 0, vid, &x);
+			err = nowdb_plru8r_get(ctx->evache, vid, &x);
 			if (err != NOWDB_OK) break;
 			if (x == 1) continue;
 			// add as resident!
-			err = nowdb_plru12_addResident(ctx->evache, 0, vid);
+			err = nowdb_plru8r_addResident(ctx->evache, vid);
 			if (err != NOWDB_OK) break;
 		}
 	}
@@ -2715,19 +2715,18 @@ unlock:
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
                                        nowdb_context_t *ctx,
-                                       nowdb_roleid_t  role,
                                        nowdb_key_t      vid) {
 	beet_err_t ber;
 	nowdb_index_t *vindex=NULL;
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
-	char key[12];
+	char key[8];
 	char found=0;
 
 	err = nowdb_lock_write(&ctx->store.lock);
 	if (err != NOWDB_OK) return err;
 
-	err = nowdb_plru12_get(ctx->evache, role, vid, &found);
+	err = nowdb_plru8r_get(ctx->evache, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
 		fprintf(stderr, "DUP KEY DETECTED (1)\n");
@@ -2736,7 +2735,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 		goto unlock;
 	}
 
-	err = nowdb_plru12_get(ctx->ivache, role, vid, &found);
+	err = nowdb_plru8r_get(ctx->ivache, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
 		fprintf(stderr, "DUP KEY DETECTED (2)\n");
@@ -2745,21 +2744,21 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 		goto unlock;
 	}
 
-	memcpy(key, &role, 4); memcpy(key+4, &vid, 8);
+	memcpy(key, &vid, 8);
 
 	err = getVIndex(scope, ctx, &vindex);
 	if (err != NOWDB_OK) goto unlock;
 
 	ber = beet_index_doesExist(vindex->idx, key);
 	if (ber == BEET_ERR_KEYNOF) {
-		err = nowdb_plru12_addResident(ctx->evache, 0, vid);
+		err = nowdb_plru8r_addResident(ctx->evache, vid);
 		goto unlock;
 	}
-	fprintf(stderr, "KEY FOUND IN BEET: %d.%ld\n", role, vid);
+	fprintf(stderr, "KEY FOUND IN BEET: %ld\n", vid);
 	if (ber != BEET_OK) {
 		err = makeBeetError(ber); goto unlock;
 	}
-	err = nowdb_plru12_add(ctx->ivache, 0, vid);
+	err = nowdb_plru8r_add(ctx->ivache, vid);
 	if (err != NOWDB_OK) goto unlock;
 
 	err = nowdb_err_get(nowdb_err_dup_key, FALSE, OBJECT, "vertex");

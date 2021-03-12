@@ -1,11 +1,11 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Private 12 Byte LRU Cache (i.e. roleid/key)
+ * Private 8 Byte LRU Cache with residents (main use case vertex pk)
  * ========================================================================
  */
-#ifndef nowdb_plru12_decl
-#define nowdb_plru12_decl
+#ifndef nowdb_plru8r_decl
+#define nowdb_plru8r_decl
 
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
@@ -17,27 +17,26 @@
  * Private 12Byte LRU
  * ------------------------------------------------------------------------
  */
-typedef ts_algo_lru_t nowdb_plru12_t;
+typedef ts_algo_lru_t nowdb_plru8r_t;
 
 /* ------------------------------------------------------------------------
  * Init LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_init(nowdb_plru12_t *lru,
+nowdb_err_t nowdb_plru8r_init(nowdb_plru8r_t *lru,
                               uint32_t       max);
 
 /* ------------------------------------------------------------------------
  * Destroy LRU
  * ------------------------------------------------------------------------
  */
-void nowdb_plru12_destroy(nowdb_plru12_t *lru);
+void nowdb_plru8r_destroy(nowdb_plru8r_t *lru);
 
 /* ------------------------------------------------------------------------
  * Get data from LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_get(nowdb_plru12_t  *lru,
-                             nowdb_roleid_t  role,
+nowdb_err_t nowdb_plru8r_get(nowdb_plru8r_t  *lru,
                              nowdb_key_t      key,
                              char          *found);
 
@@ -45,23 +44,20 @@ nowdb_err_t nowdb_plru12_get(nowdb_plru12_t  *lru,
  * Add data to LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
-                             nowdb_roleid_t role,
+nowdb_err_t nowdb_plru8r_add(nowdb_plru8r_t *lru,
                              nowdb_key_t     key);
 
 /* ------------------------------------------------------------------------
  * Add data to LRU as resident
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_addResident(nowdb_plru12_t *lru,
-                                     nowdb_roleid_t role,
+nowdb_err_t nowdb_plru8r_addResident(nowdb_plru8r_t *lru,
                                      nowdb_key_t     key);
 
 /* ------------------------------------------------------------------------
  * Revoke residence
  * ------------------------------------------------------------------------
  */
-void nowdb_plru12_revoke(nowdb_plru12_t *lru,
-                         nowdb_roleid_t  role,
+void nowdb_plru8r_revoke(nowdb_plru8r_t *lru,
                          nowdb_key_t     key);
 #endif

@@ -19,7 +19,7 @@
 #include <nowdb/scope/loader.h>
 #include <nowdb/index/man.h>
 #include <nowdb/model/model.h>
-#include <nowdb/mem/plru12.h>
+#include <nowdb/mem/plru8r.h>
 #include <nowdb/text/text.h>
 #include <nowdb/scope/procman.h>
 #include <nowdb/scope/ipc.h>
@@ -274,7 +274,6 @@ nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
                                        nowdb_context_t *ctx,
-                                       nowdb_roleid_t  role,
                                        nowdb_key_t      vid);
 
 /* ------------------------------------------------------------------------

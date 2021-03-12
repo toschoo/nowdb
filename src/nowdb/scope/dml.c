@@ -742,8 +742,8 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	// now register the vertex...
 	// (we should lock here and keep the lock)
 	err = nowdb_scope_registerVertex(dml->scope,
-	                                 dml->ctx,0,
-	                                 *(uint64_t*)vrtx);
+	                                 dml->ctx,
+	                                *(uint64_t*)vrtx);
 	if (err != NOWDB_OK) {
 		free(vrtx); return err;
 	}

@@ -16,7 +16,7 @@
 #include <nowdb/sort/sort.h>
 #include <nowdb/store/comp.h>
 #include <nowdb/store/storage.h>
-#include <nowdb/mem/plru12.h>
+#include <nowdb/mem/plru8r.h>
 
 #include <tsalgo/list.h>
 #include <tsalgo/tree.h>
@@ -47,7 +47,7 @@ typedef struct {
 	nowdb_comprsc_t    compare; /* comparison                  */
 	void                 *iman; /* index manager               */
 	void              *context; /* context for indexing        */
-	nowdb_plru12_t        *lru; /* lru for vertices            */
+	nowdb_plru8r_t        *lru; /* lru for vertices            */
 	nowdb_bool_t      starting; /* set during startup          */
 	nowdb_wrk_message_t srtmsg; /* sort message for this store */
 	nowdb_storage_t   *storage; /* where it belongs to         */
@@ -68,7 +68,7 @@ typedef struct {
  */
 nowdb_err_t nowdb_store_new(nowdb_store_t **store,
                             nowdb_path_t     base,
-                            nowdb_plru12_t   *lru,
+                            nowdb_plru8r_t   *lru,
                             nowdb_version_t   ver,
                             nowdb_content_t  cont,
                             nowdb_storage_t *strg,
@@ -81,7 +81,7 @@ nowdb_err_t nowdb_store_new(nowdb_store_t **store,
  */
 nowdb_err_t nowdb_store_init(nowdb_store_t  *store,
                              nowdb_path_t     base,
-                             nowdb_plru12_t   *lru,
+                             nowdb_plru8r_t   *lru,
                              nowdb_version_t   ver,
                              nowdb_content_t  cont,
                              nowdb_storage_t *strg,

@@ -970,7 +970,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 
 		nowdb_err_t err =
 		nowdb_scope_registerVertex(LDR(ldr)->scope,
-		                           LDR(ldr)->ctx, 0,
+		                           LDR(ldr)->ctx,
 		                           LDR(ldr)->csv->vid);
 		if (err != NOWDB_OK) {
 			char freemsg=1;
