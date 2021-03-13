@@ -139,7 +139,6 @@ int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 #define NOWDB_OFF_VERTEX 0
 #define NOWDB_OFF_ORIGIN 0
 #define NOWDB_OFF_DESTIN 8
-#define NOWDB_OFF_TMSTMP 16
 #define NOWDB_OFF_STAMP  16
 #define NOWDB_OFF_VSTAMP  8
 #define NOWDB_OFF_USER  24

@@ -687,7 +687,8 @@ static inline nowdb_err_t initVertexContext(nowdb_scope_t        *scope,
 	err = nowdb_store_init(&ctx->store, path,
 	                 ctx->evache, scope->ver,
 	                 NOWDB_CONT_VERTEX, strg,
-	                           vrtx->size,0); // timestamped?
+	                              vrtx->size,
+                                   vrtx->stamped);
 	if (err != NOWDB_OK) {
 		nowdb_plru8r_destroy(ctx->evache);
 		nowdb_plru8r_destroy(ctx->ivache);
@@ -2729,7 +2730,7 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	err = nowdb_plru8r_get(ctx->evache, vid, &found);
 	if (err != NOWDB_OK) goto unlock;
 	if (found) {
-		fprintf(stderr, "DUP KEY DETECTED (1)\n");
+		fprintf(stderr, "DUP KEY DETECTED (1): %lu\n", vid);
 		err = nowdb_err_get(nowdb_err_dup_key,
 		              FALSE, OBJECT, "vertex");
 		goto unlock;

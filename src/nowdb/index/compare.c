@@ -46,9 +46,9 @@
 	k+=8;
 
 #define VERTEXCMP(left, right, k) \
-	if (KEYS(keys)->off[i] < NOWDB_OFF_STAMP) \
+	if (KEYS(keys)->off[i] < NOWDB_OFF_VSTAMP) \
 		KEYCMP(left, right, k) \
-	else if (KEYS(keys)->off[i] == NOWDB_OFF_STAMP) \
+	else if (KEYS(keys)->off[i] == NOWDB_OFF_VSTAMP) \
 		TMSTMPCMP(left, right, k) \
 	else \
 		WEIGHTCMP(left, right, k) \

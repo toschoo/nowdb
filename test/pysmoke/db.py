@@ -46,8 +46,8 @@ def createDB(c, db):
     c.rexecute_("create small storage buystore")
 
     with c.execute("create type product ( \
-                      prod_key uint primary key, \
                       prod_desc    text, \
+                      prod_key uint primary key, \
                       prod_cat     uint, \
                       prod_packing uint, \
                       prod_price float)") as r:

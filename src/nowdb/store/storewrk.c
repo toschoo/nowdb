@@ -175,6 +175,9 @@ static nowdb_err_t syncjob(nowdb_worker_t      *wrk,
 static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 	nowdb_time_t max = NOWDB_TIME_DAWN;
 	nowdb_time_t min = NOWDB_TIME_DUSK;
+	uint32_t off = file->cont==NOWDB_CONT_EDGE?
+	                           NOWDB_OFF_STAMP:
+	                           NOWDB_OFF_VSTAMP;
 	uint32_t bsz = file->recordsize*(file->bufsize /
 	                                 file->recordsize);
 	uint32_t remsz = file->bufsize - file->recordsize;
@@ -183,12 +186,11 @@ static inline nowdb_err_t findMinMax(char *buf, nowdb_file_t *file) {
 		if (i%file->bufsize >= bsz) {
 			i+=remsz; continue;
 		}
-	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) < min)
-	        	memcpy(&min, buf+i+NOWDB_OFF_STAMP,
-			              sizeof(nowdb_time_t));
+	        if (*(nowdb_time_t*)(buf+i+off) < min)
+	        	memcpy(&min, buf+i+off, sizeof(nowdb_time_t));
 		
-	        if (*(nowdb_time_t*)(buf+i+NOWDB_OFF_STAMP) > max)
-	        	memcpy(&max, buf+i+NOWDB_OFF_STAMP,
+	        if (*(nowdb_time_t*)(buf+i+off) > max)
+	        	memcpy(&max, buf+i+off,
 			              sizeof(nowdb_time_t));
 		i+=file->recordsize;
 	}

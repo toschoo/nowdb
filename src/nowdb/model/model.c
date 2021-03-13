@@ -602,10 +602,10 @@ static uint32_t computeVertexSize(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_vertex_t *v;
 
-	// 0 + roleid + vid + num + size + ctrl
+	// 0 + roleid + vid + stamped + num + size + ctrl
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		v = runner->cont;
-		sz+=strlen(v->name) + 1 + 4 + 1 + 2 + 4 + 4;
+		sz+=strlen(v->name) + 1 + 4 + 1 + 1 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -675,6 +675,7 @@ static void vertex2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		v = runner->cont;
 		memcpy(buf+sz, &v->roleid, 4); sz+=4;
 		memcpy(buf+sz, &v->vid, 1); sz+=1;
+		memcpy(buf+sz, &v->stamped, 1); sz+=1;
 		memcpy(buf+sz, &v->num, 2); sz+=2;
 		memcpy(buf+sz, &v->size, 4); sz+=4;
 		memcpy(buf+sz, &v->ctrl, 4); sz+=4;
@@ -850,6 +851,7 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 		}
 		memcpy(&v->roleid, buf+off, 4); off+=4;
 		memcpy(&v->vid, buf+off, 1); off+=1;
+		memcpy(&v->stamped, buf+off, 1); off+=1;
 		memcpy(&v->num, buf+off, 2); off+=2;
 		memcpy(&v->size, buf+off, 4); off+=4;
 		memcpy(&v->ctrl, buf+off, 4); off+=4;
@@ -871,6 +873,7 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 			NOMEM("list.append");
 			return err;
 		}
+		fprintf(stderr, "Vertex |%s| is stamped: %d\n", v->name, v->stamped);
 	}
 	return NOWDB_OK;
 }
@@ -996,6 +999,7 @@ static inline nowdb_err_t updEdgePedge(nowdb_model_t  *model,
 	                         NOWDB_TYP_UINT:
 	                         NOWDB_TYP_TEXT;
 
+	fprintf(stderr, "searching destin: %u\n", e->destin);
 	pattern.roleid = e->destin;
 	v = ts_algo_tree_find(model->vrtxById, &pattern);
 	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
@@ -1365,21 +1369,74 @@ nowdb_err_t nowdb_model_addEdge(nowdb_model_t      *model,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: find pk in list of properties
+ * Helper: find pk in list of properties (and make it first)
  * ------------------------------------------------------------------------
  */
 static void findPK(ts_algo_list_t     *props,
                    nowdb_model_prop_t **prop) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t  *tmp;
+	nowdb_model_prop_t  *zero=NULL;
 
 	*prop = NULL;
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		tmp = runner->cont;
 		if (tmp->pk) {
+			if (tmp->pos != 0 && zero != NULL) {
+				zero->pos = tmp->pos; tmp->pos = 0;
+			}
 			*prop = tmp; break;
-		}
+		} else if (tmp->pos == 0) zero = tmp;
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find stamp in list of properties
+ * ------------------------------------------------------------------------
+ */
+static void findStamp(ts_algo_list_t  *props,
+                   nowdb_model_prop_t **prop) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *tmp;
+	nowdb_model_prop_t  *one=NULL;
+
+	*prop = NULL;
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		tmp = runner->cont;
+		if (tmp->stamp) {
+			if (tmp->pos > 1 && one != NULL) {
+				one->pos = tmp->pos; tmp->pos = 1;
+			}
+			*prop = tmp; break;
+		} else if (tmp->pos == 1 && !tmp->pk) one = tmp;
+	}
+}
+
+static void resort(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *cur;
+	char clean = 0;
+
+	do {
+		int pos=0; clean = 1;
+
+		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+			cur = runner->cont;
+			if (cur->pos > pos) {
+				for(int i=pos; i<cur->pos; i++) {
+					ts_algo_list_degrade(props, runner);
+				}
+				clean=0;break;
+				
+			} else if (cur->pos < pos) {
+				for(int i=pos; i<cur->pos; i--) {
+					ts_algo_list_promote(props, runner);
+				}
+				clean=0;break;
+			}
+			pos++;
+		}
+	} while (!clean);
 }
 
 /* ------------------------------------------------------------------------
@@ -1423,6 +1480,8 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		p = runner->cont;
 		p->roleid = roleid;
 		p->off = off; off+=8;
+
+		if (p->pk) fprintf(stderr, "PK: %u\n", p->off);
 
 		(*num)++;
 
@@ -1552,9 +1611,11 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	nowdb_model_prop_t *prop=NULL;
+	nowdb_model_prop_t *stamp=NULL;
 	nowdb_model_vertex_t *vrtx;
 	ts_algo_list_node_t *runner;
 	thing_t pattern, *thing;
+	nowdb_bool_t stamped=0;
 
 	MODELNULL();
 
@@ -1578,6 +1639,9 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 			       FALSE, OBJECT, "no PK in type");
 			goto unlock;
 		}
+		findStamp(props, &stamp);
+		if (stamp != NULL) stamped = 1;
+		resort(props);
 	}
 
 	vrtx = calloc(1, sizeof(nowdb_model_vertex_t));
@@ -1591,10 +1655,13 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		free(vrtx); goto unlock;
 	}
 
-	vrtx->roleid = getNextRoleid(model);
-	vrtx->num    = 0;
-	vrtx->ctrl   = 0;
-	vrtx->size   = 0;
+	vrtx->roleid  = getNextRoleid(model);
+	vrtx->stamped = stamped;
+	vrtx->num     = 0;
+	vrtx->ctrl    = 0;
+	vrtx->size    = 0;
+
+	fprintf(stderr, "Vertex '%s' is stamped: %d\n", vrtx->name, vrtx->stamped);
 
 	if (prop != NULL) {
 		vrtx->vid = prop->value==NOWDB_TYP_TEXT?

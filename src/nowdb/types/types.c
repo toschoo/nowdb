@@ -170,11 +170,11 @@ int nowdb_vertex_offByName(char *fld) {
 	if (strcasecmp(fld, "vid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertexid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertex") == 0) return NOWDB_OFF_VERTEX;
-	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "datetime") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "date") == 0) return NOWDB_OFF_STAMP;
+	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "datetime") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "date") == 0) return NOWDB_OFF_VSTAMP;
 	return -1;
 }
 

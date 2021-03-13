@@ -73,6 +73,7 @@ typedef struct {
 	nowdb_roleid_t    roleid; /* roleid                */
 	nowdb_model_type_t   vid; /* is the vid texutal?   */
 	nowdb_model_pedge_t   tp; /* can be removed?       */
+	nowdb_bool_t     stamped; /* vertex is stamped     */
 	uint16_t             num; /* number of attributes  */
 	uint32_t            ctrl; /* size of control block */
 	uint32_t            size; /* size of edge          */

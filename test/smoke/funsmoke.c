@@ -519,7 +519,7 @@ int main() {
 	for(int i=0; i<ITER; i++) {
 		if (testFun(NOWDB_FUN_SPREAD,
 		            NOWDB_TYP_TIME,
-		            NOWDB_OFF_TMSTMP,&uzero) != 0) {
+		            NOWDB_OFF_STAMP,&uzero) != 0) {
 			fprintf(stderr, "testFun SPREAD, TIME, TIMESTAMP, failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}

@@ -173,7 +173,7 @@ nowdb_cmp_t nowdb_sort_vertex_keys_compare(const void *left,
 		case NOWDB_OFF_VERTEX:
 			KEYCMP(left, right, KEYS(keys)->off[i]);
 
-		case NOWDB_OFF_STAMP:
+		case NOWDB_OFF_VSTAMP:
 			TMSTMPCMP(left, right, KEYS(keys)->off[i]);
 
 		default:
@@ -281,15 +281,13 @@ nowdb_cmp_t nowdb_sort_vertex_compare(const void *left,
 	if (*(nowdb_key_t*)(char*)left >
 	    *(nowdb_key_t*)(char*)right) return NOWDB_SORT_GREATER;
 
-	/* TODO
-	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) <
-	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_VSTAMP) <
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_VSTAMP))
 		return NOWDB_SORT_LESS;
 
-	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) >
-	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_VSTAMP) >
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_VSTAMP))
 		return NOWDB_SORT_GREATER;
-	*/
 
 	return NOWDB_SORT_EQUAL;
 }

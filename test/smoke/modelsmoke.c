@@ -414,6 +414,7 @@ int addType(nowdb_model_t *model,
 		case 0: 
 			prop->name = strdup("ID");
 			prop->value = NOWDB_TYP_UINT;
+			prop->stamp = 0;
 			prop->pk = TRUE; break;
 		case 1:
 			prop->name = strdup("NAME");
@@ -429,6 +430,8 @@ int addType(nowdb_model_t *model,
 			fprintf(stderr, "out-of-mem\n");
 			return -1;
 		}
+		prop->pos = i;
+		prop->stamp = 0;
 		prop->propid = 1000 + i;
 		if (ts_algo_list_append(&props, prop) != TS_ALGO_OK) {
 			free(prop->name); free(prop);

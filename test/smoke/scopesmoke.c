@@ -191,6 +191,8 @@ int createType(nowdb_scope_t *scope, char *name) {
 
 	p->name = strdup("id");
 	p->pk = 1;
+	p->pos = 0;
+	p->stamp = 0;
 	p->value = NOWDB_TYP_UINT;
 
 	if (p->name == NULL) {
@@ -209,6 +211,8 @@ int createType(nowdb_scope_t *scope, char *name) {
 
 	p->name = strdup("name");
 	p->pk = 0;
+	p->pos = 1;
+	p->stamp = 0;
 	p->value = NOWDB_TYP_TEXT;
 
 	if (p->name == NULL) {

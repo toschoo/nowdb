@@ -663,7 +663,7 @@ void nowdb_csv_row(int c, void *ldr) {
  */
 #define ORIGIN  NOWDB_OFF_ORIGIN
 #define DESTIN  NOWDB_OFF_DESTIN
-#define STAMP   NOWDB_OFF_TMSTMP
+#define STAMP   NOWDB_OFF_STAMP
 
 /* ------------------------------------------------------------------------
  * Copy data to helper
@@ -755,7 +755,7 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
  * Macro to obtain a timestamp field
  * ------------------------------------------------------------------------
  */
-#define GETTMSTMP(d, l, name, fld) \
+#define GETSTAMP(d, l, name, fld) \
 	if (toInt(LDR(ldr)->csv, data, l,\
 	    LDR(ldr)->csv->buf+LDR(ldr)->csv->pos+fld) != 0) \
 	{ \

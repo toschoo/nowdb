@@ -496,9 +496,13 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		p->roleid = 0;
 		p->pos    = i; i++;
 		p->pk = FALSE;
+		p->stamp = FALSE;
 
 		o = nowdb_ast_option(d, NOWDB_AST_PK);
 		if (o != NULL) p->pk = TRUE;
+
+		o = nowdb_ast_option(d, NOWDB_AST_STAMP);
+		if (o != NULL) p->stamp = TRUE;
 
 		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
 			destroyProps(&props); free(p);

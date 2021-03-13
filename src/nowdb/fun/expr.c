@@ -1103,12 +1103,10 @@ static inline nowdb_err_t getEdgeValue(nowdb_field_t *field,
 		}
 		break;
 
-	/*
 	case NOWDB_OFF_STAMP:
 		*t = NOWDB_TYP_TIME;
 		*res = src+NOWDB_OFF_STAMP;
 		break;
-	*/
 
 	default:
 		HANDLENULL(src,field);
@@ -1559,11 +1557,16 @@ void nowdb_expr_replace(nowdb_expr_t op,
  * Extract period from expression
  * ------------------------------------------------------------------------
  */
+#define STAMP() \
+  (FIELDOP(expr,f)->content==NOWDB_CONT_EDGE?NOWDB_OFF_STAMP: \
+                                             NOWDB_OFF_VSTAMP)
 void nowdb_expr_period(nowdb_expr_t expr,
                        nowdb_time_t *start,
                        nowdb_time_t *end) {
-	int f,c;
+
 	if (expr == NULL) return;
+
+	int f,c;
 
 	if (nowdb_expr_type(expr) != NOWDB_EXPR_OP) return;
 
@@ -1579,7 +1582,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 
 	case NOWDB_EXPR_OP_EQ:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr, c)->value, 8);
 		memcpy(end, CONSTOP(expr,c)->value, 8);
@@ -1588,7 +1591,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_GE:
 	case NOWDB_EXPR_OP_GT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_GT) (*start)++;
@@ -1597,7 +1600,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_LE:
 	case NOWDB_EXPR_OP_LT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_LT) (*end)--;
