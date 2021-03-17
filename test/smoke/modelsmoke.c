@@ -511,7 +511,7 @@ int addEdgeType(nowdb_model_t *model,
 			destroyProps(&props);
 		}
 	}
-	err = nowdb_model_addEdgeType(model, name, 1, eid, o, d, &props);
+	err = nowdb_model_addEdgeType(model, name, eid, o, d, &props);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);
