@@ -24,9 +24,9 @@ uint64_t label;
 uint64_t weight;
 */
 
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define EDGE_OFF  24
+#define LABEL_OFF 32
+#define WEIGHT_OFF 40
 
 void setRandomValue(char *e, uint32_t off) {
 	uint64_t x;
@@ -42,10 +42,10 @@ void makeEdgePattern(char *e) {
 	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
 	setValue(e, NOWDB_OFF_DESTIN, 0xb);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
 	setValue(e, EDGE_OFF, 0xc);
 	setValue(e, LABEL_OFF, 0xd);
 	setValue(e, WEIGHT_OFF, 0);
+	setValue(e, WEIGHT_OFF+8, 63);
 }
 
 #define RECPAGE (NOWDB_IDX_PAGE/recsz)

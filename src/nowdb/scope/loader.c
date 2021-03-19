@@ -614,9 +614,7 @@ void nowdb_csv_row(int c, void *ldr) {
 		return;
 	}
 
-	uint32_t x = LDR(ldr)->flags & NOWDB_CSV_VERTEX?
-		     nowdb_vrtx_ctrlStart(LDR(ldr)->csv->atts):
-                     NOWDB_OFF_USER;
+	uint32_t x = nowdb_ctrlStart(LDR(ldr)->csv->atts);
 
 	if (LDR(ldr)->csv->xb != NULL) {
 		memcpy(LDR(ldr)->csv->buf + 
@@ -1032,13 +1030,11 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 			REJECT(LDR(ldr)->csv->pedge[i].name, "invalid value");
 			return;
 		}
-		if (off > NOWDB_OFF_USER) {
-			uint8_t  k;
-			uint16_t d;
-			nowdb_edge_getCtrl(LDR(ldr)->csv->atts,
-			                          off, &k, &d);
-			LDR(ldr)->csv->xb[d] |= 1<<k;
-		}
+		uint8_t  k;
+		uint16_t d;
+		nowdb_edge_getCtrl(LDR(ldr)->csv->atts,
+			                  off, &k, &d);
+		LDR(ldr)->csv->xb[d] |= 1<<k;
 	}
 
 	LDR(ldr)->csv->cur++;

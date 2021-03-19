@@ -505,7 +505,6 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	err = getValueAsType(dml, val, edge+off);
 	if (err != NOWDB_OK) return err;
 
-	if (off < NOWDB_OFF_USER) return NOWDB_OK;
 	if (val->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 
 	uint8_t bit;
@@ -513,7 +512,7 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 
 	nowdb_edge_getCtrl(dml->e->num, off, &bit, &byte);
 
-	char *xbyte = edge+NOWDB_OFF_USER+byte;
+	char *xbyte = edge+nowdb_ctrlStart(dml->e->num)+byte;
 	(*xbyte) |= 1<<bit;
 
 	return NOWDB_OK;
@@ -687,7 +686,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		NOMEM("allocating vertex");
 		return err;
 	}
-	ctrl = vrtx+nowdb_vrtx_ctrlStart(dml->v->num);
+	ctrl = vrtx+nowdb_ctrlStart(dml->v->num);
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
 		if (val == NULL) {
@@ -722,8 +721,10 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
                                            &bit, &byte);
 			char *xbyte = ctrl+byte;
 			(*xbyte) |= 1<<bit;
-			fprintf(stderr, "SETTING CONTROL BIT %u | %u at %u: %u\n", byte, bit, nowdb_vrtx_ctrlStart(dml->v->num), *ctrl);
+			/*
+			fprintf(stderr, "SETTING CONTROL BIT %u | %u at %u: %u\n", byte, bit, nowdb_ctrlStart(dml->v->num), *ctrl);
 			fprintf(stderr, "RECSIZE: %u\n", dml->ctx->store.recsize);
+			*/
 		}
 		i++;
 	}

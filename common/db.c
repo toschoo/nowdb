@@ -243,11 +243,11 @@ int createDB(int hedges, int hprods, int hclients) {
 	            client_id uint primary key, \
 	            client_name text)");
 
-	EXECSTMT("create stamped edge buys (\
-	            origin      client, \
-	            destination product, \
-	            price       float, \
-	            quantity    float)");
+	EXECSTMT("create edge buys (\
+	            client   client origin, \
+	            product  product destin, \
+	            price    float, \
+	            quantity float)");
 
 	if (writeVrtx(PRODS, PRODUCT, hprods) != 0) {
 		fprintf(stderr, "cannot write products\n");

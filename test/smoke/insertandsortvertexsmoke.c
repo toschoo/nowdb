@@ -16,7 +16,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#define WEIGHT_OFF NOWDB_OFF_USER
+#define WEIGHT_OFF NOWDB_OFF_VERTEX+8
 
 void setRandomValue(char *e, uint32_t off) {
 	uint64_t x;

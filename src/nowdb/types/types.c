@@ -271,8 +271,7 @@ uint32_t nowdb_vrtx_attctrlSize(uint16_t atts) {
 // get attribute control bit and byte for specific offset
 void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
                         uint8_t  *bit, uint16_t *byte) {
-	uint32_t xb = edgeAttctrlSize(atts);
-	uint32_t o = (off - NOWDB_OFF_USER - xb)/8;
+	uint32_t o = off/8;
 	*byte = o/8;
 	*bit  = o%8;
 	/*
@@ -281,7 +280,7 @@ void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
 	*/
 }
 
-uint32_t nowdb_vrtx_ctrlStart(uint16_t atts) {
+uint32_t nowdb_ctrlStart(uint16_t atts) {
 	return atts*8;
 }
 

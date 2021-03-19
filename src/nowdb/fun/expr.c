@@ -197,11 +197,9 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
 	FIELD(*expr)->type = type;
 	FIELD(*expr)->num = num;
 
-	if (off > NOWDB_OFF_USER) {
-		nowdb_edge_getCtrl(num, off,
-		     &FIELD(*expr)->ctrlbit,
-		     &FIELD(*expr)->ctrlbyte);
-	}
+	nowdb_edge_getCtrl(num, off,
+	     &FIELD(*expr)->ctrlbit,
+	     &FIELD(*expr)->ctrlbyte);
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
 		if (FIELD(*expr)->name == NULL) {
@@ -1063,8 +1061,8 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 	}
 
 #define HANDLENULL(src,f) \
-	if (!(*(int*)(src+NOWDB_OFF_USER+f->ctrlbyte) & \
-	                           (1 << f->ctrlbit))) \
+	if (!(*(int*)(src+nowdb_ctrlStart(f->num)+f->ctrlbyte) & \
+	             (1 << f->ctrlbit))) \
 	{ \
 		*t = NOWDB_TYP_NOTHING; break; \
 	} \
@@ -1161,7 +1159,7 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
 	if (field->name == NULL)
 		return getRawVertexValue(field, hlp, src, t, res);
 
-	if (!(*(int*)(src+nowdb_vrtx_ctrlStart(field->num)+
+	if (!(*(int*)(src+nowdb_ctrlStart(field->num)+
                       field->ctrlbyte) & (1 << field->ctrlbit)))
 	{
 		*res = src+field->off;
