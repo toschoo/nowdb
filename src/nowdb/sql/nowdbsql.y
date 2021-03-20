@@ -204,6 +204,9 @@
 	// fprintf(stderr, "near '%s': syntax error\n", (char*)yyminor);
 }
 
+%fallback IDENTIFIER
+          ORIGIN DESTINATION TIMESTAMP .
+
 /* ------------------------------------------------------------------------
  * An SQL statement is either
  * a DDL, DLL, DML, DQL or a miscellaneous statement

@@ -157,31 +157,31 @@ def createInvalidEdge(c):
 
     print("RUNNING TEST 'createInvalidEdge'")
 
-    with c.execute("create stamped edge testedge (origin client, price float)") as r:
+    with c.execute("create edge testedge (origin client origin, price float)") as r:
          if r.ok():
             raise db.TestFailed("I can create an edge without destin :-(")
          else:
             print("%d: %s" % (r.code(), r.details()))
 
-    with c.execute("create stamped edge testedge (destin product, price float)") as r:
+    with c.execute("create edge testedge (destin product destin, price float)") as r:
          if r.ok():
             raise db.TestFailed("I can create an edge without origin :-(")
          else:
             print("%d: %s" % (r.code(), r.details()))
 
-    with c.execute("create stamped edge testedge (origin uint, destin product, price float)") as r:
+    with c.execute("create edge testedge (origin uint origin, destin product destin, price float)") as r:
          if r.ok():
             raise db.TestFailed("I can create an edge with origin that is not a vertex :-(")
          else:
             print("%d: %s" % (r.code(), r.details()))
 
-    with c.execute("create stamped edge testedge (origin client, destin uint, price float)") as r:
+    with c.execute("create edge testedge (origin client origin, destin uint destin, price float)") as r:
          if r.ok():
             raise db.TestFailed("I can create an edge with destin that is not a vertex :-(")
          else:
             print("%d: %s" % (r.code(), r.details()))
 
-    with c.execute("create edge unstamped (origin client, destin product)") as r:
+    with c.execute("create edge unstamped (origin client origin, destin product destin)") as r:
          if not r.ok():
             raise db.TestFailed("ERROR creating unstamed edge: %d: %s" % (r.code(), r.details()))
 

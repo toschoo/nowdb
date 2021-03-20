@@ -575,7 +575,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	char o=0,d=0,t=0;
 	int i=0;
 
-	stamped = dml->e->size > NOWDB_OFF_STAMP;
+	stamped = dml->e->stamped;
 	edge = calloc(1, dml->e->size);
 	if (edge == NULL) {
 		NOMEM("allocating edge");

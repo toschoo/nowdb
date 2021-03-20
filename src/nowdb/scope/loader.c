@@ -631,10 +631,6 @@ void nowdb_csv_row(int c, void *ldr) {
 	LDR(ldr)->csv->total++;
 
 	/*
-	uint32_t x = LDR(ldr)->flags & NOWDB_CSV_VERTEX?
-	             LDR(ldr)->csv->psz+1:1;
-	*/
-	/*
 	fprintf(stderr, "%u + %u * %u == %u (%u)\n",
 			LDR(ldr)->csv->pos, x,
 			LDR(ldr)->csv->recsize,

@@ -749,7 +749,6 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
                           nowdb_scope_t *scope)  {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
-	nowdb_ast_t  *f;
 	nowdb_ast_t  *d;
 	nowdb_ast_t  *t=NULL;
 	char *origin=NULL, *destin=NULL;
@@ -773,7 +772,7 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 			return err;
 		}
 	
-		// fprintf(stderr, "%s\n", p->name);
+		// fprintf(stderr, "CREATING EDGE %s\n", p->name);
 
 		p->edgeid = 0;
 		p->origin = FALSE;
@@ -2130,7 +2129,6 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	op = nowdb_ast_operation(ast);
 	if (op == NULL) INVALIDAST("no operation in AST");
 
-	
 	trg = nowdb_ast_target(ast);
 	if ((trg == NULL ||
 	     trg->stype != NOWDB_AST_SCOPE) && scope == NULL) {

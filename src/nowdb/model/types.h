@@ -90,9 +90,7 @@ typedef struct {
 	char               *name; /* name of the edge      */
 	nowdb_key_t       edgeid; /* the edgeid (= edge)   */
 	nowdb_roleid_t    origin; /* roleid of the origin  */
-	nowdb_model_type_t  orit; /* is origin vid textual */
 	nowdb_roleid_t    destin; /* roleid of the destin  */
-	nowdb_model_type_t  dest; /* is destin vid textual */
 	nowdb_bool_t     stamped; /* vertex is stamped     */
 	uint16_t             num; /* number of attributes  */
 	uint32_t            ctrl; /* size of control block */

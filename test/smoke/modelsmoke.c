@@ -480,7 +480,7 @@ int addEdgeType(nowdb_model_t *model,
 
 	EID++; eid = EID;
 
-	for(int i=0; i<3; i++) {
+	for(int i=0; i<6; i++) {
 		prop = calloc(1, sizeof(nowdb_model_pedge_t));
 		if (prop == NULL) {
 			fprintf(stderr, "out-of-mem\n");
@@ -488,18 +488,34 @@ int addEdgeType(nowdb_model_t *model,
 		}
 		switch(i) {
 		case 0: 
+			prop->name = strdup("origin");
+			prop->value = NOWDB_TYP_UINT;
+			prop->origin = 1;
+			break;
+		case 1: 
+			prop->name = strdup("destin");
+			prop->value = NOWDB_TYP_UINT;
+			prop->destin = 1;
+			break;
+		case 2: 
+			prop->name = strdup("stamp");
+			prop->value = NOWDB_TYP_TIME;
+			prop->stamp = 1;
+			break;
+		case 3: 
 			prop->name = strdup("lat");
 			prop->value = NOWDB_TYP_FLOAT;
 			break;
-		case 1:
+		case 4:
 			prop->name = strdup("lon");
 			prop->value = NOWDB_TYP_FLOAT;
 			break;
-		case 2: 
+		case 5: 
 			prop->name = strdup("id");
 			prop->value = NOWDB_TYP_TEXT;
 			break;
 		}
+		prop->pos = i;
 		if (prop->name == NULL) {
 			free(prop);
 			fprintf(stderr, "out-of-mem\n");

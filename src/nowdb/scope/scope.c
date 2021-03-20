@@ -1660,6 +1660,7 @@ static inline nowdb_err_t fillEVache(nowdb_scope_t *scope,
 	nowdb_reader_t *reader=NULL;
 	nowdb_key_t vid;
 	char *page;
+	uint32_t mx;
 
 	ts_algo_list_init(&pending);
 
@@ -1674,11 +1675,14 @@ static inline nowdb_err_t fillEVache(nowdb_scope_t *scope,
 	err = nowdb_reader_fullscan(&reader, &pending, NULL);
 	if (err != NOWDB_OK) goto unlock;
 
+	mx = (NOWDB_IDX_PAGE/reader->recsize) * reader->recsize;
+
 	while((err = nowdb_reader_move(reader)) == NOWDB_OK) {
 		page = nowdb_reader_page(reader);
-		for(int i=0; i<NOWDB_IDX_PAGE; i+=reader->recsize) {
+		for(int i=0; i<mx; i+=reader->recsize) {
 			char x=0;
-			if (memcmp(page+i, nowdb_nullrec, reader->recsize) == 0) break;
+			if (memcmp(page+i, nowdb_nullrec,
+			    reader->recsize) == 0) break;
 			memcpy(&vid, page+i+NOWDB_OFF_VERTEX, 8);
 			err = nowdb_plru8r_get(ctx->evache, vid, &x);
 			if (err != NOWDB_OK) break;

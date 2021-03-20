@@ -146,16 +146,17 @@ def createEdges(c):
          if not r.ok():
             raise db.TestFailed('cannot drop dvcsns')
     with c.execute("create edge dvcsns ( \
-                           origin device, \
-                           destin sensor)") as r:
+                           origin device origin, \
+                           destin sensor destin)") as r:
          if not r.ok():
-            raise db.TestFailed('cannot create dvcsns')
+            raise db.TestFailed('cannot create dvcsns %s' % r.details())
     with c.execute("drop edge measure if exists") as r:
          if not r.ok():
             raise db.TestFailed('cannot drop measure')
-    with c.execute("create stamped edge measure ( \
-                           origin device, \
-                           destin nirvana, \
+    with c.execute("create edge measure ( \
+                           origin device  origin, \
+                           destin nirvana destin, \
+                           stamp  time    stamp, \
                            temp   float, \
                            revo   float) \
                       storage=mystore") as r:
