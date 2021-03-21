@@ -197,9 +197,8 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
 	FIELD(*expr)->type = type;
 	FIELD(*expr)->num = num;
 
-	nowdb_edge_getCtrl(num, off,
-	     &FIELD(*expr)->ctrlbit,
-	     &FIELD(*expr)->ctrlbyte);
+	nowdb_getCtrl(off, &FIELD(*expr)->ctrlbit,
+	                   &FIELD(*expr)->ctrlbyte);
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
 		if (FIELD(*expr)->name == NULL) {
@@ -274,9 +273,8 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 			return err;
 		}
 	}
-	nowdb_vrtx_getCtrl(off,
-		  &FIELD(*expr)->ctrlbit,
-		  &FIELD(*expr)->ctrlbyte);
+	nowdb_getCtrl(off, &FIELD(*expr)->ctrlbit,
+		           &FIELD(*expr)->ctrlbyte);
 	return NOWDB_OK;
 }
 

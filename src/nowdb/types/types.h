@@ -157,15 +157,6 @@ int nowdb_vertex_offByName(char *field);
 
 int nowdb_edge_offByName(char *field);
 
-// compute the recordsize of a  node with n atts
-// if n > 0, the edge is always stamped
-uint32_t nowdb_vrtx_recSize(char stamped, uint16_t atts);
-
-// compute the recordsize of a  node with n atts
-// compute the recordsize of an edge with n atts <- edges always 16 bytes
-// if n > 0, the edge is always stamped
-uint32_t nowdb_edge_recSize(char stamped, uint16_t atts);
-
 // records per page for a given record size
 uint32_t nowdb_recordsPerPage(uint32_t recsz);
 
@@ -174,22 +165,28 @@ uint32_t nowdb_recordsPerPage(uint32_t recsz);
 // which are to be considered / to be ignored
 uint32_t nowdb_pagectrlSize(uint32_t recsz);
 
+char *nowdb_typename(nowdb_type_t typ);
+
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL
-uint32_t nowdb_edge_attctrlSize(uint16_t atts); // <- node, not edge
+static inline uint32_t nowdb_attctrlSize(uint16_t atts) {
+	return (atts%8==0?atts/8:atts/8+1);
+}
 
-uint32_t nowdb_vrtx_attctrlSize(uint16_t atts); // <- node, not edge
+// get start offset in record where ctrl block starts
+static inline uint32_t nowdb_ctrlStart(uint16_t atts) {
+	return atts*8;
+}
 
 // get attribute control bit and byte for specific offset
-void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
-                        uint8_t *bit,  uint16_t *byte);
+static inline void nowdb_getCtrl(uint32_t off, uint8_t *bit, uint16_t *byte) {
+	uint32_t o = off/8;
+	*byte = o/8;
+	*bit  = o%8;
+}
 
-// get attribute control bit and byte for specific offset
-void nowdb_vrtx_getCtrl(uint32_t off, uint8_t *bit,  uint16_t *byte);
-
-// get start position of attribute control block
-uint32_t nowdb_ctrlStart(uint16_t atts);
-
-char *nowdb_typename(nowdb_type_t typ);
+static inline uint32_t nowdb_recSize(uint16_t atts) {
+	return(8*atts+nowdb_attctrlSize(atts));
+}
 
 #endif

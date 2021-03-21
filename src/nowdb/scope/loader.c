@@ -396,7 +396,7 @@ static inline void rowTypeHeader(nowdb_loader_t *ldr) {
 	ldr->csv->atts    = v->num;
 
 	if (ldr->csv->atts > 0) {
-		ldr->csv->ctlSize = nowdb_vrtx_attctrlSize(v->num);
+		ldr->csv->ctlSize = nowdb_attctrlSize(v->num);
 
 		ldr->csv->xb = calloc(1,ldr->csv->ctlSize);
 		if (ldr->csv->xb == NULL) {
@@ -468,7 +468,7 @@ static inline void rowEdgeHeader(nowdb_loader_t *ldr) {
 	ldr->csv->atts = e->num;
 
 	if (ldr->csv->atts > 0) {
-		ldr->csv->ctlSize = nowdb_edge_attctrlSize(e->num);
+		ldr->csv->ctlSize = nowdb_attctrlSize(e->num);
 
 		ldr->csv->xb = calloc(1,ldr->csv->ctlSize);
 		if (ldr->csv->xb == NULL) {
@@ -951,7 +951,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		}
 		uint8_t  k;
 		uint16_t d;
-		nowdb_vrtx_getCtrl(off, &k, &d);
+		nowdb_getCtrl(off, &k, &d);
 		LDR(ldr)->csv->xb[d] |= 1<<k;
 	}
 
@@ -1028,8 +1028,7 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 		}
 		uint8_t  k;
 		uint16_t d;
-		nowdb_edge_getCtrl(LDR(ldr)->csv->atts,
-			                  off, &k, &d);
+		nowdb_getCtrl(off, &k, &d);
 		LDR(ldr)->csv->xb[d] |= 1<<k;
 	}
 

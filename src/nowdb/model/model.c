@@ -1539,7 +1539,7 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 	nowdb_model_prop_t  *p, *tmp;
 	uint32_t off=0, xb;
 
-	xb  = nowdb_vrtx_attctrlSize(props->len);
+	xb  = nowdb_attctrlSize(props->len);
  
         *ctrl = xb;
 
@@ -1600,7 +1600,7 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 	nowdb_model_pedge_t *p, *tmp;
 	uint32_t off=0, xb;
 	
-	xb = nowdb_edge_attctrlSize(props->len);
+	xb = nowdb_attctrlSize(props->len);
 
 	*ctrl = xb;
 

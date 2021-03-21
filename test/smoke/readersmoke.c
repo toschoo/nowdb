@@ -58,7 +58,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	nowdb_err_t err;
 	char *e;
 	uint64_t max = start + count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	e = calloc(1, recsz);
 	if (e == NULL) {
@@ -148,7 +148,7 @@ nowdb_bool_t testFullscan(nowdb_store_t *store) {
 	uint64_t s = 0;
 	uint32_t mx;
 
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	mx = (NOWDB_IDX_PAGE/recsz)*recsz;
 
@@ -200,7 +200,7 @@ int main() {
 	nowdb_store_t *store1=NULL, *store2=NULL;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1, 3);
+	recsz = nowdb_recSize(6);
 
 	fprintf(stderr, "RECSIZE: %u, FULL: %u\n", recsz, FULL);
 

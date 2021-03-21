@@ -43,7 +43,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 
 	fprintf(stderr, "inserting %u random edges\n", count);
 
-	sz = nowdb_edge_recSize(1, 3);
+	sz = nowdb_recSize(6);
 	fprintf(stderr, "allocating %u bytes\n", sz);
 	e = calloc(1, sz);
 	if (e == NULL) {
@@ -86,7 +86,7 @@ nowdb_bool_t insertVrtxs(nowdb_store_t *store, uint32_t count) {
 
 	fprintf(stderr, "inserting %u random vertexes\n", count);
 
-	sz = nowdb_vrtx_recSize(1, 2);
+	sz = nowdb_recSize(2);
 	fprintf(stderr, "allocating %u bytes\n", sz);
 	v = calloc(1, sz);
 	if (v == NULL) {

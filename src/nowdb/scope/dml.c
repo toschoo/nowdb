@@ -510,7 +510,7 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	uint8_t bit;
 	uint16_t byte;
 
-	nowdb_edge_getCtrl(dml->e->num, off, &bit, &byte);
+	nowdb_getCtrl(off, &bit, &byte);
 
 	char *xbyte = edge+nowdb_ctrlStart(dml->e->num)+byte;
 	(*xbyte) |= 1<<bit;
@@ -717,8 +717,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 		if (val->type != NOWDB_TYP_NOTHING) {
 			uint8_t bit;
 			uint16_t byte;
-			nowdb_vrtx_getCtrl(dml->p[i]->off,
-                                           &bit, &byte);
+			nowdb_getCtrl(dml->p[i]->off, &bit, &byte);
 			char *xbyte = ctrl+byte;
 			(*xbyte) |= 1<<bit;
 			/*

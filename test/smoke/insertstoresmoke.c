@@ -58,7 +58,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	nowdb_err_t err;
 	char *e;
 	uint64_t max = start + count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	e = calloc(1, recsz);
 	if (e == NULL) {
@@ -108,7 +108,7 @@ nowdb_bool_t checkInitial(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkHalf(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
@@ -135,7 +135,7 @@ nowdb_bool_t checkHalf(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkFull(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
 		return FALSE;
@@ -172,7 +172,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	uint32_t remsz;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_recSize(6);
 	realsz = (NOWDB_IDX_PAGE/recsz)*recsz;
 	remsz = NOWDB_IDX_PAGE - realsz;
 
@@ -262,7 +262,7 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	nowdb_err_t      err;
 	ts_algo_list_t files;
 	nowdb_file_t   *file;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 	ts_algo_list_node_t *runner;
 	ts_algo_list_init(&files);
 
@@ -329,7 +329,7 @@ int main() {
 	nowdb_store_t *store;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_recSize(6);
 
 	nowdb_err_init();
 	store = bootstrap("rsc/store10", NOWDB_CONT_EDGE, recsz);

@@ -26,7 +26,7 @@
 #define WEIGHT_OFF 40
 
 #define LOOP_INIT(stm, atts) \
-	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t recsz = nowdb_recSize(atts); \
 	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
 	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
 
@@ -80,7 +80,7 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	struct timespec t1, t2;
 	int have;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -217,7 +217,7 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	nowdb_reader_t *reader;
 	char           *last, *cur;
 	struct timespec t1, t2;
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -355,7 +355,7 @@ int testRange(nowdb_scope_t *scope, int h) {
 	nowdb_reader_t *range=NULL;
 	struct timespec t1, t2;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -601,7 +601,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	uint32_t mx;
 	char *tmp=NULL;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	tmp = calloc(1,recsz);
 	if (tmp == NULL) {

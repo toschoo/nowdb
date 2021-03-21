@@ -53,7 +53,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count) {
 	nowdb_err_t err;
 	char *e;
 	uint64_t max = count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	e = calloc(1, recsz);
 	if (e == NULL) {
@@ -112,7 +112,7 @@ nowdb_bool_t checkSorted(nowdb_file_t *file) {
 	char *e=NULL;
 	char *last;
 	char first = 1;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 	uint32_t realsz = NOWDB_IDX_PAGE/recsz;
 	uint32_t remsz = NOWDB_IDX_PAGE - realsz;
 
@@ -244,7 +244,7 @@ int main() {
 	int rc = EXIT_SUCCESS;
 	nowdb_store_t *store = NULL;
 	struct timespec t1, t2;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	if (!nowdb_err_init()) {
 		fprintf(stderr, "cannot init library\n");
