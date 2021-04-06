@@ -1628,7 +1628,7 @@ static inline nowdb_err_t createEIndices(nowdb_scope_t *scope, char *ctx) {
 
 	// index size according to tablespace
 	err = createIndex(scope, iname, ctx, keys,
-	                  NOWDB_CONFIG_SIZE_TINY);
+	                  NOWDB_CONFIG_SIZE_SMALL);
 	nowdb_index_keys_destroy(keys); free(iname);
 	if (err != NOWDB_OK) return err;
 
@@ -1641,7 +1641,7 @@ static inline nowdb_err_t createEIndices(nowdb_scope_t *scope, char *ctx) {
 
 	// index size according to tablespace
 	err = createIndex(scope, iname, ctx, keys,
-	                  NOWDB_CONFIG_SIZE_TINY);
+	                  NOWDB_CONFIG_SIZE_SMALL);
 	nowdb_index_keys_destroy(keys); free(iname);
 	if (err != NOWDB_OK) return err;
 
