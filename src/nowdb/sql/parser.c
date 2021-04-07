@@ -183,7 +183,7 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		}
 
 		/* start of line-comment */
-		if (nToken == NOWDB_SQL_COMMENT) continue;
+		// if (nToken == NOWDB_SQL_COMMENT) continue;
 
 		/* now we have something */
 		have=1;

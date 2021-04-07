@@ -23,6 +23,9 @@
 
 %option reentrant
 
+%x MCOMMENT
+%x LCOMMENT
+
 %%
 
 "."			return NOWDB_SQL_DOT;
@@ -158,14 +161,31 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
+"--".*[\r\n]		;
+"/*"			BEGIN(MCOMMENT);
+
 [a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
 '[^']*'					return NOWDB_SQL_STRING;
 (\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
 (\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
 0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
-"--".*[\r\n]				return NOWDB_SQL_COMMENT;
+
 [ \t\r\n]				;
-.					return NOWDB_SQL_UNEXPECTED;
+.
+
+<MCOMMENT>{
+"*/"      BEGIN(INITIAL);
+[^*\n]+   ;
+"*"       ;
+\n        yylineno++;
+}
+
+  /*
+<LCOMMENT>{
+"\n"	BEGIN(INITIAL);
+.*	;
+}
+  */
 
 %%
 
