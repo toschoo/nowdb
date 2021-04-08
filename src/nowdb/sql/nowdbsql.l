@@ -20,7 +20,6 @@
 %option reentrant
 
 %x MCOMMENT
-%x LCOMMENT
 
 %%
 
@@ -174,11 +173,6 @@
 [^*\n]+   ;
 "*"       ;
 \n        yylineno++;
-}
-
-<LCOMMENT>{
-"\n"	BEGIN(INITIAL);
-.*	;
 }
 
 %%
