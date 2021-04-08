@@ -38,6 +38,15 @@ then
 	exit 1
 fi
 
+echo "running comments.sh" >> log/client.log
+test/client/comments.sh >> log/client.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: comments.sh failed"
+	kill -2 $p
+	exit 1
+fi
+
 echo "running clientsmoke (1)" >> log/client.log
 test/client/clientsmoke >> log/client.log 2>&1
 if [ $? -ne 0 ]

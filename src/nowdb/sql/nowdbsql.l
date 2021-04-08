@@ -8,11 +8,7 @@
  *
  * urgent TODO:
  * ------------
- * - multi-line comments...
- *   with the lexer alone, this appears to be complex.
- *   here's how to do it:
- *   http://westes.github.io/flex/manual/
- *   How-can-I-match-C_002dstyle-comments_003f.html
+ * - string literals (\', \\n, \\r, \\t)
  * ========================================================================
  */
 
@@ -27,6 +23,10 @@
 %x LCOMMENT
 
 %%
+
+"--".*			;
+"/*"			BEGIN(MCOMMENT);
+[ \t\r\n]		;
 
 "."			return NOWDB_SQL_DOT;
 ";"			return NOWDB_SQL_SEMICOLON;
@@ -161,17 +161,13 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
-"--".*[\r\n]		;
-"/*"			BEGIN(MCOMMENT);
-
 [a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
 '[^']*'					return NOWDB_SQL_STRING;
 (\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
 (\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
 0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
 
-[ \t\r\n]				;
-.
+.                                       return NOWDB_SQL_UNEXPECTED;
 
 <MCOMMENT>{
 "*/"      BEGIN(INITIAL);
@@ -180,12 +176,10 @@
 \n        yylineno++;
 }
 
-  /*
 <LCOMMENT>{
 "\n"	BEGIN(INITIAL);
 .*	;
 }
-  */
 
 %%
 

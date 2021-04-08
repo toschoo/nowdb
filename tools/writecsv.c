@@ -99,6 +99,8 @@ nowdb_bool_t writeEdges(FILE *csv, uint64_t count) {
 	int j = 0;
 	int rc;
 
+	fprintf(csv, "origin;destin;stamp;label;weight\n");
+
 	memset(&buf,0,sizeof(edge_t)*1024);
 
 	for(uint32_t i=0; i<count; i++) {
