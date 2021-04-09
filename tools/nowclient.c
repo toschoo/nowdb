@@ -354,7 +354,7 @@ int findEnd(char *buf, int x) {
 	for(i=0;i<x;i++) {
 		if (on && buf[i] == '\\') continue;
 		if (buf[i] == '\'') {
-			on=on?0:1; continue;
+			on=!on; continue;
 		}
 		if (on) continue;
 		if (buf[i] == ';') break;

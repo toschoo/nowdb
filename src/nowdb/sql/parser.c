@@ -9,7 +9,8 @@
 
 #include <signal.h>
 
-#define BUFSIZE 0x1000000
+#define BUFSIZE  0x1000000
+#define STRBUFSZ 0x1000000
 
 /* -----------------------------------------------------------------------
  * Announce the token seen in the stream on stderr.
@@ -42,8 +43,10 @@ static inline int initParser(nowdbsql_parser_t *p, FILE *f, int fd) {
 	p->sock = fd;
 	p->errmsg = NULL;
 	p->buf = NULL;
+	p->strbuf = NULL;
+	p->idx = 0;
 
-	p->streaming = f==NULL?1:0;
+	p->streaming = f==NULL;
 
 	if (p->streaming) {
 		p->buf = malloc(BUFSIZE);
@@ -53,6 +56,14 @@ static inline int initParser(nowdbsql_parser_t *p, FILE *f, int fd) {
 		sigaddset(&p->sigs, SIGUSR1);
 	}
 
+	p->strbuf = malloc(STRBUFSZ);
+	if (p->strbuf == NULL) {
+		if (p->buf != NULL) {
+			free(p->buf); p->buf = NULL;
+		}
+		return -1;
+	}
+
 	/* initialise our internal state */
 	if (nowdbsql_state_init(&p->st) != 0) return -1;
 
@@ -60,6 +71,12 @@ static inline int initParser(nowdbsql_parser_t *p, FILE *f, int fd) {
 	p->lp = nowdb_sql_parseAlloc(malloc);
 	if (p->lp == NULL) {
 		nowdbsql_state_destroy(&p->st);
+		if (p->buf != NULL) {
+			free(p->buf); p->buf = NULL;
+		}
+		if (p->strbuf != NULL) {
+			free(p->strbuf); p->strbuf = NULL;
+		}
 		return -1;
 	}
 	/* initialise the lemon-generated parser */
@@ -103,6 +120,9 @@ void nowdbsql_parser_destroy(nowdbsql_parser_t *p) {
 	}
 	if (p->buf != NULL) {
 		free(p->buf); p->buf = NULL;
+	}
+	if (p->strbuf != NULL) {
+		free(p->strbuf); p->strbuf = NULL;
 	}
 	if (p->streaming && p->fd != NULL) {
 		fclose(p->fd); p->fd = NULL;
@@ -182,21 +202,41 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 			break;
 		}
 
-		/* start of line-comment */
-		// if (nToken == NOWDB_SQL_COMMENT) continue;
-
 		/* now we have something */
 		have=1;
 
-		/* duplicate the symbol to avoid
-		   mix-up with the lex and lemon memory */
-		str = strdup(yyget_text(p->sc));
+		if (nToken == NOWDB_SQL_STRING) {
+			p->strbuf[p->idx] = '\''; p->idx++;
+			p->strbuf[p->idx] = 0; p->idx = 0;
+			str = strdup(p->strbuf);
+			fprintf(stderr, "WE HAVE A STRING: %s\n", str);
+		} else {
+			/* duplicate the symbol to avoid
+			   mix-up with the lex and lemon memory */
+			str = strdup(yyget_text(p->sc));
+		}
 		if (str == NULL) {
 			p->st.errcode = NOWDB_SQL_ERR_NO_MEM;
 			nowdbsql_errmsg(&p->st, "out of memory",
-			                     yyget_text(p->sc));
+				              yyget_text(p->sc));
 			break;
 		}
+
+		if (nToken == NOWDB_SQL_STRING_PART) {
+			size_t l = strlen(str);
+			fprintf(stderr, "WE HAVE A STRING PART: '%s'\n", str);
+			if (p->idx + l + 1 >= STRBUFSZ) {
+				p->st.errcode = NOWDB_SQL_ERR_NO_MEM;
+				nowdbsql_errmsg(&p->st, "out of memory", str);
+				break;
+			}
+			if (p->idx == 0) {
+				p->strbuf[0] = '\''; p->idx = 1;
+			}
+			memcpy(p->strbuf+p->idx, str, l); p->idx+=l;
+			free(str); str = NULL;
+			continue;
+		} 
 
 		/* pass the token to the parser */
 		nowdb_sql_parse(p->lp, nToken, str, &p->st);

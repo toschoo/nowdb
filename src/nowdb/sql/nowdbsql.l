@@ -20,6 +20,7 @@
 %option reentrant
 
 %x MCOMMENT
+%x ESTRING
 
 %%
 
@@ -160,8 +161,8 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
+"'"			BEGIN(ESTRING);
 [a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
-'[^']*'					return NOWDB_SQL_STRING;
 (\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
 (\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
 0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
@@ -174,6 +175,16 @@
 "*"       ;
 \n        yylineno++;
 }
+
+<ESTRING>{
+"'"		{BEGIN(INITIAL); return NOWDB_SQL_STRING;}
+"\\'"		fprintf(stderr, "RULE 2\n"); return NOWDB_SQL_STRING_PART;
+[^\\']* 	fprintf(stderr, "RULE 3\n"); return NOWDB_SQL_STRING_PART;
+}
+
+  /*
+'[^']*'					return NOWDB_SQL_STRING;
+  */
 
 %%
 

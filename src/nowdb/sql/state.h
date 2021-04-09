@@ -43,6 +43,7 @@
  */
 #define NOWDB_SQL_COMMENT -17
 #define NOWDB_SQL_MCOMMENT -18
+#define NOWDB_SQL_STRING_PART -20
 #define NOWDB_SQL_UNEXPECTED -1
 
 /* ------------------------------------------------------------------------
