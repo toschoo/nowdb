@@ -35,4 +35,7 @@ insert into product (id, title, price)
 
 insert into buys (origin, destin, stamp, quantity, amount)
             values (1, 1, '2021-03-01T17:30:00', 5, 29.95); 
-
+-- end of file
+/*
+   beyond the end...
+*/

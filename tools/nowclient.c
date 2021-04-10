@@ -411,8 +411,13 @@ int handleFile(nowdb_con_t con, FILE *ifile) {
 		// buf[x] = 0;
 		n = findEnd(buf, x);
 		if (n < 0) {
-			fprintf(stderr, "string too long\n");
-			rc = -1; break;
+			if (!eof) { // this is a workaround:
+			            // to ignore a comment at the end of file
+			            // this should be solved in the server
+				rc = -1;
+				fprintf(stderr, "string too long\n");
+			}
+			break;
 		}
 
 		// remove whitespace

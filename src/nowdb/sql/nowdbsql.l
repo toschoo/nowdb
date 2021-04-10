@@ -186,10 +186,6 @@
 [^\\']* 	return NOWDB_SQL_STRING_PART_CHUNK;
 }
 
-  /*
-'[^']*'					return NOWDB_SQL_STRING;
-  */
-
 %%
 
 int yywrap(void *yyscanner) {
