@@ -802,7 +802,7 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 				if (o != NULL) {
 					p->destin = TRUE;
 					destin = strdup(t->value);
-					if (origin == NULL) {
+					if (destin == NULL) {
 						destroyPedges(&props);
 						NOMEM("allocating destin name");
 						return err;
@@ -852,6 +852,8 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
 		INVALIDAST("no vertex in edge");
 	}
 	err = nowdb_scope_createEdge(scope, name, origin, destin, &props);
+	if (origin != NULL) free(origin);
+	if (destin != NULL) free(destin);
 	if (err != NOWDB_OK) {
 		destroyPedges(&props);
 		if (nowdb_err_contains(err, nowdb_err_dup_key)) {
