@@ -182,7 +182,7 @@ static inline int handleStringPart(nowdbsql_parser_t  *p,
                                    int nToken, char *str) {
 	size_t l = strlen(str);
 	if (p->idx + l + 1 >= STRBUFSZ) { // string too long
-		p->st.errcode = NOWDB_SQL_ERR_NO_BUFSIZE;
+		p->st.errcode = NOWDB_SQL_ERR_BUFSIZE;
 		nowdbsql_errmsg(&p->st, "string too long", str);
 		return -1;
 	}
@@ -248,9 +248,10 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 			break;
 		}
 
-		/* now we have something */
+		// now we have something
 		have=1;
 
+		// handle complete string
 		if (nToken == NOWDB_SQL_STRING) {
 			// empty string
 			if (p->idx == 0) {
@@ -270,6 +271,7 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 				              yyget_text(p->sc));
 			break;
 		}
+		// handle string part
 		if (nToken <= NOWDB_SQL_STRING_PART_ESC &&
                     nToken >= NOWDB_SQL_STRING_PART_CHUNK) {
 			int x = handleStringPart(p, nToken, str);
