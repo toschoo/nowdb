@@ -41,10 +41,16 @@
  * Tokens that are never passed to the parser (negative values!)
  * ------------------------------------------------------------------------
  */
+#define NOWDB_SQL_UNEXPECTED -1
 #define NOWDB_SQL_COMMENT -17
 #define NOWDB_SQL_MCOMMENT -18
-#define NOWDB_SQL_STRING_PART -20
-#define NOWDB_SQL_UNEXPECTED -1
+
+#define NOWDB_SQL_STRING_PART_ESC   -20
+#define NOWDB_SQL_STRING_PART_APO   -21
+#define NOWDB_SQL_STRING_PART_LF    -22
+#define NOWDB_SQL_STRING_PART_CR    -23
+#define NOWDB_SQL_STRING_PART_TAB   -24
+#define NOWDB_SQL_STRING_PART_CHUNK -25
 
 /* ------------------------------------------------------------------------
  * Predeclaration of the stack

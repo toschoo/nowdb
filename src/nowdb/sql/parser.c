@@ -175,6 +175,52 @@ static inline void reinitHARD(nowdbsql_parser_t *p) {
 }
 
 /* -----------------------------------------------------------------------
+ * Helper: handle string part
+ * -----------------------------------------------------------------------
+ */
+static inline int handleStringPart(nowdbsql_parser_t  *p,
+                                   int nToken, char *str) {
+	size_t l = strlen(str);
+	if (p->idx + l + 1 >= STRBUFSZ) { // string too long
+		p->st.errcode = NOWDB_SQL_ERR_NO_BUFSIZE;
+		nowdbsql_errmsg(&p->st, "string too long", str);
+		return -1;
+	}
+	// we have just started this string
+	if (p->idx == 0) {
+		p->strbuf[0] = '\''; p->idx = 1;
+	}
+	memcpy(p->strbuf+p->idx, str, l); p->idx+=l;
+
+	// handle escape sequence
+	switch(nToken) {
+	case NOWDB_SQL_STRING_PART_ESC:
+		p->strbuf[p->idx-2] = '\\'; p->idx--; break;
+
+	case NOWDB_SQL_STRING_PART_APO:
+		p->strbuf[p->idx-2] = '\''; p->idx--; break;
+
+	case NOWDB_SQL_STRING_PART_LF :
+		p->strbuf[p->idx-2] = '\n'; p->idx--; break;
+
+	case NOWDB_SQL_STRING_PART_CR :
+		p->strbuf[p->idx-2] = '\r'; p->idx--; break;
+
+	case NOWDB_SQL_STRING_PART_TAB:
+		p->strbuf[p->idx-2] = '\t'; p->idx--; break;
+
+	case NOWDB_SQL_STRING_PART_CHUNK: break;
+	default:
+		// errmsg
+		fprintf(stderr, "OUCH! Unknown string part\n");
+		p->st.errcode = NOWDB_SQL_ERR_PANIC;
+		nowdbsql_errmsg(&p->st, "unhandled case in string part", str);
+		return -1;
+	}
+	return 0;
+}
+
+/* -----------------------------------------------------------------------
  * Run the parser
  * -----------------------------------------------------------------------
  */
@@ -206,10 +252,13 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 		have=1;
 
 		if (nToken == NOWDB_SQL_STRING) {
+			// empty string
+			if (p->idx == 0) {
+				p->strbuf[0] = '\''; p->idx++;
+			}
 			p->strbuf[p->idx] = '\''; p->idx++;
 			p->strbuf[p->idx] = 0; p->idx = 0;
 			str = strdup(p->strbuf);
-			fprintf(stderr, "WE HAVE A STRING: %s\n", str);
 		} else {
 			/* duplicate the symbol to avoid
 			   mix-up with the lex and lemon memory */
@@ -221,20 +270,11 @@ int nowdbsql_parser_run(nowdbsql_parser_t *p,
 				              yyget_text(p->sc));
 			break;
 		}
-
-		if (nToken == NOWDB_SQL_STRING_PART) {
-			size_t l = strlen(str);
-			fprintf(stderr, "WE HAVE A STRING PART: '%s'\n", str);
-			if (p->idx + l + 1 >= STRBUFSZ) {
-				p->st.errcode = NOWDB_SQL_ERR_NO_MEM;
-				nowdbsql_errmsg(&p->st, "out of memory", str);
-				break;
-			}
-			if (p->idx == 0) {
-				p->strbuf[0] = '\''; p->idx = 1;
-			}
-			memcpy(p->strbuf+p->idx, str, l); p->idx+=l;
+		if (nToken <= NOWDB_SQL_STRING_PART_ESC &&
+                    nToken >= NOWDB_SQL_STRING_PART_CHUNK) {
+			int x = handleStringPart(p, nToken, str);
 			free(str); str = NULL;
+			if (x != 0) break;
 			continue;
 		} 
 

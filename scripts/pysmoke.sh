@@ -77,6 +77,15 @@ then
 	exit 1
 fi
 
+echo "RUNNING strings.py" >> log/pysmoke.log
+$PY test/pysmoke/strings.py >> log/pysmoke.log 2>&1
+if [ $? -ne 0 ]
+then
+	echo "FAILED: strings.py failed"
+	kill -2 $p
+	exit 1
+fi
+
 echo "RUNNING formulas.py" >> log/pysmoke.log
 $PY test/pysmoke/formulas.py >> log/pysmoke.log 2>&1
 if [ $? -ne 0 ]

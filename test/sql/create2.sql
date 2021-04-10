@@ -31,7 +31,7 @@ insert into client (id, name)
 
 /* yet another insert */
 insert into product (id, title, price)
-            values (1, 'pizza', 5.99);
+            values (1, 'pizza \'speciale\'\nFamily Size\tYou love it! Or money back!', 5.99);
 
 insert into buys (origin, destin, stamp, quantity, amount)
             values (1, 1, '2021-03-01T17:30:00', 5, 29.95); 

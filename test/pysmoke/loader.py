@@ -124,7 +124,7 @@ def createTypes(c):
 
         with c.execute("drop type %s if exists" % t) as r:
              if not r.ok():
-                raise db.TestFailed('cannot drop %s' % t)
+                raise db.TestFailed('cannot drop %s (%s)' % (t, r.details()))
         with c.execute("create type %s (\
                            key uint primary key, \
                            name text, \

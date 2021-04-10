@@ -178,8 +178,12 @@
 
 <ESTRING>{
 "'"		{BEGIN(INITIAL); return NOWDB_SQL_STRING;}
-"\\'"		fprintf(stderr, "RULE 2\n"); return NOWDB_SQL_STRING_PART;
-[^\\']* 	fprintf(stderr, "RULE 3\n"); return NOWDB_SQL_STRING_PART;
+"\\\\"		return NOWDB_SQL_STRING_PART_ESC;
+"\\'"		return NOWDB_SQL_STRING_PART_APO;
+"\\n"		return NOWDB_SQL_STRING_PART_LF;
+"\\r"		return NOWDB_SQL_STRING_PART_CR;
+"\\t"		return NOWDB_SQL_STRING_PART_TAB;
+[^\\']* 	return NOWDB_SQL_STRING_PART_CHUNK;
 }
 
   /*
