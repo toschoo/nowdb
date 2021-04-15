@@ -38,7 +38,7 @@ struct nowdb_csv_st {
 	uint32_t                 old; /* remember previous position     */
 	uint32_t             recsize; /* size of record                 */
 	char                 hlp[96]; /* three 32 byte 'registers'      */
-	char                txt[256]; /* text buffer                    */
+	char               txt[1024]; /* text buffer                    */
 	struct csv_parser          p; /* the csv parser                 */
 	ts_algo_list_t         *list; /* temporary store for headers    */
 	nowdb_key_t              vid; /* edge model  : vertex id        */
@@ -897,7 +897,7 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
-	if (len >= 255) {
+	if (len >= 1023) {
 		REJECT("VERTEX", "value too big");
 		return;
 	}
@@ -998,7 +998,7 @@ void nowdb_csv_field_edge(void *data, size_t len, void *ldr) {
 		fieldHeader(data, len, ldr);
 		return;
 	}
-	if (len >= 255) {
+	if (len >= 1023) {
 		REJECT("EDGE", "value too big");
 		return;
 	}
