@@ -84,6 +84,7 @@
 #define nowdb_err_selflock        75
 #define nowdb_err_deadlock        76
 #define nowdb_err_doesnothold     77
+#define nowdb_err_invalid_esc     78
 #define nowdb_err_unknown       9999
 #endif
 

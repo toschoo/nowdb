@@ -108,7 +108,7 @@ def randomString(mx):
     m = rnd.randint(3,mx+1)
     for i in range(m):
         s += rnd.choice(alpha)
-    return s
+    return s # .replace('\n','\\n').replace('\r','\\r').replace('\\','\\\\')
 
 def createTypes(c):
     for i in range(3):
@@ -187,15 +187,15 @@ def testNoneIsNull(c):
              for row in cur:
                  print("%d: '%s'" % (row.field(0), row.field(1)))
                  if row.field(0) != dvc[k].key:
-                    db.TestFailed('wrong key: %d' % k)
+                    raise db.TestFailed('wrong key: %d' % k)
                  if (row.field(1) is None and \
                      dvc[k].desc is not None) or \
                     (row.field(1) is not None and \
                      dvc[k].desc is None):
-                    db.TestFailed('NULL mismatch: %d' % k)
+                    raise db.TestFailed('NULL mismatch: %d' % k)
                  cnt += 1
              if cnt != 1:
-                db.TestFailed("too many or not enough rows: %d" % cnt)
+                raise db.TestFailed("too many or not enough rows: %d" % cnt)
 
     print("SENSORS")
     for i in range(len(sns)):
@@ -205,15 +205,15 @@ def testNoneIsNull(c):
              for row in cur:
                  print("%d: '%s'" % (row.field(0), row.field(1)))
                  if row.field(0) != sns[k].key:
-                    db.TestFailed('wrong key: %d' % k)
+                    raise db.TestFailed('wrong key: %d' % k)
                  if (row.field(1) is None and \
                      sns[k].info is not None) or \
                     (row.field(1) is not None and \
                      sns[k].info is None):
-                    db.TestFailed('NULL mismatch: %d' % k)
+                    raise db.TestFailed('NULL mismatch: %d' % k)
                  cnt += 1
              if cnt != 1:
-                db.TestFailed("too many or not enough rows: %d" % cnt)
+                raise db.TestFailed("too many or not enough rows: %d" % cnt)
 
     for i in range(len(tdg)//50):
         k = rnd.randint(0,len(tdg)-1)
@@ -225,20 +225,20 @@ def testNoneIsNull(c):
              for row in cur:
                  # print("%d: %s | %s" % (row.field(0), row.field(1), row.field(2)))
                  if row.field(0) != tdg[k].sensor.key:
-                    db.TestFailed('wrong key: %d' % tdg[k].sensor.key)
+                    raise db.TestFailed('wrong key: %d' % tdg[k].sensor.key)
                  if (row.field(1) is None and \
                      tdg[k].temp is not None) or \
                     (row.field(1) is not None and \
                      tdg[k].temp is None):
-                    db.TestFailed('NULL mismatch on temp: %d' % k)
+                    raise db.TestFailed('NULL mismatch on temp: %d' % k)
                  if (row.field(2) is None and \
                      tdg[k].revo is not None) or \
                     (row.field(2) is not None and \
                      tdg[k].revo is None):
-                    db.TestFailed('NULL mismatch on revo: %d' % k)
+                    raise db.TestFailed('NULL mismatch on revo: %d' % k)
                  cnt += 1
              if cnt != 1:
-                db.TestFailed("too many or not enough rows: %d" % cnt)
+                raise db.TestFailed("too many or not enough rows: %d" % cnt)
 
 def testCount(c,mx):
 
@@ -247,29 +247,43 @@ def testCount(c,mx):
     with c.execute("select count(*) from sensor") as cur:
          for row in cur:
              if row.field(0) != len(sns):
-                db.TestFailed("wrong count for sensor: %d | %d" \
+                raise db.TestFailed("wrong count for sensor: %d | %d" \
                                              % (row.field(0), mx))
 
     with c.execute("select count(*) from device") as cur:
          for row in cur:
              if row.field(0) != len(dvc):
-                db.TestFailed("wrong count for device: %d | %d" \
+                raise db.TestFailed("wrong count for device: %d | %d" \
                                            % (row.field(0), mx))
 
     with c.execute("select count(*) from dvcsns") as cur:
          for row in cur:
              if row.field(0) != len(edg):
-                db.TestFailed("wrong count for dvcsns: %d | %d" \
+                raise db.TestFailed("wrong count for dvcsns: %d | %d" \
                                             % (row.field(0), mx))
 
     with c.execute("select count(*) from measure") as cur:
          for row in cur:
              if row.field(0) != len(tdg):
-                db.TestFailed("wrong count for tedge: %d | %d" \
+                raise db.TestFailed("wrong count for tedge: %d | %d" \
                                            % (row.field(0), mx))
 
-    # not much yet...
+def showSensors(c):
+    print("RUNNING 'showSensors'")
+    with c.execute("select * from sensor") as cur:
+         for row in cur:
+             print("%d: %s" % (row.field(0), row.field(1)))
 
+# test strings
+def testSensorNames(c):
+    print("RUNNING 'testSensorNames'")
+    for s in sns:
+        n = c.oneValue("select name from sensor where key = %d" % s.key)
+        print("comparing '%s' and '%s'" % (n, s.name))
+        if n != s.name:
+           raise db.TestFailed("wrong name in sensor %d: %s | %s" \
+                                               % (s.key, n, s.name))
+           
 if __name__ == '__main__':
 
     rnd.seed()
@@ -282,7 +296,7 @@ if __name__ == '__main__':
         print("connected...")
         with c.execute("use db100") as r:
              if not r.ok():
-                db.TestFailed('cannot use db100')
+                raise db.TestFailed('cannot use db100')
         
         print("using db100...")
 
@@ -295,7 +309,10 @@ if __name__ == '__main__':
 
         load(c)
 
+        showSensors(c)
+
         testNoneIsNull(c)
         testCount(c, ms)
+        testSensorNames(c)
 
         print("PASSED")
