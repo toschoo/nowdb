@@ -378,9 +378,10 @@ int main() {
 		client_id uint primary key, \
 		client_name text)");
 
-	EXEC("create stamped edge buys (\
-		origin client, \
-		destination product, \
+	EXEC("create edge buys (\
+		origin client origin, \
+		destin product destin, \
+	        stamp time stamp, \
 		weight float, \
 		weight2 float)");
 
@@ -447,7 +448,7 @@ int main() {
 	int havedata = 1;
 	if (count == 0) havedata = 0;
 
-	sprintf(q, "select destin, timestamp, weight from buys \
+	sprintf(q, "select destin, stamp, weight from buys \
 	             where origin=%lu", wanted);
 	EXECCUR(q);
 

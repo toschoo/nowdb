@@ -368,7 +368,7 @@ int testFun(uint32_t ftype,
 	}
 	fprintf(stderr, "testing on %d edges\n", mx);
 	for(int i=0; i<mx; i++) {
-		err = nowdb_fun_map(fun, &_hlp, fullmap, edges+i);
+		err = nowdb_fun_map(fun, &_hlp, edges+i);
 		if (err != NOWDB_OK) break;
 	}
 	if (err != NOWDB_OK) {
@@ -519,7 +519,7 @@ int main() {
 	for(int i=0; i<ITER; i++) {
 		if (testFun(NOWDB_FUN_SPREAD,
 		            NOWDB_TYP_TIME,
-		            NOWDB_OFF_TMSTMP,&uzero) != 0) {
+		            NOWDB_OFF_STAMP,&uzero) != 0) {
 			fprintf(stderr, "testFun SPREAD, TIME, TIMESTAMP, failed\n");
 			rc = EXIT_FAILURE; goto cleanup;
 		}

@@ -191,6 +191,8 @@ int createType(nowdb_scope_t *scope, char *name) {
 
 	p->name = strdup("id");
 	p->pk = 1;
+	p->pos = 0;
+	p->stamp = 0;
 	p->value = NOWDB_TYP_UINT;
 
 	if (p->name == NULL) {
@@ -209,6 +211,8 @@ int createType(nowdb_scope_t *scope, char *name) {
 
 	p->name = strdup("name");
 	p->pk = 0;
+	p->pos = 1;
+	p->stamp = 0;
 	p->value = NOWDB_TYP_TEXT;
 
 	if (p->name == NULL) {
@@ -254,13 +258,107 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
+	p->name = strdup("origin");
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->origin = 1;
+	p->pos = 0;
+	p->off = 0;
+	p->value = NOWDB_TYP_UINT;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->name = strdup("destin");
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->destin = 1;
+	p->pos = 1;
+	p->off = 8;
+	p->value = NOWDB_TYP_UINT;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->name = strdup("stamp");
+	if (p->name == NULL) {
+		free(p);
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
+	p->stamp = 1;
+	p->pos = 2;
+	p->off = 16;
+	p->value = NOWDB_TYP_TIME;
+
+	err = nowdb_text_insert(scope->text,
+		        p->name, &p->propid);
+	if (err != NOWDB_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot add text\n");
+		nowdb_err_print(err); nowdb_err_release(err);
+		return 0;
+	}
+
+	if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+		free(p->name); free(p);
+		fprintf(stderr, "cannot append to list\n");
+		return 0;
+	}
+
+	p = calloc(1, sizeof(nowdb_model_pedge_t));
+	if (p == NULL) {
+		fprintf(stderr, "not enough memory\n");
+		return 0;
+	}
 	p->name = strdup("edge");
 	if (p->name == NULL) {
 		free(p);
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 25;
+	p->pos = 3;
+	p->off = 24;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,
@@ -290,7 +388,8 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 33;
+	p->pos = 4;
+	p->off = 32;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,
@@ -320,7 +419,8 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		fprintf(stderr, "not enough memory\n");
 		return 0;
 	}
-	p->off = 41;
+	p->pos = 5;
+	p->off = 40;
 	p->value = NOWDB_TYP_UINT;
 
 	err = nowdb_text_insert(scope->text,
@@ -338,6 +438,7 @@ int createEdge(nowdb_scope_t *scope, char *name) {
 		return 0;
 	}
 
+	fprintf(stderr, "CREATING EDGE %s\n", name);
 	err = nowdb_scope_createEdge(scope, name, "client", "product", &props);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "create edge failed\n");

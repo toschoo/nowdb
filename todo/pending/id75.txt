@@ -1,0 +1,9 @@
+concurrency issue with model
+
+We need to review how model is locked.
+As long a model element is in use by any session
+(this includes being the current target in dml),
+the model element must not be dropped or altered.
+There is an unsatisfying solution for drop type
+in stmt that must be removed when the problem
+is solved.

@@ -183,14 +183,6 @@ then
 	exit 1
 fi
 
-echo "running vrowsmoke" >> log/test.log
-test/smoke/vrowsmoke >> log/test.log 2>&1
-if [ $? -ne 0 ]
-then
-	echo "FAILED: vrowsmoke failed"
-	exit 1
-fi
-
 echo "running exprsmoke" >> log/test.log
 test/smoke/exprsmoke >> log/test.log 2>&1
 if [ $? -ne 0 ]

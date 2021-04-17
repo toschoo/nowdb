@@ -146,12 +146,6 @@ nowdb_cmp_t nowdb_sort_edge_keys_compare(const void *left,
 		case NOWDB_OFF_ORIGIN:
 		case NOWDB_OFF_DESTIN:
 			KEYCMP(left, right, KEYS(keys)->off[i]);
-
-		case NOWDB_OFF_STAMP:
-			TMSTMPCMP(left, right, KEYS(keys)->off[i]);
-
-		default:
-			WEIGHTCMP(left, right, KEYS(keys)->off[i]);
 		}
 	}
 	return NOWDB_SORT_EQUAL;
@@ -168,7 +162,7 @@ nowdb_cmp_t nowdb_sort_edge_keys_compareD(const void *left,
 }
 
 /* ------------------------------------------------------------------------
- * Generic vertex compare using index keys (desc)
+ * Generic vertex compare using index keys (asc)
  * ------------------------------------------------------------------------
  */
 nowdb_cmp_t nowdb_sort_vertex_keys_compare(const void *left,
@@ -177,14 +171,13 @@ nowdb_cmp_t nowdb_sort_vertex_keys_compare(const void *left,
 	for(int i=0; i<KEYS(keys)->sz; i++) {
 		switch(KEYS(keys)->off[i]) {
 		case NOWDB_OFF_VERTEX:
-		case NOWDB_OFF_PROP:
 			KEYCMP(left, right, KEYS(keys)->off[i]);
 
-		case NOWDB_OFF_VALUE:
-			WEIGHTCMP(left, right, KEYS(keys)->off[i]);
+		case NOWDB_OFF_VSTAMP:
+			TMSTMPCMP(left, right, KEYS(keys)->off[i]);
 
-		case NOWDB_OFF_ROLE:
-			ROLECMP(left, right, KEYS(keys)->off[i]);
+		default:
+			WEIGHTCMP(left, right, KEYS(keys)->off[i]);
 		}
 	}
 	return NOWDB_SORT_EQUAL;
@@ -221,14 +214,15 @@ void nowdb_mem_sort_edge(char        *buf,
  * Sorting vertices
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
-                           uint32_t        num,
-                           nowdb_ord_t     ord) {
+void nowdb_mem_sort_vertex(char       *buf,
+                           uint32_t     sz,
+                           uint32_t  recsz,
+                           nowdb_ord_t ord) {
 	if (ord == NOWDB_ORD_ASC) {
-		nowdb_mem_sort((char*)buf, num, 32,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		     &nowdb_sort_vertex_compare, NULL);
 	} else if (ord == NOWDB_ORD_DESC) {
-		nowdb_mem_sort((char*)buf, num, 32,
+		nowdb_mem_sort(buf, sz/recsz, recsz,
 		    &nowdb_sort_vertex_compareD, NULL);
 	}
 }
@@ -257,13 +251,7 @@ nowdb_cmp_t nowdb_sort_edge_compare(const void *left,
 	    *(nowdb_key_t*)(((char*)right)+NOWDB_OFF_DESTIN))
 		return NOWDB_SORT_GREATER;
 
-	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) <
-	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
-		return NOWDB_SORT_LESS;
-
-	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_STAMP) >
-	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_STAMP))
-		return NOWDB_SORT_GREATER;
+	// timestamp
 
 	return NOWDB_SORT_EQUAL;
 }
@@ -287,20 +275,19 @@ nowdb_cmp_t nowdb_sort_vertex_compare(const void *left,
                                       const void *right,
                                       void      *ignore)
 {
-	if (((nowdb_vertex_t*)left)->role <
-	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->role >
-	    ((nowdb_vertex_t*)right)->role) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(char*)left <
+	    *(nowdb_key_t*)(char*)right) return NOWDB_SORT_LESS;
 
-	if (((nowdb_vertex_t*)left)->vertex <
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->vertex >
-	    ((nowdb_vertex_t*)right)->vertex) return NOWDB_SORT_GREATER;
+	if (*(nowdb_key_t*)(char*)left >
+	    *(nowdb_key_t*)(char*)right) return NOWDB_SORT_GREATER;
 
-	if (((nowdb_vertex_t*)left)->property <
-	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_LESS;
-	if (((nowdb_vertex_t*)left)->property >
-	    ((nowdb_vertex_t*)right)->property) return NOWDB_SORT_GREATER;
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_VSTAMP) <
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_VSTAMP))
+		return NOWDB_SORT_LESS;
+
+	if (*(nowdb_time_t*)(((char*)left)+NOWDB_OFF_VSTAMP) >
+	    *(nowdb_time_t*)(((char*)right)+NOWDB_OFF_VSTAMP))
+		return NOWDB_SORT_GREATER;
 
 	return NOWDB_SORT_EQUAL;
 }

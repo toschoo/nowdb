@@ -12,12 +12,12 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define EDGE_OFF  24
+#define LABEL_OFF 32
+#define WEIGHT_OFF 40
 
 #define LOOP_INIT(stm, atts) \
-	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t recsz = nowdb_recSize(atts); \
 	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
 	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
 
@@ -51,7 +51,7 @@ void makeEdgePattern(char *e) {
 	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
 	setValue(e, NOWDB_OFF_DESTIN, 0xb);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
+	setValue(e, WEIGHT_OFF+8, 63);
 	setValue(e, EDGE_OFF, 0xc);
 	setValue(e, LABEL_OFF, 0xd);
 	setValue(e, WEIGHT_OFF, 0);
@@ -61,7 +61,7 @@ nowdb_bool_t writeData(nowdb_file_t *file) {
 	if (file->mptr == NULL) return FALSE;
 	uint64_t w;
 	int cnt = 0;
-	LOOP_INIT(1,3);
+	LOOP_INIT(1,6);
 
 	char *e = calloc(1,recsz);
 	if (e == NULL) {
@@ -92,7 +92,7 @@ nowdb_bool_t checkData(nowdb_file_t *file) {
 	uint64_t w=42;
 	int k = 0;
 
-	LOOP_INIT(1,3);
+	LOOP_INIT(1,6);
 
 	for(int i=0; i<file->bufsize;) {
 		if (i%NOWDB_IDX_PAGE >= bufsz) {

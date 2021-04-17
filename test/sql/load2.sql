@@ -10,12 +10,13 @@ create type loc (
      lat float,
      lon float
 );
-create stamped edge measure (
-     origin sensor,
-     destin loc,
+create edge measure (
+     origin sensor origin,
+     destin loc    destin,
+     stamp  time    stamp,
      label  int,
      weight int
 );
-load 'rsc/measure.csv' into measure use header;
 load 'rsc/loc.csv' into loc use header;
+load 'rsc/kilo.csv' into measure use header;
 -- select * from ctx_tiny;

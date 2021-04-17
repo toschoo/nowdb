@@ -496,9 +496,13 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
 		p->roleid = 0;
 		p->pos    = i; i++;
 		p->pk = FALSE;
+		p->stamp = FALSE;
 
 		o = nowdb_ast_option(d, NOWDB_AST_PK);
 		if (o != NULL) p->pk = TRUE;
+
+		o = nowdb_ast_option(d, NOWDB_AST_STAMP);
+		if (o != NULL) p->stamp = TRUE;
 
 		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
 			destroyProps(&props); free(p);
@@ -549,9 +553,27 @@ static nowdb_err_t createType(nowdb_ast_t  *op,
  */
 static nowdb_err_t dropType(nowdb_ast_t  *op,
                             char       *name,
-                        nowdb_scope_t *scope)  {
+                        nowdb_scope_t *scope,
+                            void        *rsc) {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
+
+        // don't reuse this target on dml
+	// this is not a solution!
+	// the target may have been used in another session 
+	// that session will not know that the target
+	// has been dropped or altered!
+	nowdb_dml_t *dml = nowdb_proc_getDML(rsc);
+	if (dml == NULL) {
+		err = nowdb_err_get(nowdb_err_no_rsc, FALSE,
+			      OBJECT, "no scope in session");
+		return err;
+	}
+	if (dml->trgname != NULL &&
+	    strcasecmp(dml->trgname, name) == 0) {
+		free(dml->trgname);
+		dml->trgname = NULL;
+	}
 
 	err = nowdb_scope_dropType(scope, name);
 	if (err == NOWDB_OK) {
@@ -727,77 +749,111 @@ static nowdb_err_t createEdge(nowdb_ast_t  *op,
                           nowdb_scope_t *scope)  {
 	nowdb_err_t err;
 	nowdb_ast_t  *o;
-	nowdb_ast_t  *f;
 	nowdb_ast_t  *d;
+	nowdb_ast_t  *t=NULL;
 	char *origin=NULL, *destin=NULL;
 	nowdb_model_pedge_t *p;
 	ts_algo_list_t props;
+	uint32_t i=0;
 
 	d = nowdb_ast_declare(op);
 	if (d == NULL) INVALIDAST("no declarations in AST");
 	ts_algo_list_init(&props);
 
 	while(d != NULL) {
+		if (d->vtype != NOWDB_AST_V_STRING) {
+			destroyPedges(&props);
+			INVALIDAST("missing property name");
+		}
+		p = calloc(1,sizeof(nowdb_model_pedge_t));
+		if (p == NULL) {
+			destroyPedges(&props);
+			NOMEM("allocating property");
+			return err;
+		}
+	
+		// fprintf(stderr, "CREATING EDGE %s\n", p->name);
+
+		p->edgeid = 0;
+		p->origin = FALSE;
+		p->destin = FALSE;
+		p->stamp  = FALSE;
+		p->pos = i; i++;
+		p->off = 0;
+
 		if (d->stype == NOWDB_AST_TYPE) {
-			f = nowdb_ast_off(d);
-			if (f == NULL) {
+			t = nowdb_ast_utype(d);
+			if (t == NULL) {
 				destroyPedges(&props);
-				INVALIDAST("no offset in decl");
+				INVALIDAST("missing type");
 			}
-			if (f->stype == NOWDB_OFF_ORIGIN) {
-				// fprintf(stderr, "ORIGIN\n");
-				origin = d->value;
+
+			o = nowdb_ast_option(d, NOWDB_AST_ORIGIN);
+			if (o != NULL) {
+				p->origin = TRUE;
+				origin = strdup(t->value);
+				if (origin == NULL) {
+					destroyPedges(&props);
+					NOMEM("allocating origin name");
+					return err;
+				}
 			} else {
-				// fprintf(stderr, "DESTIN\n");
-				destin = d->value;
+				o = nowdb_ast_option(d, NOWDB_AST_DESTIN);
+				if (o != NULL) {
+					p->destin = TRUE;
+					destin = strdup(t->value);
+					if (destin == NULL) {
+						destroyPedges(&props);
+						NOMEM("allocating destin name");
+						return err;
+					}
+				}
 			}
 		} else {
-			if (d->vtype != NOWDB_AST_V_STRING) {
-				destroyPedges(&props);
-				INVALIDAST("missing property name");
-			}
-			p = calloc(1,sizeof(nowdb_model_pedge_t));
-			if (p == NULL) {
-				destroyPedges(&props);
-				NOMEM("allocating property");
-				return err;
-			}
-	
-			p->name  = strdup(d->value);
-			if (p->name == NULL) {
-				destroyPedges(&props); free(p);
-				NOMEM("allocating property name");
-				return err;
-			}
-			// fprintf(stderr, "%s\n", p->name);
-	
 			p->value = nowdb_ast_type(d->stype);
-			p->edgeid = 0;
-			p->off = 0;
+		}
+
+		o = nowdb_ast_option(d, NOWDB_AST_STAMP);
+		if (o != NULL) p->stamp = TRUE;
+
+		p->name  = strdup(d->value);
+		if (p->name == NULL) {
+			destroyPedges(&props);
+			if (origin != NULL) free(origin);
+			if (destin != NULL) free(destin);
+			free(p);
+			NOMEM("allocating property name");
+			return err;
+		}
 			
-			err = nowdb_text_insert(scope->text,
-			               p->name, &p->propid);
-			if (err != NOWDB_OK) {
-				destroyPedges(&props);
-				free(p->name); free(p);
-				return err;
-			}
+		err = nowdb_text_insert(scope->text, // is this necessary?
+			        p->name, &p->propid);
+		if (err != NOWDB_OK) {
+			destroyPedges(&props);
+			if (origin != NULL) free(origin);
+			if (destin != NULL) free(destin);
+			free(p->name); free(p);
+			return err;
+		}
 	
-			if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
-				destroyPedges(&props);
-				free(p->name); free(p);
-				NOMEM("list.append");
-				return err;
-			}
+		if (ts_algo_list_append(&props, p) != TS_ALGO_OK) {
+			destroyPedges(&props);
+			if (origin != NULL) free(origin);
+			if (destin != NULL) free(destin);
+			free(p->name); free(p);
+			NOMEM("list.append");
+			return err;
 		}
 		d = nowdb_ast_declare(d);
 	}
 
-	if (origin == NULL && destin == NULL) {
+	if (origin == NULL || destin == NULL) {
 		destroyPedges(&props);
 		INVALIDAST("no vertex in edge");
 	}
 	err = nowdb_scope_createEdge(scope, name, origin, destin, &props);
+	if (origin != NULL) free(origin);
+	if (destin != NULL) free(destin);
 	if (err != NOWDB_OK) {
 		destroyPedges(&props);
 		if (nowdb_err_contains(err, nowdb_err_dup_key)) {
@@ -1072,7 +1128,6 @@ static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
                                        nowdb_ast_t   *v,
                                        nowdb_simple_value_t **val) {
 	nowdb_err_t err=NOWDB_OK;
-	uint64_t rmap = 0xffffffffffffffff;
 	nowdb_expr_t expr;
 	uint32_t limits;
 	void *tmp;
@@ -1092,7 +1147,7 @@ static inline nowdb_err_t expr2simplev(nowdb_scope_t *scope,
 		nowdb_expr_destroy(expr); free(expr);
 		return err;
 	}
-	err = nowdb_expr_eval(expr, NULL, rmap, NULL,
+	err = nowdb_expr_eval(expr, NULL, NULL,
 	                    &(*val)->type, &tmp);
 	if (err != NOWDB_OK) {
 		nowdb_expr_destroy(expr); free(expr);
@@ -2076,7 +2131,6 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 	op = nowdb_ast_operation(ast);
 	if (op == NULL) INVALIDAST("no operation in AST");
 
-	
 	trg = nowdb_ast_target(ast);
 	if ((trg == NULL ||
 	     trg->stype != NOWDB_AST_SCOPE) && scope == NULL) {
@@ -2124,7 +2178,7 @@ static nowdb_err_t handleDDL(nowdb_ast_t *ast,
 		case NOWDB_AST_INDEX:
 			return dropIndex(op, trg->value, scope);
 		case NOWDB_AST_TYPE:
-			return dropType(op, trg->value, scope);
+			return dropType(op, trg->value, scope, rsc);
 		case NOWDB_AST_EDGE:
 			return dropEdge(op, trg->value, scope);
 		case NOWDB_AST_PROC:

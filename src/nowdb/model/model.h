@@ -138,7 +138,6 @@ nowdb_err_t nowdb_model_addEdge(nowdb_model_t      *model,
  */
 nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t   *model,
                                     char             *name,
-                                    char           stamped,
                                     nowdb_key_t     edgeid,
                                     nowdb_roleid_t  origin,
                                     nowdb_roleid_t  destin,

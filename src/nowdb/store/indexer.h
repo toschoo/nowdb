@@ -10,7 +10,7 @@
 #include <nowdb/types/types.h>
 #include <nowdb/types/error.h>
 #include <nowdb/index/index.h>
-#include <nowdb/mem/plru12.h>
+#include <nowdb/mem/plru8r.h>
 
 #include <tsalgo/tree.h>
 #include <beet/index.h>
@@ -29,8 +29,7 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 nowdb_err_t nowdb_indexer_init(nowdb_indexer_t *xer,
-                               nowdb_index_t   *idx,
-                               nowdb_content_t cont);
+                               nowdb_index_t   *idx);
 
 /* ------------------------------------------------------------------------
  * Destroy one indexer

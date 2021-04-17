@@ -148,7 +148,6 @@ void nowdb_group_reset(nowdb_group_t *group) {
  */
 nowdb_err_t nowdb_group_map(nowdb_group_t *group,
                             nowdb_content_t type,
-                            uint64_t        rmap,
                             char         *record) {
 	nowdb_err_t err;
 
@@ -157,7 +156,7 @@ nowdb_err_t nowdb_group_map(nowdb_group_t *group,
 			// fprintf(stderr, "GROUP: mapping %d\n", i);
 			err = nowdb_fun_map(group->fun[i],
 			                    group->hlp,
-			                    rmap, record);
+			                    record);
 			if (err != NOWDB_OK) return err;
 		}
 	}

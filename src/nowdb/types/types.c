@@ -170,12 +170,11 @@ int nowdb_vertex_offByName(char *fld) {
 	if (strcasecmp(fld, "vid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertexid") == 0) return NOWDB_OFF_VERTEX;
 	if (strcasecmp(fld, "vertex") == 0) return NOWDB_OFF_VERTEX;
-	if (strcasecmp(fld, "prop") == 0) return NOWDB_OFF_PROP;
-	if (strcasecmp(fld, "property") == 0) return NOWDB_OFF_PROP;
-	if (strcasecmp(fld, "value") == 0) return NOWDB_OFF_VALUE;
-	if (strcasecmp(fld, "vtype") == 0) return NOWDB_OFF_VTYPE;
-	if (strcasecmp(fld, "type") == 0) return NOWDB_OFF_VTYPE;
-	if (strcasecmp(fld, "role") == 0) return NOWDB_OFF_ROLE;
+	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "datetime") == 0) return NOWDB_OFF_VSTAMP;
+	if (strcasecmp(fld, "date") == 0) return NOWDB_OFF_VSTAMP;
 	return -1;
 }
 
@@ -184,22 +183,10 @@ int nowdb_edge_offByName(char *fld) {
 	if (strcasecmp(fld, "origin") == 0) return NOWDB_OFF_ORIGIN;
 	if (strcasecmp(fld, "destin") == 0) return NOWDB_OFF_DESTIN;
 	if (strcasecmp(fld, "destination") == 0) return NOWDB_OFF_DESTIN;
-	if (strcasecmp(fld, "timestamp") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "stamp") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "time") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "datetime") == 0) return NOWDB_OFF_STAMP;
-	if (strcasecmp(fld, "date") == 0) return NOWDB_OFF_STAMP;
 	return -1;
 }
 
 int nowdb_sizeByOff(nowdb_content_t content, uint16_t off) {
-	if (content == NOWDB_CONT_VERTEX) {
-		switch(off) {
-		case NOWDB_OFF_VTYPE:
-		case NOWDB_OFF_ROLE: return 4;
-		default: return 8;
-		}
-	}
 	return 8;
 }
 
@@ -231,22 +218,6 @@ char *nowdb_typename(nowdb_type_t typ) {
 	}
 }
 
-static inline uint32_t edgeAttctrlSize(uint16_t atts) {
-	return (atts%8==0?atts/8:atts/8+1);
-}
-
-static inline uint32_t edgeRecSize(char stamped, uint16_t atts) {
-	if (atts == 0) {
-		if (stamped) return 24; else return 16;
-	}
-	uint16_t xb = edgeAttctrlSize(atts);
-	return (24+xb+8*atts);
-}
-
-uint32_t nowdb_edge_recSize(char stamped, uint16_t atts) {
-	return edgeRecSize(stamped, atts);
-}
-
 static inline uint32_t recordsPerPage(uint32_t recsz) {
 	return (NOWDB_IDX_PAGE/recsz);
 }
@@ -256,30 +227,12 @@ uint32_t nowdb_recordsPerPage(uint32_t recsize) {
 }
 
 static inline uint32_t pagectrlSize(uint32_t recsz) {
-	if (recsz <= 24) return 0;
 	uint32_t rp = recordsPerPage(recsz);
-	return (rp%8==0?rp/8:rp/8+1);
+	return (rp%8==0?rp/8:rp/8+2);
 }
 
 uint32_t nowdb_pagectrlSize(uint32_t recsz) {
 	return pagectrlSize(recsz);
-}
-
-uint32_t nowdb_edge_attctrlSize(uint16_t atts) {
-	return edgeAttctrlSize(atts);
-}
-
-// get attribute control bit and byte for specific offset
-void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
-                        uint8_t  *bit, uint16_t *byte) {
-	uint32_t xb = edgeAttctrlSize(atts);
-	uint32_t o = (off - NOWDB_OFF_USER - xb)/8;
-	*byte = o/8;
-	*bit  = o%8;
-	/*
-	fprintf(stderr, "xb: %u, off: %u, o: %u, byte: %hu, bit: %u\n",
-	                 xb, off, o, *byte, *bit);
-	*/
 }
 
 char nowdb_nullrec[1024] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,

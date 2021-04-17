@@ -602,9 +602,10 @@ static uint32_t computeVertexSize(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_vertex_t *v;
 
+	// 0 + roleid + vid + stamped + num + size + ctrl
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		v = runner->cont;
-		sz+=strlen(v->name) + 1 + 4 + 1;
+		sz+=strlen(v->name) + 1 + 4 + 1 + 1 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -619,10 +620,11 @@ static uint32_t computePropSize(ts_algo_list_t *list) {
 	nowdb_model_prop_t *p;
 
 	/* size(prop) = strlen(name) + '\0' + propid (8)
-	 *            + roleid(4) + pos(4) + value(4) + pk(1) */
+	 *            + roleid(4) + pos(4) + value(4)
+                      + pk(1) + stamp(1) + offset (4) */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		p = runner->cont;
-		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1;
+		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1 + 1 + 4;
 	}
 	return sz;
 }
@@ -637,10 +639,13 @@ static uint32_t computePedgeSize(ts_algo_list_t *list) {
 	nowdb_model_pedge_t *p;
 
 	/* size(prop) = strlen(name) + '\0' + propid (8)
-	 *            + roleid(4) + pos(4) + value(4) + pk(1) */
+                      + edgeid (8) + pos (4) + value (4)
+                      + origin (1) + destin (1) + stamp (1)
+                      + off (4) */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		p = runner->cont;
-		sz+=strlen(p->name) + 1 + 8 + 8 + 4 + 4;
+		sz+=strlen(p->name) + 1 + 8 + 8 + 4 + 4
+		                    + 1 + 1 + 1 + 4;
 	}
 	return sz;
 }
@@ -654,9 +659,14 @@ static uint32_t computeEdgeSize(ts_algo_list_t *list) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_edge_t *e;
 
+	/* size = strlen(name) + '\0' + edgeid (8)
+                + origin (4) + destin (4) +
+                + stamped (1) + num (2)
+                + ctrl (4) + size (4) */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		e = runner->cont;
-		sz+=strlen(e->name) + 1 + 8 + 4 + 4 + 2 + 4 + 4;
+		sz+=strlen(e->name) + 1 + 8 + 4 + 4
+                                    + 1 + 2 + 4 + 4;
 	}
 	return sz;
 }
@@ -674,6 +684,10 @@ static void vertex2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		v = runner->cont;
 		memcpy(buf+sz, &v->roleid, 4); sz+=4;
 		memcpy(buf+sz, &v->vid, 1); sz+=1;
+		memcpy(buf+sz, &v->stamped, 1); sz+=1;
+		memcpy(buf+sz, &v->num, 2); sz+=2;
+		memcpy(buf+sz, &v->ctrl, 4); sz+=4;
+		memcpy(buf+sz, &v->size, 4); sz+=4;
 		strcpy(buf+sz, v->name); sz+=strlen(v->name)+1;
 	}
 }
@@ -694,6 +708,8 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &p->pos, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
 		memcpy(buf+sz, &p->pk, 1); sz+=1;
+		memcpy(buf+sz, &p->stamp, 1); sz+=1;
+		memcpy(buf+sz, &p->off, 4); sz+=4;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
 }
@@ -711,7 +727,11 @@ static void pedge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		p = runner->cont;
 		memcpy(buf+sz, &p->propid, 8); sz+=8;
 		memcpy(buf+sz, &p->edgeid, 8); sz+=8;
+		memcpy(buf+sz, &p->pos, 4); sz+=4;
 		memcpy(buf+sz, &p->value, 4); sz+=4;
+		memcpy(buf+sz, &p->origin, 1); sz+=1;
+		memcpy(buf+sz, &p->destin, 1); sz+=1;
+		memcpy(buf+sz, &p->stamp, 1); sz+=1;
 		memcpy(buf+sz, &p->off, 4); sz+=4;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
@@ -731,9 +751,10 @@ static void edge2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &e->edgeid, 8); sz+=8;
 		memcpy(buf+sz, &e->origin, 4); sz+=4;
 		memcpy(buf+sz, &e->destin, 4); sz+=4;
+		memcpy(buf+sz, &e->stamped, 1); sz+=1;
 		memcpy(buf+sz, &e->num, 2); sz+=2;
-		memcpy(buf+sz, &e->size, 4); sz+=4;
 		memcpy(buf+sz, &e->ctrl, 4); sz+=4;
+		memcpy(buf+sz, &e->size, 4); sz+=4;
 		strcpy(buf+sz, e->name); sz+=strlen(e->name)+1;
 	}
 }
@@ -776,7 +797,7 @@ static nowdb_err_t storeModel(nowdb_model_t *model, char what) {
 	default: return nowdb_err_get(nowdb_err_panic,
 	  FALSE, OBJECT, "impossible value in switch");
 	}
-
+	fprintf(stderr, "store size: %u\n", sz); 
 	if (sz == 0) return NOWDB_OK;
 	buf = malloc(sz);
 	if (buf == NULL) {
@@ -845,6 +866,10 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 		}
 		memcpy(&v->roleid, buf+off, 4); off+=4;
 		memcpy(&v->vid, buf+off, 1); off+=1;
+		memcpy(&v->stamped, buf+off, 1); off+=1;
+		memcpy(&v->num, buf+off, 2); off+=2;
+		memcpy(&v->ctrl, buf+off, 4); off+=4;
+		memcpy(&v->size, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
 			free(v);
@@ -863,6 +888,7 @@ static nowdb_err_t loadVertex(ts_algo_list_t *list,
 			NOMEM("list.append");
 			return err;
 		}
+		fprintf(stderr, "Vertex |%s| is stamped: %d\n", v->name, v->stamped);
 	}
 	return NOWDB_OK;
 }
@@ -889,6 +915,8 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		memcpy(&p->pos, buf+off, 4); off+=4;
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->pk, buf+off, 1); off+=1;
+		memcpy(&p->stamp, buf+off, 1); off+=1;
+		memcpy(&p->off, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
 			free(p);
@@ -930,7 +958,11 @@ static nowdb_err_t loadPedge(ts_algo_list_t   *list,
 		}
 		memcpy(&p->propid, buf+off, 8); off+=8;
 		memcpy(&p->edgeid, buf+off, 8); off+=8;
+		memcpy(&p->pos, buf+off, 4); off+=4;
 		memcpy(&p->value, buf+off, 4); off+=4;
+		memcpy(&p->origin, buf+off, 1); off+=1;
+		memcpy(&p->destin, buf+off, 1); off+=1;
+		memcpy(&p->stamp, buf+off, 1); off+=1;
 		memcpy(&p->off, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
@@ -955,27 +987,13 @@ static nowdb_err_t loadPedge(ts_algo_list_t   *list,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: initialise op, dp, tp
+ * Helper: initialise value according to vertex
  * ------------------------------------------------------------------------
  */
-static inline void initEdgePedge(nowdb_model_edge_t *e) {
-
-	e->op.name = "origin";
-	e->op.edgeid = e->edgeid;
-	e->op.off = NOWDB_OFF_ORIGIN;
-
-	e->dp.name = "destin";
-	e->dp.edgeid = e->edgeid;
-	e->dp.off = NOWDB_OFF_DESTIN;
-
-	e->tp.name = "stamp";
-	e->tp.edgeid = e->edgeid;
-	e->tp.off = NOWDB_OFF_STAMP;
-	e->tp.value = NOWDB_TYP_TIME;
-}
-
-static inline nowdb_err_t updEdgePedge(nowdb_model_t  *model,
-                                       nowdb_model_edge_t *e) {
+static inline nowdb_err_t updEdgePedge(nowdb_model_t   *model,
+                                       nowdb_model_edge_t  *e,
+                                       nowdb_model_pedge_t *o,
+                                       nowdb_model_pedge_t *d) {
 	nowdb_model_vertex_t pattern, *v;
 
 	pattern.roleid = e->origin;
@@ -983,18 +1001,19 @@ static inline nowdb_err_t updEdgePedge(nowdb_model_t  *model,
 	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
 	        FALSE, OBJECT, "origin is not a known vertex");
 
-	e->op.value = v->vid == NOWDB_MODEL_NUM?
-	                         NOWDB_TYP_UINT:
-	                         NOWDB_TYP_TEXT;
+	o->value = v->vid == NOWDB_MODEL_NUM?
+	                      NOWDB_TYP_UINT:
+	                      NOWDB_TYP_TEXT;
 
+	fprintf(stderr, "searching destin: %u\n", e->destin);
 	pattern.roleid = e->destin;
 	v = ts_algo_tree_find(model->vrtxById, &pattern);
 	if (v == NULL) return nowdb_err_get(nowdb_err_dup_key,
 	        FALSE, OBJECT, "destin is not a known vertex");
 
-	e->dp.value = v->vid == NOWDB_MODEL_NUM?
-	                         NOWDB_TYP_UINT:
-	                         NOWDB_TYP_TEXT;
+	d->value = v->vid == NOWDB_MODEL_NUM?
+	                      NOWDB_TYP_UINT:
+	                      NOWDB_TYP_TEXT;
 	return NOWDB_OK;
 }
 
@@ -1018,9 +1037,10 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 		memcpy(&e->edgeid, buf+off, 8); off+=8;
 		memcpy(&e->origin, buf+off, 4); off+=4;
 		memcpy(&e->destin, buf+off, 4); off+=4;
+		memcpy(&e->stamped, buf+off, 1); off+=1;
 		memcpy(&e->num, buf+off, 2); off+=2;
-		memcpy(&e->size, buf+off, 4); off+=4;
 		memcpy(&e->ctrl, buf+off, 4); off+=4;
+		memcpy(&e->size, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
 			free(e);
@@ -1040,7 +1060,7 @@ static nowdb_err_t loadEdge(ts_algo_list_t   *list,
 			return err;
 		}
 
-		initEdgePedge(e);
+		// initEdgePedge(e);
 	}
 	return NOWDB_OK;
 }
@@ -1121,13 +1141,7 @@ static nowdb_err_t loadModel(nowdb_model_t *model, char what) {
 		ts_algo_list_destroy(&list); return err;
 	}
 	for(runner=list.head;runner!=NULL;runner=runner->nxt) {
-		if (what == E) {
-			err = updEdgePedge(model, runner->cont);
-			if (err != NOWDB_OK) {
-				ts_algo_list_destroy(&list);
-				return err;
-			}
-		}
+
 		if (ts_algo_tree_insert(byId, runner->cont) != TS_ALGO_OK) {
 			ts_algo_list_destroy(&list);
 			NOMEM("byId.insert");
@@ -1356,21 +1370,140 @@ nowdb_err_t nowdb_model_addEdge(nowdb_model_t      *model,
 }
 
 /* ------------------------------------------------------------------------
- * Helper: find pk in list of properties
+ * Helper: find pk in list of properties (and make it first)
  * ------------------------------------------------------------------------
  */
 static void findPK(ts_algo_list_t     *props,
                    nowdb_model_prop_t **prop) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t  *tmp;
+	nowdb_model_prop_t  *zero=NULL;
 
 	*prop = NULL;
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		tmp = runner->cont;
 		if (tmp->pk) {
+			if (tmp->pos != 0 && zero != NULL) {
+				zero->pos = tmp->pos; tmp->pos = 0;
+			}
 			*prop = tmp; break;
-		}
+		} else if (tmp->pos == 0) zero = tmp;
 	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find origin and destin in list of properties (and make it first)
+ * ------------------------------------------------------------------------
+ */
+static void findOriDstStamp(ts_algo_list_t  *props,
+                       nowdb_model_pedge_t **oprop,
+                       nowdb_model_pedge_t **dprop,
+                       nowdb_model_pedge_t **sprop) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *tmp;
+	nowdb_model_pedge_t *zero=NULL;
+	nowdb_model_pedge_t *one=NULL;
+	nowdb_model_pedge_t *two=NULL;
+
+	*oprop = NULL;
+	*dprop = NULL;
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		tmp = runner->cont;
+		if (tmp->origin) {
+			if (tmp->pos != 0 && zero != NULL) {
+				zero->pos = tmp->pos; tmp->pos = 0;
+			}
+			*oprop = tmp;
+		} else if (tmp->destin) {
+			if (tmp->pos != 0 && one != NULL) {
+				one->pos = tmp->pos; tmp->pos = 0;
+			}
+			*dprop = tmp;
+		} else if (tmp->stamp) {
+			if (tmp->pos != 0 && two != NULL) {
+				two->pos = tmp->pos; tmp->pos = 0;
+			}
+			*sprop = tmp;
+		} else if (tmp->pos == 0) zero = tmp;
+		  else if (tmp->pos == 1) one = tmp;
+		  else if (tmp->pos == 2) two = tmp;
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: find stamp in list of properties
+ * ------------------------------------------------------------------------
+ */
+static void findStamp(ts_algo_list_t  *props,
+                   nowdb_model_prop_t **prop) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *tmp;
+	nowdb_model_prop_t  *one=NULL;
+
+	*prop = NULL;
+	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+		tmp = runner->cont;
+		if (tmp->stamp) {
+			if (tmp->pos > 1 && one != NULL) {
+				one->pos = tmp->pos; tmp->pos = 1;
+			}
+			*prop = tmp; break;
+		} else if (tmp->pos == 1 && !tmp->pk) one = tmp;
+	}
+}
+
+static void resortProps(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_prop_t  *cur;
+	char clean = 0;
+
+	do {
+		int pos=0; clean = 1;
+
+		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+			cur = runner->cont;
+			if (cur->pos > pos) {
+				for(int i=pos; i<cur->pos; i++) {
+					ts_algo_list_degrade(props, runner);
+				}
+				clean=0;break;
+				
+			} else if (cur->pos < pos) {
+				for(int i=pos; i<cur->pos; i--) {
+					ts_algo_list_promote(props, runner);
+				}
+				clean=0;break;
+			}
+			pos++;
+		}
+	} while (!clean);
+}
+
+static void resortPedges(ts_algo_list_t *props) {
+	ts_algo_list_node_t *runner;
+	nowdb_model_pedge_t *cur;
+	char clean = 0;
+
+	do {
+		int pos=0; clean = 1;
+
+		for(runner=props->head; runner!=NULL; runner=runner->nxt) {
+			cur = runner->cont;
+			if (cur->pos > pos) {
+				for(int i=pos; i<cur->pos; i++) {
+					ts_algo_list_degrade(props, runner);
+				}
+				clean=0;break;
+				
+			} else if (cur->pos < pos) {
+				for(int i=pos; i<cur->pos; i--) {
+					ts_algo_list_promote(props, runner);
+				}
+				clean=0;break;
+			}
+			pos++;
+		}
+	} while (!clean);
 }
 
 /* ------------------------------------------------------------------------
@@ -1398,13 +1531,27 @@ static char propUnique(ts_algo_list_t *props,
  */
 static nowdb_err_t propsUnique(nowdb_model_t  *model,
                                nowdb_roleid_t roleid,
-                               ts_algo_list_t *props) {
+                               ts_algo_list_t *props,
+                               uint16_t         *num, 
+                               uint32_t        *size,
+                               uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_prop_t  *p, *tmp;
+	uint32_t off=0, xb;
+
+	xb  = nowdb_attctrlSize(props->len);
+ 
+        *ctrl = xb;
 
 	for(runner=props->head; runner!=NULL; runner=runner->nxt) {
 		p = runner->cont;
 		p->roleid = roleid;
+		p->off = off; off+=8;
+
+		if (p->pk) fprintf(stderr, "PK: %u\n", p->off);
+
+		(*num)++;
+
 		tmp = ts_algo_tree_find(model->propById, p);
 		if (tmp != NULL) return nowdb_err_get(nowdb_err_dup_key,
 		                                 FALSE, OBJECT, p->name);
@@ -1416,6 +1563,7 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		                        FALSE, OBJECT, p->name);
 		}
 	}
+	(*size)=off+xb;
 	return NOWDB_OK;
 }
 
@@ -1450,10 +1598,9 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
                                 uint32_t        *ctrl) {
 	ts_algo_list_node_t *runner;
 	nowdb_model_pedge_t *p, *tmp;
-	uint32_t off, xb;
+	uint32_t off=0, xb;
 	
-	xb = nowdb_edge_attctrlSize(props->len);
-	off = NOWDB_OFF_USER+xb;
+	xb = nowdb_attctrlSize(props->len);
 
 	*ctrl = xb;
 
@@ -1478,7 +1625,7 @@ static nowdb_err_t pedgesUnique(nowdb_model_t  *model,
 
 		// get propid
 	}
-	(*size)=off;
+	(*size)=off+xb;
 	return NOWDB_OK;
 }
 
@@ -1530,9 +1677,11 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	nowdb_err_t err = NOWDB_OK;
 	nowdb_err_t err2;
 	nowdb_model_prop_t *prop=NULL;
+	nowdb_model_prop_t *stamp=NULL;
 	nowdb_model_vertex_t *vrtx;
 	ts_algo_list_node_t *runner;
 	thing_t pattern, *thing;
+	nowdb_bool_t stamped=0;
 
 	MODELNULL();
 
@@ -1554,6 +1703,9 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 			       FALSE, OBJECT, "no PK in type");
 			goto unlock;
 		}
+		findStamp(props, &stamp);
+		if (stamp != NULL) stamped = 1;
+		resortProps(props);
 	}
 
 	vrtx = calloc(1, sizeof(nowdb_model_vertex_t));
@@ -1567,7 +1719,13 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 		free(vrtx); goto unlock;
 	}
 
-	vrtx->roleid = getNextRoleid(model);
+	vrtx->roleid  = getNextRoleid(model);
+	vrtx->stamped = stamped;
+	vrtx->num     = 0;
+	vrtx->ctrl    = 0;
+	vrtx->size    = 0;
+
+	fprintf(stderr, "Vertex '%s' is stamped: %d\n", vrtx->name, vrtx->stamped);
 
 	if (prop != NULL) {
 		vrtx->vid = prop->value==NOWDB_TYP_TEXT?
@@ -1578,12 +1736,15 @@ nowdb_err_t nowdb_model_addType(nowdb_model_t  *model,
 	}
 
 	if (props != NULL) {
-		err = propsUnique(model, vrtx->roleid, props);
+		err = propsUnique(model, vrtx->roleid, props,
+		        &vrtx->num, &vrtx->size, &vrtx->ctrl);
 		if (err != NOWDB_OK) {
 			free(vrtx->name); free(vrtx);
 			goto unlock;
 		}
 	}
+
+	fprintf(stderr, "Vertex atts: %hu, size: %u\n", vrtx->num, vrtx->size);
 
 	err = addNL(model->vrtxById,
 	            model->vrtxByName,
@@ -1654,7 +1815,6 @@ static inline nowdb_err_t removeEdgeType(nowdb_model_t *model,
  */
 nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
                                     char            *name,
-                                    char          stamped,
                                     nowdb_key_t    edgeid,
                                     nowdb_roleid_t origin,
                                     nowdb_roleid_t destin,
@@ -1664,6 +1824,7 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 	nowdb_model_edge_t  *edge;
 	ts_algo_list_node_t *runner;
 	thing_t pattern, *thing;
+	nowdb_bool_t stamped=0;
 
 	MODELNULL();
 
@@ -1678,6 +1839,25 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		goto unlock;
 	}
 
+	nowdb_model_pedge_t *ori = NULL;
+	nowdb_model_pedge_t *dst = NULL;
+	nowdb_model_pedge_t *stp = NULL;
+	if (props != NULL) {
+		findOriDstStamp(props, &ori, &dst, &stp);
+		if (ori == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid,
+			       FALSE, OBJECT, "no origin in edge");
+			goto unlock;
+		}
+		if (dst == NULL) {
+			err = nowdb_err_get(nowdb_err_invalid,
+			       FALSE, OBJECT, "no destin in edge");
+			goto unlock;
+		}
+		if (stp != NULL) stamped = 1;
+		resortPedges(props);
+	}
+
 	edge = calloc(1, sizeof(nowdb_model_edge_t));
 	if (edge == NULL) {
 		NOMEM("allocating edge");
@@ -1689,21 +1869,21 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		free(edge); goto unlock;
 	}
 
-	edge->edgeid = edgeid;
-	edge->origin = origin;
-	edge->destin = destin;
-	edge->num    = 0;
-	edge->ctrl   = 0;
-	edge->size=stamped?NOWDB_OFF_USER:NOWDB_OFF_STAMP;
+	edge->edgeid  = edgeid;
+	edge->origin  = origin;
+	edge->destin  = destin;
+	edge->stamped = stamped;
+	edge->num     = 0;
+	edge->ctrl    = 0;
+	edge->size    = 0;
 
-	initEdgePedge(edge);
-	err = updEdgePedge(model, edge);
+	err = updEdgePedge(model, edge, ori, dst);
 	if (err != NOWDB_OK) {
 		free(edge->name); free(edge);
 		goto unlock;
 	}
 
-	if (stamped && props != NULL) {
+	if (props != NULL) {
 		err = pedgesUnique(model, edge->edgeid, props,
 		        &edge->num, &edge->size, &edge->ctrl);
 		if (err != NOWDB_OK) {
@@ -1719,7 +1899,7 @@ nowdb_err_t nowdb_model_addEdgeType(nowdb_model_t  *model,
 		free(edge->name); free(edge);
 		goto unlock;
 	}
-	if (stamped && props != NULL) {
+	if (props != NULL) {
 		// note that we remove the props from the list
 		// so that the caller can destroy everything in
 		// the list wether there was an error or not
@@ -2226,6 +2406,7 @@ nowdb_err_t nowdb_model_getPedgeById(nowdb_model_t       *model,
 	return NOWDB_OK;
 }
 
+/*
 static inline char getCanonicalPedge(nowdb_model_t       *model,
                                      nowdb_key_t         edgeid,
                                      char                 *name,
@@ -2257,6 +2438,7 @@ static inline char getCanonicalPedge(nowdb_model_t       *model,
 
 	return 1;
 }
+*/
 
 /* ------------------------------------------------------------------------
  * find pedge by name
@@ -2271,7 +2453,7 @@ nowdb_err_t nowdb_model_getPedgeByName(nowdb_model_t       *model,
 
 	MODELNULL();
 
-	if (getCanonicalPedge(model, edgeid, name, prop)) return NOWDB_OK;
+	// if (getCanonicalPedge(model, edgeid, name, prop)) return NOWDB_OK;
 
 	tmp.edgeid = edgeid;
 	tmp.name   = name;
@@ -2388,45 +2570,30 @@ nowdb_err_t nowdb_model_getPedges(nowdb_model_t  *model,
 	e = ts_algo_tree_find(model->edgeById, &pattern);
 	if (e == NULL) INVALID("no such edge");
 
-	if (e->size > NOWDB_OFF_USER) {
 
-		ts_algo_list_init(&unsorted);
-		tmp.edgeid = edgeid;
+	ts_algo_list_init(&unsorted);
+	tmp.edgeid = edgeid;
 
-		// filter properties using tmp (i.e. roleid)
-		if (ts_algo_tree_filter(model->pedgeById, &unsorted, &tmp,
-		                        pedgesByEdgeid) != TS_ALGO_OK) {
-			NOMEM("tree.filter");
-			return err;
-		}
+	// filter properties using tmp (i.e. roleid)
+	if (ts_algo_tree_filter(model->pedgeById, &unsorted, &tmp,
+		                    pedgesByEdgeid) != TS_ALGO_OK) {
+		NOMEM("tree.filter");
+		return err;
+	}
 	
-		// sort properties by off
-		sorted = ts_algo_list_sort(&unsorted, sortByOff);
-		ts_algo_list_destroy(&unsorted);
-		if (sorted == NULL) {
-			NOMEM("list.sort");
-			return err;
-		}
+	// sort properties by off
+	sorted = ts_algo_list_sort(&unsorted, sortByOff);
+	ts_algo_list_destroy(&unsorted);
+	if (sorted == NULL) {
+		NOMEM("list.sort");
+		return err;
+	}
 
-		// copy sorted list to result list
-		err = copyList(sorted, props);
-		ts_algo_list_destroy(sorted); free(sorted);
-		if (err != NOWDB_OK) {
-			NOMEM("list.copy");
-			return err;
-		}
-	}
-	if (e->size > NOWDB_OFF_STAMP) {
-		if (ts_algo_list_insert(props, &e->tp) != TS_ALGO_OK) {
-			ts_algo_list_destroy(props);
-			NOMEM("list.insert");
-			return err;
-		}
-	}
-	if (ts_algo_list_insert(props, &e->dp) != TS_ALGO_OK ||
-	    ts_algo_list_insert(props, &e->op) != TS_ALGO_OK) {
-		ts_algo_list_destroy(props);
-		NOMEM("list.insert");
+	// copy sorted list to result list
+	err = copyList(sorted, props);
+	ts_algo_list_destroy(sorted); free(sorted);
+	if (err != NOWDB_OK) {
+		NOMEM("list.copy");
 		return err;
 	}
 	return NOWDB_OK;

@@ -33,7 +33,7 @@ int insertEdges(char *e, int items, uint32_t size) {
 	int rm;
 	int z=0;
 
-	sz = nowdb_edge_recSize(1, 3);
+	sz = nowdb_recSize(6);
 	rm = BUFSZ-(BUFSZ/sz)*sz;
 
 	fprintf(stderr, "inserting %d random edges\n", items);
@@ -76,7 +76,7 @@ char *createBuf(int items, uint32_t size) {
 		free(buf); return NULL;
 	}
 	/*
-	int sz = nowdb_edge_recSize(1,3);
+	int sz = nowdb_recSize(6);
 	int rm = BUFSZ-(BUFSZ/sz)*sz;
 	for(int i=0; i<size;) {
 		if (BUFSZ - (i%BUFSZ) <= rm) {
@@ -96,7 +96,7 @@ int checkSorted(char *e, int items, uint32_t size) {
 	int b=0;
 	int sd=0; // stepdown
 
-	sz = nowdb_edge_recSize(1, 3);
+	sz = nowdb_recSize(6);
 	rm = BUFSZ-(BUFSZ/sz)*sz;
 
 	cnt = 1;
@@ -168,7 +168,7 @@ int testSort(int items) {
 	int sz, size;
 	int k=1;
 
-	sz = nowdb_edge_recSize(1, 3);
+	sz = nowdb_recSize(6);
 	int perbuf = BUFSZ/sz;
 	while(perbuf*k<items) k+=1;
 
@@ -191,7 +191,7 @@ int testSort(int items) {
 }
 
 int main() {
-	int perbuf = BUFSZ/nowdb_edge_recSize(1,3);
+	int perbuf = BUFSZ/nowdb_recSize(6);
 	int rc = EXIT_SUCCESS;
 	if (!nowdb_init()) {
 		fprintf(stderr, "cannot init environment\n");

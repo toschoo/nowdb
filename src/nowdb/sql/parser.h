@@ -33,6 +33,8 @@ typedef struct {
 	FILE            *fd; /* input stream                 */
 	int            sock; /* input socket                 */
 	char           *buf; /* buffer for socket            */
+	char        *strbuf; /* string buffer                */
+	int             idx; /* position in string buffer    */
 	char        *errmsg; /* error message                */
 	sigset_t       sigs; /* signal set for stream parser */ 
 	char      streaming; /* streaming mode               */

@@ -352,8 +352,9 @@ int findEnd(char *buf, int x) {
 	char on=0;
 	int i;
 	for(i=0;i<x;i++) {
+		if (on && buf[i] == '\\') continue;
 		if (buf[i] == '\'') {
-			on=on?0:1; continue;
+			on=!on; continue;
 		}
 		if (on) continue;
 		if (buf[i] == ';') break;
@@ -361,15 +362,6 @@ int findEnd(char *buf, int x) {
 	if (on) return -1;
 	if (i==x) return -1;
 	return i;
-}
-
-/* -----------------------------------------------------------------------
- * check commented line
- * -----------------------------------------------------------------------
- */
-char comment(char *buf, int n) {
-	if (buf[0] == '-' && buf[1] == '-') return 1;
-	return 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -419,17 +411,20 @@ int handleFile(nowdb_con_t con, FILE *ifile) {
 		// buf[x] = 0;
 		n = findEnd(buf, x);
 		if (n < 0) {
-			fprintf(stderr, "string too long\n");
-			rc = -1; break;
+			if (!eof) { // this is a workaround:
+			            // to ignore a comment at the end of file
+			            // this should be solved in the server
+				rc = -1;
+				fprintf(stderr, "string too long\n");
+			}
+			break;
 		}
 
 		// remove whitespace
 		k = whitespace(buf, -1, n);
 
-		// if not empty and not a comment:
 		// handle this query
-		if (!empty(buf+k, n-k) &&
-                    !comment(buf+k, n-k)) {
+		if (!empty(buf+k, n-k)) {
 			if (handleQuery(con, buf+k, n-k) != 0) {
 				rc = -1; break;
 			}

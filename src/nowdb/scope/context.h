@@ -22,8 +22,8 @@
 typedef struct {
 	char             *name; // context name
         char         *strgname; // storage name
-	nowdb_plru12_t *evache; // external vertex cache (contains residents)
-	nowdb_plru12_t *ivache; // internal vertex cache
+	nowdb_plru8r_t *evache; // external vertex cache (contains residents)
+	nowdb_plru8r_t *ivache; // internal vertex cache
 	nowdb_store_t    store; // the heart of the matter
 } nowdb_context_t;
 

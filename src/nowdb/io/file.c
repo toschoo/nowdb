@@ -432,6 +432,7 @@ nowdb_err_t nowdb_file_erase(nowdb_file_t *file) {
 static inline void deltas(char *buf,
                           uint32_t size,
                           uint32_t recsize,
+                          uint32_t offset,
                           nowdb_time_t *f,
                           nowdb_time_t *t) {
 	nowdb_time_t to   = NOWDB_TIME_DAWN;
@@ -440,7 +441,7 @@ static inline void deltas(char *buf,
 	uint32_t mx = (size/recsize)*recsize;
 
 	for(int i=0; i<mx; i+=recsize) {
-		tmp = (nowdb_time_t*)(buf+i+NOWDB_OFF_TMSTMP);
+		tmp = (nowdb_time_t*)(buf+i+offset);
 		if (*tmp > to) to = *tmp;
 		if (*tmp < from) from = *tmp;
 	}
@@ -479,6 +480,9 @@ static inline nowdb_err_t zstdcomp(nowdb_file_t *file,
 
 	if (file->ctrl & NOWDB_FILE_TS) deltas(buf, size,
 	                                       file->recordsize,
+	                                       file->cont == NOWDB_CONT_EDGE?
+	                                                     NOWDB_OFF_STAMP:
+	                                                     NOWDB_OFF_VSTAMP,
 	                                       &from, &to);
 
 	file->hdr->reserved = 0;

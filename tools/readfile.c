@@ -17,7 +17,7 @@ void helptxt(char *program) {
 }
 
 #define LOOP_INIT(stm, atts) \
-	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t recsz = nowdb_edge_recSize(atts); \
 	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
 	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
 
@@ -39,7 +39,7 @@ int readfile(char *path) {
 	int x = 0;
 	FILE *f;
 
-	int recsz = nowdb_edge_recSize(1,3);
+	int recsz = nowdb_recSize(3);
 	int bufsz = (8192/recsz)*recsz;
 
 	s = filesize(path);

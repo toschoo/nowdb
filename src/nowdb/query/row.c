@@ -137,7 +137,6 @@ static inline nowdb_err_t copybuf(char *src, uint32_t recsz,
  */
 nowdb_err_t nowdb_row_project(nowdb_row_t *row,
                               char *src, uint32_t recsz,
-                              uint64_t pmap,
                               char *buf, uint32_t sz,
                               uint32_t *osz, char *full,
                               char *cnt, char *ok) {
@@ -150,8 +149,6 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	*full=0;
 	*ok  =0;
 	*cnt =0;
-
-	// fprintf(stderr, "my pmap: %lu\n", pmap);
 
 	if (row == NULL) return copybuf(src, recsz,
 	                                buf,    sz,
@@ -173,8 +170,8 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 	// project the fields
 	for(int i=row->cur; i<row->sz; i++) {
 		err = nowdb_expr_eval(row->fields[i],
-	                             &row->eval, pmap,
-		                      src, &typ, &val);
+	                             &row->eval,
+		                     src, &typ, &val);
 		if (err != NOWDB_OK) return err;
 		t = (char)typ;
 		s = getSize(&t, val);

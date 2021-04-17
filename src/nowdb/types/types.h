@@ -132,35 +132,21 @@ extern char nowdb_nullrec[1024];
 
 int nowdb_sizeByOff(nowdb_content_t cont, uint16_t off);
 
-#define NOWDB_VERTEX_SIZE 32
-
 /* ------------------------------------------------------------------------
- * Vertex Offsets
+ * Offsets
  * ------------------------------------------------------------------------
  */
 #define NOWDB_OFF_VERTEX 0
-#define NOWDB_OFF_PROP   8
-#define NOWDB_OFF_VALUE 16
-#define NOWDB_OFF_VTYPE 24
-#define NOWDB_OFF_ROLE  28
+#define NOWDB_OFF_ORIGIN 0
+#define NOWDB_OFF_DESTIN 8
+#define NOWDB_OFF_STAMP  16
+#define NOWDB_OFF_VSTAMP  8
 
-/* ------------------------------------------------------------------------
- * Vertex Property
- * ---------------
- * Storetype of properties of a vertex
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_key_t   vertex; /* id of the vertex          */
-	nowdb_key_t property; /* id of the vertex property */
-	nowdb_value_t  value; /* property value            */
-	nowdb_type_t   vtype; /* type of the value         */
-	nowdb_roleid_t  role; /* role identifier           */
-} nowdb_vertex_t;
-
-void nowdb_vertex_writeValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
-void nowdb_vertex_readValue(nowdb_vertex_t *v, nowdb_type_t typ, void *value);
-int nowdb_vertex_strtov(nowdb_vertex_t *v, nowdb_type_t typ, char *value);
+/* to be removed */
+#define NOWDB_OFF_ROLE 128
+#define NOWDB_OFF_PROP 256
+#define NOWDB_OFF_VTYPE 512
+#define NOWDB_OFF_VALUE 1024
 
 int nowdb_vertex_offByName(char *field);
 
@@ -168,17 +154,8 @@ int nowdb_vertex_offByName(char *field);
  * Edge Offsets
  * ------------------------------------------------------------------------
  */
-#define NOWDB_OFF_ORIGIN   0
-#define NOWDB_OFF_DESTIN   8
-#define NOWDB_OFF_TMSTMP  16
-#define NOWDB_OFF_STAMP   16
-#define NOWDB_OFF_USER    24
 
 int nowdb_edge_offByName(char *field);
-
-// compute the recordsize of an edge with n atts
-// if n > 0, the edge is always stamped
-uint32_t nowdb_edge_recSize(char stamped, uint16_t atts);
 
 // records per page for a given record size
 uint32_t nowdb_recordsPerPage(uint32_t recsz);
@@ -188,14 +165,28 @@ uint32_t nowdb_recordsPerPage(uint32_t recsz);
 // which are to be considered / to be ignored
 uint32_t nowdb_pagectrlSize(uint32_t recsz);
 
+char *nowdb_typename(nowdb_type_t typ);
+
 // compute the size of the attribute control block
 // which registers attributes that are NULL/NOT NULL
-uint32_t nowdb_edge_attctrlSize(uint16_t atts);
+static inline uint32_t nowdb_attctrlSize(uint16_t atts) {
+	return (atts%8==0?atts/8:atts/8+1);
+}
+
+// get start offset in record where ctrl block starts
+static inline uint32_t nowdb_ctrlStart(uint16_t atts) {
+	return atts*8;
+}
 
 // get attribute control bit and byte for specific offset
-void nowdb_edge_getCtrl(uint16_t atts, uint32_t off,
-                        uint8_t *bit,  uint16_t *byte);
+static inline void nowdb_getCtrl(uint32_t off, uint8_t *bit, uint16_t *byte) {
+	uint32_t o = off/8;
+	*byte = o/8;
+	*bit  = o%8;
+}
 
-char *nowdb_typename(nowdb_type_t typ);
+static inline uint32_t nowdb_recSize(uint16_t atts) {
+	return(8*atts+nowdb_attctrlSize(atts));
+}
 
 #endif

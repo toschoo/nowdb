@@ -1,24 +1,16 @@
 /* ========================================================================
  * (c) Tobias Schoofs, 2018
  * ========================================================================
- * Private 12 Byte LRU Cache (i.e. roleid/key)
+ * Private 8 Byte LRU Cache with residents (main use case: vertex pk)
  * ========================================================================
  */
-#include <nowdb/mem/plru12.h>
+#include <nowdb/mem/plru8r.h>
+#include <stdio.h>
 
-static char *OBJECT = "LRU12";
-
-/* ------------------------------------------------------------------------
- * Private 12Byte LRU
- * ------------------------------------------------------------------------
- */
-typedef struct {
-	nowdb_roleid_t role;
-	nowdb_key_t     key;
-} key12_t;
+static char *OBJECT = "LRU8r";
 
 #define KEY(x) \
-	((key12_t*)x)
+	(*(nowdb_key_t*)x)
 
 #define LRUNULL() \
 	if (lru == NULL) return nowdb_err_get(nowdb_err_invalid, \
@@ -32,10 +24,8 @@ typedef struct {
  * ------------------------------------------------------------------------
  */
 static ts_algo_cmp_t compare(void *ignore, void *one, void *two) {
-	if (KEY(one)->role < KEY(two)->role) return ts_algo_cmp_less;
-	if (KEY(one)->role > KEY(two)->role) return ts_algo_cmp_greater;
-	if (KEY(one)->key  < KEY(two)->key) return ts_algo_cmp_less;
-	if (KEY(one)->key  > KEY(two)->key) return ts_algo_cmp_greater;
+	if (KEY(one) < KEY(two)) return ts_algo_cmp_less;
+	if (KEY(one) > KEY(two)) return ts_algo_cmp_greater;
 	return ts_algo_cmp_equal;
 }
 
@@ -62,7 +52,7 @@ static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
  * Init LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_init(nowdb_plru12_t *lru,
+nowdb_err_t nowdb_plru8r_init(nowdb_plru8r_t *lru,
                               uint32_t       max) {
 	nowdb_err_t err;
 
@@ -82,7 +72,7 @@ nowdb_err_t nowdb_plru12_init(nowdb_plru12_t *lru,
  * Destroy LRU
  * ------------------------------------------------------------------------
  */
-void nowdb_plru12_destroy(nowdb_plru12_t *lru) {
+void nowdb_plru8r_destroy(nowdb_plru8r_t *lru) {
  	if (lru == NULL) return;
 	ts_algo_lru_destroy(lru);
 }
@@ -92,18 +82,14 @@ void nowdb_plru12_destroy(nowdb_plru12_t *lru) {
  * Get data from LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_get(nowdb_plru12_t  *lru,
-                             nowdb_roleid_t  role,
+nowdb_err_t nowdb_plru8r_get(nowdb_plru8r_t  *lru,
                              nowdb_key_t      key,
                              char          *found) {
-	key12_t k, *x;
+	nowdb_key_t *x;
 
 	LRUNULL();
 
-	k.role = role;
-	k.key = key;
-
-	x = ts_algo_lru_get(lru, &k);
+	x = ts_algo_lru_get(lru, &key);
 
 	*found = x!=NULL;
 
@@ -114,23 +100,21 @@ nowdb_err_t nowdb_plru12_get(nowdb_plru12_t  *lru,
  * Add data to LRU (either resident or not)
  * ------------------------------------------------------------------------
  */
-static inline nowdb_err_t add2lru(nowdb_plru12_t *lru,
-                                  nowdb_roleid_t role,
+static inline nowdb_err_t add2lru(nowdb_plru8r_t *lru,
                                   nowdb_key_t     key,
                                   char          rsdnt) {
 	nowdb_err_t err=NOWDB_OK;
-	key12_t *k;
+	nowdb_key_t *k;
 	
 	LRUNULL();
 
-	k = malloc(sizeof(key12_t));
+	k = malloc(sizeof(nowdb_key_t));
 	if (k == NULL) {
 		NOMEM("allocating lru node");
 		return err;
 	}
 
-	k->role = role;
-	k->key = key;
+	*k = key;
 
 	if (rsdnt) {
 		if (ts_algo_lru_addResident(lru, k) != TS_ALGO_OK) {
@@ -150,30 +134,25 @@ static inline nowdb_err_t add2lru(nowdb_plru12_t *lru,
  * Add data to LRU as resident
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_addResident(nowdb_plru12_t *lru,
-                                     nowdb_roleid_t  role,
-                                     nowdb_key_t      key) {
-	return add2lru(lru,role,key,1);
+nowdb_err_t nowdb_plru8r_addResident(nowdb_plru8r_t *lru,
+                                     nowdb_key_t     key) {
+	return add2lru(lru,key,1);
 }
 
 /* ------------------------------------------------------------------------
  * Add data to LRU
  * ------------------------------------------------------------------------
  */
-nowdb_err_t nowdb_plru12_add(nowdb_plru12_t *lru,
-                            nowdb_roleid_t  role,
+nowdb_err_t nowdb_plru8r_add(nowdb_plru8r_t *lru,
                             nowdb_key_t      key) {
-	return add2lru(lru,role,key,0);
+	return add2lru(lru,key,0);
 }
 
 /* ------------------------------------------------------------------------
  * Revoke residence
  * ------------------------------------------------------------------------
  */
-void nowdb_plru12_revoke(nowdb_plru12_t *lru,
-                         nowdb_roleid_t  role,
-                         nowdb_key_t      key) {
-	key12_t k;
-	k.key = key; k.role = role;
-	ts_algo_lru_revokeResidence(lru, &k);
+void nowdb_plru8r_revoke(nowdb_plru8r_t *lru,
+                         nowdb_key_t     key) {
+	ts_algo_lru_revokeResidence(lru, &key);
 }

@@ -21,12 +21,12 @@
 #define NPRODS   2
 #define NCLIENTS 1
 
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define EDGE_OFF  24
+#define LABEL_OFF 32
+#define WEIGHT_OFF 40
 
 #define LOOP_INIT(stm, atts) \
-	uint32_t recsz = nowdb_edge_recSize(stm, atts); \
+	uint32_t recsz = nowdb_recSize(atts); \
 	uint32_t bufsz = (NOWDB_IDX_PAGE/recsz)*recsz; \
 	uint32_t remsz = NOWDB_IDX_PAGE - bufsz;
 
@@ -60,10 +60,10 @@ void makeEdgePattern(char *e) {
 	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
 	setValue(e, NOWDB_OFF_DESTIN, 0xb);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
 	setValue(e, EDGE_OFF, 0xc);
 	setValue(e, LABEL_OFF, 0xd);
 	setValue(e, WEIGHT_OFF, 0);
+	setValue(e, WEIGHT_OFF+8, 63);
 }
 
 nowdb_eval_t _eval;
@@ -80,7 +80,7 @@ int testBuffer(nowdb_scope_t *scope, int h) {
 	struct timespec t1, t2;
 	int have;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -217,7 +217,7 @@ int testBKRange(nowdb_scope_t *scope, int h) {
 	nowdb_reader_t *reader;
 	char           *last, *cur;
 	struct timespec t1, t2;
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -355,7 +355,7 @@ int testRange(nowdb_scope_t *scope, int h) {
 	nowdb_reader_t *range=NULL;
 	struct timespec t1, t2;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	timestamp(&t1);
 
@@ -601,7 +601,7 @@ int testMerge(nowdb_scope_t *scope, char type, int h) {
 	uint32_t mx;
 	char *tmp=NULL;
 
-	LOOP_INIT(1,2)
+	LOOP_INIT(1,5)
 
 	tmp = calloc(1,recsz);
 	if (tmp == NULL) {

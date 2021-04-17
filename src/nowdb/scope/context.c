@@ -31,11 +31,11 @@ void nowdb_context_destroy(nowdb_context_t *ctx) {
 		free(ctx->strgname); ctx->strgname = NULL;
 	}
 	if (ctx->evache != NULL) {
-		nowdb_plru12_destroy(ctx->evache);
+		nowdb_plru8r_destroy(ctx->evache);
 		free(ctx->evache); ctx->evache = NULL;
 	}
 	if (ctx->ivache != NULL) {
-		nowdb_plru12_destroy(ctx->ivache);
+		nowdb_plru8r_destroy(ctx->ivache);
 		free(ctx->ivache); ctx->ivache = NULL;
 	}
 	nowdb_store_destroy(&ctx->store);

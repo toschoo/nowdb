@@ -163,12 +163,14 @@ void nowdb_mem_sort_edge(char        *buf,
 /* ------------------------------------------------------------------------
  * Sorting vertices
  * ----------------
- * - num is the number of vertices
+ * - size is the size of the buffer in bytes
+ * - recsz is the size of the vertex
  * ------------------------------------------------------------------------
  */
-void nowdb_mem_sort_vertex(nowdb_vertex_t *buf,
-                           uint32_t        num,
-                           nowdb_ord_t     ord);
+void nowdb_mem_sort_vertex(char        *buf,
+                           uint32_t    size,
+                           uint32_t   recsz,
+                           nowdb_ord_t ord);
 
 /* ------------------------------------------------------------------------
  * Sorting list of blocks

@@ -77,9 +77,10 @@ def createprocs(c, lang):
     c.execute("insert into unique (id, desc) values (1, 'bootstrap')").close()
 
     c.execute("drop edge result if exists").close()
-    c.execute("create stamped edge result (\
-                  origin unique, \
-                  destin product, \
+    c.execute("create edge result (\
+                  origin unique  origin, \
+                  destin product destin, \
+                  stamp  time     stamp, \
                   f1     float, \
                   f2     float, \
                   f3     float, \

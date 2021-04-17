@@ -177,10 +177,13 @@
 #define NOWDB_AST_STRESS   10209
 #define NOWDB_AST_IGNORE   10210
 #define NOWDB_AST_PK       10211
-#define NOWDB_AST_LANG     10212
-#define NOWDB_AST_ERRORS   10213
-#define NOWDB_AST_MODE     10214
-#define NOWDB_AST_TIMEOUT  10215
+#define NOWDB_AST_ORIGIN   10212
+#define NOWDB_AST_DESTIN   10213
+#define NOWDB_AST_STAMP    10214
+#define NOWDB_AST_LANG     10215
+#define NOWDB_AST_ERRORS   10216
+#define NOWDB_AST_MODE     10217
+#define NOWDB_AST_TIMEOUT  10218
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:
@@ -223,6 +226,7 @@
 #define NOWDB_AST_TIME     10316
 #define NOWDB_AST_BOOL     10317
 #define NOWDB_AST_NULL     10318
+#define NOWDB_AST_VTYPE    10319
 
 /* -----------------------------------------------------------------------
  * Path and Location ('remote', 'local')
@@ -460,6 +464,12 @@ nowdb_ast_t *nowdb_ast_compare(nowdb_ast_t *node);
  * -----------------------------------------------------------------------
  */
 nowdb_ast_t *nowdb_ast_operand(nowdb_ast_t *node, int i);
+
+/* -----------------------------------------------------------------------
+ * Get user defined type from decl
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_utype(nowdb_ast_t *ast);
 
 /* -----------------------------------------------------------------------
  * Convert AST type to generic NOWDB type

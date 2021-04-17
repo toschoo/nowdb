@@ -24,9 +24,9 @@ uint64_t label;
 uint64_t weight;
 */
 
-#define EDGE_OFF  25
-#define LABEL_OFF 33
-#define WEIGHT_OFF 41
+#define EDGE_OFF  24
+#define LABEL_OFF 32
+#define WEIGHT_OFF 40
 
 void setRandomValue(char *e, uint32_t off) {
 	uint64_t x;
@@ -42,10 +42,10 @@ void makeEdgePattern(char *e) {
 	setValue(e, NOWDB_OFF_ORIGIN, 0xa);
 	setValue(e, NOWDB_OFF_DESTIN, 0xb);
 	nowdb_time_now((nowdb_time_t*)(e+NOWDB_OFF_STAMP));
-	setValue(e, NOWDB_OFF_USER, 3);
 	setValue(e, EDGE_OFF, 0xc);
 	setValue(e, LABEL_OFF, 0xd);
 	setValue(e, WEIGHT_OFF, 0);
+	setValue(e, WEIGHT_OFF+8, 63);
 }
 
 #define RECPAGE (NOWDB_IDX_PAGE/recsz)
@@ -58,7 +58,7 @@ nowdb_bool_t insertEdges(nowdb_store_t *store, uint32_t count, uint64_t start) {
 	nowdb_err_t err;
 	char *e;
 	uint64_t max = start + count;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	e = calloc(1, recsz);
 	if (e == NULL) {
@@ -108,7 +108,7 @@ nowdb_bool_t checkInitial(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkHalf(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
@@ -135,7 +135,7 @@ nowdb_bool_t checkHalf(nowdb_store_t *store) {
 }
 
 nowdb_bool_t checkFull(nowdb_store_t *store) {
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 	if (store->writer == NULL) {
 		fprintf(stderr, "store without writer\n");
 		return FALSE;
@@ -172,7 +172,7 @@ nowdb_bool_t find(nowdb_file_t *file, uint32_t count, uint64_t start) {
 	uint32_t remsz;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_recSize(6);
 	realsz = (NOWDB_IDX_PAGE/recsz)*recsz;
 	remsz = NOWDB_IDX_PAGE - realsz;
 
@@ -262,7 +262,7 @@ nowdb_bool_t checkFiles(nowdb_store_t *store) {
 	nowdb_err_t      err;
 	ts_algo_list_t files;
 	nowdb_file_t   *file;
-	uint32_t recsz = nowdb_edge_recSize(1,3);
+	uint32_t recsz = nowdb_recSize(6);
 	ts_algo_list_node_t *runner;
 	ts_algo_list_init(&files);
 
@@ -329,10 +329,10 @@ int main() {
 	nowdb_store_t *store;
 	uint32_t recsz;
 
-	recsz = nowdb_edge_recSize(1,3);
+	recsz = nowdb_recSize(6);
 
 	nowdb_err_init();
-	store = bootstrap("rsc/store10", recsz);
+	store = bootstrap("rsc/store10", NOWDB_CONT_EDGE, recsz);
 	if (store == NULL) {
 		fprintf(stderr, "cannot create store\n");
 		rc = EXIT_FAILURE; goto cleanup;

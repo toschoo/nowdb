@@ -41,7 +41,7 @@ function db.createDB(c,dbname)
                           prod_packing uint, 
                           prod_price float)]])
   if rc~= now.OK then
-     error("cannot create type product")
+     error("cannot create type product2")
   end
   res.release()
    
@@ -64,9 +64,10 @@ function db.createDB(c,dbname)
   end
   res.release()
    
-  rc, res = c.pexecute([[create stamped edge buys ( 
-                          origin client, 
-                          destin product, 
+  rc, res = c.pexecute([[create edge buys ( 
+                          origin client  origin, 
+                          destin product destin, 
+                          stamp  time     stamp, 
                           quantity uint, 
                           price float)]])
   if rc ~= now.OK then
@@ -74,9 +75,10 @@ function db.createDB(c,dbname)
   end
   res.release()
    
-  rc, res = c.pexecute([[create stamped edge visits ( 
-                          origin client, 
-                          destin store, 
+  rc, res = c.pexecute([[create edge visits ( 
+                          origin client origin, 
+                          destin store  destin, 
+                          stamp  time    stamp, 
                           quantity uint, 
                           price float)]])
   if rc ~= now.OK then

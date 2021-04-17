@@ -257,7 +257,9 @@ static char vertexComplete(nowdb_dml_t *dml,
 	}
 	if (dml->propn != fields->len) return 0;
 	for(run=fields->head; run!=NULL; run=run->nxt) {
-		if (strcasecmp(dml->p[i]->name, (char*)run->cont) != 0) {
+		fprintf(stderr, "%d: %p\n", i, dml->p[i]);
+		if (strcasecmp(dml->p[i]->name,
+                    (char*)run->cont) != 0) {
 			return 0;
 		}
 		i++;
@@ -307,7 +309,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
-	// fprintf(stderr, "SETTING CONTENT %s\n", trgname);
+	fprintf(stderr, "SETTING CONTENT %s\n", trgname);
 
 	// check fields == values
 	if (fields != NULL && values != NULL) {
@@ -503,22 +505,41 @@ static inline nowdb_err_t copyEdgeValue(nowdb_dml_t   *dml,
 	err = getValueAsType(dml, val, edge+off);
 	if (err != NOWDB_OK) return err;
 
-	if (off < NOWDB_OFF_USER) return NOWDB_OK;
 	if (val->type == NOWDB_TYP_NOTHING) return NOWDB_OK;
 
 	uint8_t bit;
 	uint16_t byte;
 
-	nowdb_edge_getCtrl(dml->e->num, off, &bit, &byte);
+	nowdb_getCtrl(off, &bit, &byte);
 
-	char *xbyte = edge+NOWDB_OFF_USER+byte;
+	char *xbyte = edge+nowdb_ctrlStart(dml->e->num)+byte;
 	(*xbyte) |= 1<<bit;
 
 	return NOWDB_OK;
 }
 
 /* ------------------------------------------------------------------------
- * Get off by name
+ * Get off by name (vertex)
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t getVertexOffByName(nowdb_dml_t *dml,
+                                             char       *name,
+                                             uint32_t    *off) {
+	nowdb_err_t err;
+	nowdb_model_prop_t *p;
+
+	err = nowdb_model_getPropByName(dml->scope->model,
+	                                dml->v->roleid,
+	                                name, &p);
+	if (err != NOWDB_OK) return err;
+
+	*off = p->off;
+
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Get off by name (edge)
  * ------------------------------------------------------------------------
  */
 static inline nowdb_err_t getEdgeOffByName(nowdb_dml_t *dml,
@@ -554,7 +575,7 @@ static inline nowdb_err_t insertEdgeFields(nowdb_dml_t *dml,
 	char o=0,d=0,t=0;
 	int i=0;
 
-	stamped = dml->e->size > NOWDB_OFF_STAMP;
+	stamped = dml->e->stamped;
 	edge = calloc(1, dml->e->size);
 	if (edge == NULL) {
 		NOMEM("allocating edge");
@@ -656,86 +677,88 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	nowdb_err_t err=NOWDB_OK;
 	ts_algo_list_node_t *vrun;
 	nowdb_simple_value_t *val;
-	nowdb_vertex_t vrtx;
+	char *vrtx, *ctrl;
 	int i=0;
 	int pkfound=0;
 
-	memset(&vrtx, 0, sizeof(nowdb_vertex_t));
+	vrtx = calloc(1, dml->v->size);
+ 	if (vrtx == NULL) {
+		NOMEM("allocating vertex");
+		return err;
+	}
+	ctrl = vrtx+nowdb_ctrlStart(dml->v->num);
 	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
 		val = vrun->cont;
+		if (val == NULL) {
+			INVALIDVAL("value descriptor is NULL"); break;
+		}
 		if (dml->p[i]->value != val->type) {
 			if (nowdb_correctType(dml->p[i]->value,
-			                     &val->type,
-			                     val->value) != 0) {
-				INVALID("types differ");
+			                      &val->type,
+			                      val->value) != 0) {
+				INVALIDVAL("types differ"); break;
 			}
 		}
 		// store primary key in vertex
 		if (dml->p[i]->pk) {
-			err = getValueAsType(dml, val, &vrtx.vertex);
+			err = getValueAsType(dml, val, vrtx);
 			if (err != NOWDB_OK) return err;
 			if (val->type == NOWDB_TYP_NOTHING) {
-				INVALID("pk is NULL");
+				INVALIDVAL("pk is NULL"); break;
 			}
 			pkfound = 1;
 
 		// check all other values
 		} else {
-			err = getValueAsType(dml, val, &vrtx.value);
+			err = getValueAsType(dml, val, vrtx+dml->p[i]->off);
 			if (err != NOWDB_OK) return err;
+		}
+		// set control block
+		if (val->type != NOWDB_TYP_NOTHING) {
+			uint8_t bit;
+			uint16_t byte;
+			nowdb_getCtrl(dml->p[i]->off, &bit, &byte);
+			char *xbyte = ctrl+byte;
+			(*xbyte) |= 1<<bit;
+			/*
+			fprintf(stderr, "SETTING CONTROL BIT %u | %u at %u: %u\n", byte, bit, nowdb_ctrlStart(dml->v->num), *ctrl);
+			fprintf(stderr, "RECSIZE: %u\n", dml->ctx->store.recsize);
+			*/
 		}
 		i++;
 	}
 	if (!pkfound) {
 		INVALIDVAL("no pk in vertex");
-		return err;
+	}
+	// stamp found || not required
+
+	if (err != NOWDB_OK) {
+		free(vrtx); return err;
 	}
 
 	// now we have role and vertex
 	i=0;
-	vrtx.role = dml->v->roleid;
 
 	// now register the vertex...
 	// (we should lock here and keep the lock)
 	err = nowdb_scope_registerVertex(dml->scope,
 	                                 dml->ctx,
-	                                 vrtx.role,
-	                                 vrtx.vertex);
-	if (err != NOWDB_OK) return err;
-
-	// ... and store all attributes
-	for(vrun=values->head; vrun!=NULL; vrun=vrun->nxt) {
-		val = vrun->cont;
-
-		if (val->type == NOWDB_TYP_NOTHING) {
-			i++; continue;
-		}
-
-		vrtx.property = dml->p[i]->propid;
-		vrtx.vtype = dml->p[i]->value;
-
-		// no error shall occur, we already checked it
-		err = getValueAsType(dml, val, &vrtx.value);
-		if (err != NOWDB_OK) break;
-
-		/*
-		fprintf(stderr, "inserting vertex %u / %lu / %lu / %u\n",
-		                 vrtx.role, vrtx.vertex,
-		                 vrtx.property, vrtx.vtype);
-		*/
-
-		err = nowdb_store_insert(&dml->ctx->store, &vrtx);
-		if (err != NOWDB_OK) break;
-		i++;
+	                                *(uint64_t*)vrtx);
+	if (err != NOWDB_OK) {
+		free(vrtx); return err;
 	}
+
+	err = nowdb_store_insert(&dml->ctx->store, vrtx);
 	/*
-	 * if things fail here,
-	 * we have already registered the vertex
-	 * and we have inserted parts of it.
-	 * we need to:
-	 * - delete everything we inserted
-	 * - and unregister
-	 */
+	 * We need unregister vertex!
+	if (err != NOWDB_OK) {
+		nowdb_scope_unregisterVertex(dml->scope,
+                                             dml->ctx,0,
+                                             vrtx);
+	}
+	*/
+
+	free(vrtx);
 	return err;
 }
 

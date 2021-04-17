@@ -60,7 +60,7 @@ def createDB(c, db):
                       prod_packing uint, \
                       prod_price float)") as r:
         if not r.ok():
-            raise FailedCreation("cannot create type product")
+            raise FailedCreation("cannot create type product2")
    
     with c.execute("create type client ( \
                       client_key uint primary key, \
@@ -77,18 +77,20 @@ def createDB(c, db):
         if not r.ok():
             raise FailedCreation("cannot create type client")
    
-    with c.execute("create stamped edge buys ( \
-                      origin client, \
-                      destin product, \
+    with c.execute("create edge buys ( \
+                      origin client  origin, \
+                      destin product destin, \
+                      stamp  time     stamp, \
                       quantity uint, \
                       price float)") as r:
         if not r.ok():
             raise FailedCreation("cannot create edge buys: %s (%d)" % \
                                             (r.details(), r.code()))
    
-    with c.execute("create stamped edge visits ( \
-                      origin client, \
-                      destin store, \
+    with c.execute("create edge visits ( \
+                      origin client origin, \
+                      destin store  destin, \
+                      stamp  time    stamp, \
                       quantity uint, \
                       price float)") as r:
         if not r.ok():
@@ -149,7 +151,7 @@ def loadStores(c):
 
 def loadEdges(c):
     bs = []
-    with c.execute("select origin, destin, timestamp, quantity, price from buys") as cur:
+    with c.execute("select origin, destin, stamp, quantity, price from buys") as cur:
         for row in cur:
            bs.append(BuysEdge(row.field(0),
                               row.field(1),
@@ -157,7 +159,7 @@ def loadEdges(c):
                               row.field(3),
                               row.field(4)))
     vs = []
-    with c.execute("select origin, destin, timestamp, quantity, price from visits") as cur:
+    with c.execute("select origin, destin, stamp, quantity, price from visits") as cur:
         for row in cur:
            vs.append(VisitsEdge(row.field(0),
                                 row.field(1),
@@ -310,7 +312,7 @@ class BuysEdge:
 
     def store(self, c):
        stmt = "insert into buys "
-       stmt += "(origin, destin, timestamp, quantity, price) ("
+       stmt += "(origin, destin, stamp, quantity, price) ("
        stmt += str(self.origin.key) + ", "
        stmt += str(self.destin.key) + ", "
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "
@@ -341,7 +343,7 @@ class VisitsEdge:
 
     def store(self, c):
        stmt = "insert into visits "
-       stmt += "(origin, destin, timestamp, quantity, price) ("
+       stmt += "(origin, destin, stamp, quantity, price) ("
        stmt += str(self.origin.key) + ", "
        stmt += "'" + self.destin.name + "', "
        stmt += "'" + self.tp.strftime(now.TIMEFORMAT) + "', "

@@ -22,7 +22,7 @@ typedef struct {
 typedef struct {
 	int origin;
 	int destin;
-	int64_t timestamp;
+	int64_t stamp;
 	float price;
 	float quantity;
 } edge_t;
@@ -119,7 +119,7 @@ static int writeEdges(nowdb_path_t path, int halves,
 			1000000000l * 60l * (int64_t)m +
 		        1000000000l * 60l * 60l * (int64_t)h;
 
-		edges[i].timestamp = base + nsecs;
+		edges[i].stamp = base + nsecs;
 	}
 	fclose(f);
 	qsort(edges, x, sizeof(edge_t), &edgecompr);
@@ -243,11 +243,12 @@ int createDB(int hedges, int hprods, int hclients) {
 	            client_id uint primary key, \
 	            client_name text)");
 
-	EXECSTMT("create stamped edge buys (\
-	            origin      client, \
-	            destination product, \
-	            price       float, \
-	            quantity    float)");
+	EXECSTMT("create edge buys (\
+	            origin   client  origin, \
+	            destin   product destin, \
+	            stamp    time     stamp, \
+	            price    float, \
+	            quantity float)");
 
 	if (writeVrtx(PRODS, PRODUCT, hprods) != 0) {
 		fprintf(stderr, "cannot write products\n");

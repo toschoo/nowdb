@@ -84,7 +84,7 @@ int addVertex(nowdb_model_t *model,
 
 	fprintf(stderr, "adding vertex %u - %s\n", role, name);
 
-	v = calloc(1,sizeof(nowdb_vertex_t));
+	v = calloc(1,sizeof(nowdb_model_vertex_t));
 	if (v == NULL) {
 		perror("out-of-mem");
 		return -1;
@@ -414,6 +414,7 @@ int addType(nowdb_model_t *model,
 		case 0: 
 			prop->name = strdup("ID");
 			prop->value = NOWDB_TYP_UINT;
+			prop->stamp = 0;
 			prop->pk = TRUE; break;
 		case 1:
 			prop->name = strdup("NAME");
@@ -429,6 +430,8 @@ int addType(nowdb_model_t *model,
 			fprintf(stderr, "out-of-mem\n");
 			return -1;
 		}
+		prop->pos = i;
+		prop->stamp = 0;
 		prop->propid = 1000 + i;
 		if (ts_algo_list_append(&props, prop) != TS_ALGO_OK) {
 			free(prop->name); free(prop);
@@ -477,7 +480,7 @@ int addEdgeType(nowdb_model_t *model,
 
 	EID++; eid = EID;
 
-	for(int i=0; i<3; i++) {
+	for(int i=0; i<6; i++) {
 		prop = calloc(1, sizeof(nowdb_model_pedge_t));
 		if (prop == NULL) {
 			fprintf(stderr, "out-of-mem\n");
@@ -485,18 +488,34 @@ int addEdgeType(nowdb_model_t *model,
 		}
 		switch(i) {
 		case 0: 
+			prop->name = strdup("origin");
+			prop->value = NOWDB_TYP_UINT;
+			prop->origin = 1;
+			break;
+		case 1: 
+			prop->name = strdup("destin");
+			prop->value = NOWDB_TYP_UINT;
+			prop->destin = 1;
+			break;
+		case 2: 
+			prop->name = strdup("stamp");
+			prop->value = NOWDB_TYP_TIME;
+			prop->stamp = 1;
+			break;
+		case 3: 
 			prop->name = strdup("lat");
 			prop->value = NOWDB_TYP_FLOAT;
 			break;
-		case 1:
+		case 4:
 			prop->name = strdup("lon");
 			prop->value = NOWDB_TYP_FLOAT;
 			break;
-		case 2: 
+		case 5: 
 			prop->name = strdup("id");
 			prop->value = NOWDB_TYP_TEXT;
 			break;
 		}
+		prop->pos = i;
 		if (prop->name == NULL) {
 			free(prop);
 			fprintf(stderr, "out-of-mem\n");
@@ -508,7 +527,7 @@ int addEdgeType(nowdb_model_t *model,
 			destroyProps(&props);
 		}
 	}
-	err = nowdb_model_addEdgeType(model, name, 1, eid, o, d, &props);
+	err = nowdb_model_addEdgeType(model, name, eid, o, d, &props);
 	if (err != NOWDB_OK) {
 		nowdb_err_print(err);
 		nowdb_err_release(err);

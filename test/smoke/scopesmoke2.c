@@ -36,7 +36,7 @@ typedef struct {
 typedef struct {
 	int origin;
 	int destin;
-	int64_t timestamp;
+	int64_t stamp;
 	float price;
 	float quantity;
 } edge_t;
@@ -130,7 +130,7 @@ int writeEdges(nowdb_path_t path, int halves, int hprods, int hclients) {
 			1000000000l * 60l * (int64_t)m +
 		        1000000000l * 60l * 60l * (int64_t)h;
 
-		edges[i].timestamp = base + nsecs;
+		edges[i].stamp = base + nsecs;
 	}
 	fclose(f);
 	qsort(edges, x, sizeof(edge_t), &edgecompr);
@@ -358,7 +358,7 @@ int checkResult(int       h,
 	for(int i=0; i<mx; i++) {
 		if ((origin == 0 || edges[i].origin == origin) &&
 		    (destin == 0 || edges[i].destin == destin) &&
-		    (tp     == 0 || edges[i].timestamp == tp)) {
+		    (tp     == 0 || edges[i].stamp  == tp)) {
 			total++;
 		}
 	}
@@ -382,7 +382,7 @@ char *getRandom(int       halves,
 
 	*origin = edges[i].origin;
 	*destin = edges[i].destin;
-	*tp = edges[i].timestamp;
+	*tp = edges[i].stamp;
 
 	sql = malloc(strlen(frm) + 24 + 1);
 	if (sql == NULL) {
@@ -441,25 +441,25 @@ char *getRandom(int       halves,
 	}
 
 #define SQLIDX "\
-select origin, destin, timestamp from buys \
+select origin, destin, stamp from buys \
  where origin = %d \
    and destin = %d \
-   and timestamp = %ld"
+   and stamp  = %ld"
 
 #define SQLCIDX "\
 select count(*) from buys \
  where origin = %d \
    and destin = %d \
-   and timestamp = %ld"
+   and stamp = %ld"
 
 #define SQLFULL "\
-select origin, destin, timestamp from buys \
+select origin, destin, stamp from buys \
  where origin = %d \
    and destin = %d \
-   and timestamp = %ld"
+   and stamp  = %ld"
 
 #define SQLORD "\
-select origin, destin, timestamp from buys \
+select origin, destin, stamp from buys \
  order by origin"
 
 #define SQLGRP "\
@@ -517,9 +517,10 @@ int main() {
 		            client_id uint primary key, \
 		            client_name text)");
 
-		EXECSTMT("create stamped edge buys (\
-		            origin client, \
-		            destination product, \
+		EXECSTMT("create edge buys (\
+		            origin client  origin, \
+		            destin product destin, \
+		            stamp  time     stamp, \
 		            price float, \
 		            quantity float)");
 

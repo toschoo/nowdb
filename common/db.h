@@ -13,7 +13,7 @@
 #include <common/scopes.h>
 #include <common/bench.h>
 
-#define RECPAGE (NOWDB_IDX_PAGE/nowdb_edge_recSize(1,2))
+#define RECPAGE (NOWDB_IDX_PAGE/nowdb_recSize(5))
 #define FULLEDGE (8*128*RECPAGE)
 #define HALFEDGE (FULLEDGE/2)
 #define FULLPOS NOWDB_MEGA

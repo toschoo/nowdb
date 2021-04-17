@@ -8,11 +8,7 @@
  *
  * urgent TODO:
  * ------------
- * - multi-line comments...
- *   with the lexer alone, this appears to be complex.
- *   here's how to do it:
- *   http://westes.github.io/flex/manual/
- *   How-can-I-match-C_002dstyle-comments_003f.html
+ * - string literals (\', \\n, \\r, \\t)
  * ========================================================================
  */
 
@@ -23,7 +19,14 @@
 
 %option reentrant
 
+%x MCOMMENT
+%x ESTRING
+
 %%
+
+"--".*			;
+"/*"			BEGIN(MCOMMENT);
+[ \t\r\n]		;
 
 "."			return NOWDB_SQL_DOT;
 ";"			return NOWDB_SQL_SEMICOLON;
@@ -96,9 +99,6 @@
 (?i:DESTINATION)	return NOWDB_SQL_DESTINATION;
 (?i:DESTIN)		return NOWDB_SQL_DESTINATION;
 (?i:DEST)		return NOWDB_SQL_DESTINATION;
-(?i:TIMESTAMPED)	return NOWDB_SQL_STAMPED;
-(?i:STAMPED)		return NOWDB_SQL_STAMPED;
-(?i:TIMESTAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:STAMP)		return NOWDB_SQL_TIMESTAMP;
 (?i:TRUE)		return NOWDB_SQL_TRUE;
 (?i:FALSE)		return NOWDB_SQL_FALSE;
@@ -161,14 +161,30 @@
 (?i:IGNORE)		return NOWDB_SQL_IGNORE;
 (?i:HEADER)		return NOWDB_SQL_HEADER;
 
+"'"			BEGIN(ESTRING);
 [a-zA-Z][a-zA-Z0-9_]*  			return NOWDB_SQL_IDENTIFIER;
-'[^']*'					return NOWDB_SQL_STRING;
 (\+|\-)?((0|([1-9][0-9]*))\.[0-9]*)	return NOWDB_SQL_FLOAT;
 (\+|\-)(0|([1-9][0-9]*))		return NOWDB_SQL_INTEGER;
 0|([1-9][0-9]*)				return NOWDB_SQL_UINTEGER;
-"--".*[\r\n]				return NOWDB_SQL_COMMENT;
-[ \t\r\n]				;
-.					return NOWDB_SQL_UNEXPECTED;
+
+.                                       return NOWDB_SQL_UNEXPECTED;
+
+<MCOMMENT>{
+"*/"      BEGIN(INITIAL);
+[^*\n]+   ;
+"*"       ;
+\n        yylineno++;
+}
+
+<ESTRING>{
+"'"		{BEGIN(INITIAL); return NOWDB_SQL_STRING;}
+"\\\\"		return NOWDB_SQL_STRING_PART_ESC;
+"\\'"		return NOWDB_SQL_STRING_PART_APO;
+"\\n"		return NOWDB_SQL_STRING_PART_LF;
+"\\r"		return NOWDB_SQL_STRING_PART_CR;
+"\\t"		return NOWDB_SQL_STRING_PART_TAB;
+[^\\']* 	return NOWDB_SQL_STRING_PART_CHUNK;
+}
 
 %%
 

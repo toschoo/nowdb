@@ -104,9 +104,10 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_FIELD: ASTCALLOC(1);
 	case NOWDB_AST_VALUE: ASTCALLOC(1);
 	case NOWDB_AST_DECL: ASTCALLOC(3);
-	case NOWDB_AST_OFF: ASTCALLOC(0);
+	case NOWDB_AST_DESTIN: ASTCALLOC(1);
 	case NOWDB_AST_FUN: ASTCALLOC(2);
 	case NOWDB_AST_OP: ASTCALLOC(2);
+	case NOWDB_AST_TYPE: ASTCALLOC(0);
 
 	case NOWDB_AST_USE: ASTCALLOC(0);
 	case NOWDB_AST_FETCH: ASTCALLOC(0);
@@ -198,15 +199,11 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_DATE: return "date field"; 
 		case NOWDB_AST_TIME: return "time field"; 
 		case NOWDB_AST_BOOL: return "bool field"; 
-		case NOWDB_AST_TYPE: return "user defined"; 
+		case NOWDB_AST_TYPE: return "user defined field"; 
 		default: return "unknown field type";
 		}
 
-	case NOWDB_AST_OFF: 
-		switch(stype) {
-		case NOWDB_OFF_ORIGIN: return "origin";
-		case NOWDB_OFF_DESTIN: return "destination";
-		}
+	case NOWDB_AST_TYPE: return "user defined type";
 
 	case NOWDB_AST_USE: return "use";
 	case NOWDB_AST_FETCH: return "fetch";
@@ -255,6 +252,9 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_IGNORE: return "option ignore";
 		case NOWDB_AST_USE: return "option use";
 		case NOWDB_AST_PK: return "primary key";
+		case NOWDB_AST_STAMP: return "timestamp";
+		case NOWDB_AST_ORIGIN: return "origin";
+		case NOWDB_AST_DESTIN: return "destination";
 		case NOWDB_AST_TYPE: return "as type";
 		case NOWDB_AST_LANG: return "language";
 		case NOWDB_AST_ERRORS: return "error file";
@@ -284,7 +284,7 @@ static inline char *tellType(int ntype, int stype) {
 
 	case NOWDB_AST_PATH:   return "path";
 
-	default: return "unknown";
+	default: fprintf(stderr, "%d|%d is unknown\n", ntype, stype); return "unknown";
 	}
 }
 
@@ -676,7 +676,7 @@ static inline int addcompare(nowdb_ast_t *n,
 static inline int ad3ecl(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
-	case NOWDB_AST_OFF: ADDKID(0);
+	case NOWDB_AST_TYPE: ADDKID(0);
 	case NOWDB_AST_OPTION: ADDKID(1);
 	case NOWDB_AST_DECL: ADDKID(2);
 	default: return -1;
@@ -1240,6 +1240,18 @@ nowdb_ast_t *nowdb_ast_storage(nowdb_ast_t *ast) {
 
 	switch(ast->ntype) {
 	case NOWDB_AST_CREATE: return ast->kids[4];
+	default: return NULL;
+	}
+}
+
+/* -----------------------------------------------------------------------
+ * AST user type
+ * -----------------------------------------------------------------------
+ */
+nowdb_ast_t *nowdb_ast_utype(nowdb_ast_t *ast) {
+	if (ast == NULL) return NULL;
+	switch(ast->ntype) {
+	case NOWDB_AST_DECL: return ast->kids[0];
 	default: return NULL;
 	}
 }

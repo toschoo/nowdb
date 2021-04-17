@@ -75,7 +75,7 @@ int ternaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_expr_t o3,
 		nowdb_err_print(err); nowdb_err_release(err);
 		return -1;
 	}
-	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	err = nowdb_expr_eval(o, NULL, NULL, t, (void**)&x);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: cannot evaluate\n");
 		nowdb_expr_destroy(o); free(o);
@@ -100,7 +100,7 @@ int binaryOp(int op, nowdb_expr_t o1, nowdb_expr_t o2, nowdb_type_t *t, void *r)
 		nowdb_err_print(err); nowdb_err_release(err);
 		return -1;
 	}
-	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	err = nowdb_expr_eval(o, NULL, NULL, t, (void**)&x);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: cannot evaluate\n");
 		nowdb_expr_destroy(o); free(o);
@@ -124,7 +124,7 @@ int unaryOp(int op, nowdb_expr_t o1, nowdb_type_t *t, void *r) {
 		nowdb_err_print(err); nowdb_err_release(err);
 		return -1;
 	}
-	err = nowdb_expr_eval(o, NULL, 0, NULL, t, (void**)&x);
+	err = nowdb_expr_eval(o, NULL, NULL, t, (void**)&x);
 	if (err != NOWDB_OK) {
 		fprintf(stderr, "ERROR: cannot evaluate\n");
 		nowdb_expr_destroy(o); free(o);

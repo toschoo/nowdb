@@ -123,11 +123,7 @@ nowdb_err_t nowdb_index_keys_copy(nowdb_index_keys_t *from,
  * ------------------------------------------------------------------------
  */
 uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
-	uint32_t sz = 0;
-	for(int i=0; i<k->sz; i++) {
-		if (k->off[i] < NOWDB_OFF_VTYPE) sz += 8; else sz +=4;
-	}
-	return sz;
+	return (k->sz * sizeof(nowdb_key_t));
 }
 
 /* ------------------------------------------------------------------------
@@ -135,6 +131,14 @@ uint32_t nowdb_index_keySizeVertex(nowdb_index_keys_t *k) {
  * ------------------------------------------------------------------------
  */
 uint32_t nowdb_index_keySizeEdge(nowdb_index_keys_t *k) {
+	return (k->sz * sizeof(nowdb_key_t));
+}
+
+/* ------------------------------------------------------------------------
+ * Keysize (generic)
+ * ------------------------------------------------------------------------
+ */
+uint32_t nowdb_index_keySize(nowdb_index_keys_t *k) {
 	return (k->sz * sizeof(nowdb_key_t));
 }
 
@@ -216,16 +220,7 @@ static nowdb_err_t removePath(char *path) {
  * ------------------------------------------------------------------------
  */
 static uint32_t computeKeySize(nowdb_index_desc_t *desc) {
-	uint32_t s = 0;
-
-	// better to use sizeByOff!
-	for(int i=0;i<desc->keys->sz;i++) {
-		if (desc->cont == NOWDB_CONT_VERTEX &&
-		    desc->keys->off[i] >= NOWDB_OFF_VTYPE)
-			s+=4;
-		else s+=8;
-	}
-	return s;
+	return desc->keys->sz*8;
 }
 
 /* ------------------------------------------------------------------------

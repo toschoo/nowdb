@@ -19,8 +19,6 @@
 
 static char *OBJECT = "cursor";
 
-static uint64_t fullmap = NOWDB_BITMAP64_ALL;
-
 /* ------------------------------------------------------------------------
  * Helper: Index contains model identifier
  * ------------------------------------------------------------------------
@@ -407,553 +405,6 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 }
 
 /* ------------------------------------------------------------------------
- * init vertex props for where
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t initWRow(nowdb_cursor_t *cur) {
-	nowdb_err_t err;
-	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
-	err = nowdb_vrow_fromFilter(cur->v->roleid, &cur->wrow,
-	                               cur->filter, cur->eval);
-	if (err != NOWDB_OK) return err;
-	// nowdb_vrow_autoComplete(cur->wrow);
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * init vertex props for where
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t initPRow(nowdb_cursor_t *cur) {
-	nowdb_err_t err;
-	nowdb_model_prop_t *p;
-	nowdb_expr_t px;
-
-	if (cur->v == NULL) INVALIDPLAN("no vertex type in cursor");
-	if (cur->row == NULL) return NOWDB_OK;
-
-	err = nowdb_vrow_new(cur->v->roleid, &cur->prow, cur->eval);
-	if (err != NOWDB_OK) return err;
-
-	// not yet working
-	// nowdb_vrow_autoComplete(cur->prow);
-
-	for(int i=0; i<cur->row->sz; i++) {
-		err = nowdb_vrow_addExpr(cur->prow, cur->row->fields[i]);
-		if (err != NOWDB_OK) return err;
-	}
-
-	// Always add pk
-	err = nowdb_model_getPK(cur->model, cur->v->roleid, &p);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_expr_newVertexField(&px, p->name,
-	         cur->v->roleid, p->propid, p->value);
-	if (err != NOWDB_OK) return err;
-
-	err = nowdb_vrow_addExpr(cur->prow, px);
-	nowdb_expr_destroy(px); free(px);
-	if (err != NOWDB_OK) return err;
-
-	return NOWDB_OK;
-}
-
-#define FIELD(x) \
-	NOWDB_EXPR_TOFIELD(x)
-
-/* ------------------------------------------------------------------------
- * Helper: check whether filter contains nothing but vid
- * ------------------------------------------------------------------------
- */
-static nowdb_err_t hasOnlyVidR(nowdb_row_t    *row,
-                               nowdb_expr_t filter,
-                               char           *yes) {
-	nowdb_err_t err;
-	ts_algo_list_t fields;
-	ts_algo_list_node_t *run;
-	nowdb_expr_t node;
-
-	if (filter == NULL) return NOWDB_OK;
-
-	ts_algo_list_init(&fields);
-	err = nowdb_expr_filter(filter, NOWDB_EXPR_FIELD, &fields);
-	if (err != NOWDB_OK) {
-		ts_algo_list_destroy(&fields);
-		return err;
-	}
-	for(run=fields.head;run!=NULL;run=run->nxt) {
-		node=run->cont;
-		// should we check for PK?
-		if (FIELD(node)->off != NOWDB_OFF_ROLE &&
-		    FIELD(node)->off != NOWDB_OFF_VERTEX) {
-			*yes=0; break;
-		}
-	}
-	ts_algo_list_destroy(&fields);
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: check whether filter contains nothing but vid
- * ------------------------------------------------------------------------
- */
-static nowdb_err_t hasOnlyVid(nowdb_row_t  *row,
-                              nowdb_expr_t  filter,
-                              char         *yes)
-{
-	*yes = 1;
-	if (filter == NULL) return NOWDB_OK;
-	return hasOnlyVidR(row, filter, yes);
-}
-
-/* ------------------------------------------------------------------------
- * Some local helpers
- * ------------------------------------------------------------------------
- */
-#define DESTROYVIDS(v) \
-	for(ts_algo_list_node_t *run=v.head; \
-	             run!=NULL; run=run->nxt) \
-	{ \
-		free(run->cont); \
-	} \
-	ts_algo_list_destroy(&v);
-
-/* ------------------------------------------------------------------------
- * Helper: Build the filter for the vertex as 'in (...)'
- * ------------------------------------------------------------------------
- */
-static nowdb_err_t makeVidCompare(nowdb_cursor_t *cur,
-                                 ts_algo_tree_t *vids) {
-	nowdb_err_t err;
-	nowdb_expr_t f, o1, o2;
-	nowdb_expr_t r, rc, v, vc;
-
-	// vertex constant
-	// we make this first, so the memory management for vids is done
-	err = nowdb_expr_constFromTree(&vc, vids, NOWDB_TYP_UINT);
-	if (err != NOWDB_OK) {
-		ts_algo_tree_destroy(vids); free(vids);
-		return err;
-	}
-
-	// role field
-	err = nowdb_expr_newVertexOffField(&r, NOWDB_OFF_ROLE);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(vc); free(vc);
-		return err;
-	}
-
-	// role constant
-	err = nowdb_expr_newConstant(&rc, &cur->v->roleid,
-	                                 NOWDB_TYP_SHORT);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(vc); free(vc);
-		nowdb_expr_destroy(r); free(r);
-		return err;
-	}
-
-	// roleid = role
-	err = nowdb_expr_newOp(&o1, NOWDB_EXPR_OP_EQ, r, rc);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(vc); free(vc);
-		nowdb_expr_destroy(r); free(r);
-		nowdb_expr_destroy(rc); free(rc);
-		return err;
-	}
-
-	// vid field
-	err = nowdb_expr_newVertexOffField(&v, NOWDB_OFF_VERTEX);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(vc); free(vc);
-		nowdb_expr_destroy(o1); free(o1);
-		return err;
-	}
-
-	// vid in vids
-	err = nowdb_expr_newOp(&o2, NOWDB_EXPR_OP_IN, v, vc);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(o1); free(o1);
-		nowdb_expr_destroy(v); free(v);
-		nowdb_expr_destroy(vc); free(vc);
-		return err;
-	}
-
-	// and
-	err = nowdb_expr_newOp(&f, NOWDB_EXPR_OP_AND, o1, o2);
-	if (err != NOWDB_OK) {
-		nowdb_expr_destroy(o1); free(o1);
-		nowdb_expr_destroy(o2); free(o2);
-		return err;
-	}
-
-	// nowdb_filter_show(f,stderr);fprintf(stderr, "\n");
-
-	// destroy the old filter
-	if (cur->filter != NULL) {
-		nowdb_expr_destroy(cur->filter);
-		free(cur->filter); cur->filter = NULL;
-	}
-
-	// set the new filter
-	cur->filter = f;
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Some local helpers
- * ------------------------------------------------------------------------
- */
-#define DESTROYPIDX(n,ps) \
-	for(int i=0; i<n; i++) { \
-		if (ps[i].keys != NULL) { \
-			free(ps[i].keys); \
-		} \
-		if (ps[i].maps != NULL) { \
-			free(ps[i].maps); \
-		} \
-	} \
-	free(ps);
-
-/* ------------------------------------------------------------------------
- * Helper: Build mrange reader for vid 'in (...)'
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t makeVidRange(nowdb_scope_t  *scope,
-                                       nowdb_context_t  *ctx,
-                                       nowdb_cursor_t   *cur,
-                                       ts_algo_tree_t *vtree) {
-	nowdb_err_t err;
-	nowdb_plan_idx_t *pidx;
-	nowdb_index_t *idx;
-
-	// get the internal index on vertex
-	err = nowdb_scope_getVidx(scope, ctx, &idx);
-	if (err != NOWDB_OK) return err;
-
-	// one plan index per vid
-	pidx = calloc(1, sizeof(nowdb_plan_idx_t));
-	if (pidx == NULL) {
-		NOMEM("allocating plan index");
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		return err;
-	}
-
-	// create index keys
-	pidx->idx = idx;
-	pidx->keys = malloc(12);
-	if (pidx->keys == NULL) {
-		NOMEM("allocating keys");
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		DESTROYPIDX(0,pidx);
-		return err;
-	}
-
-	memcpy(pidx->keys, &cur->v->roleid, 4);
-
-	pidx->maps = calloc(2, sizeof(ts_algo_tree_t*));
-	if (pidx->maps == NULL) {
-		NOMEM("allocating keys");
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		DESTROYPIDX(1,pidx);
-		return err;
-	}
-
-	pidx->maps[0] = NULL;
-	pidx->maps[1] = vtree;
-
-	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, 1);
-	pidx->maps = NULL;
-	DESTROYPIDX(1,pidx);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		return err;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: Build search readers, one reader per vid 'in (...)'
- * ------------------------------------------------------------------------
- */
-static inline nowdb_err_t makeVidSearch(nowdb_scope_t  *scope,
-                                        nowdb_context_t  *ctx,
-                                        nowdb_cursor_t   *cur,
-                                        ts_algo_list_t  *vlst) {
-	nowdb_err_t err;
-	nowdb_plan_idx_t *pidx;
-	nowdb_index_t    *idx;
-	ts_algo_list_node_t *run;
-	int i=0;
-
-	// get the internal index on vertex
-	err = nowdb_scope_getVidx(scope, ctx, &idx);
-	if (err != NOWDB_OK) return err;
-
-	// one plan index per vid
-	pidx = calloc(vlst->len, sizeof(nowdb_plan_idx_t));
-	if (pidx == NULL) {
-		NOMEM("allocating plan index");
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		return err;
-	}
-
-	// create index keys
-	for(run=vlst->head;run!=NULL;run=run->nxt) {
-		pidx[i].idx = idx;
-		pidx[i].keys = malloc(12);
-		if (pidx[i].keys == NULL) {
-			NOMEM("allocating keys");
-			NOWDB_IGNORE(nowdb_index_enduse(idx));
-			DESTROYPIDX(i,pidx);
-			return err;
-		}
-		memcpy(pidx[i].keys, &cur->v->roleid, 4);
-		memcpy(pidx[i].keys+4, run->cont, 8); i++;
-	}
-
-	// create index keys
-	err = createSeq(cur, NOWDB_PLAN_SEARCH_, pidx, vlst->len);
-	DESTROYPIDX(vlst->len,pidx);
-	if (err != NOWDB_OK) {
-		NOWDB_IGNORE(nowdb_index_enduse(idx));
-		return err;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: Build search readers, one reader per vid 'in (...)'
- * ------------------------------------------------------------------------
- */
-static nowdb_err_t makeVidReader(nowdb_scope_t  *scope,
-                                 nowdb_context_t  *ctx,
-                                 nowdb_cursor_t   *cur,
-                                 ts_algo_list_t  *vlst,
-                                 ts_algo_tree_t  *vids) {
-	nowdb_err_t err;
-
-	// first destroy existing reader
-	if (cur->rdr != NULL) {
-		nowdb_reader_destroy(cur->rdr);
-		free(cur->rdr); cur->rdr = NULL;
-	}
-
-	// destroy existing files
-	if (cur->stf.store != NULL) {
-		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
-		ts_algo_list_destroy(&cur->stf.pending);
-		ts_algo_list_init(&cur->stf.files);
-		ts_algo_list_init(&cur->stf.pending);
-		cur->stf.store = NULL;
-	}
-	
-	// get the relevant files 
-	cur->stf.store = &ctx->store;
-	err = nowdb_store_getFiles(cur->stf.store, &cur->stf.files,
-	                          NOWDB_TIME_DAWN, NOWDB_TIME_DUSK);
-	if (err != NOWDB_OK) return err;
-
-	// this magical number is not based on any benchmarks!
-	if (vlst->len > 31) {
-		// fprintf(stderr, "MRANGE\n");
-		err = makeVidRange(scope, ctx, cur, vids);
-	} else {
-		// fprintf(stderr, "SEARCH: %d\n", vlst->len);
-		err = makeVidSearch(scope, ctx, cur, vlst);
-	}
-	if (err != NOWDB_OK) {
-		nowdb_store_destroyFiles(cur->stf.store, &cur->stf.files);
-		ts_algo_list_destroy(&cur->stf.pending);
-		cur->stf.store = NULL;
-		return err;
-	}
-
-	// set the filter to the new reader
-	if (cur->filter != NULL) {
-		cur->rdr->filter = cur->filter;
-	}
-	return NOWDB_OK;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: Get the vids according to the original query,
- *         put them in a list and then create new second
- *         cursor identical to the first, but with
- *         filter and readers accepting all vertices
- *         (of this type) that are 'in (...)' the vertices.
- *
- * Here are the callbacks for the tree...
- * ------------------------------------------------------------------------
- */
-#define VID(x) \
-	(*(uint64_t*)x)
-
-static ts_algo_cmp_t vidcompare(void *ingore, void *one, void *two) {
-	if (VID(one) < VID(two)) return ts_algo_cmp_less;
-	if (VID(one) > VID(two)) return ts_algo_cmp_greater;
-	return ts_algo_cmp_equal;
-}
-
-static ts_algo_rc_t noupdate(void *ignore, void *o, void *n) {
-	free(n);
-	return TS_ALGO_OK;
-}
-
-static void videstroy(void *ignore, void **n) {
-	if (n == NULL) return;
-	if (*n == NULL) return;
-	free(*n); *n = NULL;
-}
-
-/* ------------------------------------------------------------------------
- * Helper: here is it
- * ------------------------------------------------------------------------
- */
-#define BUFSIZE 8192
-static nowdb_err_t getVids(nowdb_scope_t *scope,
-                           nowdb_context_t *ctx,
-                           nowdb_cursor_t  *mom) {
-	nowdb_err_t err=NOWDB_OK;
-	nowdb_cursor_t *cur;
-	char *buf=NULL;
-	uint32_t osz=0, cnt=0;
-	ts_algo_tree_t *vids=NULL;
-	ts_algo_list_t *vlst=NULL;
-
-	// create a new cursor,
-	// which is the same as the old
-	// but projects only the primary key
-	cur = calloc(1, sizeof(nowdb_cursor_t));
-	if (cur == NULL) {
-		NOMEM("allocating cursor");
-		return err;
-	}
-
-	// we could just memcpy the whole thing
-	cur->content = mom->content;
-	cur->rdr = mom->rdr;
-	memcpy(&cur->stf, &mom->stf, sizeof(nowdb_storefile_t));
-	cur->model = mom->model;
-	cur->recsz = mom->recsz;
-	cur->filter = mom->filter;
-	cur->eval = mom->eval;
-	cur->v = mom->v;
-	cur->fromkey = mom->fromkey;
-	cur->tokey = mom->tokey;
-
-	cur->row = NULL;
-	cur->group = NULL;
-	cur->nogrp = NULL;
-	cur->tmp = NULL;
-	cur->tmp2 = NULL;
-
-	cur->hasid = 1;
-	cur->eof = 0;
-
-	// initialise the vertex row handler
-	err = initWRow(cur);
-	if (err != NOWDB_OK) goto cleanup;
-
-	/*
-	if (cur->wrow != NULL) {
-		nowdb_expr_show(cur->wrow->filter,stderr);
-		fprintf(stderr, "\n");
-	}
-	*/
-
-	// open it
-	err = nowdb_cursor_open(cur);
-	if (err != NOWDB_OK) goto cleanup;
-
-	// the output buffer
-	buf = malloc(BUFSIZE);
-	if (buf == NULL) {
-		NOMEM("allocating buffer");
-		goto cleanup;
-	}
-
-	// we store the vid uniquely
-	vids = ts_algo_tree_new(&vidcompare, NULL,
-	                        &noupdate, &videstroy,
-	                                   &videstroy);
-	if (vids == NULL) {
-		NOMEM("tree.init");
-		goto cleanup;
-	}
-
-	// fetch
-	for(;;) {
-		err = nowdb_cursor_fetch(cur, buf, BUFSIZE, &osz, &cnt);
-		if (err != NOWDB_OK) {
-			if (err->errcode == nowdb_err_eof) {
-				nowdb_err_release(err);
-				err = NOWDB_OK;
-				if (cnt == 0) break;
-			} else goto cleanup;
-		}
-		for(int i=0; i<osz; i+=cur->recsz) {
-			uint64_t *vid;
-			vid = malloc(8);
-			if (vid == NULL) {
-				NOMEM("allocating vid");
-				goto cleanup;
-			}
-			memcpy(vid, buf+i, 8);
-			// fprintf(stderr, "got vid %lu (%u)\n", *vid, cur->recsz);
-			if (ts_algo_tree_insert(vids, vid) != TS_ALGO_OK) {
-				free(vid);
-				ts_algo_tree_destroy(vids); free(vids);
-				NOMEM("tree.insert");
-				goto cleanup;
-			}
-		}
-	}
-
-	// nothing found
-	if (vids->count == 0) {
-		err = nowdb_err_get(nowdb_err_eof, FALSE, OBJECT,
-		                                 "preprocessing");
-		ts_algo_tree_destroy(vids); free(vids);
-		goto cleanup;
-	}
-
-	// fprintf(stderr, "HAVING %d\n", vids->count);
-
-	// tree to list
-	vlst = ts_algo_tree_toList(vids);
-	if (vlst == NULL) {
-		ts_algo_tree_destroy(vids); free(vids);
-		NOMEM("tree.toList");
-		goto cleanup;
-	}
-
-	// create filter with in compare
-	err = makeVidCompare(mom, vids);
-	if (err != NOWDB_OK) goto cleanup;
-
-	// make reader (using the built-in index if possible)
-	err = makeVidReader(scope, ctx, mom, vlst, vids);
-	if (err != NOWDB_OK) goto cleanup;
-
-cleanup:
-	if (vlst != NULL) {
-		ts_algo_list_destroy(vlst); free(vlst);
-	}
-	if (buf != NULL) free(buf);
-
-	// destroy the cursor
-	if (cur->wrow != NULL) {
-		nowdb_vrow_destroy(cur->wrow);
-		free(cur->wrow); cur->wrow = NULL;
-	}
-	free(cur);
-
-	mom->eof = 0;
-
-	return err;
-}
-
-/* ------------------------------------------------------------------------
  * Create new cursor
  * ------------------------------------------------------------------------
  */
@@ -1158,39 +609,6 @@ nowdb_err_t nowdb_cursor_new(nowdb_scope_t  *scope,
 			stp->load = NULL;
 		}
 	}
-	// well, we have a cursor.
-	// if it is on vertex and the projection
-	// contains things beyond the primary key,
-	// we are not yet done.
-	if ((*cur)->content == NOWDB_CONT_VERTEX) {
-		char ok;
-
-		/*
-		nowdb_expr_show((*cur)->filter, stderr);
-		fprintf(stderr, "\n");
-		*/
-
-		// make mom->prow from field list
-		err = initPRow(*cur);
-		if (err != NOWDB_OK) {
-			nowdb_cursor_destroy(*cur);
-			free(*cur); return err;
-		}
-
-	        err = hasOnlyVid((*cur)->row, (*cur)->filter, &ok);
-		if (err != NOWDB_OK) {
-			nowdb_cursor_destroy(*cur);
-			free(*cur); return err;
-		}
-		if (ok) return NOWDB_OK;
-
-		// get vids
-		err = getVids(scope, ctx, *cur);
-		if (err != NOWDB_OK) {
-			nowdb_cursor_destroy(*cur);
-			free(*cur); return err;
-		}
-	}
 	return NOWDB_OK;
 }
 
@@ -1229,14 +647,6 @@ void nowdb_cursor_destroy(nowdb_cursor_t *cur) {
 	if (cur->row != NULL) {
 		nowdb_row_destroy(cur->row);
 		free(cur->row); cur->row = NULL;
-	}
-	if (cur->wrow != NULL) {
-		nowdb_vrow_destroy(cur->wrow);
-		free(cur->wrow); cur->wrow = NULL;
-	}
-	if (cur->prow != NULL) {
-		nowdb_vrow_destroy(cur->prow);
-		free(cur->prow); cur->prow = NULL;
 	}
 	if (cur->tmp != NULL) {
 		free(cur->tmp); cur->tmp = NULL;
@@ -1290,7 +700,6 @@ static inline char checkpos(nowdb_reader_t *r, uint32_t pos) {
 static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
                                   nowdb_content_t ctype,
                                   uint32_t        recsz,
-                                  uint64_t        pmap,
                                   char           *src) {
 	nowdb_err_t err;
 
@@ -1298,7 +707,7 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 		memcpy(cur->tmp, src, recsz);
 		memcpy(cur->tmp2, cur->tmp, recsz);
 	}
-	err = nowdb_group_map(cur->nogrp, ctype, pmap, src);
+	err = nowdb_group_map(cur->nogrp, ctype, src);
 	if (err != NOWDB_OK) return err;
 	return NOWDB_OK;
 }
@@ -1310,7 +719,6 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
 static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
                                       nowdb_content_t ctype,
                                       uint32_t        recsz,
-                                      uint64_t         pmap,
                                       char *src,    char *x) {
 	nowdb_err_t err;
 	nowdb_cmp_t cmp;
@@ -1334,7 +742,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 	/* no group switch, just map */
 	if (cmp == NOWDB_SORT_EQUAL) {
 		if (cur->group != NULL) {
-			err = nowdb_group_map(cur->group, ctype, pmap, src);
+			err = nowdb_group_map(cur->group, ctype, src);
 			if (err != NOWDB_OK) return err;
 		}
 		*x=0;
@@ -1342,8 +750,7 @@ static inline nowdb_err_t groupswitch(nowdb_cursor_t   *cur,
 	}
 	/* we actually switch the group */
 	if (cur->group != NULL) {
-		err = nowdb_group_map(cur->group, ctype,
-			                pmap, cur->tmp2);
+		err = nowdb_group_map(cur->group, ctype, cur->tmp2);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 		if (err != NOWDB_OK) return err;
@@ -1387,8 +794,7 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	} else if (cur->group != NULL) {
 		cur->off = 0;
 		// if (*osz == 0) return old; // is this correct???
-		err = nowdb_group_map(cur->group, ctype,
-			              fullmap,cur->tmp2);
+		err = nowdb_group_map(cur->group, ctype, cur->tmp2);
 		if (err != NOWDB_OK) return err;
 		err = nowdb_group_reduce(cur->group, ctype);
 	}
@@ -1399,7 +805,6 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 	err = nowdb_row_project(cur->row,
 	                        cur->tmp2,
 	                cur->rdr->recsize,
-	                          fullmap,
 		      buf, sz, osz, &full,
                           &cc, &complete);
 	if (err != NOWDB_OK) {
@@ -1450,7 +855,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 	nowdb_err_t err;
 	uint32_t recsz;
 	uint32_t realsz;
-	uint64_t pmap=fullmap;
 	char *realsrc=NULL;
 	nowdb_expr_t filter;
 	char *src;
@@ -1469,41 +873,15 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		if (cur->leftover != NULL) {
 
 			realsz = cur->recsz;
-			pmap = cur->pmap;
 			realsrc = cur->leftover;
 			cur->leftover = NULL;
 
 			goto projection;
 
 		}
-		// handle complete prows
-		if (cur->prow != NULL) {
-			if (nowdb_vrow_complete(cur->prow,
-			                        &realsz,
-			                        &pmap,
-                                                &realsrc)) {
-				cur->freesrc = 1;
-				goto grouping;
-			}
-		}
-		// handle leftover from wrows
-		if (cur->eof && cur->wrow != NULL) {
-			err = nowdb_vrow_force(cur->wrow);
-			if (err != NOWDB_OK) return err;
-
-			// memset(cur->vrtx, 0, 32);
-			err = nowdb_vrow_eval(cur->wrow,
-                                (nowdb_key_t*)cur->vrtx, &x);
-			if (err != NOWDB_OK) return err;
-			if (x) {
-				realsrc = cur->vrtx;
-				realsz = 32;
-				goto projection;
-			}
-			if (!nowdb_vrow_empty(cur->wrow)) continue;
-		}
 		// END OF FILE
 		if (cur->eof) {
+			fprintf(stderr, "EOF indeed: %d\n", cur->eof);
 			MKEOF();
 			return handleEOF(cur, err, ctype,
 				         recsz, buf, sz,
@@ -1517,11 +895,6 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 					return err;
 
 				cur->eof = 1;
-				if (cur->prow != NULL) {
-					nowdb_err_release(err);
-					err = nowdb_vrow_force(cur->prow);
-					if (err != NOWDB_OK) return err;
-				}
 				continue;
 			}
 
@@ -1540,31 +913,14 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		if (!checkpos(cur->rdr, cur->off/recsz)) {
 			cur->off += recsz; continue;
 		}
+		// fprintf(stderr, "NOT DELETED\n");
 		// FILTER
-		if (cur->wrow != NULL) {
-			char x=0;
-
-			// we add one more property
-			err = nowdb_vrow_add(cur->wrow,
-			    (nowdb_vertex_t*)(src+cur->off), &x);
-			if (err != NOWDB_OK) return err;
-			if (!x) {
-				cur->off += recsz; continue;
-			}
-			// the only record that could have been completed
-			// by that is the one to which the current belongs
-			err = nowdb_vrow_eval(cur->wrow,
-			    (nowdb_key_t*)cur->vrtx, &x);
-			if (err != NOWDB_OK) return err;
-			if (!x) {
-				cur->off += recsz; continue;
-			}
-
-		} else if (filter != NULL) {
+		if (filter != NULL) {
+			// fprintf(stderr, "FILTER???\n");
 			void *v=NULL;
 			nowdb_type_t  t;
-			err = nowdb_expr_eval(filter, cur->eval, fullmap,
-			                           src+cur->off, &t, &v);
+			err = nowdb_expr_eval(filter, cur->eval,
+			                  src+cur->off, &t, &v);
 			if (err != NOWDB_OK) return err;
 			if (t == NOWDB_TYP_NOTHING) {
 				cur->off += recsz; continue;
@@ -1576,27 +932,13 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 				cur->off += recsz; continue;
 			}
 		}
-		// PROW
-		if (cur->prow != NULL) {
-			err = nowdb_vrow_add(cur->prow,
-			      (nowdb_vertex_t*)(src+cur->off), &x);
-			if (err != NOWDB_OK) return err;
-			if (!nowdb_vrow_complete(cur->prow,
-			         &realsz, &pmap, &realsrc)) 
-			{
-				cur->off += recsz; continue;
-			}
-			cur->freesrc = 1;
-		} else {
-			realsz = recsz;
-			realsrc = src+cur->off;
-		}
+		realsz = recsz;
+		realsrc = src+cur->off;
 grouping:
 		// if keys-only, group or no-group aggregates
 		if (cur->tmp != NULL) {
 			if (cur->nogrp != NULL) {
-				err = nogroup(cur, ctype, realsz,
-				              pmap, realsrc);
+				err = nogroup(cur, ctype, realsz, realsrc);
 				FREESRC();
 				if (err != NOWDB_OK) return err;
 				cur->off += recsz;
@@ -1605,7 +947,7 @@ grouping:
 			if (cur->grouping) {
 				// review for vertex !
 				err = groupswitch(cur, ctype, realsz,
-				                  pmap, realsrc, &x);
+				                        realsrc, &x);
 				FREESRC();
 				if (err != NOWDB_OK) return err;
 				if (!x) {
@@ -1615,16 +957,18 @@ grouping:
 			}
 		}
 projection:
+		// fprintf(stderr, "PROJECTING\n");
 		if (cur->group == NULL) {
+			// fprintf(stderr, "NO GROUP\n");
 			err = nowdb_row_project(cur->row,
 			                 realsrc, realsz,
-			                   pmap, buf, sz,
+			                         buf, sz,
 			                      osz, &full,
  			                 &cc, &complete);
 		} else {
 			err = nowdb_row_project(cur->row,
 			               cur->tmp2, realsz,
-			                   pmap, buf, sz,
+			                         buf, sz,
 			                      osz, &full,
 			                 &cc, &complete);
 		}
@@ -1643,7 +987,6 @@ projection:
 			cur->leftover = realsrc;
 			cur->recsz = realsz;
 			recsz = cur->recsz;
-			cur->pmap = pmap;
 
 			// this is still ugly
 			if (realsrc != cur->vrtx    &&

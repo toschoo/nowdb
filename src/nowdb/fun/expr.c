@@ -197,11 +197,8 @@ nowdb_err_t nowdb_expr_newEdgeField(nowdb_expr_t *expr,
 	FIELD(*expr)->type = type;
 	FIELD(*expr)->num = num;
 
-	if (off > NOWDB_OFF_USER) {
-		nowdb_edge_getCtrl(num, off,
-		     &FIELD(*expr)->ctrlbit,
-		     &FIELD(*expr)->ctrlbyte);
-	}
+	nowdb_getCtrl(off, &FIELD(*expr)->ctrlbit,
+	                   &FIELD(*expr)->ctrlbyte);
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
 		if (FIELD(*expr)->name == NULL) {
@@ -246,8 +243,9 @@ nowdb_err_t nowdb_expr_newVertexOffField(nowdb_expr_t *expr, uint32_t off) {
 nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
                                       char      *propname,
                                       nowdb_roleid_t role,
-                                      nowdb_key_t  propid,
-                                      nowdb_type_t   type) {
+                                      uint32_t        off,
+                                      nowdb_type_t   type,
+                                      uint16_t        num) {
 	nowdb_err_t err;
 
 	*expr = calloc(1,sizeof(nowdb_field_t));
@@ -260,12 +258,12 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 
 	FIELD(*expr)->text = NULL;
 	FIELD(*expr)->content = NOWDB_CONT_VERTEX;
-	FIELD(*expr)->off = NOWDB_OFF_VALUE;
+	FIELD(*expr)->off = off;
 	FIELD(*expr)->role = role;
-	FIELD(*expr)->propid = propid;
-	FIELD(*expr)->pk = 0;
+	FIELD(*expr)->pk = off == 0;
 	FIELD(*expr)->name = NULL;
 	FIELD(*expr)->type = type;
+	FIELD(*expr)->num = num;
 
 	if (propname != NULL) {
 		FIELD(*expr)->name = strdup(propname);
@@ -275,6 +273,8 @@ nowdb_err_t nowdb_expr_newVertexField(nowdb_expr_t  *expr,
 			return err;
 		}
 	}
+	nowdb_getCtrl(off, &FIELD(*expr)->ctrlbit,
+		           &FIELD(*expr)->ctrlbyte);
 	return NOWDB_OK;
 }
 
@@ -685,12 +685,12 @@ static nowdb_err_t copyField(nowdb_field_t *src,
 		                                   src->type, src->num);
 		
 	} else {
-		err = src->name == NULL?
-		      nowdb_expr_newVertexOffField(trg, src->off):
-		      nowdb_expr_newVertexField(trg, src->name,
+		err = nowdb_expr_newVertexField(trg, src->name,
 		                                     src->role,
-		                                     src->propid,
-		                                     src->type);
+                                                     src->off,
+                                                     src->type,
+                                                     src->num);
+                                                       
 	}
 	if (err != NOWDB_OK) return err;
 	FIELD(*trg)->usekey = src->usekey;
@@ -1059,8 +1059,8 @@ static inline nowdb_err_t getText(nowdb_eval_t *hlp,
 	}
 
 #define HANDLENULL(src,f) \
-	if (!(*(int*)(src+NOWDB_OFF_USER+f->ctrlbyte) & \
-	                           (1 << f->ctrlbit))) \
+	if (!(*(int*)(src+nowdb_ctrlStart(f->num)+f->ctrlbyte) & \
+	             (1 << f->ctrlbit))) \
 	{ \
 		*t = NOWDB_TYP_NOTHING; break; \
 	} \
@@ -1140,12 +1140,6 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
 	*t = field->type;
 	*res = src+field->off;
 
-	/*
-	fprintf(stderr, "RAW %d: %lu / %lu\n", field->off,
- 	                 ((nowdb_vertex_t*)src)->property,
-	                    ((nowdb_vertex_t*)src)->value);
-	*/
-
 	return NOWDB_OK;
 }
 
@@ -1155,36 +1149,27 @@ static inline nowdb_err_t getRawVertexValue(nowdb_field_t *field,
  */
 static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
                                          nowdb_eval_t  *hlp,
-                                         uint64_t      rmap,
                                          char          *src,
                                          nowdb_type_t  *t,
                                          void         **res) {
 	nowdb_err_t err;
 
-	if (field->name == NULL) {
-		// fprintf(stderr, "raw with map %lu\n", rmap);
+	if (field->name == NULL)
 		return getRawVertexValue(field, hlp, src, t, res);
-	}
 
-	/*
-	fprintf(stderr, "VERTEX: %u (=%lu/%u)\n", field->off, 
-	                     *(uint64_t*)(src+field->off), field->type);
-	*/
-
-	// this magic formula should be defined somewhere
-	int i = (field->off-4)/8;
-	// fprintf(stderr, "rmap: %lu (%d, %d)\n", rmap, i, field->off);
-	if ((rmap & 1<<i) == 0) {
-		// fprintf(stderr, "%s evaluates to NULL\n", field->name);
+	if (!(*(int*)(src+nowdb_ctrlStart(field->num)+
+                      field->ctrlbyte) & (1 << field->ctrlbit)))
+	{
 		*res = src+field->off;
-		*t = NOWDB_TYP_NOTHING; return NOWDB_OK;
-	}
-
-	*t = field->type; // where does the type come from?
-	if (*t == NOWDB_TYP_TEXT) {
-		HANDLETEXT((nowdb_key_t*)(src+field->off));
+		*t = NOWDB_TYP_NOTHING;
 	} else {
-		*res = src+field->off;
+
+		*t = field->type; // where does the type come from?
+		if (*t == NOWDB_TYP_TEXT) {
+			HANDLETEXT((nowdb_key_t*)(src+field->off));
+		} else {
+			*res = src+field->off;
+		}
 	}
 	return NOWDB_OK;
 }
@@ -1195,7 +1180,6 @@ static inline nowdb_err_t getVertexValue(nowdb_field_t *field,
  */
 static nowdb_err_t evalField(nowdb_field_t *field,
                              nowdb_eval_t  *hlp,
-                             uint64_t      rmap,
                              char          *row,
                              nowdb_type_t  *typ,
                              void         **res) {
@@ -1207,7 +1191,7 @@ static nowdb_err_t evalField(nowdb_field_t *field,
 		err = getEdgeValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	} else {
-		err = getVertexValue(field, hlp, rmap, row, typ, res);
+		err = getVertexValue(field, hlp, row, typ, res);
 		if (err != NOWDB_OK) return err;
 	}
 
@@ -1243,7 +1227,6 @@ static inline int evalType(nowdb_op_t *op, char guess);
  */
 static nowdb_err_t evalOp(nowdb_op_t   *op,
                           nowdb_eval_t *hlp,
-                          uint64_t     rmap,
                           char         *row,
                           nowdb_type_t *typ,
                           void        **res) {
@@ -1255,7 +1238,7 @@ static nowdb_err_t evalOp(nowdb_op_t   *op,
 
 			// the "main" thing
 			err = nowdb_expr_eval(op->argv[i],
-			                      hlp, rmap, row,
+			                      hlp, row,
 			                      op->types+i,
 			                      op->results+i);
 			if (err != NOWDB_OK) return err;
@@ -1362,24 +1345,23 @@ static inline nowdb_err_t evalConst(nowdb_const_t *cst,
  */
 nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
                             nowdb_eval_t *hlp,
-                            uint64_t     rmap,
                             char         *row,
                             nowdb_type_t *typ,
                             void        **res) {
 	if (expr == NULL) return NOWDB_OK;
 	switch(EXPR(expr)->etype) {
 	case NOWDB_EXPR_FIELD:
-		return evalField(FIELD(expr), hlp, rmap, row, typ, res);
+		return evalField(FIELD(expr), hlp, row, typ, res);
 
 	case NOWDB_EXPR_CONST:
 		return evalConst(CONST(expr), typ, res);
 
 	case NOWDB_EXPR_OP:
-		return evalOp(OP(expr), hlp, rmap, row, typ, res);
+		return evalOp(OP(expr), hlp, row, typ, res);
 
 	case NOWDB_EXPR_REF:
 		return nowdb_expr_eval(REF(expr)->ref, hlp,
-		                       rmap, row, typ, res);
+		                       row, typ, res);
 
 	case NOWDB_EXPR_AGG:
 		return evalAgg(AGG(expr), typ, res);
@@ -1571,11 +1553,16 @@ void nowdb_expr_replace(nowdb_expr_t op,
  * Extract period from expression
  * ------------------------------------------------------------------------
  */
+#define STAMP() \
+  (FIELDOP(expr,f)->content==NOWDB_CONT_EDGE?NOWDB_OFF_STAMP: \
+                                             NOWDB_OFF_VSTAMP)
 void nowdb_expr_period(nowdb_expr_t expr,
                        nowdb_time_t *start,
                        nowdb_time_t *end) {
-	int f,c;
+
 	if (expr == NULL) return;
+
+	int f,c;
 
 	if (nowdb_expr_type(expr) != NOWDB_EXPR_OP) return;
 
@@ -1591,7 +1578,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 
 	case NOWDB_EXPR_OP_EQ:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr, c)->value, 8);
 		memcpy(end, CONSTOP(expr,c)->value, 8);
@@ -1600,7 +1587,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_GE:
 	case NOWDB_EXPR_OP_GT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(start, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_GT) (*start)++;
@@ -1609,7 +1596,7 @@ void nowdb_expr_period(nowdb_expr_t expr,
 	case NOWDB_EXPR_OP_LE:
 	case NOWDB_EXPR_OP_LT:
 		if (!getFieldAndConst(expr, &f, &c)) return;
-		if (FIELDOP(expr,f)->off != NOWDB_OFF_TMSTMP) return;
+		if (FIELDOP(expr,f)->off != STAMP()) return;
 		if (CONSTOP(expr,c)->type != NOWDB_TYP_TIME) return;
 		memcpy(end, CONSTOP(expr,c)->value, 8);
 		if (OP(expr)->fun == NOWDB_EXPR_OP_LT) (*end)--;
