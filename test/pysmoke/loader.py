@@ -50,10 +50,12 @@ def createSensors(mx):
     with open(SNAME, 'w') as f:
          f.write('key;name;info\n')
          for s in sns:
+             n = sanitize(s.name)
              if s.info is None:
-                f.write('%d;%s;\n' % (s.key, s.name))
+                f.write('%d;%s;\n' % (s.key, n))
              else:
-                f.write('%d;%s;%s\n' % (s.key, s.name, s.info))
+                i = sanitize(s.info)
+                f.write('%d;%s;%s\n' % (s.key, n, i))
            
 def createDevices(mx):
     for k in range(mx):
@@ -66,10 +68,12 @@ def createDevices(mx):
     with open(DNAME, 'w') as f:
          f.write('key;name;desc\n')
          for d in dvc:
+             n = sanitize(d.name)
              if d.desc is None:
-                f.write('%d;%s;\n' % (d.key, d.name))
+                f.write('%d;%s;\n' % (d.key, n))
              else:
-                f.write('%d;%s;%s\n' % (d.key, d.name, d.desc))
+                dsc = sanitize(d.desc)
+                f.write('%d;%s;%s\n' % (d.key, n, dsc))
 
 def createDvcSns():
     for s in sns:
@@ -104,11 +108,14 @@ def createMeasures(mx):
 
 def randomString(mx):
     s = ''
-    alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n\r\\'
     m = rnd.randint(3,mx+1)
     for i in range(m):
         s += rnd.choice(alpha)
-    return s # .replace('\n','\\n').replace('\r','\\r').replace('\\','\\\\')
+    return s
+
+def sanitize(s):
+    return s.replace('\\','\\\\').replace('\n','\\n').replace('\r','\\r')
 
 def createTypes(c):
     for i in range(3):
@@ -283,6 +290,15 @@ def testSensorNames(c):
         if n != s.name:
            raise db.TestFailed("wrong name in sensor %d: %s | %s" \
                                                % (s.key, n, s.name))
+
+def testDeviceNames(c):
+    print("RUNNING 'testDeviceNames'")
+    for d in dvc:
+        n = c.oneValue("select name from device where key = %d" % d.key)
+        print("comparing '%s' and '%s'" % (n, d.name))
+        if n != d.name:
+           raise db.TestFailed("wrong name in sensor %d: %s | %s" \
+                                               % (d.key, n, d.name))
            
 if __name__ == '__main__':
 
@@ -309,10 +325,11 @@ if __name__ == '__main__':
 
         load(c)
 
-        showSensors(c)
+        # showSensors(c)
 
         testNoneIsNull(c)
         testCount(c, ms)
         testSensorNames(c)
+        testDeviceNames(c)
 
         print("PASSED")

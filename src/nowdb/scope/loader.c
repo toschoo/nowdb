@@ -772,18 +772,18 @@ static inline int toUInt32(nowdb_csv_t *csv, char *data,
 	nowdb_err_release(err); err = NOWDB_OK;
 
 /* ------------------------------------------------------------------------
- * Convert text to key
+ * Convert text to key (removing escape sequences)
  * ------------------------------------------------------------------------
  */
 static inline char getKeyFromText(nowdb_loader_t *ldr,
-                                  void *data, size_t len,
+                                  char *data, size_t len,
                                   void *target) {
 	nowdb_err_t err;
 	char *txt = ldr->csv->txt;
 
 	int i,j=0,k=0;
 	for(i=0;i<len;i++) {
-		if (((char*)data)[i] == '\\') {
+		if (data[i] == '\\') {
 			if (i+1 >= len) {
 				err = nowdb_err_get(nowdb_err_invalid_esc,
 			                FALSE, OBJECT, "string handling");
@@ -791,25 +791,30 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 				return -1;
 			}
 			char ch;
-			switch(((char*)data)[i+1]) {
+			switch(data[i+1]) {
 			case '\\': ch = '\\'; break;
 			case 'n':  ch = '\n'; break;
 			case 'r':  ch = '\r'; break;
 			default:
-				fprintf(stderr, "%c%c\n", ((char*)data)[i], ((char*)data)[i]);
 				err = nowdb_err_get(nowdb_err_invalid_esc,
 			                FALSE, OBJECT, "string handling");
 				HANDLEERR(ldr, err);
 				return -1;
 			}
-			memcpy(txt+j, data+k, i-k);
-			j+=i-k;
-			txt[j] = ch;
-                        i++; k=i;
+			if (i>0) {
+				memcpy(txt+j, data+k, i-k);
+				j+=i-k;
+			}
+			txt[j] = ch; j++;
+                        i++; k=i+1;
 		}
 	}
-	if (i>k) memcpy(txt+j, data+k, i-k);
-	txt[j+i-k] = 0;
+	if (i>k) {
+		memcpy(txt+j, data+k, i-k);
+		txt[j+i-k] = '\0';
+	} else {
+		txt[j] = '\0';
+	}
 
 	err = nowdb_text_insert(ldr->text, txt, target);
 	if (err != NOWDB_OK) {
