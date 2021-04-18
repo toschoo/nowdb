@@ -801,7 +801,7 @@ static inline char getKeyFromText(nowdb_loader_t *ldr,
 				HANDLEERR(ldr, err);
 				return -1;
 			}
-			if (i>0) {
+			if (i>k) {
 				memcpy(txt+j, data+k, i-k);
 				j+=i-k;
 			}
