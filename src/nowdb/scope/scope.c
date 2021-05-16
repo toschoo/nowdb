@@ -2733,7 +2733,6 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 	if (inc) {
 		if (vid > ctx->store.max) {
 			ctx->store.max = vid;
-			err = nowdb_plru8r_addResident(ctx->evache, vid);
 		} else {
 			err = nowdb_err_get(nowdb_err_dup_key,
 		                      FALSE, OBJECT, "vertex");
