@@ -94,6 +94,8 @@
 (?i:BOOLEAN)		return NOWDB_SQL_BOOL;
 (?i:PRIMARY\ KEY)	return NOWDB_SQL_PK;
 (?i:PK)			return NOWDB_SQL_PK;
+(?i:INCREMENT)		return NOWDB_SQL_INC;
+(?i:INC)		return NOWDB_SQL_INC;
 
 (?i:ORIGIN)		return NOWDB_SQL_ORIGIN;
 (?i:DESTINATION)	return NOWDB_SQL_DESTINATION;

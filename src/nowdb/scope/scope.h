@@ -274,7 +274,8 @@ nowdb_err_t nowdb_scope_insert(nowdb_scope_t *scope,
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
                                        nowdb_context_t *ctx,
-                                       nowdb_key_t      vid);
+                                       nowdb_key_t      vid,
+                                       nowdb_bool_t     inc);
 
 /* ------------------------------------------------------------------------
  * Load csv

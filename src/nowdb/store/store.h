@@ -35,6 +35,9 @@ typedef struct {
 	uint32_t          filesize; /* size of new files           */
 	uint32_t         largesize; /* size of new readers         */
 	uint32_t           setsize; /* records per page            */
+	uint64_t             count; /* # of records stored         */
+	nowdb_key_t            max; /* max pk                      */
+	nowdb_key_t            min; /* min pk                      */
 	nowdb_path_t          path; /* base path                   */
 	nowdb_path_t       catalog; /* path to catalog             */
 	nowdb_file_t       *writer; /* where we currently write to */

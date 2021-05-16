@@ -680,6 +680,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	char *vrtx, *ctrl;
 	int i=0;
 	int pkfound=0;
+	nowdb_bool_t inc = FALSE;
 
 	vrtx = calloc(1, dml->v->size);
  	if (vrtx == NULL) {
@@ -706,6 +707,7 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 			if (val->type == NOWDB_TYP_NOTHING) {
 				INVALIDVAL("pk is NULL"); break;
 			}
+			inc = dml->p[i]->inc;
 			pkfound = 1;
 
 		// check all other values
@@ -743,7 +745,8 @@ static inline nowdb_err_t insertVertexFields(nowdb_dml_t *dml,
 	// (we should lock here and keep the lock)
 	err = nowdb_scope_registerVertex(dml->scope,
 	                                 dml->ctx,
-	                                *(uint64_t*)vrtx);
+	                                *(uint64_t*)vrtx,
+	                                 inc);
 	if (err != NOWDB_OK) {
 		free(vrtx); return err;
 	}

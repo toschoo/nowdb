@@ -793,6 +793,30 @@ static inline nowdb_err_t prepareWriter(nowdb_store_t *store) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: write store data to catalog
+ * ------------------------------------------------------------------------
+ */
+static inline void writeCatalogHeader(nowdb_store_t *store,
+                                      char *buf, int  *off)
+{
+	memcpy(buf+*off, &store->count, 8); *off+=8;
+	memcpy(buf+*off, &store->max  , 8); *off+=8;
+	memcpy(buf+*off, &store->min  , 8); *off+=8;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: read store data into store
+ * ------------------------------------------------------------------------
+ */
+static inline void readCatalogHeader(nowdb_store_t *store,
+                                      char *buf, int *off) 
+{
+	memcpy(&store->count, buf+*off, 8); *off+=8;
+	memcpy(&store->max  , buf+*off, 8); *off+=8;
+	memcpy(&store->min  , buf+*off, 8); *off+=8;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: write one file into catalog
  * ------------------------------------------------------------------------
  */
@@ -908,6 +932,8 @@ static inline nowdb_err_t openstore(nowdb_store_t *store, char *buf, int size) {
 	if (magic != NOWDB_MAGIC) return nowdb_err_get(nowdb_err_magic,
 	                                FALSE, OBJECT, store->catalog);
 	memcpy(&ver, buf+off, 4); off+=4;
+
+	readCatalogHeader(store, buf, &off);
 
 	ts_algo_list_init(&files);
 	while(off < size) {
@@ -1038,6 +1064,7 @@ static inline nowdb_err_t readCatalog(nowdb_store_t *store) {
 static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	/* once:
 	 * MAGIC + version
+         * count + max + min (8+8+8)
 	 *
 	 * per line:
 	 * ---------
@@ -1056,7 +1083,7 @@ static inline uint32_t computeCatalogSize(nowdb_store_t *store) {
 	 * newest,           8
 	 * file name        32
 	 */
-	uint32_t once = 8;
+	uint32_t once = 32;
 	uint32_t perline = 93;
 	uint32_t nfiles = 1;
 
@@ -1085,7 +1112,6 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	nowdb_err_t err;
 	uint32_t magic = NOWDB_MAGIC;
 	char *buf = NULL;
-	int off=8;
 	ts_algo_list_node_t *runner;
 	ts_algo_list_t *readers;
 	uint32_t sz;
@@ -1095,8 +1121,11 @@ static inline nowdb_err_t storeCatalog(nowdb_store_t *store) {
 	if (buf == NULL) return nowdb_err_get(nowdb_err_no_mem,
 	                   FALSE, OBJECT, "allocating buffer");
 
+	int off=8;
 	memcpy(buf, &magic, 4);
 	memcpy(buf+4, &store->version, 4);
+
+	writeCatalogHeader(store, buf, &off);
 
 	/* writer */
 	if (store->writer != NULL) {
@@ -1348,6 +1377,7 @@ nowdb_err_t nowdb_store_insert(nowdb_store_t *store,
 
 	store->writer->size += store->recsize;
 	pos+=store->recsize; store->writer->pos+=store->recsize;
+	store->count++;
 
 	if (REMAINDER < store->recsize) {
 		uint32_t d = REMAINDER;
@@ -2046,6 +2076,8 @@ nowdb_err_t nowdb_store_showCatalog(nowdb_store_t *store) {
 	                                FALSE, OBJECT, store->catalog);
 	memcpy(&ver, buf+off, 4); off+=4;
 
+	readCatalogHeader(store, buf, &off);
+
 	ts_algo_list_init(&files);
 	while(off < sz) {
 		err = readCatalogLine(store, &files, buf, &off, sz, ver);
@@ -2056,7 +2088,9 @@ nowdb_err_t nowdb_store_showCatalog(nowdb_store_t *store) {
 	free(buf);
 
 	off = 1;
-	fprintf(stdout, "Version: %u\n", ver);
+	fprintf(stdout, "Count  : %lu\n", store->count);
+	fprintf(stdout, "Max    : %lu\n", store->max);
+	fprintf(stdout, "Min    : %lu\n", store->min);
 
 	for(runner=files.head; runner!=NULL; runner=runner->nxt) {
 		nowdb_file_t *file = runner->cont;

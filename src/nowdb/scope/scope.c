@@ -2718,7 +2718,8 @@ unlock:
  */
 nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
                                        nowdb_context_t *ctx,
-                                       nowdb_key_t      vid) {
+                                       nowdb_key_t      vid,
+                                       nowdb_bool_t     inc) {
 	beet_err_t ber;
 	nowdb_index_t *vindex=NULL;
 	nowdb_err_t err = NOWDB_OK;
@@ -2736,6 +2737,16 @@ nowdb_err_t nowdb_scope_registerVertex(nowdb_scope_t *scope,
 		err = nowdb_err_get(nowdb_err_dup_key,
 		              FALSE, OBJECT, "vertex");
 		goto unlock;
+	}
+
+	if (inc) {
+		if (vid > ctx->store.max) {
+			ctx->store.max = vid;
+		} else {
+			err = nowdb_err_get(nowdb_err_dup_key,
+		                      FALSE, OBJECT, "vertex");
+		}
+		goto unlock; // ready
 	}
 
 	err = nowdb_plru8r_get(ctx->ivache, vid, &found);
