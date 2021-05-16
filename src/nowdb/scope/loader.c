@@ -943,12 +943,14 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	}
 
 	int i = LDR(ldr)->csv->cur;
-	int off = LDR(ldr)->csv->props[i].off;
 
 	/* get PK (= vid) */
 	if (i >= LDR(ldr)->csv->psz) {
 		fprintf(stderr, "field %d!!!\n", i);
 	}
+
+	int off = LDR(ldr)->csv->props[i].off;
+
 	if (LDR(ldr)->csv->props[i].pk) {
 		if (len == 0) {
 			REJECT(LDR(ldr)->csv->props[i].name,
