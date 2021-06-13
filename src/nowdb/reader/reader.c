@@ -49,6 +49,7 @@ static inline nowdb_err_t initReader(nowdb_reader_t *reader) {
 	reader->ko  = 0;
 	reader->ownfiles = 0;
 	reader->files = NULL;
+	reader->store = NULL;
 	reader->buf = NULL;
 	reader->tmp = NULL;
 	reader->tmp2 = NULL;
@@ -162,6 +163,18 @@ static inline nowdb_err_t rewindSearch(nowdb_reader_t *reader) {
 	if (ber != BEET_OK) {
 		return makeBeetError(ber);
 	}
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Helper: rewind count reader
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t rewindCount(nowdb_reader_t *reader) {
+	reader->page = NULL;
+	reader->cont = NULL;
+	reader->off = 0;
+	reader->eof = 0;
 	return NOWDB_OK;
 }
 
@@ -548,6 +561,20 @@ static inline nowdb_err_t moveSearch(nowdb_reader_t *reader) {
 }
 
 /* ------------------------------------------------------------------------
+ * Helper: move for count
+ * ------------------------------------------------------------------------
+ */
+static inline nowdb_err_t moveCount(nowdb_reader_t *reader) {
+	if (reader->eof) {
+		return nowdb_err_get(nowdb_err_eof,
+	                      FALSE, OBJECT, NULL);
+	}
+	reader->value = nowdb_store_count(reader->store);
+	reader->eof = 1;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
  * Helper: check if current key is in map
  * ------------------------------------------------------------------------
  */
@@ -918,6 +945,9 @@ nowdb_err_t nowdb_reader_move(nowdb_reader_t *reader) {
 	case NOWDB_READER_CRANGE:
 		return moveCRange(reader);
 
+	case NOWDB_READER_COUNT:
+		return moveCount(reader);
+
 	case NOWDB_READER_BUF:
 		return moveBuf(reader);
 
@@ -960,6 +990,9 @@ nowdb_err_t nowdb_reader_rewind(nowdb_reader_t *reader) {
 	case NOWDB_READER_CRANGE:
 		return rewindRange(reader);
 
+	case NOWDB_READER_COUNT:
+		return rewindCount(reader);
+
 	case NOWDB_READER_BUF:
 	case NOWDB_READER_BUFIDX:
 	case NOWDB_READER_BKRANGE:
@@ -999,6 +1032,9 @@ char *nowdb_reader_page(nowdb_reader_t *reader) {
 			off+=sz;
 		}
 		return reader->buf;
+
+	case NOWDB_READER_COUNT:
+		return (char*)&reader->value;
 
 	case NOWDB_READER_BUF:
 		if (reader->off >= reader->size) return NULL;
@@ -1312,6 +1348,36 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
 	                              start, end);
 	if (err != NOWDB_OK) return err;
 	(*reader)->maps = maps;
+	return NOWDB_OK;
+}
+
+/* ------------------------------------------------------------------------
+ * Count Reader 
+ * ------------
+ * Instantiate a reader That just returns the count of the store.
+ * TODO: not tested as sub reader!
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_count(nowdb_reader_t **reader,
+                               nowdb_store_t   *store) {
+	nowdb_err_t err;
+	if (reader == NULL) return nowdb_err_get(nowdb_err_invalid,
+	        FALSE, OBJECT, "pointer to reader object is NULL");
+	if (store == NULL) return nowdb_err_get(nowdb_err_invalid,
+	                   FALSE, OBJECT, "store object is NULL");
+
+	err = newReader(reader);
+	if (err != NOWDB_OK) return err;
+	(*reader)->type = NOWDB_READER_COUNT;
+	(*reader)->content = store->cont;
+	(*reader)->recsize = sizeof(uint64_t);
+	(*reader)->store = store;
+
+	err = rewindCount(*reader);
+	if (err != NOWDB_OK) {
+		nowdb_reader_destroy(*reader); free(*reader);
+		return err;
+	}
 	return NOWDB_OK;
 }
 

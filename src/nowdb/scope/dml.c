@@ -309,7 +309,7 @@ nowdb_err_t nowdb_dml_setTarget(nowdb_dml_t *dml,
 	if (dml->scope == NULL) INVALID("no scope in dml descriptor");
 	if (trgname == NULL) INVALID("no target name");
 
-	fprintf(stderr, "SETTING CONTENT %s\n", trgname);
+	// fprintf(stderr, "SETTING CONTENT %s\n", trgname);
 
 	// check fields == values
 	if (fields != NULL && values != NULL) {

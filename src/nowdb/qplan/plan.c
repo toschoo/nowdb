@@ -49,6 +49,9 @@ static char *OBJECT = "plan";
 #define ARG(x,i) \
 	OP(x)->argv[i]
 
+#define FUN(x) \
+	(nowdb_fun_t*)(x)
+
 /* -----------------------------------------------------------------------
  * Predeclaration for recursive call
  * -----------------------------------------------------------------------
@@ -1438,7 +1441,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
                                nowdb_ast_t    *ast,
                                ts_algo_list_t *plan) {
 	nowdb_expr_t   filter = NULL;
-	ts_algo_list_t *pj, *grp=NULL, *agg=NULL, *ord=NULL;
+	ts_algo_list_t *pj=NULL, *grp=NULL, *agg=NULL, *ord=NULL;
 	ts_algo_list_t idxes;
 	nowdb_err_t   err;
 	nowdb_ast_t  *trg, *from, *sel, *group=NULL, *order=NULL;
@@ -1605,6 +1608,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	}
 
 	stp->ntype = NOWDB_PLAN_READER;
+	// choose count
 	if (idxes.len == 1 && grp == NULL && ord == NULL) {
 		// fprintf(stderr, "CHOOSING SEARCH\n");
 		stp->stype = NOWDB_PLAN_SEARCH_;
@@ -1774,6 +1778,19 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 			destroyFunList(agg); free(agg);
 		}
 		nowdb_plan_destroy(plan, FALSE); return err;
+	}
+	// is it a plain count
+	if (idxes.len  == 0    &&
+	    filter     == NULL &&
+	    grp        == NULL && 
+	    order      == NULL && 
+	    pj         != NULL &&
+	    agg        != NULL &&
+            pj->len    == 1    &&
+            agg->len   == 1    &&
+	    (FUN(agg->head->cont))->fun == NOWDB_FUN_COUNT)
+	{
+		stp->stype = NOWDB_PLAN_COUNTALL;
 	}
 
 	if (grp != NULL) {

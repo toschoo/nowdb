@@ -2049,6 +2049,14 @@ nowdb_err_t nowdb_store_dropFiles(nowdb_store_t *store,
                                   nowdb_time_t   stamp);
 
 /* ------------------------------------------------------------------------
+ * Count all records in store
+ * ------------------------------------------------------------------------
+ */
+uint64_t nowdb_store_count(nowdb_store_t *store) {
+	return store->count;
+}
+
+/* ------------------------------------------------------------------------
  * Pretty-print the catalog
  * ------------------------------------------------------------------------
  */
