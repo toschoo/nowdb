@@ -1788,8 +1788,11 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	    agg        != NULL &&
             pj->len    == 1    &&
             agg->len   == 1    &&
-	    (FUN(agg->head->cont))->fun == NOWDB_FUN_COUNT)
-	{
+	    (FUN(agg->head->cont))->fun == NOWDB_FUN_COUNT &&
+	    // this is unfortunate: we should be able to use
+	    // fast count even with expressions, when it boils down to count
+	    (FUN(pj->head->cont))->fun == NOWDB_EXPR_AGG)
+	{                                                 
 		stp->stype = NOWDB_PLAN_COUNTALL;
 	}
 

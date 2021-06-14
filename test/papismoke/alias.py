@@ -98,7 +98,7 @@ def aliastest(c):
 
     for row in c.execute("select count(*) + 1 as c1 from product"):
         if row['c1'] != l+1:
-           raise db.TestFailed('c1 differs')
+           raise db.TestFailed('c1 differs: %d - %d' % (row['c1'], l+1))
 
     for row in c.execute("select null as nix from product"):
         if row['nix'] is not None:
