@@ -1372,6 +1372,25 @@ nowdb_err_t nowdb_expr_eval(nowdb_expr_t expr,
 }
 
 /* ------------------------------------------------------------------------
+ * Fix expression result
+ * ------------------------------------------------------------------------
+ */
+void nowdb_expr_fix(nowdb_expr_t expr,
+                    nowdb_type_t  typ,
+                    void       *value) {
+	switch(EXPR(expr)->etype) {
+
+	case NOWDB_EXPR_AGG:
+		FUN(AGG(expr)->agg)->otype = typ;
+		memcpy(&FUN(AGG(expr)->agg)->r1, value, 8); // size!
+		break;
+
+	default:
+		return;
+	}
+}
+
+/* ------------------------------------------------------------------------
  * Helper: find filter offset in key offsets
  * ------------------------------------------------------------------------
  */
@@ -1780,7 +1799,8 @@ static void showOp(nowdb_op_t *op, FILE *stream) {
  * -----------------------------------------------------------------------
  */
 static void showAgg(nowdb_agg_t *agg, FILE *stream) {
-	fprintf(stderr, "agg");
+	fprintf(stderr, "agg: ");
+	fprintf(stderr, "%d", FUN(agg->agg)->fun);
 	return;
 }
 

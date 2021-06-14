@@ -349,6 +349,11 @@ static inline nowdb_err_t initReader(nowdb_scope_t *scope,
 
 	cur->hasid = TRUE;
 
+	// Count is easy:
+	if (rplan->stype == NOWDB_PLAN_COUNTALL) {
+		return nowdb_reader_count(&cur->rdr, store);
+	}
+
 	/* get files */
 	err = nowdb_store_getFiles(store, &cur->stf.files, start, end);
 	if (err != NOWDB_OK) return err;
@@ -703,6 +708,8 @@ static inline nowdb_err_t nogroup(nowdb_cursor_t *cur,
                                   char           *src) {
 	nowdb_err_t err;
 
+	if (cur->rdr->type == NOWDB_READER_COUNT) return NOWDB_OK;
+
 	if (memcmp(cur->tmp, nowdb_nullrec, recsz) == 0) {
 		memcpy(cur->tmp, src, recsz);
 		memcpy(cur->tmp2, cur->tmp, recsz);
@@ -790,7 +797,13 @@ static inline nowdb_err_t handleEOF(nowdb_cursor_t *cur,
 
 	if (cur->group == NULL && cur->nogrp == NULL) return old;
 	if (cur->nogrp != NULL) {
-		err = nowdb_group_reduce(cur->nogrp, ctype);
+		if (cur->rdr->type == NOWDB_READER_COUNT) {
+			nowdb_expr_fix(cur->row->fields[0],
+			                    NOWDB_TYP_UINT,
+			                 &cur->rdr->value);
+		} else {
+			err = nowdb_group_reduce(cur->nogrp, ctype);
+		}
 	} else if (cur->group != NULL) {
 		cur->off = 0;
 		// if (*osz == 0) return old; // is this correct???
@@ -881,7 +894,7 @@ static inline nowdb_err_t fetch(nowdb_cursor_t *cur,
 		}
 		// END OF FILE
 		if (cur->eof) {
-			fprintf(stderr, "EOF indeed: %d\n", cur->eof);
+			// fprintf(stderr, "EOF indeed: %d\n", cur->eof);
 			MKEOF();
 			return handleEOF(cur, err, ctype,
 				         recsz, buf, sz,

@@ -48,6 +48,7 @@ typedef struct {
 	nowdb_type_t      value; /* type of the property value     */
 	nowdb_bool_t         pk; /* this one is PK                 */
 	nowdb_bool_t      stamp; /* this one is the timestamp      */
+	nowdb_bool_t        inc; /* promise to keep increasing pk  */
 	uint32_t            off; /* row offset                     */
 } nowdb_model_prop_t;
 

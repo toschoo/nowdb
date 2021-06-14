@@ -621,10 +621,10 @@ static uint32_t computePropSize(ts_algo_list_t *list) {
 
 	/* size(prop) = strlen(name) + '\0' + propid (8)
 	 *            + roleid(4) + pos(4) + value(4)
-                      + pk(1) + stamp(1) + offset (4) */
+                      + pk(1) + stamp(1) + inc(1) + offset (4) */
 	for(runner=list->head;runner!=NULL;runner=runner->nxt) {
 		p = runner->cont;
-		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1 + 1 + 4;
+		sz+=strlen(p->name) + 1 + 8 + 4 + 4 + 4 + 1 + 1 + 1 + 4;
 	}
 	return sz;
 }
@@ -709,6 +709,7 @@ static void prop2buf(char *buf, uint32_t mx, ts_algo_list_t *list) {
 		memcpy(buf+sz, &p->value, 4); sz+=4;
 		memcpy(buf+sz, &p->pk, 1); sz+=1;
 		memcpy(buf+sz, &p->stamp, 1); sz+=1;
+		memcpy(buf+sz, &p->inc, 1); sz+=1;
 		memcpy(buf+sz, &p->off, 4); sz+=4;
 		strcpy(buf+sz, p->name); sz+=strlen(p->name)+1;
 	}
@@ -916,6 +917,7 @@ static nowdb_err_t loadProp(ts_algo_list_t   *list,
 		memcpy(&p->value, buf+off, 4); off+=4;
 		memcpy(&p->pk, buf+off, 1); off+=1;
 		memcpy(&p->stamp, buf+off, 1); off+=1;
+		memcpy(&p->inc, buf+off, 1); off+=1;
 		memcpy(&p->off, buf+off, 4); off+=4;
 		s = strnlen(buf+off, 4097);
 		if (s >= 4096) {
@@ -1549,6 +1551,7 @@ static nowdb_err_t propsUnique(nowdb_model_t  *model,
 		p->off = off; off+=8;
 
 		if (p->pk) fprintf(stderr, "PK: %u\n", p->off);
+		if (p->inc) fprintf(stderr, "INC: %u\n", p->off);
 
 		(*num)++;
 

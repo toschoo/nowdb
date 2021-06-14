@@ -180,10 +180,11 @@
 #define NOWDB_AST_ORIGIN   10212
 #define NOWDB_AST_DESTIN   10213
 #define NOWDB_AST_STAMP    10214
-#define NOWDB_AST_LANG     10215
-#define NOWDB_AST_ERRORS   10216
-#define NOWDB_AST_MODE     10217
-#define NOWDB_AST_TIMEOUT  10218
+#define NOWDB_AST_INC      10215
+#define NOWDB_AST_LANG     10220
+#define NOWDB_AST_ERRORS   10221
+#define NOWDB_AST_MODE     10222
+#define NOWDB_AST_TIMEOUT  10223
 
 /* -----------------------------------------------------------------------
  * IFEXISTS is a special option for create and drop:

@@ -44,6 +44,7 @@ struct nowdb_csv_st {
 	nowdb_key_t              vid; /* edge model  : vertex id        */
 	nowdb_model_prop_t    *props; /* vertex model: array of props   */
 	nowdb_model_pedge_t   *pedge; /* edge   model: array of props   */
+	nowdb_bool_t             inc; /* pk is inc                      */
 	uint8_t                  *xb; /* control block for edge model   */
 	uint16_t                atts; /* number of atts in edge         */
 	uint32_t             ctlSize; /* size of control block          */
@@ -429,6 +430,7 @@ static inline void rowTypeHeader(nowdb_loader_t *ldr) {
 		ldr->csv->props[i].value = p->value;
 		ldr->csv->props[i].off = p->off;
 		ldr->csv->props[i].pk = p->pk;
+		ldr->csv->props[i].inc = p->inc;
 		if (p->pk) ldr->csv->pkidx = i;
 
 		ldr->csv->props[i].name = runner->cont;
@@ -941,12 +943,14 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 	}
 
 	int i = LDR(ldr)->csv->cur;
-	int off = LDR(ldr)->csv->props[i].off;
 
 	/* get PK (= vid) */
 	if (i >= LDR(ldr)->csv->psz) {
 		fprintf(stderr, "field %d!!!\n", i);
 	}
+
+	int off = LDR(ldr)->csv->props[i].off;
+
 	if (LDR(ldr)->csv->props[i].pk) {
 		if (len == 0) {
 			REJECT(LDR(ldr)->csv->props[i].name,
@@ -998,7 +1002,8 @@ void nowdb_csv_field_type(void *data, size_t len, void *ldr) {
 		nowdb_err_t err =
 		nowdb_scope_registerVertex(LDR(ldr)->scope,
 		                           LDR(ldr)->ctx,
-		                           LDR(ldr)->csv->vid);
+		                           LDR(ldr)->csv->vid,
+		                           LDR(ldr)->csv->inc);
 		if (err != NOWDB_OK) {
 			char freemsg=1;
 			char *msg = nowdb_err_describe(err, ';');

@@ -12,6 +12,7 @@
 #include <nowdb/task/lock.h>
 #include <nowdb/io/dir.h>
 #include <nowdb/io/file.h>
+#include <nowdb/store/store.h>
 #include <nowdb/fun/expr.h>
 #include <nowdb/index/index.h>
 #include <nowdb/mem/pplru.h>
@@ -38,6 +39,7 @@
 #define NOWDB_READER_SEQ      10001
 #define NOWDB_READER_MERGE    10002
 #define NOWDB_READER_JOIN     10003
+#define NOWDB_READER_COUNT    10004
 
 /* ------------------------------------------------------------------------
  * Max sub readers
@@ -66,6 +68,7 @@ typedef struct nowdb_reader_t {
 	uint32_t             recsize; /* set according to first file   */
 	nowdb_content_t      content; /* vertex or edge                */
 	ts_algo_list_t        *files; /* list of relevant files        */
+	nowdb_store_t         *store; /* store instead of files        */
 	ts_algo_list_node_t *current; /* current file (fullscan)       */
 	nowdb_file_t           *file; /* current file (search)         */
 	ts_algo_tree_t       readers; /* files for index-based readers */
@@ -73,6 +76,7 @@ typedef struct nowdb_reader_t {
 	nowdb_pplru_t         *bplru; /* black list                    */
 	char                    *buf; /* for buffer-based readers      */
 	uint32_t                size; /* size of buffer in bytes       */
+	uint64_t               value; /* single value reader (count)   */
 	char                    *tmp; /* buffer for keys in bufreader  */
 	char                   *tmp2; /* buffer for keys in bufreader  */
 	char                  *page2; /* buffer for page in bufreader  */
@@ -277,6 +281,16 @@ nowdb_err_t nowdb_reader_mrange(nowdb_reader_t **reader,
                                 nowdb_expr_t    filter,
                                 ts_algo_tree_t  **maps,
                                 void *start, void *end);
+
+
+/* ------------------------------------------------------------------------
+ * Count Reader 
+ * ------------
+ * Instantiate a reader That just returns the count of the store.
+ * ------------------------------------------------------------------------
+ */
+nowdb_err_t nowdb_reader_count(nowdb_reader_t **reader,
+                               nowdb_store_t   *store);
 
 /* ------------------------------------------------------------------------
  * Buffer scan

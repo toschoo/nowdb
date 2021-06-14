@@ -338,6 +338,7 @@ typedef struct {
  * Parameters:
  * - C: the ast to add to
  * - o: the option subcode
+ * - x: the variable
  * - t: the value type
  * - v: the value
  * ------------------------------------------------------------------------
@@ -345,6 +346,12 @@ typedef struct {
 #define NOWDB_SQL_ADD_OPTION(C,o,t,v) \
 	NOWDB_SQL_CHECKSTATE(); \
 	nowdb_ast_t *x; \
+	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_OPTION, o); \
+	nowdb_ast_setValue(x, t, v); \
+	NOWDB_SQL_ADDKID(C, x);
+
+#define NOWDB_SQL_ADD_MOPTION(C,o,x,t,v) \
+	NOWDB_SQL_CHECKSTATE(); \
 	NOWDB_SQL_CREATEAST(&x, NOWDB_AST_OPTION, o); \
 	nowdb_ast_setValue(x, t, v); \
 	NOWDB_SQL_ADDKID(C, x);

@@ -498,6 +498,15 @@ field_decl(F) ::= IDENTIFIER(I) type(T) PK. {
 	NOWDB_SQL_ADD_OPTION(F, NOWDB_AST_PK, 0, NULL);
 }
 
+field_decl(F) ::= IDENTIFIER(I) type(T) PK INC. {
+	nowdb_ast_t *p = NULL;
+	nowdb_ast_t *i = NULL;
+	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
+	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);
+	NOWDB_SQL_ADD_MOPTION(F, NOWDB_AST_PK, p, 0, NULL);
+	NOWDB_SQL_ADD_MOPTION(F, NOWDB_AST_INC, i, 0, NULL);
+}
+
 field_decl(F) ::= IDENTIFIER(I) type(T) TIMESTAMP. {
 	NOWDB_SQL_CREATEAST(&F, NOWDB_AST_DECL, T);
 	nowdb_ast_setValue(F, NOWDB_AST_V_STRING, I);

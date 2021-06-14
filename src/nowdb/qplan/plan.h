@@ -41,8 +41,8 @@
  * - range+
  * ------------------------------------------------------------------------
  */
-#define NOWDB_PLAN_FS       10 
-#define NOWDB_PLAN_FS_      11  
+#define NOWDB_PLAN_FS       10
+#define NOWDB_PLAN_FS_      11
 #define NOWDB_PLAN_SEARCH   20
 #define NOWDB_PLAN_SEARCH_  21
 #define NOWDB_PLAN_FRANGE   30
@@ -53,6 +53,7 @@
 #define NOWDB_PLAN_KRANGE_  51
 #define NOWDB_PLAN_CRANGE   60
 #define NOWDB_PLAN_CRANGE_  61
+#define NOWDB_PLAN_COUNTALL 70
 
 /* ------------------------------------------------------------------------
  * Plan node

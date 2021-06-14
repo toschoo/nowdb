@@ -255,6 +255,7 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_STAMP: return "timestamp";
 		case NOWDB_AST_ORIGIN: return "origin";
 		case NOWDB_AST_DESTIN: return "destination";
+		case NOWDB_AST_INC: return "increment";
 		case NOWDB_AST_TYPE: return "as type";
 		case NOWDB_AST_LANG: return "language";
 		case NOWDB_AST_ERRORS: return "error file";

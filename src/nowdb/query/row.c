@@ -191,7 +191,7 @@ nowdb_err_t nowdb_row_project(nowdb_row_t *row,
 		}
 		row->dirty = 1;
 
-		// fprintf(stderr, "%d: %u\n", i, *osz);
+		// fprintf(stderr, "ROW %d: %u (%u)\n", i, *osz, row->sz);
 	}
 
 	// terminate line
