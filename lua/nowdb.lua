@@ -240,6 +240,9 @@ local function mkResult(r)
              if rc == nowdb.EOF then return nil end
              nowdb.raise(rc, msg)
           end
+	  -- apparently there is a bug in fetch:
+	  -- it returns OK with no rows left in the cursor!
+	  if now2lua_countfields(self.cr) == 0 then return nil end
           return self
        end
     end

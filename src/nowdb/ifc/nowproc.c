@@ -39,7 +39,7 @@
 
 static char *OBJECT = "PROCIFC";
 
-#define PRSBUFSIZE 0x10000
+#define PRSBUFSIZE 0x100000
 #define BUFSIZE 0x100000
 #define MAXROW  0x1000
 
