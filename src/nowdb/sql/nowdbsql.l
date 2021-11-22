@@ -30,6 +30,7 @@
 
 "."			return NOWDB_SQL_DOT;
 ";"			return NOWDB_SQL_SEMICOLON;
+":"			return NOWDB_SQL_COLON;
 "="			return NOWDB_SQL_EQ;
 ","			return NOWDB_SQL_COMMA;
 "*"			return NOWDB_SQL_STAR;

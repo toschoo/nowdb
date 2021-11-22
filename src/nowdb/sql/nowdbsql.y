@@ -1067,12 +1067,26 @@ table_list(T) ::= table_list(L) COMMA table_spec(S). {
 	T=L;
 }
 
+table_list(T) ::= table_list(L) table_spec(S). {
+	NOWDB_SQL_ADDKID(L,S);
+	T=L;
+}
+
 table_spec(T) ::= IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
 table_spec(T) ::= IDENTIFIER(I) AS IDENTIFIER(A). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
+	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+	nowdb_ast_t *a;
+	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_ALIAS, 0);
+	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, A);
+	NOWDB_SQL_ADDKID(T, a);
+}
+
+table_spec(T) ::= IDENTIFIER(A) COLON IDENTIFIER(I). {
 	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 	nowdb_ast_t *a;
