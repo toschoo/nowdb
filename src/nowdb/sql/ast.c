@@ -116,7 +116,8 @@ int nowdb_ast_init(nowdb_ast_t *n, int ntype, int stype) {
 	case NOWDB_AST_LOCK: ASTCALLOC(2);
 	case NOWDB_AST_UNLOCK: ASTCALLOC(2);
 
-	case NOWDB_AST_TARGET: ASTCALLOC(1);
+	case NOWDB_AST_TARGET: ASTCALLOC(2);
+	case NOWDB_AST_ALIAS: ASTCALLOC(0);
 	case NOWDB_AST_OPTION: ASTCALLOC(1);
 	case NOWDB_AST_PATH:   ASTCALLOC(0);
 	case NOWDB_AST_DATA:   ASTCALLOC(1);
@@ -227,6 +228,8 @@ static inline char *tellType(int ntype, int stype) {
 		case NOWDB_AST_QUEUE: return "queue";
 		default: return "unknown target";
 		}
+
+	case NOWDB_AST_ALIAS: return "alias";
 
 	case NOWDB_AST_STORAGE: return "storage";
 
@@ -810,6 +813,7 @@ static inline int addtrg(nowdb_ast_t *n,
                          nowdb_ast_t *k) {
 	switch(k->ntype) {
 	case NOWDB_AST_TARGET: ADDKID(0);
+	case NOWDB_AST_ALIAS:  ADDKID(1);
 	default: return -1;
 	}
 }

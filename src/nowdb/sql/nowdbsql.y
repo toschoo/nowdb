@@ -1062,13 +1062,9 @@ table_list(T) ::= table_spec(S). {
 	T=S;
 }
 
-table_list(T) ::= table_list(L) COMMMA table_spec(S). {
+table_list(T) ::= table_list(L) COMMA table_spec(S). {
 	NOWDB_SQL_ADDKID(L,S);
 	T=L;
-}
-
-table_spec(T) ::= VERTEX. {
-	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_VERTEX);
 }
 
 table_spec(T) ::= IDENTIFIER(I). {
@@ -1076,9 +1072,13 @@ table_spec(T) ::= IDENTIFIER(I). {
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
 }
 
-table_spec(T) ::= VERTEX AS IDENTIFIER(I). {
-	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_TYPE);
+table_spec(T) ::= IDENTIFIER(I) AS IDENTIFIER(A). {
+	NOWDB_SQL_CREATEAST(&T, NOWDB_AST_TARGET, NOWDB_AST_CONTEXT);
 	nowdb_ast_setValue(T, NOWDB_AST_V_STRING, I);
+	nowdb_ast_t *a;
+	NOWDB_SQL_CREATEAST(&a, NOWDB_AST_ALIAS, 0);
+	nowdb_ast_setValue(a, NOWDB_AST_V_STRING, A);
+	NOWDB_SQL_ADDKID(T, a);
 }
 
 /* ------------------------------------------------------------------------

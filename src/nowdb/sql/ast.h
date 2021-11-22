@@ -212,22 +212,23 @@
 #define NOWDB_AST_OP       10307
 #define NOWDB_AST_FUN      10308
 #define NOWDB_AST_PARAM    10309
+#define NOWDB_AST_ALIAS    10310
 
 /* -----------------------------------------------------------------------
  * Values
  * TODO: consider to use the types here directly (NOWDB_TYP_TEXT, etc.)
  * -----------------------------------------------------------------------
  */
-#define NOWDB_AST_VALUE    10310
-#define NOWDB_AST_TEXT     10311
-#define NOWDB_AST_FLOAT    10312
-#define NOWDB_AST_UINT     10313
-#define NOWDB_AST_INT      10314
-#define NOWDB_AST_DATE     10315
-#define NOWDB_AST_TIME     10316
-#define NOWDB_AST_BOOL     10317
-#define NOWDB_AST_NULL     10318
-#define NOWDB_AST_VTYPE    10319
+#define NOWDB_AST_VALUE    10320
+#define NOWDB_AST_TEXT     10321
+#define NOWDB_AST_FLOAT    10322
+#define NOWDB_AST_UINT     10323
+#define NOWDB_AST_INT      10324
+#define NOWDB_AST_DATE     10325
+#define NOWDB_AST_TIME     10326
+#define NOWDB_AST_BOOL     10327
+#define NOWDB_AST_NULL     10328
+#define NOWDB_AST_VTYPE    10329
 
 /* -----------------------------------------------------------------------
  * Path and Location ('remote', 'local')
