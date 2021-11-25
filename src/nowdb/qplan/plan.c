@@ -1430,6 +1430,27 @@ static inline nowdb_err_t adjustTarget(nowdb_scope_t *scope,
 }
 
 /* -----------------------------------------------------------------------
+ * Adjust all targets to what they are according to the model
+ * -----------------------------------------------------------------------
+ */
+static inline nowdb_err_t adjustTargets(nowdb_scope_t *scope,
+                                        nowdb_ast_t   *trg) {
+	nowdb_err_t err = NOWDB_OK;
+	for (nowdb_ast_t *run = trg; run!=NULL; run=nowdb_ast_target(run)) {
+		err = adjustTarget(scope, run);
+		if (err != NOWDB_OK) break;
+		nowdb_ast_t *alias = run->kids[1];
+		if (alias != NULL) {
+			fprintf(stderr, "TARGET: '%s:%s'\n", (char*)alias->value, (char*)run->value);
+		} else {
+			fprintf(stderr, "TARGET: '%s'\n", (char*)run->value);
+		}
+	}
+	return err;
+	
+}
+
+/* -----------------------------------------------------------------------
  * Over-simplistic to get it going:
  * - we assume an ast with a simple target object
  * - we create 1 reader fullscan+ or indexsearch 
@@ -1457,8 +1478,8 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 	trg = nowdb_ast_target(from);
 	if (trg == NULL) INVALIDAST("no target in from");
 
-	// what is this???
-	err = adjustTarget(scope, trg);
+	// set vertex or edge?
+	err = adjustTargets(scope, trg);
 	if (err != NOWDB_OK) return err;
 
 	/* create summary node */
@@ -1779,7 +1800,7 @@ nowdb_err_t nowdb_plan_fromAst(nowdb_scope_t  *scope,
 		}
 		nowdb_plan_destroy(plan, FALSE); return err;
 	}
-	// is it a plain count
+	// is it a plain count?
 	if (idxes.len  == 0    &&
 	    filter     == NULL &&
 	    grp        == NULL && 

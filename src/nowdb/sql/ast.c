@@ -993,7 +993,10 @@ nowdb_ast_t *nowdb_ast_target(nowdb_ast_t *ast) {
 	case NOWDB_AST_LOCK:
 	case NOWDB_AST_UNLOCK: return ast->kids[0];
 
-	case NOWDB_AST_TARGET: return ast->kids[0]; // sub-target
+	// get a target from a target is ambiguous!
+	// it used for multiple targets where kids[0] is the next target
+	// and for module.function in the create proc statement!
+	case NOWDB_AST_TARGET: return ast->kids[0];
 
 	default: return NULL;
 	}
