@@ -3,7 +3,8 @@
 NoWDB is an experimental prototype for timeseries database with a graph-oriented datamodell.
 It supports a subset of SQL and supports stored procedures implemented as Lua scripts.
 
-There a clients for C, C++, Go, Lua, Python and Julia.
+There are clients for C, C++, [Go](https://github.com/toschoo/gonow),
+Lua, Python and Julia.
 There is also a [package](https://github.com/toschoo/luanow)
 providing server-side functionality implemented in Lua.
 
